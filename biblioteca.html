@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<!--
+  ═══════════════════════════════════════════════════════════════════
+  VBM KAIZEN · Biblioteca de Kaizens aprovados
+  ═══════════════════════════════════════════════════════════════════
+  PAPEL DA PÁGINA
+    Repositório consultivo. Alterna entre visão em grade e lista pelo
+    data-view-toggle; busca/filtros via data-filter-input.
+
+  DEPENDÊNCIAS (carregadas no <head> / fim do <body>)
+    • Font Awesome 6  — ícones (fa-solid ...)
+    • assets/vbm-app.css — Design System VBM: tokens (--vbm-*), reset,
+      componentes compartilhados (.btn, .form-control, .modal, .badge...)
+    • assets/vbm-app.js  — comportamento compartilhado: modais, abas,
+      wizard, filtros, toasts, toggles. Auto-inicializa no DOMContentLoaded.
+    NÃO usa jQuery, Bootstrap nem AOS — foram removidos por não terem
+    uso real (economia de ~446 KB por página).
+
+  ORGANIZAÇÃO DESTE ARQUIVO
+    1. <style> local .... overrides desta tela apenas. O que for
+                          reutilizável deve ir para vbm-app.css.
+    2. <body> .......... topnav → painel de configurações → conteúdo
+    3. <script> ........ blocos IIFE independentes, um por recurso
+
+  TEMA CLARO/ESCURO
+    Alternado por body[data-bg="dark"] (persistido em localStorage
+    'vdt-theme'). Toda regra de cor precisa do par claro + escuro.
+
+  INTERNACIONALIZAÇÃO (i18n)
+    Marque o elemento com data-i18n / -title / -aria / -placeholder e
+    cadastre a chave nos DOIS dicionários (pt-BR e en) no fim do arquivo.
+    Idioma persistido em localStorage 'vdt-lang'.
+  ═══════════════════════════════════════════════════════════════════
+-->
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>VBM Kaizen — Biblioteca</title>
+<link href="assets/vendor/e5e202e3c8995079_all.min.css" rel="stylesheet"/>
+<link href="assets/vbm-app.css" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link href="https://fonts.gstatic.com" rel="preconnect" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet"/>
+<link href="assets/vendor/a1922a98664cc516_favicon-32x32-1.png" rel="icon"/>
+<style>
+/* ═══════════════════════════════════════════════════
+   TOPNAV LAYOUT OVERRIDE — replicado 1:1 do index.html
+═══════════════════════════════════════════════════ */
+.app-layout{display:block;min-height:100vh}.app-main{margin-left:0}
+
+.topnav{position:sticky;top:0;z-index:100;height:64px;background:linear-gradient(145deg,#082d4f 0%,#1b6898 100%);display:flex;align-items:center;padding:0 2rem;gap:0;border-bottom:1px solid rgba(255,255,255,.08);box-shadow:0 2px 20px rgba(8,45,79,.18)}
+@supports (backdrop-filter: blur(1px)) { .topnav { backdrop-filter: blur(4px) saturate(120%); -webkit-backdrop-filter: blur(4px) saturate(120%); } }
+
+.topnav-logo{display:flex;align-items:center;text-decoration:none;flex-shrink:0;margin-right:1.5rem;position:relative;z-index:1}
+.topnav-logo img{height:26px;width:auto}
+
+.topnav-links{display:flex;align-items:center;justify-content:center;gap:.15rem;flex:1;position:relative;z-index:1}
+.topnav-link{display:flex;align-items:center;gap:.4rem;padding:.5rem .85rem;border-radius:.45rem;font-family:'Poppins',sans-serif;font-weight:400;font-size:.72rem;letter-spacing:.04em;color:rgba(255,255,255,.75);text-decoration:none;white-space:nowrap;transition:color .18s;position:relative}
+.topnav-link i{font-size:.72rem}
+.topnav-link:hover{color:#fff}
+.topnav-link.active{color:#fff}
+.topnav-link::after{content:'';position:absolute;bottom:-1px;left:50%;width:0;height:1.5px;background:linear-gradient(90deg,transparent,#fff 25%,#fff 75%,transparent);border-radius:10px;box-shadow:0 0 8px rgba(255,255,255,.65);opacity:0;transform:translateX(-50%);transition:width .3s var(--ease-out),opacity .3s var(--ease-out)}
+.topnav-link.active::after{width:60%;opacity:1}
+.topnav-link:not(.active):hover::after{width:30%;opacity:.4}
+
+.topnav-badge{font-size:.55rem;padding:.1rem .35rem;border-radius:10rem;background:#c2770e;color:#fff;font-family:'Poppins',sans-serif;font-weight:700;line-height:1.4}
+.topnav-sep{width:1px;height:20px;background:rgba(255,255,255,.25);flex-shrink:0;margin:0 .1rem}
+.topnav-actions{display:flex;align-items:center;gap:.5rem;flex-shrink:0;margin-left:auto;position:relative;z-index:1}
+
+.topnav-user{display:flex;align-items:center;gap:10px;padding-left:10px;border-left:1px solid rgba(255,255,255,.22);flex-shrink:0}
+.topnav-user-text{display:flex;flex-direction:column;align-items:flex-end;line-height:1.3}
+.topnav-user-avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(145deg,var(--vbm-blue-light),var(--vbm-blue-dark));border:1.5px solid rgba(255,255,255,.5);display:flex;align-items:center;justify-content:center;font-family:'Poppins',sans-serif;font-weight:700;font-size:11px;color:#fff;flex-shrink:0}
+.topnav-user-name{font-family:'Poppins',sans-serif;font-weight:600;font-size:11.5px;color:#fff;white-space:nowrap}
+.topnav-user-role{font-family:'Poppins',sans-serif;font-weight:600;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.6);white-space:nowrap}
+
+.topnav-mobile-toggle{display:none;width:34px;height:34px;border-radius:.4rem;border:none;background:rgba(255,255,255,.06);color:rgba(255,255,255,.7);align-items:center;justify-content:center;font-size:.85rem;cursor:pointer;flex-shrink:0}
+.topnav-drawer{display:none;position:fixed;top:64px;left:0;right:0;background:#020e1c;border-bottom:1px solid rgba(60,181,229,.15);z-index:299;padding:.75rem 1rem;flex-direction:column;gap:.25rem;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.topnav-drawer.open{display:flex}
+.topnav-drawer .topnav-link{font-size:.8rem;padding:.65rem .9rem}
+
+@media(max-width:960px){.topnav-links{display:none}.topnav-mobile-toggle{display:flex}.topnav-user-role{display:none}}
+@media(max-width:540px){.topnav-user-name{display:none}}
+
+/* Grids do modal de detalhe (Problema/Meta, Resultados Alcançados) —
+   empilham em telas estreitas em vez de espremer o conteúdo. */
+@media(max-width:640px){
+  .kd-2col{grid-template-columns:1fr !important;}
+  .kd-3col{grid-template-columns:1fr !important;}
+}
+
+/* ═══════════════════════════════════════════════════
+   SETTINGS (engrenagem) — replicado 1:1 de
+   Referencias/Value Drive Tree/style.css
+═══════════════════════════════════════════════════ */
+.settings-btn{display:flex;align-items:center;justify-content:center;width:36px;height:36px;padding:0;border:none;border-radius:100px;background:transparent;color:#fff;cursor:pointer;flex-shrink:0;transition:background .25s,transform .35s var(--ease-spring)}
+.settings-btn:hover{background:rgba(255,255,255,.12)}
+.settings-btn[aria-expanded="true"]{background:rgba(255,255,255,.18);transform:rotate(50deg)}
+
+.settings-backdrop{position:fixed;inset:0;background:rgba(9,20,34,.4);opacity:0;pointer-events:none;z-index:399;transition:opacity .3s var(--ease-out)}
+@supports (backdrop-filter: blur(1px)) { .settings-backdrop { backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); } }
+.settings-backdrop.open{opacity:1;pointer-events:auto}
+
+.settings-panel{position:fixed;top:0;right:0;width:300px;max-width:90vw;height:100vh;background:#fff;box-shadow:-16px 0 48px rgba(9,20,34,.22);z-index:400;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .38s var(--ease-out)}
+.settings-panel.open{transform:translateX(0)}
+.settings-panel-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #eef1f6}
+.settings-panel-head h2{font-family:'Poppins',sans-serif;font-weight:700;font-size:.92rem;letter-spacing:-.01em;color:var(--vbm-dark)}
+.settings-close{display:flex;align-items:center;justify-content:center;width:24px;height:24px;border:none;border-radius:100px;background:#fafcfe;color:var(--vbm-mid);cursor:pointer;transition:background .2s,color .2s}
+.settings-close svg{width:11px;height:11px}
+.settings-close:hover{background:var(--vbm-blue);color:#fff}
+.settings-panel-body{padding:20px;display:flex;flex-direction:column;overflow-y:auto}
+.settings-section{display:flex;flex-direction:column;gap:9px}
+.settings-section-title{display:flex;align-items:center;gap:5px;font-family:'Poppins',sans-serif;font-weight:600;font-size:11px;color:var(--vbm-dark)}
+.settings-info{display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;border-radius:50%;border:1px solid #e8e8e8;color:var(--vbm-mid);font-size:8px;font-style:italic;font-family:Georgia,serif;cursor:help}
+.settings-divider{height:1px;background:#eef1f6;margin:18px 0}
+.theme-toggle{display:flex;align-items:center;background:#fafcfe;border:1px solid #e8e8e8;border-radius:100px;padding:.16rem;gap:.1rem;width:fit-content}
+.theme-toggle-btn{padding:.38rem 1.05rem;border-radius:100px;font-size:.64rem;letter-spacing:.02em;color:var(--vbm-mid);border:none;background:transparent;cursor:pointer;font-family:'Poppins',sans-serif;font-weight:600;transition:background .2s,color .2s;white-space:nowrap;line-height:1}
+.theme-toggle-btn.active{background:var(--vbm-blue);color:#fff;box-shadow:0 4px 14px rgba(60,181,229,.35)}
+.settings-select-wrap{position:relative}
+.settings-select{width:100%;appearance:none;-webkit-appearance:none;background:#fff;border:1.5px solid #e8e8e8;border-radius:9px;padding:.5rem 1.9rem .5rem .75rem;font-family:'Poppins',sans-serif;font-size:11.5px;font-weight:300;color:var(--vbm-dark);cursor:pointer;transition:border-color .2s,box-shadow .2s}
+.settings-select:hover{border-color:var(--vbm-blue-light)}
+.settings-select:focus{outline:none;border-color:var(--vbm-blue);box-shadow:0 0 0 3px rgba(60,181,229,.15)}
+.settings-select-caret{width:9px;height:9px;position:absolute;right:.75rem;top:50%;transform:translateY(-50%);color:var(--vbm-mid);pointer-events:none}
+
+.settings-panel,.settings-panel-head,.settings-panel-head h2,.settings-close,.settings-section-title,.settings-info,.settings-divider,.theme-toggle,.theme-toggle-btn,.settings-select,.settings-select-caret,.settings-backdrop{transition-property:background,background-color,border-color,color,box-shadow,opacity,transform;transition-duration:.25s,.25s,.25s,.25s,.25s,.3s,.38s;transition-timing-function:var(--ease-out)}
+
+[data-bg="dark"] .settings-backdrop{background:rgba(0,0,0,.55)}
+[data-bg="dark"] .settings-panel{background:var(--vbm-blue-deep);box-shadow:-16px 0 48px rgba(0,0,0,.45)}
+[data-bg="dark"] .settings-panel-head{border-bottom-color:rgba(255,255,255,.1)}
+[data-bg="dark"] .settings-panel-head h2{color:#fff}
+[data-bg="dark"] .settings-close{background:rgba(255,255,255,.08);color:rgba(255,255,255,.6)}
+[data-bg="dark"] .settings-close:hover{background:var(--vbm-blue);color:#fff}
+[data-bg="dark"] .settings-section-title{color:#fff}
+[data-bg="dark"] .settings-info{border-color:rgba(255,255,255,.25);color:rgba(255,255,255,.5)}
+[data-bg="dark"] .settings-divider{background:rgba(255,255,255,.1)}
+[data-bg="dark"] .theme-toggle{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.14)}
+[data-bg="dark"] .theme-toggle-btn{color:rgba(255,255,255,.55)}
+[data-bg="dark"] .theme-toggle-btn.active{color:#fff}
+[data-bg="dark"] .settings-select{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.16);color:#fff}
+[data-bg="dark"] .settings-select option{background:var(--vbm-blue-deep);color:#fff}
+[data-bg="dark"] .settings-select-caret{color:rgba(255,255,255,.5)}
+
+/* ════════════════════════════════════════════════════════════
+   TEMA ESCURO — aplicado à página inteira
+   ════════════════════════════════════════════════════════════ */
+body,.topnav,.topnav-link,.settings-btn{transition:background .3s var(--ease-out),background-color .3s var(--ease-out),border-color .3s var(--ease-out),color .3s var(--ease-out),box-shadow .3s var(--ease-out)}
+body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-text:rgba(244,247,251,.82);background:radial-gradient(ellipse 80% 50% at 72% 6%,rgba(60,181,229,.10) 0%,transparent 55%),linear-gradient(160deg,#10131a 0%,var(--vbm-blue-deep) 100%);background-attachment:fixed}
+[data-bg="dark"] .topnav{background:transparent;border-bottom-color:rgba(255,255,255,.05)}
+[data-bg="dark"] .topnav-link{color:rgba(255,255,255,.65)}
+[data-bg="dark"] .topnav-link:hover{color:#fff}
+[data-bg="dark"] .topnav-sep{background:rgba(255,255,255,.14)}
+[data-bg="dark"] .topnav-user{border-left-color:rgba(255,255,255,.16)}
+[data-bg="dark"] .stat-card,[data-bg="dark"] .section-card{background:rgba(255,255,255,.06) !important;border-color:rgba(255,255,255,.12) !important;box-shadow:0 4px 24px rgba(0,0,0,.3) !important}
+[data-bg="dark"] .stat-label,[data-bg="dark"] .section-card-title{color:rgba(255,255,255,.9)}
+[data-bg="dark"] .section-card-icon{background:rgba(255,255,255,.08);color:#fff}
+[data-bg="dark"] .data-table thead th{color:rgba(255,255,255,.5);background:rgba(255,255,255,.04);border-bottom-color:rgba(255,255,255,.14)}
+[data-bg="dark"] .data-table tbody tr{border-color:rgba(255,255,255,.08)}
+[data-bg="dark"] .data-table td{border-bottom-color:rgba(255,255,255,.08)}
+[data-bg="dark"] .kaizen-card,[data-bg="dark"] .approval-item{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1)}
+[data-bg="dark"] .kaizen-card-foot{border-top-color:rgba(255,255,255,.08)}
+[data-bg="dark"] .kaizen-tag{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2);color:rgba(255,255,255,.85)}
+[data-bg="dark"] .btn-icon{background:rgba(255,255,255,.1);border:none;color:rgba(255,255,255,.85)}
+[data-bg="dark"] .btn-icon-blue{background:rgba(60,181,229,.22);color:#8fdcff;border:none}
+[data-bg="dark"] .badge-aprovado{background:rgba(22,163,74,.2);color:#4ade80}
+[data-bg="dark"] .badge-reprovado{background:rgba(220,38,38,.2);color:#f87171}
+[data-bg="dark"] .badge-aguardando{background:rgba(194,119,14,.22);color:#fbbf24}
+[data-bg="dark"] .badge-rascunho{background:rgba(255,255,255,.12);color:rgba(255,255,255,.8)}
+[data-bg="dark"] .kaizen-card-id{color:var(--vbm-blue-light)}
+[data-bg="dark"] .filter-bar{background:rgba(255,255,255,.03);border-bottom-color:rgba(255,255,255,.08)}
+[data-bg="dark"] .filter-search{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.14)}
+[data-bg="dark"] .filter-search input{color:#fff}
+[data-bg="dark"] .filter-search input::placeholder{color:rgba(255,255,255,.35)}
+[data-bg="dark"] .filter-search i{color:rgba(255,255,255,.35)}
+[data-bg="dark"] .filter-search:focus-within i{color:var(--vbm-blue-light)}
+[data-bg="dark"] .filter-select{background-color:rgba(255,255,255,.06);border-color:rgba(255,255,255,.14);color:#fff;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23ffffff' fill='none' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E")}
+[data-bg="dark"] .filter-select option{background:var(--vbm-blue-deep);color:#fff}
+[data-bg="dark"] .filter-view-btn{background:rgba(255,255,255,.1) !important;border-color:rgba(255,255,255,.3) !important;color:#fff !important}
+[data-bg="dark"] .filter-view-btn i{color:#fff !important}
+[data-bg="dark"] .filter-view-btn.active,[data-bg="dark"] .filter-view-btn:hover{background:var(--vbm-blue) !important;border-color:var(--vbm-blue) !important;color:#fff !important}
+
+/* ══════════════════════════════════════════════════════════════
+   PADRONIZAÇÃO TIPOGRÁFICA — mesma escala aplicada ao formulário
+   de kaizen-novo.html: menos peso (Medium/Semibold no lugar de
+   Bold), tamanhos levemente reduzidos, hierarquia por tamanho+
+   peso+cor. Escopo local — não altera assets/vbm-app.css.
+   ══════════════════════════════════════════════════════════════ */
+.page-header-title { font-weight:600; font-size:1.15rem; letter-spacing:-.01em; }
+.page-header-sub { font-size:.76rem; }
+.section-card-title { font-weight:600; font-size:.84rem; }
+.kaizen-card-title { font-weight:600; font-size:.84rem; }
+.stat-label { font-size:.7rem; }
+.modal-title { font-weight:600; font-size:.95rem; }
+.form-group { margin-bottom:1.05rem; }
+.form-label { font-weight:500; font-size:.72rem; letter-spacing:.01em; margin-bottom:.35rem; }
+.form-control { font-size:.7rem; font-weight:300; }
+.form-control::placeholder { color:#a8a8a8; font-weight:300; }
+[data-bg="dark"] .form-control::placeholder { color:rgba(255,255,255,.3); }
+.form-helper { font-size:.68rem; line-height:1.5; }
+.filter-search input { font-size:.7rem; font-weight:300; }
+.filter-search input::placeholder { color:#a8a8a8; }
+.filter-select { font-size:.74rem; }
+
+.repl-badge{border-radius:.4rem;padding:.5rem .75rem;margin-top:.5rem;display:flex;align-items:center;gap:.4rem;font-size:.7rem;}
+.repl-badge i{font-size:.72rem;}
+.repl-green{background:#e8f8f0;color:#16a34a;}
+.repl-green i{color:#16a34a;}
+.repl-blue{background:var(--vbm-blue-pale);color:var(--vbm-blue-dark);}
+.repl-blue i{color:var(--vbm-blue);}
+[data-bg="dark"] .repl-green{background:rgba(22,163,74,.18);color:#4ade80;}
+[data-bg="dark"] .repl-green i{color:#4ade80;}
+[data-bg="dark"] .repl-blue{background:rgba(60,181,229,.18);color:var(--vbm-blue-light);}
+[data-bg="dark"] .repl-blue i{color:var(--vbm-blue-light);}
+
+/* ══════════════════════════════════════════════════════════════
+   REFINAMENTO PREMIUM — elevação visual dos componentes desta
+   página, seguindo os tokens do Design System (raios, sombras
+   em camadas, glass sutil, transições var(--ease-out)).
+   ══════════════════════════════════════════════════════════════ */
+
+/* Section card — casca com sombra em camadas, mais "flutuante" */
+.section-card {
+  border-radius: 1rem;
+  border: 1px solid rgba(0,0,0,.06);
+  box-shadow: 0 1px 2px rgba(16,24,40,.04), 0 8px 24px rgba(16,24,40,.06);
+  transition: box-shadow .35s var(--ease-out), border-color .35s var(--ease-out), background .35s var(--ease-out);
+}
+[data-bg="dark"] .section-card { border: 1px solid rgba(255,255,255,.1); }
+
+/* Kaizen cards — mais próximos do vbm-card do Design System:
+   borda sutil, sombra progressiva, leve elevação + glow no hover */
+.kaizen-card {
+  border-radius: 1rem;
+  border: 1px solid rgba(0,0,0,.06);
+  box-shadow: none;
+  overflow: hidden;
+  transition: transform .38s var(--ease-out), box-shadow .38s var(--ease-out), border-color .38s var(--ease-out), opacity .6s var(--ease-out);
+}
+.kaizen-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 44px rgba(16,24,40,.12);
+  border-color: rgba(60,181,229,.28);
+}
+.kaizen-card-accent { display: none; }
+.kaizen-card-title { transition: color .25s var(--ease-out); }
+.kaizen-card:hover .kaizen-card-title { color: var(--vbm-blue-dark); }
+[data-bg="dark"] .kaizen-card {
+  box-shadow: none;
+}
+[data-bg="dark"] .kaizen-card:hover {
+  box-shadow: 0 20px 48px rgba(0,0,0,.32);
+  border-color: rgba(60,181,229,.35);
+}
+[data-bg="dark"] .kaizen-card:hover .kaizen-card-title { color: var(--vbm-blue-light); }
+
+/* Tags — pill discreta e consistente */
+.kaizen-tag {
+  border-radius: 100px;
+  transition: background .2s var(--ease-out), border-color .2s var(--ease-out), color .2s var(--ease-out);
+}
+
+/* Badges de status — pill com dot, alinhado ao badge-blue do Design System */
+.badge { border-radius: 100px; font-weight: 600; letter-spacing: .01em; }
+
+/* Caixas Replicável — mesma linguagem de pill/glass */
+.repl-badge { border-radius: .6rem; transition: background .2s var(--ease-out), color .2s var(--ease-out); }
+
+/* Botões de ação — vidro fosco sem borda; ícone sempre em primeiro plano,
+   com contraste forte sobre o vidro. Hover só intensifica o vidro
+   (blur/opacidade/sombra), nunca troca a cor do ícone ou do tom. */
+.btn-icon {
+  border: none !important;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border-radius: 100px;
+  color: var(--vbm-dark) !important;
+  position: relative;
+  transition: background .25s var(--ease-out), box-shadow .25s var(--ease-out), transform .25s var(--ease-spring), backdrop-filter .25s var(--ease-out);
+}
+.btn-icon i { position: relative; z-index: 1; }
+.btn-icon-blue { color: var(--vbm-blue-dark) !important; }
+.btn-icon:hover {
+  transform: scale(1.07);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 6px 20px rgba(16,24,40,.12), inset 0 1px 0 rgba(255,255,255,.5);
+  filter: saturate(1.15);
+}
+
+[data-bg="dark"] .btn-icon { border: none !important; color: #fff !important; }
+[data-bg="dark"] .btn-icon-blue { color: #bfe8ff !important; }
+[data-bg="dark"] .btn-icon:hover {
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 6px 22px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.14);
+  filter: saturate(1.2) brightness(1.1);
+}
+
+/* Filtros — inputs/selects com foco elegante (ring azul suave) */
+.filter-search, .filter-select, .filter-view-btn {
+  border-radius: .6rem;
+  transition: border-color .25s var(--ease-out), box-shadow .25s var(--ease-out), background .25s var(--ease-out);
+}
+.filter-search:focus-within { box-shadow: 0 0 0 3px rgba(60,181,229,.14); }
+.filter-select:focus { box-shadow: 0 0 0 3px rgba(60,181,229,.14); }
+[data-bg="dark"] .filter-search:focus-within { box-shadow: 0 0 0 3px rgba(60,181,229,.2); }
+[data-bg="dark"] .filter-select:focus { box-shadow: 0 0 0 3px rgba(60,181,229,.2); }
+.filter-view-btn { border-radius: .55rem; }
+
+/* Modal — vidro fosco e sombra profunda, igual ao .ds-modal do Design System */
+.modal-backdrop { backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.modal { border-radius: 1.25rem; box-shadow: 0 32px 80px rgba(0,0,0,.2); }
+[data-bg="dark"] .modal { background: var(--vbm-blue-deep); box-shadow: 0 32px 80px rgba(0,0,0,.45); }
+[data-bg="dark"] .modal-head { border-bottom-color: rgba(255,255,255,.1); }
+[data-bg="dark"] .modal-title { color: #fff; }
+[data-bg="dark"] .modal-close { background: rgba(255,255,255,.08); color: rgba(255,255,255,.6); }
+[data-bg="dark"] .modal-close:hover { background: var(--vbm-blue); color: #fff; }
+[data-bg="dark"] .modal-foot { border-top-color: rgba(255,255,255,.1); }
+
+/* Tabela — linhas com hover sutil e tipografia mais legível */
+.data-table tbody tr { transition: background .2s var(--ease-out); }
+[data-bg="dark"] .data-table tbody tr:hover td { background: rgba(255,255,255,.04); }
+/* Rodapé "Exibindo X · Carregar mais" — acompanha a cor do topo do card */
+[data-bg="dark"] .bib-table-foot { border-top-color: rgba(255,255,255,.1) !important; }
+
+/* Colunas #, Categoria, Unidade, Data, Status e Ações centralizadas;
+   só o Título segue alinhado à esquerda (leitura natural do texto). */
+.data-table th:nth-child(1), .data-table td:nth-child(1),
+.data-table th:nth-child(3), .data-table td:nth-child(3),
+.data-table th:nth-child(4), .data-table td:nth-child(4),
+.data-table th:nth-child(5), .data-table td:nth-child(5),
+.data-table th:nth-child(6), .data-table td:nth-child(6),
+.data-table th:nth-child(7), .data-table td:nth-child(7) { text-align: center; }
+.data-table td:nth-child(6) .badge { display:inline-flex; }
+.data-table td:nth-child(7) .table-actions { justify-content: center; }
+
+/* Badge de Categoria — largura fixa para todas as tags, independente
+   do tamanho do texto, com o mesmo efeito vidro (glass) usado nas tags
+   dos cards da grade (fundo translúcido + blur). */
+.data-table td:nth-child(3) .badge { min-width: 92px; justify-content: center; }
+.data-table td:nth-child(3) .badge-blue {
+  background: rgba(60,181,229,.12);
+  border: 1px solid rgba(60,181,229,.28);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+[data-bg="dark"] .data-table td:nth-child(3) .badge-blue {
+  background: rgba(255,255,255,.1);
+  border-color: rgba(255,255,255,.2);
+  color: rgba(255,255,255,.85);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+
+/* Cards da grade — todos os textos em peso 400 (Regular) */
+.kaizen-card-id, .kaizen-card-title, .kaizen-meta-item,
+.kaizen-tag, .kaizen-card-foot .badge { font-weight: 400 !important; }
+
+/* Botão "Carregar mais" — mesmo tamanho compacto/pill e efeito (leve
+   elevação no hover, sem glow) do botão "Salvar rascunho" do wizard
+   (.wizard-header-btn em kaizen-novo.html), adaptado às cores do tema
+   claro/escuro desta tela. */
+.bib-loadmore-btn.btn {
+  padding: .38rem .85rem; font-size: .68rem; gap: .35rem; border-radius: 100px;
+  box-shadow: none;
+}
+.bib-loadmore-btn.btn-outline:hover {
+  background: rgba(60,181,229,.08); color: var(--vbm-blue-dark);
+  transform: translateY(-1px); box-shadow: none;
+}
+[data-bg="dark"] .bib-loadmore-btn.btn-outline {
+  background: rgba(255,255,255,.05); color: #fff; border-color: rgba(255,255,255,.32);
+}
+[data-bg="dark"] .bib-loadmore-btn.btn-outline:hover {
+  background: rgba(255,255,255,.14); border-color: rgba(255,255,255,.5); color: #fff;
+  transform: translateY(-1px); box-shadow: none;
+}
+
+/* Scrollbar discreto (webkit) para um acabamento mais premium */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,.14); border-radius: 100px; border: 2px solid transparent; background-clip: content-box; }
+[data-bg="dark"] ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.14); background-clip: content-box; }
+
+/* Foco visível e consistente em elementos interativos (acessibilidade) */
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 2px solid var(--vbm-blue);
+  outline-offset: 2px;
+  border-radius: .35rem;
+}
+</style>
+</head>
+<body>
+<div class="app-layout">
+
+<nav class="topnav" id="topnav">
+  <a href="index.html" class="topnav-logo">
+    <img src="assets/vale-logo-color.svg" alt="Vale"/>
+  </a>
+  <div class="topnav-links">
+    <a href="index.html" class="topnav-link"><i class="fa-solid fa-house"></i> <span data-i18n="nav.menu">Menu</span></a>
+    <div class="topnav-sep"></div>
+    <a href="kaizen-novo.html" class="topnav-link"><i class="fa-solid fa-plus-circle"></i> <span data-i18n="nav.novoKaizen">Novo Kaizen</span></a>
+    <div class="topnav-sep"></div>
+    <a href="biblioteca.html" class="topnav-link active"><i class="fa-solid fa-book"></i> <span data-i18n="nav.biblioteca">Biblioteca</span></a>
+    <a href="aprovacao.html" class="topnav-link"><i class="fa-solid fa-clipboard-check"></i> <span data-i18n="nav.aprovacao">Aprovação</span><span class="topnav-badge">3</span></a>
+    <div class="topnav-sep"></div>
+    <a href="admin.html" class="topnav-link"><i class="fa-solid fa-shield-halved"></i> <span data-i18n="nav.administracao">Administração</span></a>
+  </div>
+  <div class="topnav-actions">
+    <button class="settings-btn" id="settingsBtn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="settingsPanel" title="Configurações" data-i18n-title="settings.btnTitle">
+      <svg width="17" height="17" viewBox="0 0 20 20" fill="none">
+        <path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" stroke="currentColor" stroke-width="1.5" />
+        <path d="M16.2 12.3a1.4 1.4 0 0 0 .28 1.54l.05.05a1.7 1.7 0 1 1-2.4 2.4l-.05-.05a1.4 1.4 0 0 0-1.54-.28 1.4 1.4 0 0 0-.85 1.28V17.4a1.7 1.7 0 0 1-3.4 0v-.08a1.4 1.4 0 0 0-.91-1.28 1.4 1.4 0 0 0-1.54.28l-.05.05a1.7 1.7 0 1 1-2.4-2.4l.05-.05a1.4 1.4 0 0 0 .28-1.54 1.4 1.4 0 0 0-1.28-.85H2.6a1.7 1.7 0 0 1 0-3.4h.08a1.4 1.4 0 0 0 1.28-.91 1.4 1.4 0 0 0-.28-1.54l-.05-.05a1.7 1.7 0 1 1 2.4-2.4l.05.05a1.4 1.4 0 0 0 1.54.28h.06a1.4 1.4 0 0 0 .85-1.28V2.6a1.7 1.7 0 0 1 3.4 0v.08a1.4 1.4 0 0 0 .85 1.28h.06a1.4 1.4 0 0 0 1.54-.28l.05-.05a1.7 1.7 0 1 1 2.4 2.4l-.05.05a1.4 1.4 0 0 0-.28 1.54v.06a1.4 1.4 0 0 0 1.28.85h.08a1.7 1.7 0 0 1 0 3.4h-.08a1.4 1.4 0 0 0-1.28.85Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+      </svg>
+    </button>
+    <div class="topnav-user">
+      <div class="topnav-user-text">
+        <span class="topnav-user-name">João Silva</span>
+        <span class="topnav-user-role"><span data-i18n="role.operador">Operador</span> · Sudbury</span>
+      </div>
+      <div class="topnav-user-avatar">JS</div>
+    </div>
+    <button class="topnav-mobile-toggle" id="mobileToggle"><i class="fa-solid fa-bars"></i></button>
+  </div>
+</nav>
+<div class="topnav-drawer" id="topnavDrawer">
+  <a href="index.html" class="topnav-link"><i class="fa-solid fa-house"></i> <span data-i18n="nav.menu">Menu</span></a>
+  <a href="kaizen-novo.html" class="topnav-link"><i class="fa-solid fa-plus-circle"></i> <span data-i18n="nav.novoKaizen">Novo Kaizen</span></a>
+  <a href="biblioteca.html" class="topnav-link active"><i class="fa-solid fa-book"></i> <span data-i18n="nav.biblioteca">Biblioteca</span></a>
+  <a href="aprovacao.html" class="topnav-link"><i class="fa-solid fa-clipboard-check"></i> <span data-i18n="nav.aprovacao">Aprovação</span><span class="topnav-badge">3</span></a>
+  <a href="admin.html" class="topnav-link"><i class="fa-solid fa-shield-halved"></i> <span data-i18n="nav.administracao">Administração</span></a>
+</div>
+
+<!-- ═══ PAINEL LATERAL DE CONFIGURAÇÕES (Theme + Language) ═══ -->
+<div class="settings-backdrop" id="settingsBackdrop"></div>
+<aside class="settings-panel" id="settingsPanel" role="dialog" aria-modal="true" aria-label="Configurações" aria-hidden="true">
+  <div class="settings-panel-head">
+    <h2 data-i18n="settings.title">Configurações</h2>
+    <button class="settings-close" id="settingsClose" type="button" aria-label="Fechar" data-i18n-aria="settings.close">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
+    </button>
+  </div>
+  <div class="settings-panel-body">
+    <section class="settings-section">
+      <span class="settings-section-title" data-i18n="settings.theme">Tema</span>
+      <div class="theme-toggle" role="group" aria-label="Alternar tema">
+        <button class="theme-toggle-btn active" id="btnWhite" data-i18n="theme.white">Claro</button>
+        <button class="theme-toggle-btn" id="btnBusiness" data-i18n="theme.dark">Escuro</button>
+      </div>
+    </section>
+    <div class="settings-divider"></div>
+    <section class="settings-section">
+      <span class="settings-section-title">
+        <span data-i18n="settings.language">Idioma</span>
+        <span class="settings-info" title="Idioma da interface" data-i18n-title="settings.languageInfo">i</span>
+      </span>
+      <div class="settings-select-wrap">
+        <select id="langSelect" class="settings-select">
+          <option value="pt-BR">Português (Brasil)</option>
+          <option value="en">English</option>
+        </select>
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none" class="settings-select-caret"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
+      </div>
+    </section>
+  </div>
+</aside>
+
+<main class="app-main">
+  <div class="page-content">
+
+    <!-- Hero banner for library -->
+    <div style="position:relative;border-radius:1.25rem;overflow:hidden;margin-bottom:1.5rem;background:linear-gradient(135deg,#041523,#082d4f);background-image:url('assets/Fundo_VNL_2400x1145.svg');background-size:cover;background-position:center;padding:2rem;">
+      <div style="position:absolute;width:350px;height:350px;border-radius:50%;background:radial-gradient(circle,rgba(60,181,229,.18) 0%,transparent 65%);top:-100px;right:-60px;filter:blur(50px);animation:orb1 20s ease-in-out infinite;pointer-events:none;"></div>
+      <div style="position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;">
+        <div>
+          <div style="font-size:.6rem;letter-spacing:.25em;text-transform:uppercase;color:var(--vbm-blue-light);margin-bottom:.6rem;" data-i18n="bib.officialRepo">Repositório Oficial</div>
+          <div style="font-family:'Poppins',sans-serif;font-weight:700;font-style:italic;font-size:clamp(1.8rem,4vw,3rem);color:#fff;mix-blend-mode:overlay;line-height:.9;margin-bottom:.4rem;">BIBLIOTECA</div>
+          <div style="font-family:'Poppins',sans-serif;font-weight:700;font-size:clamp(.9rem,2vw,1.3rem);color:rgba(255,255,255,.75);mix-blend-mode:overlay;margin-bottom:.75rem;">KAIZENS · VALE BASE METALS</div>
+          <p style="font-size:.82rem;color:rgba(255,255,255,.5);max-width:440px;line-height:1.6;" data-i18n="bib.heroDesc">Todos os Kaizens aprovados da organização. Consulte, inspire-se e replique melhorias em sua área.</p>
+        </div>
+        <div style="background:rgba(255,255,255,.08);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.14);border-radius:.9rem;padding:1.1rem 1.4rem;min-width:220px;box-shadow:0 8px 32px rgba(0,0,0,.18);">
+          <div style="font-size:.58rem;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:.75rem;" data-i18n="bib.summaryTitle">Resumo da Biblioteca</div>
+          <div style="display:flex;flex-direction:column;gap:.55rem;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
+              <span style="font-size:.72rem;color:rgba(255,255,255,.55);" data-i18n="bib.total2024">Total 2024</span>
+              <span style="font-family:'Poppins', sans-serif;font-weight:700;font-size:.85rem;color:#fff;">2.500</span>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
+              <span style="font-size:.72rem;color:rgba(255,255,255,.55);" data-i18n="bib.total2025">Total 2025</span>
+              <span style="font-family:'Poppins', sans-serif;font-weight:700;font-size:.85rem;color:#fff;">2.684</span>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
+              <span style="font-size:.72rem;color:rgba(255,255,255,.55);" data-i18n="bib.total2026">Total 2026</span>
+              <span style="font-family:'Poppins', sans-serif;font-weight:700;font-size:.85rem;color:#fff;">31</span>
+            </div>
+            <div style="height:1px;background:rgba(255,255,255,.1);"></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
+              <span style="font-size:.72rem;color:rgba(255,255,255,.55);display:flex;align-items:center;gap:.4rem;"><span style="width:7px;height:7px;border-radius:50%;background:#16a34a;display:inline-block;"></span> <span data-i18n="badge.aprovados">Aprovados</span></span>
+              <span style="font-family:'Poppins', sans-serif;font-weight:700;font-size:.85rem;color:#fff;">31</span>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
+              <span style="font-size:.72rem;color:rgba(255,255,255,.55);display:flex;align-items:center;gap:.4rem;"><span style="width:7px;height:7px;border-radius:50%;background:#dc2626;display:inline-block;"></span> <span data-i18n="badge.reprovados">Reprovados</span></span>
+              <span style="font-family:'Poppins', sans-serif;font-weight:700;font-size:.85rem;color:#fff;">1</span>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
+              <span style="font-size:.72rem;color:rgba(255,255,255,.55);display:flex;align-items:center;gap:.4rem;"><span style="width:7px;height:7px;border-radius:50%;background:#f59e0b;display:inline-block;"></span> <span data-i18n="badge.aguardando">Aguardando</span></span>
+              <span style="font-family:'Poppins', sans-serif;font-weight:700;font-size:.85rem;color:#fff;">3</span>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
+              <span style="font-size:.72rem;color:rgba(255,255,255,.55);display:flex;align-items:center;gap:.4rem;"><span style="width:7px;height:7px;border-radius:50%;background:#9ca3af;display:inline-block;"></span> <span data-i18n="badge.rascunhos">Rascunhos</span></span>
+              <span style="font-family:'Poppins', sans-serif;font-weight:700;font-size:.85rem;color:#fff;">5</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filter bar -->
+    <div class="section-card reveal">
+      <div class="filter-bar">
+        <div class="filter-search">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input type="text" placeholder="Buscar por título, líder, ID ou palavra-chave..." data-i18n-placeholder="bib.searchPlaceholder" data-filter-input="bibList"/>
+        </div>
+        <select class="filter-select">
+          <option data-i18n="filter.allUnits">Todas as unidades</option>
+          <option>Sudbury, CA</option>
+          <option>Thompson, CA</option>
+          <option>Voisey's Bay, CA</option>
+          <option>Salobo, BR</option>
+          <option>PT Vale, ID</option>
+        </select>
+        <select class="filter-select">
+          <option data-i18n="filter.allCategories">Todas as categorias</option>
+          <option data-i18n="cat.seguranca">Segurança</option>
+          <option data-i18n="cat.producao">Produção</option>
+          <option>5S</option>
+          <option data-i18n="cat.manutencao">Manutenção</option>
+          <option data-i18n="cat.energia">Energia</option>
+          <option data-i18n="cat.meioAmbiente">Meio Ambiente</option>
+          <option data-i18n="cat.qualidade">Qualidade</option>
+        </select>
+        <select class="filter-select">
+          <option data-i18n="filter.allPeriod">Todo o período</option>
+          <option>2026</option>
+          <option>2025</option>
+          <option>2024</option>
+        </select>
+        <div class="filter-view-toggle" style="margin-left:auto;">
+          <button class="filter-view-btn active" data-view-toggle="biblioteca" data-view="grid" title="Grade" data-i18n-title="common.grid"><i class="fa-solid fa-th-large"></i></button>
+          <button class="filter-view-btn" data-view-toggle="biblioteca" data-view="list" title="Lista" data-i18n-title="common.list"><i class="fa-solid fa-list"></i></button>
+        </div>
+      </div>
+
+      <!-- GRID VIEW -->
+      <div data-view="biblioteca" data-view-mode="grid">
+      <div id="bibList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1.1rem;padding:1.25rem;">
+
+        <div class="kaizen-card reveal-scale" data-filter-item>
+          <div class="kaizen-card-accent accent-green"></div>
+          <div class="kaizen-card-body" style="display:flex;flex-direction:column;padding-bottom:.4rem;">
+            <div class="kaizen-card-id">KZN26-041 · Sudbury</div>
+            <div class="kaizen-card-title" style="font-weight:600;font-size:.76rem;">Padronização de EPI na zona de mineração</div>
+            <div class="kaizen-card-tags"><span class="kaizen-tag">Segurança</span><span class="kaizen-tag">5S</span></div>
+            <div class="kaizen-meta" style="margin-top:auto;margin-bottom:0;">
+              <div class="kaizen-meta-item"><i class="fa-solid fa-user"></i> Maria Torres</div>
+              <div class="kaizen-meta-item"><i class="fa-solid fa-calendar"></i> Jun 2026</div>
+            </div>
+          </div>
+          <div class="kaizen-card-foot">
+            <span class="badge badge-aprovado" data-i18n="badge.aprovado">Aprovado</span>
+            <div class="kaizen-card-actions">
+              <button class="btn-icon btn-icon-blue" title="Ver detalhe" data-i18n-title="common.viewDetail" data-modal-open="modalBibDetail"><i class="fa-solid fa-eye"></i></button>
+              <button class="btn-icon" title="Imprimir A4" data-i18n-title="common.imprimirA4" onclick="printKaizen('bibPrint')"><i class="fa-solid fa-print"></i></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="kaizen-card reveal-scale" data-filter-item>
+          <div class="kaizen-card-accent accent-green"></div>
+          <div class="kaizen-card-body">
+            <div class="kaizen-card-id">KZN26-038 · Voisey's Bay</div>
+            <div class="kaizen-card-title">Otimização de consumo de energia no britador</div>
+            <div class="kaizen-card-tags"><span class="kaizen-tag">Energia</span><span class="kaizen-tag">Sustentabilidade</span></div>
+            <div class="kaizen-meta">
+              <div class="kaizen-meta-item"><i class="fa-solid fa-user"></i> Carlos Pereira</div>
+              <div class="kaizen-meta-item"><i class="fa-solid fa-calendar"></i> Mai 2026</div>
+            </div>
+          </div>
+          <div class="kaizen-card-foot">
+            <span class="badge badge-aprovado" data-i18n="badge.aprovado">Aprovado</span>
+            <div class="kaizen-card-actions">
+              <button class="btn-icon btn-icon-blue" title="Ver detalhe" data-i18n-title="common.viewDetail" data-modal-open="modalBibDetail"><i class="fa-solid fa-eye"></i></button>
+              <button class="btn-icon" title="Imprimir A4" data-i18n-title="common.imprimirA4" onclick="printKaizen('bibPrint')"><i class="fa-solid fa-print"></i></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="kaizen-card reveal-scale" data-filter-item>
+          <div class="kaizen-card-accent accent-green"></div>
+          <div class="kaizen-card-body">
+            <div class="kaizen-card-id">KZN26-033 · Sudbury</div>
+            <div class="kaizen-card-title">Reorganização do 5S no almoxarifado central</div>
+            <div class="kaizen-card-tags"><span class="kaizen-tag">5S</span><span class="kaizen-tag">Organização</span></div>
+            <div class="kaizen-meta">
+              <div class="kaizen-meta-item"><i class="fa-solid fa-user"></i> João Silva</div>
+              <div class="kaizen-meta-item"><i class="fa-solid fa-calendar"></i> Mai 2026</div>
+            </div>
+          </div>
+          <div class="kaizen-card-foot">
+            <span class="badge badge-aprovado" data-i18n="badge.aprovado">Aprovado</span>
+            <div class="kaizen-card-actions">
+              <button class="btn-icon btn-icon-blue" title="Ver detalhe" data-i18n-title="common.viewDetail" data-modal-open="modalBibDetail"><i class="fa-solid fa-eye"></i></button>
+              <button class="btn-icon" title="Imprimir A4" data-i18n-title="common.imprimirA4" onclick="printKaizen('bibPrint')"><i class="fa-solid fa-print"></i></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="kaizen-card reveal-scale" data-filter-item>
+          <div class="kaizen-card-accent accent-green"></div>
+          <div class="kaizen-card-body">
+            <div class="kaizen-card-id">KZN26-021 · Sudbury</div>
+            <div class="kaizen-card-title">Redução de tempo de resposta em manutenção corretiva</div>
+            <div class="kaizen-card-tags"><span class="kaizen-tag">Manutenção</span><span class="kaizen-tag">Tempo</span></div>
+            <div class="kaizen-meta">
+              <div class="kaizen-meta-item"><i class="fa-solid fa-user"></i> João Silva</div>
+              <div class="kaizen-meta-item"><i class="fa-solid fa-calendar"></i> Abr 2026</div>
+            </div>
+          </div>
+          <div class="kaizen-card-foot">
+            <span class="badge badge-aprovado" data-i18n="badge.aprovado">Aprovado</span>
+            <div class="kaizen-card-actions">
+              <button class="btn-icon btn-icon-blue" title="Ver detalhe" data-i18n-title="common.viewDetail" data-modal-open="modalBibDetail"><i class="fa-solid fa-eye"></i></button>
+              <button class="btn-icon" onclick="printKaizen('bibPrint')" title="Imprimir" data-i18n-title="adm.print"><i class="fa-solid fa-print"></i></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="kaizen-card reveal-scale" data-filter-item>
+          <div class="kaizen-card-accent accent-green"></div>
+          <div class="kaizen-card-body">
+            <div class="kaizen-card-id">KZN26-015 · Thompson</div>
+            <div class="kaizen-card-title">Redução consumo ar comprimido compressores</div>
+            <div class="kaizen-card-tags"><span class="kaizen-tag">Energia</span><span class="kaizen-tag">Custo</span></div>
+            <div class="kaizen-meta">
+              <div class="kaizen-meta-item"><i class="fa-solid fa-user"></i> Ana Lima</div>
+              <div class="kaizen-meta-item"><i class="fa-solid fa-calendar"></i> Mar 2026</div>
+            </div>
+          </div>
+          <div class="kaizen-card-foot">
+            <span class="badge badge-aprovado" data-i18n="badge.aprovado">Aprovado</span>
+            <div class="kaizen-card-actions">
+              <button class="btn-icon btn-icon-blue" title="Ver detalhe" data-i18n-title="common.viewDetail" data-modal-open="modalBibDetail"><i class="fa-solid fa-eye"></i></button>
+              <button class="btn-icon" onclick="printKaizen('bibPrint')" title="Imprimir" data-i18n-title="adm.print"><i class="fa-solid fa-print"></i></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="kaizen-card reveal-scale" data-filter-item>
+          <div class="kaizen-card-accent accent-green"></div>
+          <div class="kaizen-card-body">
+            <div class="kaizen-card-id">KZN25-089 · Salobo</div>
+            <div class="kaizen-card-title">Inspeção visual automatizada pós-fundição</div>
+            <div class="kaizen-card-tags"><span class="kaizen-tag">Qualidade</span><span class="kaizen-tag">Automação</span></div>
+            <div class="kaizen-meta">
+              <div class="kaizen-meta-item"><i class="fa-solid fa-user"></i> Pedro Almeida</div>
+              <div class="kaizen-meta-item"><i class="fa-solid fa-calendar"></i> Nov 2025</div>
+            </div>
+          </div>
+          <div class="kaizen-card-foot">
+            <span class="badge badge-aprovado" data-i18n="badge.aprovado">Aprovado</span>
+            <div class="kaizen-card-actions">
+              <button class="btn-icon btn-icon-blue" title="Ver detalhe" data-i18n-title="common.viewDetail" data-modal-open="modalBibDetail"><i class="fa-solid fa-eye"></i></button>
+              <button class="btn-icon" onclick="printKaizen('bibPrint')" title="Imprimir" data-i18n-title="adm.print"><i class="fa-solid fa-print"></i></button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+      </div><!-- /grid view -->
+
+      <!-- LIST VIEW -->
+      <div data-view="biblioteca" data-view-mode="list" style="display:none;">
+        <div style="overflow-x:auto;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>#</th><th data-i18n="table.titulo">Título</th><th data-i18n="table.categoria">Categoria</th><th data-i18n="bib.unidade">Unidade</th><th data-i18n="table.data">Data</th><th data-i18n="table.status">Status</th><th data-i18n="table.acoes">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span style="font-family:'Poppins', sans-serif;font-weight:400;color:var(--vbm-blue);font-size:.72rem;">KZN-2026-041</span></td>
+                <td><span style="font-family:'Poppins', sans-serif;font-weight:400;font-size:.82rem;">Padronização de EPI na zona de mineração</span></td>
+                <td><span class="badge badge-blue" style="font-size:.58rem;">Segurança</span></td>
+                <td><span style="font-size:.75rem;color:var(--vbm-mid);">Sudbury</span></td>
+                <td><span style="font-size:.75rem;color:var(--vbm-mid);">Jun 2026</span></td>
+                <td><span class="badge badge-aprovado" data-i18n="badge.aprovado">Aprovado</span></td>
+                <td class="table-actions">
+                  <button class="btn-icon btn-icon-blue" data-modal-open="modalBibDetail" title="Ver"><i class="fa-solid fa-eye"></i></button>
+                  <button class="btn-icon" onclick="printKaizen('bibPrint')" title="Imprimir"><i class="fa-solid fa-print"></i></button>
+                </td>
+              </tr>
+              <tr>
+                <td><span style="font-family:'Poppins', sans-serif;font-weight:400;color:var(--vbm-blue);font-size:.72rem;">KZN-2026-038</span></td>
+                <td><span style="font-family:'Poppins', sans-serif;font-weight:400;font-size:.82rem;">Otimização de consumo de energia no britador</span></td>
+                <td><span class="badge badge-blue" style="font-size:.58rem;">Energia</span></td>
+                <td><span style="font-size:.75rem;color:var(--vbm-mid);">Voisey's Bay</span></td>
+                <td><span style="font-size:.75rem;color:var(--vbm-mid);">Mai 2026</span></td>
+                <td><span class="badge badge-aprovado" data-i18n="badge.aprovado">Aprovado</span></td>
+                <td class="table-actions">
+                  <button class="btn-icon btn-icon-blue" data-modal-open="modalBibDetail" title="Ver"><i class="fa-solid fa-eye"></i></button>
+                  <button class="btn-icon" onclick="printKaizen('bibPrint')" title="Imprimir"><i class="fa-solid fa-print"></i></button>
+                </td>
+              </tr>
+              <tr>
+                <td><span style="font-family:'Poppins', sans-serif;font-weight:400;color:var(--vbm-blue);font-size:.72rem;">KZN-2026-033</span></td>
+                <td><span style="font-family:'Poppins', sans-serif;font-weight:400;font-size:.82rem;">Reorganização do 5S no almoxarifado central</span></td>
+                <td><span class="badge badge-blue" style="font-size:.58rem;">5S</span></td>
+                <td><span style="font-size:.75rem;color:var(--vbm-mid);">Sudbury</span></td>
+                <td><span style="font-size:.75rem;color:var(--vbm-mid);">Mai 2026</span></td>
+                <td><span class="badge badge-aprovado" data-i18n="badge.aprovado">Aprovado</span></td>
+                <td class="table-actions">
+                  <button class="btn-icon btn-icon-blue" data-modal-open="modalBibDetail" title="Ver"><i class="fa-solid fa-eye"></i></button>
+                  <button class="btn-icon" onclick="printKaizen('bibPrint')" title="Imprimir"><i class="fa-solid fa-print"></i></button>
+                </td>
+              </tr>
+              <tr>
+                <td><span style="font-family:'Poppins', sans-serif;font-weight:400;color:var(--vbm-blue);font-size:.72rem;">KZN-2026-021</span></td>
+                <td><span style="font-family:'Poppins', sans-serif;font-weight:400;font-size:.82rem;">Redução de tempo de resposta em manutenção corretiva</span></td>
+                <td><span class="badge badge-blue" style="font-size:.58rem;">Manutenção</span></td>
+                <td><span style="font-size:.75rem;color:var(--vbm-mid);">Sudbury</span></td>
+                <td><span style="font-size:.75rem;color:var(--vbm-mid);">Abr 2026</span></td>
+                <td><span class="badge badge-aprovado" data-i18n="badge.aprovado">Aprovado</span></td>
+                <td class="table-actions">
+                  <button class="btn-icon btn-icon-blue" data-modal-open="modalBibDetail" title="Ver"><i class="fa-solid fa-eye"></i></button>
+                  <button class="btn-icon" onclick="printKaizen('bibPrint')" title="Imprimir"><i class="fa-solid fa-print"></i></button>
+                </td>
+              </tr>
+              <tr>
+                <td><span style="font-family:'Poppins', sans-serif;font-weight:400;color:var(--vbm-blue);font-size:.72rem;">KZN-2026-015</span></td>
+                <td><span style="font-family:'Poppins', sans-serif;font-weight:400;font-size:.82rem;">Redução consumo ar comprimido compressores</span></td>
+                <td><span class="badge badge-blue" style="font-size:.58rem;">Energia</span></td>
+                <td><span style="font-size:.75rem;color:var(--vbm-mid);">Thompson</span></td>
+                <td><span style="font-size:.75rem;color:var(--vbm-mid);">Mar 2026</span></td>
+                <td><span class="badge badge-aprovado" data-i18n="badge.aprovado">Aprovado</span></td>
+                <td class="table-actions">
+                  <button class="btn-icon btn-icon-blue" data-modal-open="modalBibDetail" title="Ver"><i class="fa-solid fa-eye"></i></button>
+                  <button class="btn-icon" onclick="printKaizen('bibPrint')" title="Imprimir"><i class="fa-solid fa-print"></i></button>
+                </td>
+              </tr>
+              <tr>
+                <td><span style="font-family:'Poppins', sans-serif;font-weight:400;color:var(--vbm-blue);font-size:.72rem;">KZN-2025-089</span></td>
+                <td><span style="font-family:'Poppins', sans-serif;font-weight:400;font-size:.82rem;">Inspeção visual automatizada pós-fundição</span></td>
+                <td><span class="badge badge-blue" style="font-size:.58rem;">Qualidade</span></td>
+                <td><span style="font-size:.75rem;color:var(--vbm-mid);">Salobo</span></td>
+                <td><span style="font-size:.75rem;color:var(--vbm-mid);">Nov 2025</span></td>
+                <td><span class="badge badge-aprovado" data-i18n="badge.aprovado">Aprovado</span></td>
+                <td class="table-actions">
+                  <button class="btn-icon btn-icon-blue" data-modal-open="modalBibDetail" title="Ver"><i class="fa-solid fa-eye"></i></button>
+                  <button class="btn-icon" onclick="printKaizen('bibPrint')" title="Imprimir"><i class="fa-solid fa-print"></i></button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="bib-table-foot no-print" style="padding:1rem 1.5rem;border-top:1px solid #f0f0f0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
+        <span style="font-size:.72rem;color:var(--vbm-mid);" data-i18n="bib.showingCount">31 Kaizens aprovados · Exibindo 6</span>
+        <button class="btn btn-outline btn-sm bib-loadmore-btn"><span data-i18n="bib.loadMore">Carregar mais</span> <i class="fa-solid fa-chevron-down"></i></button>
+      </div>
+    </div>
+
+  </div>
+</main>
+</div>
+
+<!-- Modal: Detalhe com Print A4 -->
+<div class="modal-backdrop" id="modalBibDetail">
+  <div class="modal modal-xl">
+    <div class="modal-head">
+      <div class="modal-icon" style="background:#e8f8f0;"><i class="fa-solid fa-circle-check" style="color:#16a34a;"></i></div>
+      <div class="modal-title">KZN-2026-041 — Padronização de EPI na zona de mineração</div>
+      <button class="modal-close" data-modal-close aria-label="Fechar" data-i18n-aria="common.fechar"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body" id="bibPrint">
+      <!-- Print header (visible on print) -->
+      <div style="display:none;" class="print-header">
+        <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem;padding-bottom:1rem;border-bottom:2px solid #eaeaea;">
+          <div style="font-family:'Poppins', sans-serif;font-weight:700;font-size:1.4rem;">Vale Base Metals — Kaizen</div>
+          <div style="margin-left:auto;font-size:.75rem;color:#888;">Impresso em: <span id="printDate"></span></div>
+        </div>
+      </div>
+
+      <div class="kaizen-detail-head">
+        <div class="kd-id">KZN-2026-041 · Segurança · Sudbury, Canada · Aprovado em 05/Jun/2026</div>
+        <div class="kd-title">Padronização de EPI na zona de mineração</div>
+        <div class="kd-metas">
+          <div class="kd-meta"><i class="fa-solid fa-user"></i> Líder: Maria Torres</div>
+          <div class="kd-meta"><i class="fa-solid fa-users"></i> Equipe: João Silva, Carlos Pereira</div>
+          <div class="kd-meta"><i class="fa-solid fa-tag"></i> Segurança &amp; 5S</div>
+          <div class="kd-meta"><i class="fa-solid fa-globe"></i> Replicação: Todas as unidades</div>
+        </div>
+      </div>
+
+      <div class="kd-2col" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
+        <div class="kd-section">
+          <div class="kd-section-head"><div class="kd-section-icon"><i class="fa-solid fa-bullseye"></i></div><div class="kd-section-title" data-i18n="kd.problemStatement">Declaração do Problema</div></div>
+          <div class="kd-section-body" style="font-size:.83rem;line-height:1.65;">
+            Falta de padronização no uso de EPI na zona de mineração resultava em 23% de não-conformidades nas auditorias mensais, com risco elevado de acidentes.
+          </div>
+        </div>
+        <div class="kd-section">
+          <div class="kd-section-head"><div class="kd-section-icon"><i class="fa-solid fa-flag"></i></div><div class="kd-section-title" data-i18n="kd.goal">Meta / Objetivo</div></div>
+          <div class="kd-section-body" style="font-size:.83rem;line-height:1.65;">
+            Reduzir não-conformidades de EPI para menos de 5% nas auditorias, através de estações de controle visual e check-list digital.
+          </div>
+        </div>
+      </div>
+
+      <div class="kd-section" style="margin-bottom:1rem;">
+        <div class="kd-section-head"><div class="kd-section-icon"><i class="fa-solid fa-camera"></i></div><div class="kd-section-title" data-i18n="kd.evidenceBeforeAfter">Evidências Antes &amp; Depois</div></div>
+        <div class="kd-section-body">
+          <div class="kd-before-after">
+            <div class="kd-photo-box">
+              <img src="assets/vendor/8fe997d64b2290fc_About-us.webp" alt="Antes" style="height:160px;"/>
+              <div class="kd-photo-box-body"><div class="kd-photo-label" data-i18n="kd.before">Antes</div><div class="kd-photo-desc">Sem controle visual de EPI. Operadores sem identificação visual da conformidade.</div></div>
+            </div>
+            <div class="kd-photo-box">
+              <img src="assets/vendor/c392f7cd5f5881d2_Sustainability.webp" alt="Depois" style="height:160px;"/>
+              <div class="kd-photo-box-body"><div class="kd-photo-label" data-i18n="kd.after">Depois</div><div class="kd-photo-desc">Estação de controle EPI com espelho e check-list. Verde = conformidade. Auditorias mensais digitais.</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="kd-section" style="margin-bottom:1rem;">
+        <div class="kd-section-head"><div class="kd-section-icon"><i class="fa-solid fa-chart-bar"></i></div><div class="kd-section-title" data-i18n="kd.resultsAchieved">Resultados Alcançados</div></div>
+        <div class="kd-section-body">
+          <div class="kd-3col" style="display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;">
+            <div style="background:var(--vbm-off-white);border-radius:.5rem;padding:.85rem;border-left:3px solid #16a34a;text-align:center;">
+              <div style="font-family:'Poppins', sans-serif;font-weight:700;font-size:1.6rem;color:#16a34a;">-78%</div>
+              <div style="font-size:.7rem;color:var(--vbm-mid);">Não-conformidades EPI<br/>23% → 5%</div>
+            </div>
+            <div style="background:var(--vbm-off-white);border-radius:.5rem;padding:.85rem;border-left:3px solid var(--vbm-blue);text-align:center;">
+              <div style="font-family:'Poppins', sans-serif;font-weight:700;font-size:1.6rem;color:var(--vbm-blue);">0</div>
+              <div style="font-size:.7rem;color:var(--vbm-mid);">Acidentes relacionados<br/>nos 60 dias pós-impl.</div>
+            </div>
+            <div style="background:var(--vbm-off-white);border-radius:.5rem;padding:.85rem;border-left:3px solid #7c3aed;text-align:center;">
+              <div style="font-family:'Poppins', sans-serif;font-weight:700;font-size:1.6rem;color:#7c3aed;">95%</div>
+              <div style="font-size:.7rem;color:var(--vbm-mid);">Satisfação operadores<br/>pesquisa pós-impl.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="kd-section">
+        <div class="kd-section-head"><div class="kd-section-icon"><i class="fa-solid fa-lightbulb"></i></div><div class="kd-section-title" data-i18n="kd.learningsReplication">Aprendizados &amp; Potencial de Replicação</div></div>
+        <div class="kd-section-body" style="font-size:.83rem;line-height:1.65;">
+          <strong>Aprendizados:</strong> Envolver a liderança desde o início foi fundamental para a adoção. A comunicação visual (espelho + check-list colorido) é mais efetiva que texto.<br/><br/>
+          <strong>Replicação:</strong> Solução de baixo custo (~CAD 450/estação) adaptável para qualquer unidade de mineração. Arquivos digitais do check-list disponíveis no SharePoint.
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot no-print">
+      <button class="btn btn-ghost" data-modal-close data-i18n="common.fechar">Fechar</button>
+      <button class="btn btn-outline" onclick="document.getElementById('printDate').textContent=new Date().toLocaleDateString('pt-BR');document.querySelector('.print-header').style.display='block';printKaizen('bibPrint')">
+        <i class="fa-solid fa-print"></i> <span data-i18n="common.imprimirA4">Imprimir A4</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container"></div>
+<script src="assets/vbm-app.js"></script>
+<script>
+(function(){
+  var topnav=document.getElementById('topnav');
+  /* topbar com cor fixa — sem alternância por scroll */
+})();
+(function(){
+  var btn=document.getElementById('mobileToggle'),drawer=document.getElementById('topnavDrawer');
+  if(btn&&drawer){
+    btn.addEventListener('click',function(){
+      var o=drawer.classList.toggle('open');
+      btn.querySelector('i').className=o?'fa-solid fa-xmark':'fa-solid fa-bars';
+    });
+    document.addEventListener('click',function(e){
+      if(!btn.contains(e.target)&&!drawer.contains(e.target)){
+        drawer.classList.remove('open');
+        btn.querySelector('i').className='fa-solid fa-bars';
+      }
+    });
+  }
+})();
+</script>
+<script>
+// ─── Painel de Configurações (engrenagem) — replicado de Value Driver Tree ───
+(function () {
+  var btn = document.getElementById('settingsBtn');
+  var panel = document.getElementById('settingsPanel');
+  var backdrop = document.getElementById('settingsBackdrop');
+  var closeBtn = document.getElementById('settingsClose');
+  if (!btn || !panel || !backdrop) return;
+
+  function openPanel() {
+    panel.classList.add('open');
+    backdrop.classList.add('open');
+    btn.setAttribute('aria-expanded', 'true');
+    panel.setAttribute('aria-hidden', 'false');
+  }
+  function closePanel() {
+    panel.classList.remove('open');
+    backdrop.classList.remove('open');
+    btn.setAttribute('aria-expanded', 'false');
+    panel.setAttribute('aria-hidden', 'true');
+  }
+
+  btn.addEventListener('click', function () {
+    panel.classList.contains('open') ? closePanel() : openPanel();
+  });
+  closeBtn && closeBtn.addEventListener('click', closePanel);
+  backdrop.addEventListener('click', closePanel);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closePanel();
+  });
+})();
+
+// ─── Tema (Claro/Escuro) do painel de Configurações ───
+(function () {
+  var THEME_KEY = 'vdt-theme';
+  var btnWhite = document.getElementById('btnWhite');
+  var btnBusiness = document.getElementById('btnBusiness');
+  if (!btnWhite && !btnBusiness) return;
+
+  function applyTheme(theme) {
+    var isDark = theme === 'dark';
+    document.body.dataset.bg = isDark ? 'dark' : '';
+    if (btnWhite) btnWhite.classList.toggle('active', !isDark);
+    if (btnBusiness) btnBusiness.classList.toggle('active', isDark);
+  }
+
+  var saved = 'light';
+  try { saved = localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light'; } catch (e) {}
+  applyTheme(saved);
+
+  btnWhite && btnWhite.addEventListener('click', function () {
+    applyTheme('light');
+    try { localStorage.setItem(THEME_KEY, 'light'); } catch (e) {}
+  });
+  btnBusiness && btnBusiness.addEventListener('click', function () {
+    applyTheme('dark');
+    try { localStorage.setItem(THEME_KEY, 'dark'); } catch (e) {}
+  });
+})();
+
+// ─── Idioma (PT-BR/EN) do painel de Configurações ───
+(function () {
+  var I18N = {
+    'pt-BR': {
+      'settings.btnTitle': 'Configurações',
+      'settings.title': 'Configurações',
+      'settings.close': 'Fechar',
+      'settings.theme': 'Tema',
+      'theme.white': 'Claro',
+      'theme.dark': 'Escuro',
+      'settings.language': 'Idioma',
+      'settings.languageInfo': 'Idioma da interface',
+      'nav.menu': 'Menu',
+      'nav.novoKaizen': 'Novo Kaizen',
+      'nav.biblioteca': 'Biblioteca',
+      'nav.aprovacao': 'Aprovação',
+      'nav.administracao': 'Administração',
+      'role.operador': 'Operador',
+      'badge.aprovado': 'Aprovado',
+      'badge.aprovados': 'Aprovados',
+      'badge.reprovados': 'Reprovados',
+      'badge.aguardando': 'Aguardando',
+      'badge.rascunhos': 'Rascunhos',
+      'common.fechar': 'Fechar',
+      'common.imprimirA4': 'Imprimir A4',
+      'filter.allCategories': 'Todas as categorias',
+      'filter.allUnits': 'Todas as unidades',
+      'filter.allPeriod': 'Todo o período',
+      'cat.seguranca': 'Segurança',
+      'cat.producao': 'Produção',
+      'cat.manutencao': 'Manutenção',
+      'cat.energia': 'Energia',
+      'cat.meioAmbiente': 'Meio Ambiente',
+      'cat.qualidade': 'Qualidade',
+      'bib.officialRepo': 'Repositório Oficial',
+      'bib.heroDesc': 'Todos os Kaizens aprovados da organização. Consulte, inspire-se e replique melhorias em sua área.',
+      'bib.unidade': 'Unidade',
+      'bib.searchPlaceholder': 'Buscar por título, líder, ID ou palavra-chave...',
+      'bib.showingCount': '31 Kaizens aprovados · Exibindo 6',
+      'bib.loadMore': 'Carregar mais',
+      'bib.summaryTitle': 'Resumo da Biblioteca',
+      'bib.total2024': 'Total 2024',
+      'bib.total2025': 'Total 2025',
+      'bib.total2026': 'Total 2026',
+      'table.titulo': 'Título',
+      'table.categoria': 'Categoria',
+      'table.data': 'Data',
+      'table.status': 'Status',
+      'table.acoes': 'Ações',
+      'kd.problemStatement': 'Declaração do Problema',
+      'kd.goal': 'Meta / Objetivo',
+      'kd.evidenceBeforeAfter': 'Evidências Antes & Depois',
+      'kd.before': 'Antes',
+      'kd.after': 'Depois',
+      'kd.resultsAchieved': 'Resultados Alcançados',
+      'kd.learningsReplication': 'Aprendizados & Potencial de Replicação',
+      'common.grid': 'Grade',
+      'common.list': 'Lista',
+      'common.viewDetail': 'Ver detalhe',
+      'adm.print': 'Imprimir'
+    },
+    'en': {
+      'settings.btnTitle': 'Settings',
+      'settings.title': 'Settings',
+      'settings.close': 'Close',
+      'settings.theme': 'Theme',
+      'theme.white': 'Light',
+      'theme.dark': 'Dark',
+      'settings.language': 'Language',
+      'settings.languageInfo': 'Interface language',
+      'nav.menu': 'Menu',
+      'nav.novoKaizen': 'New Kaizen',
+      'nav.biblioteca': 'Library',
+      'nav.aprovacao': 'Approval',
+      'nav.administracao': 'Administration',
+      'role.operador': 'Operator',
+      'badge.aprovado': 'Approved',
+      'badge.aprovados': 'Approved',
+      'badge.reprovados': 'Rejected',
+      'badge.aguardando': 'Pending',
+      'badge.rascunhos': 'Drafts',
+      'common.fechar': 'Close',
+      'common.imprimirA4': 'Print PDF',
+      'filter.allCategories': 'All categories',
+      'filter.allUnits': 'All units',
+      'filter.allPeriod': 'All time',
+      'cat.seguranca': 'Safety',
+      'cat.producao': 'Production',
+      'cat.manutencao': 'Maintenance',
+      'cat.energia': 'Energy',
+      'cat.meioAmbiente': 'Environment',
+      'cat.qualidade': 'Quality',
+      'bib.officialRepo': 'Official Repository',
+      'bib.heroDesc': 'All approved Kaizens across the organization. Browse, get inspired, and replicate improvements in your area.',
+      'bib.unidade': 'Unit',
+      'bib.searchPlaceholder': 'Search by title, leader, ID or keyword...',
+      'bib.showingCount': '31 approved Kaizens · Showing 6',
+      'bib.loadMore': 'Load more',
+      'bib.summaryTitle': 'Library Summary',
+      'bib.total2024': 'Total 2024',
+      'bib.total2025': 'Total 2025',
+      'bib.total2026': 'Total 2026',
+      'table.titulo': 'Title',
+      'table.categoria': 'Category',
+      'table.data': 'Date',
+      'table.status': 'Status',
+      'table.acoes': 'Actions',
+      'kd.problemStatement': 'Problem Statement',
+      'kd.goal': 'Goal / Objective',
+      'kd.evidenceBeforeAfter': 'Before & After Evidence',
+      'kd.before': 'Before',
+      'kd.after': 'After',
+      'kd.resultsAchieved': 'Results Achieved',
+      'kd.learningsReplication': 'Learnings & Replication Potential',
+      'common.grid': 'Grid',
+      'common.list': 'List',
+      'common.viewDetail': 'View detail',
+      'adm.print': 'Print'
+    }
+  };
+
+  var select = document.getElementById('langSelect');
+  var panel = document.getElementById('settingsPanel');
+  var settingsBtn = document.getElementById('settingsBtn');
+  if (!select || !panel) return;
+
+  function translatePanel(lang) {
+    var dict = I18N[lang] || I18N['pt-BR'];
+    var scope = [document.body];
+    scope.forEach(function (root) {
+      root.querySelectorAll('[data-i18n]').forEach(function (el) {
+        var key = el.dataset.i18n;
+        if (dict[key] != null) el.textContent = dict[key];
+      });
+      root.querySelectorAll('[data-i18n-title]').forEach(function (el) {
+        var key = el.dataset.i18nTitle;
+        if (dict[key] != null) el.setAttribute('title', dict[key]);
+      });
+      root.querySelectorAll('[data-i18n-aria]').forEach(function (el) {
+        var key = el.dataset.i18nAria;
+        if (dict[key] != null) el.setAttribute('aria-label', dict[key]);
+      });
+      root.querySelectorAll('[data-i18n-placeholder]').forEach(function (el) {
+        var key = el.dataset.i18nPlaceholder;
+        if (dict[key] != null) el.setAttribute('placeholder', dict[key]);
+      });
+      if (root.dataset && root.dataset.i18nTitle && dict[root.dataset.i18nTitle] != null) {
+        root.setAttribute('title', dict[root.dataset.i18nTitle]);
+      }
+    });
+  }
+
+  function applyLang(lang) {
+    if (!I18N[lang]) lang = 'pt-BR';
+    select.value = lang;
+    translatePanel(lang);
+    try { localStorage.setItem('vdt-lang', lang); } catch (e) {}
+  }
+
+  select.addEventListener('change', function () { applyLang(select.value); });
+
+  var savedLang = 'pt-BR';
+  try { savedLang = localStorage.getItem('vdt-lang') || 'pt-BR'; } catch (e) {}
+  applyLang(savedLang);
+})();
+</script>
+</body>
+</html>
