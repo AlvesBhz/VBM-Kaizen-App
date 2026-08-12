@@ -278,6 +278,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
   border-color:rgba(var(--hue),.55);
 }
 @media (prefers-reduced-motion: reduce){ .admin-item-icon{ transition-duration:.01ms !important; } }
+.admin-item-icon img{width:20px;height:20px;object-fit:contain;}
 .admin-item-body{flex:1;min-width:0;}
 .admin-item-name{font-family:'Poppins',sans-serif;font-weight:600;font-size:.82rem;color:var(--vbm-dark);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .admin-item-sub{font-size:.68rem;color:var(--vbm-mid);margin-top:.1rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
@@ -616,10 +617,15 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
         </div>
       </div>
       <div class="admin-list">
-        <div class="admin-item">
-          <div class="admin-item-icon green"><i class="fa-solid fa-helmet-safety"></i></div>
-          <div class="admin-item-body"><div class="admin-item-name">Segurança</div><div class="admin-item-sub">EPI, bloqueios, riscos físicos e prevenção de acidentes</div></div>
-          <span class="admin-item-badge">12 <span data-i18n="adm.kaizensWord">kaizens</span></span>
+        <!-- 1º card: conteúdo real, vindo de GET /api/categorias (ver
+             assets/categorias.js) — 1ª fase busca só 1 categoria. Os
+             demais cards abaixo continuam estáticos por enquanto. Os
+             valores/ícone fixos aqui servem de fallback visual até o
+             fetch responder (ou se ele falhar). -->
+        <div class="admin-item" id="categoriaCardDestaque">
+          <div class="admin-item-icon green" id="categoriaCardIcone"><i class="fa-solid fa-helmet-safety"></i></div>
+          <div class="admin-item-body"><div class="admin-item-name" id="categoriaCardNome">Segurança</div><div class="admin-item-sub" id="categoriaCardDescricao">EPI, bloqueios, riscos físicos e prevenção de acidentes</div></div>
+          <span class="admin-item-badge" id="categoriaCardBadge">12 <span data-i18n="adm.kaizensWord">kaizens</span></span>
           <div class="admin-item-actions">
             <button class="btn-icon btn-icon-blue btn-icon-sm" data-modal-open="modalEditCategoria"><i class="fa-solid fa-pen"></i></button>
             <button class="btn-icon btn-icon-red btn-icon-sm" title="Desativar" data-i18n-title="common.desativar" onclick="toggleAdminItemStatus(this,'categoria Segurança')"><i class="fa-solid fa-ban"></i></button>
@@ -1498,6 +1504,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 <div class="toast-container"></div>
 <script src="assets/vbm-app.js"></script>
 <script src="assets/aprovadores.js"></script>
+<script src="assets/categorias.js"></script>
 <script>
 (function(){
   var tabs = document.querySelectorAll('[data-admin-tab]');

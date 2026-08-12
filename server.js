@@ -3,7 +3,9 @@
  *
  * Serve os HTML/CSS/JS estáticos do app (index, admin, aprovacao, etc.)
  * e expõe uma API REST para a tabela `kzn_aprovador`, usada hoje pela
- * aba "Aprovadores" de admin.html.
+ * aba "Aprovadores" de admin.html. Também expõe uma leitura (só GET)
+ * de `kzn_categoria` + contagem em `kzn_pendenciaconsolidada`, usada
+ * pelo card em destaque da aba "Categorias" (ver assets/categorias.js).
  *
  * MODELO DE CONEXÃO (igual ao app.py de teste / app.yaml fornecidos):
  *   - Conexão DIRETA ao Azure SQL Database, sem passar pelo Databricks
@@ -51,6 +53,14 @@ function safeIdentifier(value, fallback) {
 const DB_SCHEMA = safeIdentifier(process.env.AZURE_SQL_SCHEMA, "dbo");
 const DB_TABLE = safeIdentifier(process.env.AZURE_SQL_TABLE, "kzn_aprovador");
 const FULL_TABLE_NAME = `[${DB_SCHEMA}].[${DB_TABLE}]`;
+
+// Mesmo schema dos aprovadores; tabela própria, também sobrescrevível
+// por env var caso o nome real divirja do padrão.
+const DB_CATEGORIA_TABLE = safeIdentifier(process.env.AZURE_SQL_CATEGORIA_TABLE, "kzn_categoria");
+const FULL_CATEGORIA_TABLE = `[${DB_SCHEMA}].[${DB_CATEGORIA_TABLE}]`;
+
+const DB_PENDENCIA_TABLE = safeIdentifier(process.env.AZURE_SQL_PENDENCIA_TABLE, "kzn_pendenciaconsolidada");
+const FULL_PENDENCIA_TABLE = `[${DB_SCHEMA}].[${DB_PENDENCIA_TABLE}]`;
 
 function checkConfig() {
   const missing = [
@@ -255,6 +265,44 @@ apiRouter.delete("/aprovadores/:id", async (req, res) => {
   } catch (err) {
     console.error("[aprovadores] erro ao deletar:", err.message);
     res.status(500).json({ error: "Erro ao deletar aprovador: " + err.message });
+  }
+});
+
+// ------------------------------------------------------------------
+// API — kzn_categoria (1ª fase: só leitura, 1 categoria)
+// ------------------------------------------------------------------
+// O card em destaque da aba "Categorias" mostra hoje só a 1ª categoria
+// retornada — os demais itens da lista continuam estáticos por
+// enquanto (ver assets/categorias.js). A contagem de Kaizens vem de
+// kzn_pendenciaconsolidada, casada por NM_CATEGORIA; se essa coluna
+// não existir na tabela real, a consulta de contagem falha sozinha
+// sem derrubar a categoria em si (mesmo espírito defensivo do
+// restante do arquivo) — devolve QTD_KAIZENS: null e só loga o motivo.
+apiRouter.get("/categorias", async (req, res) => {
+  try {
+    const result = await runQuery(
+      `SELECT TOP (1) NM_CATEGORIA, DS_CATEGORIA, URL_ICONE
+       FROM ${FULL_CATEGORIA_TABLE}
+       ORDER BY NM_CATEGORIA`
+    );
+    const categoria = result.recordset[0] || null;
+    if (!categoria) return res.json(null);
+
+    let qtdKaizens = null;
+    try {
+      const contagem = await runQuery(
+        `SELECT COUNT(*) AS QTD FROM ${FULL_PENDENCIA_TABLE} WHERE NM_CATEGORIA = @nmCategoria`,
+        [["nmCategoria", sql.NVarChar(200), categoria.NM_CATEGORIA]]
+      );
+      qtdKaizens = contagem.recordset[0].QTD;
+    } catch (err) {
+      console.warn(`[categorias] contagem de kaizens indisponível (${FULL_PENDENCIA_TABLE}): ${err.message}`);
+    }
+
+    res.json({ ...categoria, QTD_KAIZENS: qtdKaizens });
+  } catch (err) {
+    console.error("[categorias] erro ao consultar:", err.message);
+    res.status(500).json({ error: "Erro ao consultar categorias: " + err.message });
   }
 });
 
