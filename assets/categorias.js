@@ -27,6 +27,7 @@
   var descPtEl = document.getElementById("catEditDescPt");
   var descEnEl = document.getElementById("catEditDescEn");
   var saveBtn = document.getElementById("btnSaveEditCategoria");
+  var diagEl = document.getElementById("catEditDiagnostico");
 
   var categoriaId = null; // ID_CATEGORIA em destaque, assim que descoberto (ver garantirCategoriaId)
 
@@ -101,6 +102,19 @@
           if (window.updateCategoryDescCounter) updateCategoryDescCounter(descPtEl, "catEdit");
         }
         if (descEnEl) descEnEl.value = (data.en && data.en.DS_CATEGORIA) || "";
+
+        if (diagEl) {
+          if (data.pt && data.en) {
+            diagEl.style.display = "none";
+          } else {
+            diagEl.style.display = "";
+            diagEl.textContent =
+              "ID_CATEGORIA = " + data.ID_CATEGORIA + " — no banco: " +
+              "PT " + (data.pt ? "encontrado" : "NÃO encontrado") + ", " +
+              "EN " + (data.en ? "encontrado" : "NÃO encontrado") +
+              ". Salvar cria a linha que faltar com este mesmo ID_CATEGORIA.";
+          }
+        }
       })
       .catch(function (err) {
         console.error("[categorias] falha ao carregar categoria para edição:", err);
@@ -140,6 +154,7 @@
       .then(function () {
         if (nomeEl) nomeEl.textContent = payload.pt.NM_CATEGORIA;
         if (descricaoEl) descricaoEl.textContent = payload.pt.DS_CATEGORIA;
+        if (diagEl) diagEl.style.display = "none"; // depois de salvar, as 2 linhas já existem
         if (window.closeModal) closeModal("modalEditCategoria");
         if (window.showToast) showToast("success", "Salvo", "Categoria atualizada com sucesso!");
       })

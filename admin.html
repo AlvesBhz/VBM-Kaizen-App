@@ -1087,6 +1087,10 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
         </div>
         <div class="form-helper" style="text-align:right;" id="catEditDescCounter">56/140</div>
       </div>
+      <!-- Diagnóstico do que veio do banco pra este registro — mostra o
+           ID_CATEGORIA em edição e se cada idioma tem linha própria.
+           Some sozinho quando os dois idiomas existem. -->
+      <div class="form-helper" id="catEditDiagnostico" style="display:none;"></div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" data-modal-close data-i18n="common.cancelar">Cancelar</button>
