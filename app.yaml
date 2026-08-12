@@ -1,0 +1,39 @@
+# Databricks App — VBM Kaizen (front-end + API Aprovadores)
+# Conexão DIRETA ao Azure SQL Database (sem passar pelo Databricks SQL
+# Warehouse), no mesmo modelo do protótipo de teste (app.py / pymssql):
+# credenciais fixas via env vars, lidas pelo server.js com `mssql`.
+command:
+  - npm
+  - start
+
+env:
+  # Configs não sensíveis: pode deixar hardcoded aqui
+  - name: 'AZURE_SQL_SERVER'
+    value: 'rdb-ibp-bmsa-prd.database.windows.net'
+  - name: 'AZURE_SQL_DATABASE'
+    value: 'BDIBPBMSA_PRD'
+  - name: 'AZURE_SQL_PORT'
+    value: '1433'
+  - name: 'AZURE_SQL_SCHEMA'
+    value: 'ci'
+  - name: 'AZURE_SQL_TABLE'
+    value: 'kzn_aprovador'
+
+  # Usuário e senha: NUNCA em texto puro em produção.
+  # Devem vir de um Secret Scope do Databricks, adicionado como
+  # "resource" do app (App resources > + Add resource > Secret) e
+  # referenciado aqui via "valueFrom" (nome do resource, não o valor
+  # do secret). Exemplo, assumindo um resource chamado "azure-sql":
+  #
+  #   - name: 'AZURE_SQL_USER'
+  #     valueFrom: 'azure-sql-user'
+  #   - name: 'AZURE_SQL_PASSWORD'
+  #     valueFrom: 'azure-sql-password'
+  #
+  # Os valores abaixo replicam exatamente o app.yaml de teste fornecido
+  # (texto puro) só para manter o mesmo comportamento por enquanto —
+  # troque pelo valueFrom acima antes de ir para produção.
+  - name: 'AZURE_SQL_USER'
+    value: 'pcivbmreader'
+  - name: 'AZURE_SQL_PASSWORD'
+    value: 'Readpci@13'

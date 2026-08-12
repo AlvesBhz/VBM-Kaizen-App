@@ -583,120 +583,28 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       </div>
     </div>
 
-    <!-- ═══ APROVADORES ═══ -->
+    <!-- ═══ APROVADORES ═══
+         Conteúdo carregado dinamicamente da tabela kzn_aprovador via
+         GET /api/aprovadores (ver assets/aprovadores.js). Os cards
+         abaixo (loading/erro/vazio) e o container #aprovadoresList
+         são preenchidos em tempo de execução — não há mais dados
+         estáticos aqui. -->
     <div class="admin-panel active section-card reveal" id="panel-aprovadores">
       <div class="section-head" style="padding:1.25rem;">
-        <div class="section-title"><i class="fa-solid fa-user-check" style="color:var(--vbm-blue);"></i> <span data-i18n="adm.approversByUnit">Aprovadores por Unidade</span></div>
-        <div style="display:flex;gap:.5rem;">
+        <div class="section-title"><i class="fa-solid fa-user-check" style="color:var(--vbm-blue);"></i> <span data-i18n="adm.approversTitle">Aprovadores</span>
+          <span class="admin-item-badge" id="aprovadoresCount" style="margin-left:.5rem;">…</span>
+        </div>
+        <div style="display:flex;gap:.5rem;align-items:center;">
+          <span id="aprovadoresConnStatus" style="font-size:.7rem;color:var(--vbm-mid);"></span>
+          <button class="btn btn-ghost btn-sm" type="button" id="btnReloadAprovadores" title="Recarregar"><i class="fa-solid fa-rotate"></i></button>
           <button class="btn btn-outline btn-sm admin-add-btn" data-modal-open="modalAddAprovador"><i class="fa-solid fa-plus"></i> <span data-i18n="adm.newApprover">Novo Aprovador</span></button>
         </div>
       </div>
 
-      <div style="padding:1.25rem 1.25rem .5rem;">
-      <div class="unit-group-grid">
-        <div class="unit-group">
-          <div class="unit-group-head">
-            <i class="fa-solid fa-location-dot" style="color:var(--vbm-blue);font-size:.75rem;"></i>
-            <span class="unit-group-head-name">Sudbury, Ontario — Canada</span>
-            <span class="admin-item-badge" style="margin-left:auto;">6 <span data-i18n="adm.approversWord">aprovadores</span></span>
-          </div>
-          <div class="unit-group-body">
-            <div class="admin-item">
-              <div class="admin-avatar" style="background:linear-gradient(135deg,#3cb5e5,#1a8bbf);">RA</div>
-              <div class="admin-item-body">
-                <div class="admin-item-name">Roberto Almeida</div>
-                <div class="admin-item-sub">roberto.almeida@valebasemetals.com</div>
-              </div>
-              <span class="admin-item-badge role-badge" data-i18n="role.gerente">Gerente</span>
-              <div class="admin-item-actions">
-                <button class="btn-icon btn-icon-blue btn-icon-sm" title="Editar" data-i18n-title="common.editar" data-modal-open="modalEditAprovador"><i class="fa-solid fa-pen"></i></button>
-                <button class="btn-icon btn-icon-red btn-icon-sm" title="Desativar" data-i18n-title="common.desativar" onclick="toggleAdminItemStatus(this,'aprovador Roberto Almeida')"><i class="fa-solid fa-ban"></i></button>
-              </div>
-            </div>
-            <div class="admin-item">
-              <div class="admin-avatar" style="background:linear-gradient(135deg,#f59e0b,#c2770e);">SK</div>
-              <div class="admin-item-body">
-                <div class="admin-item-name">Sandra Kowalski</div>
-                <div class="admin-item-sub">sandra.kowalski@valebasemetals.com</div>
-              </div>
-              <span class="admin-item-badge role-badge" data-i18n="role.supervisor">Supervisor</span>
-              <div class="admin-item-actions">
-                <button class="btn-icon btn-icon-blue btn-icon-sm" data-modal-open="modalEditAprovador"><i class="fa-solid fa-pen"></i></button>
-                <button class="btn-icon btn-icon-red btn-icon-sm" title="Desativar" data-i18n-title="common.desativar" onclick="toggleAdminItemStatus(this,'aprovador Sandra Kowalski')"><i class="fa-solid fa-ban"></i></button>
-              </div>
-            </div>
-            <div class="admin-item">
-              <div class="admin-avatar" style="background:linear-gradient(135deg,#16a34a,#15803d);">FL</div>
-              <div class="admin-item-body">
-                <div class="admin-item-name">Fernanda Lopes</div>
-                <div class="admin-item-sub">fernanda.lopes@valebasemetals.com</div>
-              </div>
-              <span class="admin-item-badge role-badge" data-i18n="role.engenheiro">Engenheiro</span>
-              <div class="admin-item-actions">
-                <button class="btn-icon btn-icon-blue btn-icon-sm" data-modal-open="modalEditAprovador"><i class="fa-solid fa-pen"></i></button>
-                <button class="btn-icon btn-icon-red btn-icon-sm" title="Desativar" data-i18n-title="common.desativar" onclick="toggleAdminItemStatus(this,'aprovador Fernanda Lopes')"><i class="fa-solid fa-ban"></i></button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="unit-group">
-          <div class="unit-group-head">
-            <i class="fa-solid fa-location-dot" style="color:var(--vbm-blue);font-size:.75rem;"></i>
-            <span class="unit-group-head-name">Thompson, Manitoba — Canada</span>
-            <span class="admin-item-badge" style="margin-left:auto;">4 <span data-i18n="adm.approversWord">aprovadores</span></span>
-          </div>
-          <div class="unit-group-body">
-            <div class="admin-item">
-              <div class="admin-avatar" style="background:linear-gradient(135deg,#7c3aed,#a855f7);">CM</div>
-              <div class="admin-item-body">
-                <div class="admin-item-name">Carlos Mendes</div>
-                <div class="admin-item-sub">carlos.mendes@valebasemetals.com</div>
-              </div>
-              <span class="admin-item-badge role-badge" data-i18n="role.gerente">Gerente</span>
-              <div class="admin-item-actions">
-                <button class="btn-icon btn-icon-blue btn-icon-sm" data-modal-open="modalEditAprovador"><i class="fa-solid fa-pen"></i></button>
-                <button class="btn-icon btn-icon-red btn-icon-sm" title="Desativar" data-i18n-title="common.desativar" onclick="toggleAdminItemStatus(this,'aprovador Carlos Mendes')"><i class="fa-solid fa-ban"></i></button>
-              </div>
-            </div>
-            <div class="admin-item">
-              <div class="admin-avatar" style="background:linear-gradient(135deg,#ec4899,#db2777);">AR</div>
-              <div class="admin-item-body">
-                <div class="admin-item-name">Ana Ribeiro</div>
-                <div class="admin-item-sub">ana.ribeiro@valebasemetals.com</div>
-              </div>
-              <span class="admin-item-badge role-badge" data-i18n="role.supervisor">Supervisor</span>
-              <div class="admin-item-actions">
-                <button class="btn-icon btn-icon-blue btn-icon-sm" data-modal-open="modalEditAprovador"><i class="fa-solid fa-pen"></i></button>
-                <button class="btn-icon btn-icon-red btn-icon-sm" title="Desativar" data-i18n-title="common.desativar" onclick="toggleAdminItemStatus(this,'aprovador Ana Ribeiro')"><i class="fa-solid fa-ban"></i></button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="unit-group">
-          <div class="unit-group-head">
-            <i class="fa-solid fa-location-dot" style="color:var(--vbm-blue);font-size:.75rem;"></i>
-            <span class="unit-group-head-name">Salobo — Brasil</span>
-            <span class="admin-item-badge" style="margin-left:auto;">5 <span data-i18n="adm.approversWord">aprovadores</span></span>
-          </div>
-          <div class="unit-group-body">
-            <div class="admin-item">
-              <div class="admin-avatar" style="background:linear-gradient(135deg,#0ea5e9,#0369a1);">PF</div>
-              <div class="admin-item-body">
-                <div class="admin-item-name">Paulo Ferreira</div>
-                <div class="admin-item-sub">paulo.ferreira@valebasemetals.com</div>
-              </div>
-              <span class="admin-item-badge role-badge" data-i18n="role.gerente">Gerente</span>
-              <div class="admin-item-actions">
-                <button class="btn-icon btn-icon-blue btn-icon-sm" data-modal-open="modalEditAprovador"><i class="fa-solid fa-pen"></i></button>
-                <button class="btn-icon btn-icon-red btn-icon-sm" title="Desativar" data-i18n-title="common.desativar" onclick="toggleAdminItemStatus(this,'aprovador Paulo Ferreira')"><i class="fa-solid fa-ban"></i></button>
-              </div>
-            </div>
-          </div>
-        </div>
+      <div id="aprovadoresState" style="padding:1.25rem;color:var(--vbm-mid);font-size:.85rem;">
+        Carregando aprovadores...
       </div>
-      </div>
+      <div class="admin-list" id="aprovadoresList" style="display:none;"></div>
     </div>
 
     <!-- ═══ CATEGORIAS ═══ -->
@@ -1015,40 +923,17 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       <button class="modal-close" data-modal-close><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
+      <!-- Campos = colunas reais de kzn_aprovador (ID_USUARIO, CD_MATRICULA, NM_USER).
+           DT_ATUALIZACAO é gerada pelo servidor (GETDATE()). -->
       <div class="form-grid form-grid-2">
-        <div class="form-group"><label class="form-label" data-i18n="adm.fullName">Nome completo</label><input type="text" class="form-control" placeholder="Buscar no MDM..." data-i18n-placeholder="adm.searchMdm"/></div>
-        <div class="form-group"><label class="form-label" data-i18n="adm.mdmRegistration">MDM / Matrícula</label><input type="text" class="form-control" placeholder="MDM00000"/></div>
-        <div class="form-group" style="grid-column:1/-1;"><label class="form-label" data-i18n="adm.corporateEmail">E-mail corporativo</label><input type="email" class="form-control" placeholder="nome@valebasemetals.com"/></div>
-        <div class="form-group"><label class="form-label" data-i18n="adm.unit">Unidade</label>
-          <select class="form-control">
-            <option data-i18n="f.select">Selecione...</option>
-            <option>Sudbury, CA</option>
-            <option>Thompson, CA</option>
-            <option>Voisey's Bay, CA</option>
-            <option>Salobo, BR</option>
-            <option>PT Vale, ID</option>
-          </select>
-        </div>
-        <div class="form-group"><label class="form-label" data-i18n="adm.role">Papel</label>
-          <select class="form-control">
-            <option data-i18n="role.supervisor">Supervisor</option>
-            <option data-i18n="role.gerente">Gerente</option>
-            <option data-i18n="role.engenheiro">Engenheiro</option>
-            <option data-i18n="role.diretor">Diretor</option>
-          </select>
-        </div>
-        <div class="form-group" style="grid-column:1/-1;margin-bottom:0;">
-          <label class="form-label" style="margin-bottom:.4rem;" data-i18n="adm.teamsNotifications">Notificações por Teams</label>
-          <div style="display:flex;align-items:center;gap:.5rem;">
-            <div class="toggle on" style="cursor:pointer;" title="Toggle Teams notification"></div>
-            <span style="font-size:.73rem;color:var(--vbm-mid);" data-i18n="adm.teamsNotificationsDesc">Enviar notificação Teams ao receber kaizen para aprovação</span>
-          </div>
-        </div>
+        <div class="form-group"><label class="form-label" data-i18n="adm.idUsuario">ID_USUARIO</label><input type="number" step="1" class="form-control" id="addAprovadorIdUsuario" placeholder="Ex.: 10234"/></div>
+        <div class="form-group"><label class="form-label" data-i18n="adm.mdmRegistration">CD_MATRICULA</label><input type="text" class="form-control" id="addAprovadorMatricula" placeholder="MDM00000"/></div>
+        <div class="form-group" style="grid-column:1/-1;"><label class="form-label" data-i18n="adm.fullName">NM_USER (nome completo)</label><input type="text" class="form-control" id="addAprovadorNome" placeholder="Nome do aprovador"/></div>
       </div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" data-modal-close data-i18n="common.cancelar">Cancelar</button>
-      <button class="btn btn-primary" onclick="closeModal('modalAddAprovador');showToast('success','Aprovador adicionado','Aprovador cadastrado com sucesso!')"><span data-i18n="adm.saveApprover">Salvar Aprovador</span></button>
+      <button class="btn btn-primary" id="btnSaveAddAprovador"><span data-i18n="adm.saveApprover">Salvar Aprovador</span></button>
     </div>
   </div>
 </div>
@@ -1062,20 +947,14 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
     </div>
     <div class="modal-body">
       <div class="form-grid form-grid-2">
-        <div class="form-group"><label class="form-label" data-i18n="adm.fullName">Nome completo</label><input type="text" class="form-control" value="Roberto Almeida"/></div>
-        <div class="form-group"><label class="form-label">MDM</label><input type="text" class="form-control" value="BR9921"/></div>
-        <div class="form-group" style="grid-column:1/-1;"><label class="form-label" data-i18n="adm.email">E-mail</label><input type="email" class="form-control" value="roberto.almeida@valebasemetals.com"/></div>
-        <div class="form-group"><label class="form-label" data-i18n="adm.unit">Unidade</label>
-          <select class="form-control"><option selected>Sudbury, CA</option><option>Thompson, CA</option></select>
-        </div>
-        <div class="form-group"><label class="form-label" data-i18n="adm.role">Papel</label>
-          <select class="form-control"><option data-i18n="role.supervisor">Supervisor</option><option selected data-i18n="role.gerente">Gerente</option><option data-i18n="role.engenheiro">Engenheiro</option></select>
-        </div>
+        <div class="form-group"><label class="form-label" data-i18n="adm.idUsuario">ID_USUARIO</label><input type="number" class="form-control" id="editAprovadorIdUsuario" disabled/></div>
+        <div class="form-group"><label class="form-label" data-i18n="adm.mdmRegistration">CD_MATRICULA</label><input type="text" class="form-control" id="editAprovadorMatricula"/></div>
+        <div class="form-group" style="grid-column:1/-1;"><label class="form-label" data-i18n="adm.fullName">NM_USER (nome completo)</label><input type="text" class="form-control" id="editAprovadorNome"/></div>
       </div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" data-modal-close data-i18n="common.cancelar">Cancelar</button>
-      <button class="btn btn-primary" onclick="closeModal('modalEditAprovador');showToast('success','Salvo','Aprovador atualizado com sucesso!')"><span data-i18n="common.salvar">Salvar</span></button>
+      <button class="btn btn-primary" id="btnSaveEditAprovador"><span data-i18n="common.salvar">Salvar</span></button>
     </div>
   </div>
 </div>
@@ -1618,6 +1497,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 
 <div class="toast-container"></div>
 <script src="assets/vbm-app.js"></script>
+<script src="assets/aprovadores.js"></script>
 <script>
 (function(){
   var tabs = document.querySelectorAll('[data-admin-tab]');
@@ -1800,6 +1680,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       'adm.fullName': 'Nome completo',
       'adm.searchMdm': 'Buscar no MDM...',
       'adm.mdmRegistration': 'MDM / Matrícula',
+      'adm.idUsuario': 'ID_USUARIO',
       'adm.corporateEmail': 'E-mail corporativo',
       'adm.company': 'Empresa',
       'adm.unit': 'Unidade',
@@ -1856,6 +1737,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       'adm.tabResultados': 'Resultados',
       'adm.tabUsuarios': 'Usuários',
       'adm.approversByUnit': 'Aprovadores por Unidade',
+      'adm.approversTitle': 'Aprovadores',
       'adm.newApprover': 'Novo Aprovador',
       'adm.categoriesTitle': 'Categorias de Kaizen',
       'adm.newCategory': 'Nova Categoria',
@@ -1898,6 +1780,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       'adm.fullName': 'Full name',
       'adm.searchMdm': 'Search MDM...',
       'adm.mdmRegistration': 'MDM / Employee ID',
+      'adm.idUsuario': 'ID_USUARIO',
       'adm.corporateEmail': 'Corporate email',
       'adm.company': 'Company',
       'adm.unit': 'Unit',
@@ -1954,6 +1837,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       'adm.tabResultados': 'Results',
       'adm.tabUsuarios': 'Users',
       'adm.approversByUnit': 'Approvers by Unit',
+      'adm.approversTitle': 'Approvers',
       'adm.newApprover': 'New Approver',
       'adm.categoriesTitle': 'Kaizen Categories',
       'adm.newCategory': 'New Category',

@@ -1,0 +1,12 @@
+{
+  "name": "vbm-kaizen-app",
+  "version": "1.0.0",
+  "dependencies": {
+    "compression": "^1.8.1",
+    "express": "^5.2.1",
+    "mssql": "^11.0.1"
+  },
+  "scripts": {
+    "start": "node server.js"
+  }
+}

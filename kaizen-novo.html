@@ -732,20 +732,37 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="form-group">
             <label class="form-label" style="margin-bottom:.6rem;" data-i18n="f.financialResultQuestion">Este Kaizen gerou resultado? <span class="field-tag-optional" data-i18n="f.optional">opcional</span></label>
 
-            <div class="form-grid form-grid-2">
+            <div style="display:flex;flex-direction:column;gap:1.1rem;">
               <div class="result-block" id="blocoResultadoFinanceiro">
                 <div class="toggle-wrap">
                   <div class="toggle" id="tipoResultadoFinanceiro" role="switch" aria-checked="false" tabindex="0"></div>
                   <span class="toggle-label" data-i18n="f.resultTypeFinancial">Resultado Financeiro</span>
                 </div>
                 <div class="form-group conditional-sub">
-                  <label class="form-label" id="lblTipoResultadoFinanceiro" data-i18n="f.financialResultType">Tipo de Resultado Financeiro <span class="field-tag-conditional" data-i18n="f.conditional">Condicional</span></label>
-                  <select class="form-control" id="id_resultado_financeiro" name="id_resultado_financeiro" disabled>
-                    <option value="" data-i18n="f.select">Selecione...</option>
-                    <option data-i18n="f.financial.saving">Saving</option>
-                    <option data-i18n="f.financial.costAvoided">Cost Avoided</option>
-                  </select>
-                  <div class="form-helper" data-i18n="f.financialResultHelper">Visível apenas quando "Resultado Financeiro" está marcado.</div>
+                  <div class="form-grid form-grid-3">
+                    <div class="form-group" style="margin-bottom:0;">
+                      <label class="form-label" id="lblTipoResultadoFinanceiro" data-i18n="f.financialResultType">Tipo de Resultado Financeiro <span class="field-tag-conditional" data-i18n="f.conditional">Condicional</span></label>
+                      <select class="form-control" id="id_resultado_financeiro" name="id_resultado_financeiro" disabled>
+                        <option value="" data-i18n="f.select">Selecione...</option>
+                        <option data-i18n="f.financial.saving">Saving</option>
+                        <option data-i18n="f.financial.costAvoided">Cost Avoided</option>
+                      </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                      <label class="form-label" data-i18n="f.resultCurrency">Moeda</label>
+                      <select class="form-control" id="moeda_resultado_financeiro" name="moeda_resultado_financeiro" disabled>
+                        <option value="" data-i18n="f.select">Selecione...</option>
+                        <option value="BRL">BRL — Real</option>
+                        <option value="USD">USD — Dólar americano</option>
+                        <option value="CAD">CAD — Dólar canadense</option>
+                      </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                      <label class="form-label" data-i18n="f.resultValue">Valor Alcançado/Esperado</label>
+                      <input type="number" step="0.01" min="0" class="form-control" id="valor_resultado_financeiro" name="valor_resultado_financeiro" placeholder="0,00" disabled/>
+                    </div>
+                  </div>
+                  <div class="form-helper" style="margin-top:.5rem;" data-i18n="f.financialResultHelper">Visível apenas quando "Resultado Financeiro" está marcado.</div>
                 </div>
               </div>
 
@@ -755,22 +772,35 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
                   <span class="toggle-label" data-i18n="f.resultTypeOthers">Outros resultados</span>
                 </div>
                 <div class="form-group conditional-sub">
-                  <label class="form-label" id="lblTipoResultadoOutros" data-i18n="f.otherResultType">Tipo de Resultado <span class="field-tag-conditional" data-i18n="f.conditional">Condicional</span></label>
-                  <select class="form-control" id="id_resultado_outros" name="id_resultado_outros" disabled>
-                    <option value="" data-i18n="f.select">Selecione...</option>
-                    <option data-i18n="f.other.productivity">Produtividade</option>
-                    <option data-i18n="f.other.safety">Saúde e Segurança</option>
-                    <option data-i18n="f.other.production">Produção</option>
-                    <option data-i18n="f.other.time">Tempo</option>
-                    <option data-i18n="f.other.consumption">Consumo</option>
-                    <option data-i18n="f.other.environment">Meio Ambiente</option>
-                  </select>
-                  <div class="form-helper" data-i18n="f.otherResultHelper">Visível apenas quando "Outros resultados" está marcado.</div>
+                  <div class="form-grid form-grid-2">
+                    <div class="form-group" style="margin-bottom:0;">
+                      <label class="form-label" id="lblTipoResultadoOutros" data-i18n="f.otherResultType">Tipo de Resultado <span class="field-tag-conditional" data-i18n="f.conditional">Condicional</span></label>
+                      <select class="form-control" id="id_resultado_outros" name="id_resultado_outros" disabled>
+                        <option value="" data-i18n="f.select">Selecione...</option>
+                        <option data-i18n="f.other.productivity">Produtividade</option>
+                        <option data-i18n="f.other.safety">Saúde e Segurança</option>
+                        <option data-i18n="f.other.production">Produção</option>
+                        <option data-i18n="f.other.time">Tempo</option>
+                        <option data-i18n="f.other.consumption">Consumo</option>
+                        <option data-i18n="f.other.environment">Meio Ambiente</option>
+                      </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                      <label class="form-label" data-i18n="f.otherResultDescription">Descrição dos Resultados Alcançados</label>
+                      <textarea class="form-control" id="descricao_resultado_outros" name="descricao_resultado_outros" rows="1" placeholder="Descreva os resultados alcançados..." data-i18n-placeholder="f.otherResultDescriptionPlaceholder" disabled></textarea>
+                    </div>
+                  </div>
+                  <div class="form-helper" style="margin-top:.5rem;" data-i18n="f.otherResultHelper">Visível apenas quando "Outros resultados" está marcado.</div>
                 </div>
               </div>
             </div>
 
             <input type="hidden" id="fl_resultado_financeiro" name="fl_resultado_financeiro" value="false"/>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" data-i18n="f.comparisonWithGoal">Comparação com a Meta Inicial / Declaração do Problema <span class="field-tag-optional" data-i18n="f.optional">opcional</span></label>
+            <textarea class="form-control" id="comparacao_meta_inicial" name="comparacao_meta_inicial" rows="3" placeholder="Compare o resultado obtido com a meta ou o problema originalmente declarado..." data-i18n-placeholder="f.comparisonWithGoalPlaceholder"></textarea>
           </div>
 
           <div style="background:var(--vbm-off-white);border-radius:.65rem;padding:1.1rem;margin-top:1.25rem;border:1px solid #e8e8e8;">
@@ -977,6 +1007,12 @@ window.addEventListener('load', function () { window.scrollTo(0, 0); });
       'f.other.consumption': 'Consumo',
       'f.other.environment': 'Meio Ambiente',
       'f.otherResultHelper': 'Visível apenas quando "Outros" está selecionado.',
+      'f.resultCurrency': 'Moeda',
+      'f.resultValue': 'Valor Alcançado/Esperado',
+      'f.otherResultDescription': 'Descrição dos Resultados Alcançados',
+      'f.otherResultDescriptionPlaceholder': 'Descreva os resultados alcançados...',
+      'f.comparisonWithGoal': 'Comparação com a Meta Inicial / Declaração do Problema',
+      'f.comparisonWithGoalPlaceholder': 'Compare o resultado obtido com a meta ou o problema originalmente declarado...',
       'wiz.title': 'Novo Kaizen',
       'wiz.subtitle': 'Registre sua iniciativa de melhoria contínua em 4 etapas',
       'wiz.step1': 'Iniciativa',
@@ -1100,6 +1136,12 @@ window.addEventListener('load', function () { window.scrollTo(0, 0); });
       'f.other.consumption': 'Consumption',
       'f.other.environment': 'Environment',
       'f.otherResultHelper': 'Only visible when "Others" is selected.',
+      'f.resultCurrency': 'Currency',
+      'f.resultValue': 'Value Achieved/Expected',
+      'f.otherResultDescription': 'Description of Results Achieved',
+      'f.otherResultDescriptionPlaceholder': 'Describe the results achieved...',
+      'f.comparisonWithGoal': 'Comparison with Initial Goal / Problem Statement',
+      'f.comparisonWithGoalPlaceholder': 'Compare the result obtained with the originally stated goal or problem...',
       'wiz.title': 'New Kaizen',
       'wiz.subtitle': 'Register your continuous improvement initiative in 4 steps',
       'wiz.step1': 'Initiative',
@@ -1185,18 +1227,24 @@ window.addEventListener('load', function () { window.scrollTo(0, 0); });
 // vbm-app.js, que alterna a classe "on"; aqui apenas reagimos ao resultado
 // já aplicado, por isso o setTimeout(0) — garante que rodamos depois dele)
 (function () {
-  function wireBlock(toggleId, selectId, hiddenSetter) {
+  // controlIds: todos os campos que só fazem sentido com o bloco ativo
+  // (o combo original + os que a Etapa 4 acrescentou — Moeda/Valor no
+  // financeiro, Descrição nos outros). Todos entram/saem de disabled
+  // juntos, mesmo padrão "visível porém bloqueado" já usado aqui.
+  function wireBlock(toggleId, controlIds, hiddenSetter) {
     var toggle = document.getElementById(toggleId);
-    var select = document.getElementById(selectId);
     var block = toggle ? toggle.closest('.result-block') : null;
-    if (!toggle || !select || !block) return;
+    var controls = controlIds.map(function (id) { return document.getElementById(id); }).filter(Boolean);
+    if (!toggle || !block || !controls.length) return;
 
     function sync() {
       var active = toggle.classList.contains('on');
       toggle.setAttribute('aria-checked', active ? 'true' : 'false');
       block.classList.toggle('is-active', active);
-      select.disabled = !active;
-      if (!active) select.value = '';
+      controls.forEach(function (el) {
+        el.disabled = !active;
+        if (!active) el.value = '';
+      });
       if (hiddenSetter) hiddenSetter(active);
     }
 
@@ -1208,10 +1256,10 @@ window.addEventListener('load', function () { window.scrollTo(0, 0); });
   }
 
   var hidden = document.getElementById('fl_resultado_financeiro');
-  wireBlock('tipoResultadoFinanceiro', 'id_resultado_financeiro', function (active) {
+  wireBlock('tipoResultadoFinanceiro', ['id_resultado_financeiro', 'moeda_resultado_financeiro', 'valor_resultado_financeiro'], function (active) {
     if (hidden) hidden.value = active ? 'true' : 'false';
   });
-  wireBlock('tipoResultadoOutros', 'id_resultado_outros', null);
+  wireBlock('tipoResultadoOutros', ['id_resultado_outros', 'descricao_resultado_outros'], null);
 })();
 
 // ─── Seletor de membros com vagas fixas (Membros da Equipe Vale / Externos) ───
@@ -1303,7 +1351,15 @@ function createTeamPicker(opts) {
     }
     var emptySlot = e.target.closest('.team-slot:not(.filled)');
     if (emptySlot && !searchInput.disabled) {
-      searchInput.focus();
+      // Já tem nome digitado no campo de busca: o clique na vaga "+ Adicionar"
+      // adiciona direto, sem precisar apertar Enter ou achar o botão "+" ao
+      // lado do campo. Campo vazio: mantém o comportamento antigo (só foca,
+      // pra digitar em seguida) — nada a adicionar ainda.
+      if (searchInput.value.trim()) {
+        addFromInput();
+      } else {
+        searchInput.focus();
+      }
     }
   });
 
