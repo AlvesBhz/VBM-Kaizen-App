@@ -934,12 +934,12 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="lang-slot">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
             <span class="lang-slot-divider"></span>
-            <input type="text" class="form-control lang-slot-input" placeholder="Ex: Qualidade" data-lang="pt-BR" id="catAddNamePt" required/>
+            <input type="text" class="form-control lang-slot-input" placeholder="Ex: Qualidade" data-lang="pt-BR" id="catAddNamePt" maxlength="30" required/>
           </div>
           <div class="lang-slot">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
             <span class="lang-slot-divider"></span>
-            <input type="text" class="form-control lang-slot-input" placeholder="Ex: Quality" data-lang="en" id="catAddNameEn" required/>
+            <input type="text" class="form-control lang-slot-input" placeholder="Ex: Quality" data-lang="en" id="catAddNameEn" maxlength="30" required/>
           </div>
         </div>
       </div>
@@ -950,20 +950,20 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="lang-slot lang-slot-textarea">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
             <span class="lang-slot-divider"></span>
-            <textarea class="form-control lang-slot-input" rows="1" maxlength="140" placeholder="Descreva o escopo desta categoria..." data-i18n-placeholder="adm.categoryDescPlaceholder" data-lang="pt-BR" id="catAddDescPt" oninput="updateCategoryDescCounter(this,'catAdd')" required></textarea>
+            <textarea class="form-control lang-slot-input" rows="1" maxlength="100" placeholder="Descreva o escopo desta categoria..." data-i18n-placeholder="adm.categoryDescPlaceholder" data-lang="pt-BR" id="catAddDescPt" oninput="updateCategoryDescCounter(this,'catAdd',100)" required></textarea>
           </div>
           <div class="lang-slot lang-slot-textarea">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
             <span class="lang-slot-divider"></span>
-            <textarea class="form-control lang-slot-input" rows="1" maxlength="140" placeholder="Describe the scope of this category..." data-lang="en" id="catAddDescEn" required></textarea>
+            <textarea class="form-control lang-slot-input" rows="1" maxlength="100" placeholder="Describe the scope of this category..." data-lang="en" id="catAddDescEn" required></textarea>
           </div>
         </div>
-        <div class="form-helper" style="text-align:right;" id="catAddDescCounter">0/140</div>
+        <div class="form-helper" style="text-align:right;" id="catAddDescCounter">0/100</div>
       </div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" data-modal-close data-i18n="common.cancelar">Cancelar</button>
-      <button class="btn btn-primary" onclick="closeModal('modalAddCategoria');showToast('success','Categoria criada','Nova categoria adicionada com sucesso!')"><span data-i18n="adm.createCategory">Criar Categoria</span></button>
+      <button class="btn btn-primary" id="btnSaveAddCategoria"><span data-i18n="adm.createCategory">Criar Categoria</span></button>
     </div>
   </div>
 </div>
@@ -999,12 +999,12 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="lang-slot">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
             <span class="lang-slot-divider"></span>
-            <input type="text" class="form-control lang-slot-input" value="Segurança" data-lang="pt-BR" id="catEditNamePt" required/>
+            <input type="text" class="form-control lang-slot-input" value="Segurança" data-lang="pt-BR" id="catEditNamePt" maxlength="30" required/>
           </div>
           <div class="lang-slot">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
             <span class="lang-slot-divider"></span>
-            <input type="text" class="form-control lang-slot-input" value="Safety" data-lang="en" id="catEditNameEn" required/>
+            <input type="text" class="form-control lang-slot-input" value="Safety" data-lang="en" id="catEditNameEn" maxlength="30" required/>
           </div>
         </div>
       </div>
@@ -1015,15 +1015,15 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="lang-slot lang-slot-textarea">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
             <span class="lang-slot-divider"></span>
-            <textarea class="form-control lang-slot-input" rows="1" maxlength="140" data-lang="pt-BR" id="catEditDescPt" oninput="updateCategoryDescCounter(this,'catEdit')" required>EPI, bloqueios, riscos físicos e prevenção de acidentes</textarea>
+            <textarea class="form-control lang-slot-input" rows="1" maxlength="100" data-lang="pt-BR" id="catEditDescPt" oninput="updateCategoryDescCounter(this,'catEdit',100)" required>EPI, bloqueios, riscos físicos e prevenção de acidentes</textarea>
           </div>
           <div class="lang-slot lang-slot-textarea">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
             <span class="lang-slot-divider"></span>
-            <textarea class="form-control lang-slot-input" rows="1" maxlength="140" data-lang="en" id="catEditDescEn" required>PPE, lockouts, physical risks and accident prevention</textarea>
+            <textarea class="form-control lang-slot-input" rows="1" maxlength="100" data-lang="en" id="catEditDescEn" required>PPE, lockouts, physical risks and accident prevention</textarea>
           </div>
         </div>
-        <div class="form-helper" style="text-align:right;" id="catEditDescCounter">56/140</div>
+        <div class="form-helper" style="text-align:right;" id="catEditDescCounter">56/100</div>
       </div>
       <!-- Diagnóstico do que veio do banco pra este registro — mostra o
            ID_CATEGORIA em edição e se cada idioma tem linha própria.
@@ -1512,9 +1512,13 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 
   window.addEventListener('load', function(){ autosizeAll(); });
 
-  window.updateCategoryDescCounter = function(textarea, prefix){
+  window.updateCategoryDescCounter = function(textarea, prefix, max){
+    // max é opcional (default 140) — só a aba Categorias passa 100
+    // explicitamente; os outros 6 modais que usam esta mesma função
+    // (Replicação/Desperdícios/Resultados) continuam em 140, intocados.
+    max = max || 140;
     var counter = document.getElementById(prefix+'DescCounter');
-    if(counter) counter.textContent = textarea.value.length + '/140';
+    if(counter) counter.textContent = textarea.value.length + '/' + max;
     autosizeTextarea(textarea);
   };
 

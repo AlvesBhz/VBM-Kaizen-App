@@ -278,6 +278,59 @@ apiRouter.delete("/aprovadores/:id", async (req, res) => {
 // ------------------------------------------------------------------
 // API — kzn_categoria
 // ------------------------------------------------------------------
+// Limites de campo (mesmos para INSERT e UPDATE — ver
+// validarCategoriaCampos abaixo, usada pelos dois).
+const CATEGORIA_NOME_MAX = 30;
+const CATEGORIA_DESCRICAO_MAX = 100;
+
+// Validação única, compartilhada pelo POST (criar) e PUT (editar) —
+// garante que os dois processos apliquem exatamente a mesma regra.
+function validarCategoriaCampos(nomePt, descPt, nomeEn, descEn) {
+  if (!nomePt || !descPt || !nomeEn || !descEn) {
+    return "Nome e descrição são obrigatórios nos dois idiomas.";
+  }
+  if (nomePt.length > CATEGORIA_NOME_MAX || nomeEn.length > CATEGORIA_NOME_MAX) {
+    return `O nome da categoria deve ter no máximo ${CATEGORIA_NOME_MAX} caracteres (em cada idioma).`;
+  }
+  if (descPt.length > CATEGORIA_DESCRICAO_MAX || descEn.length > CATEGORIA_DESCRICAO_MAX) {
+    return `A descrição da categoria deve ter no máximo ${CATEGORIA_DESCRICAO_MAX} caracteres (em cada idioma).`;
+  }
+  return null;
+}
+
+// Upsert de 1 linha (1 idioma) de kzn_categoria — MERGE: atualiza se a
+// linha (ID_CATEGORIA + ID_IDIOMA) já existe, cria se não existe.
+// Usada tanto pelo POST (criar — as 2 linhas caem sempre no ramo
+// INSERT, já que o ID_CATEGORIA é sempre novo) quanto pelo PUT (editar
+// — cai em UPDATE pra quem já existe, INSERT só pro idioma que
+// faltava). Mesma função, mesma regra, nos dois processos.
+// WHEN NOT MATCHED: URL_ICONE herda o valor da linha do OUTRO idioma
+// que já existir (mesma categoria, mesmo ícone nos dois idiomas — fica
+// NULL na criação, quando nenhuma linha existe ainda); SG_ATIVO 'S'
+// (ativo), mesmo padrão das categorias já cadastradas.
+function upsertCategoriaIdioma(id, idIdioma, nome, descricao) {
+  return runQuery(
+    `MERGE INTO ${FULL_CATEGORIA_TABLE} AS target
+     USING (SELECT @id AS ID_CATEGORIA, @idIdioma AS ID_IDIOMA) AS src
+       ON target.ID_CATEGORIA = src.ID_CATEGORIA AND target.ID_IDIOMA = src.ID_IDIOMA
+     WHEN MATCHED THEN
+       UPDATE SET NM_CATEGORIA = @nome, DS_CATEGORIA = @descricao, DT_ATUALIZACAO = GETDATE()
+     WHEN NOT MATCHED THEN
+       INSERT (ID_CATEGORIA, ID_IDIOMA, URL_ICONE, NM_CATEGORIA, DS_CATEGORIA, SG_ATIVO, DT_ATUALIZACAO)
+       VALUES (
+         @id, @idIdioma,
+         (SELECT TOP (1) URL_ICONE FROM ${FULL_CATEGORIA_TABLE} WHERE ID_CATEGORIA = @id),
+         @nome, @descricao, 'S', GETDATE()
+       );`,
+    [
+      ["nome", sql.NVarChar(CATEGORIA_NOME_MAX), nome],
+      ["descricao", sql.NVarChar(CATEGORIA_DESCRICAO_MAX), descricao],
+      ["id", sql.Int, id],
+      ["idIdioma", sql.Int, idIdioma],
+    ]
+  );
+}
+
 // Lista TODAS as categorias (linha PT de cada uma — ID_IDIOMA fixo,
 // ver nota de ID_IDIOMA_PT/EN acima) pra aba "Categorias" de
 // admin.html, sem nenhum item estático misturado (ver
@@ -382,8 +435,9 @@ apiRouter.put("/categorias/:id", async (req, res) => {
     const nomeEn = (en.NM_CATEGORIA || "").trim();
     const descEn = (en.DS_CATEGORIA || "").trim();
 
-    if (!nomePt || !descPt || !nomeEn || !descEn) {
-      return res.status(400).json({ error: "Nome e descrição são obrigatórios nos dois idiomas." });
+    const erroValidacao = validarCategoriaCampos(nomePt, descPt, nomeEn, descEn);
+    if (erroValidacao) {
+      return res.status(400).json({ error: erroValidacao });
     }
 
     const existe = await runQuery(
@@ -394,41 +448,53 @@ apiRouter.put("/categorias/:id", async (req, res) => {
       return res.status(404).json({ error: "Categoria não encontrada." });
     }
 
-    // WHEN NOT MATCHED: URL_ICONE herda o valor da linha do OUTRO
-    // idioma que já existir (mesma categoria, mesmo ícone nos dois
-    // idiomas); SG_ATIVO 'S' (ativo) — mesmo padrão das categorias já
-    // cadastradas hoje.
-    const upsertIdioma = (idIdioma, nome, descricao) =>
-      runQuery(
-        `MERGE INTO ${FULL_CATEGORIA_TABLE} AS target
-         USING (SELECT @id AS ID_CATEGORIA, @idIdioma AS ID_IDIOMA) AS src
-           ON target.ID_CATEGORIA = src.ID_CATEGORIA AND target.ID_IDIOMA = src.ID_IDIOMA
-         WHEN MATCHED THEN
-           UPDATE SET NM_CATEGORIA = @nome, DS_CATEGORIA = @descricao, DT_ATUALIZACAO = GETDATE()
-         WHEN NOT MATCHED THEN
-           INSERT (ID_CATEGORIA, ID_IDIOMA, URL_ICONE, NM_CATEGORIA, DS_CATEGORIA, SG_ATIVO, DT_ATUALIZACAO)
-           VALUES (
-             @id, @idIdioma,
-             (SELECT TOP (1) URL_ICONE FROM ${FULL_CATEGORIA_TABLE} WHERE ID_CATEGORIA = @id),
-             @nome, @descricao, 'S', GETDATE()
-           );`,
-        [
-          ["nome", sql.NVarChar(200), nome],
-          ["descricao", sql.NVarChar(200), descricao],
-          ["id", sql.Int, id],
-          ["idIdioma", sql.Int, idIdioma],
-        ]
-      );
-
     await Promise.all([
-      upsertIdioma(ID_IDIOMA_PT, nomePt, descPt),
-      upsertIdioma(ID_IDIOMA_EN, nomeEn, descEn),
+      upsertCategoriaIdioma(id, ID_IDIOMA_PT, nomePt, descPt),
+      upsertCategoriaIdioma(id, ID_IDIOMA_EN, nomeEn, descEn),
     ]);
 
     res.json({ ok: true });
   } catch (err) {
     console.error("[categorias] erro ao atualizar:", err.message);
     res.status(500).json({ error: "Erro ao atualizar categoria: " + err.message });
+  }
+});
+
+// Criar (POST) — MESMA validação e MESMA função de upsert do PUT
+// acima (upsertCategoriaIdioma): a única diferença é que aqui o
+// ID_CATEGORIA é sempre novo (próximo disponível), então as 2 chamadas
+// caem sempre no ramo INSERT do MERGE. Sem transação explícita: numa
+// falha a meio caminho (ex.: EN falha depois do PT já ter gravado), a
+// categoria fica só com a linha PT — mesma situação já tratada pelo
+// PUT (upsert completa o idioma que faltar depois, numa edição normal).
+apiRouter.post("/categorias", async (req, res) => {
+  try {
+    const pt = req.body?.pt || {};
+    const en = req.body?.en || {};
+    const nomePt = (pt.NM_CATEGORIA || "").trim();
+    const descPt = (pt.DS_CATEGORIA || "").trim();
+    const nomeEn = (en.NM_CATEGORIA || "").trim();
+    const descEn = (en.DS_CATEGORIA || "").trim();
+
+    const erroValidacao = validarCategoriaCampos(nomePt, descPt, nomeEn, descEn);
+    if (erroValidacao) {
+      return res.status(400).json({ error: erroValidacao });
+    }
+
+    const proximoId = await runQuery(
+      `SELECT ISNULL(MAX(ID_CATEGORIA), 0) + 1 AS PROXIMO_ID FROM ${FULL_CATEGORIA_TABLE}`
+    );
+    const id = proximoId.recordset[0].PROXIMO_ID;
+
+    await Promise.all([
+      upsertCategoriaIdioma(id, ID_IDIOMA_PT, nomePt, descPt),
+      upsertCategoriaIdioma(id, ID_IDIOMA_EN, nomeEn, descEn),
+    ]);
+
+    res.status(201).json({ ok: true, ID_CATEGORIA: id });
+  } catch (err) {
+    console.error("[categorias] erro ao criar:", err.message);
+    res.status(500).json({ error: "Erro ao criar categoria: " + err.message });
   }
 });
 

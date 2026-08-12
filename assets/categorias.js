@@ -28,12 +28,39 @@
   var saveBtn = document.getElementById("btnSaveEditCategoria");
   var diagEl = document.getElementById("catEditDiagnostico");
 
+  var addNamePtEl = document.getElementById("catAddNamePt");
+  var addNameEnEl = document.getElementById("catAddNameEn");
+  var addDescPtEl = document.getElementById("catAddDescPt");
+  var addDescEnEl = document.getElementById("catAddDescEn");
+  var addSaveBtn = document.getElementById("btnSaveAddCategoria");
+  var addTriggerBtn = document.querySelector('[data-modal-open="modalAddCategoria"]');
+
   var categoriaEmEdicaoId = null; // ID_CATEGORIA aberto no modal de edição no momento
+
+  // Mesmos limites do server.js (CATEGORIA_NOME_MAX/CATEGORIA_DESCRICAO_MAX)
+  // — checagem no cliente é só uma resposta mais rápida pro usuário; o
+  // servidor sempre valida de novo antes de gravar.
+  var NOME_MAX = 30;
+  var DESCRICAO_MAX = 100;
 
   function escapeHtml(str) {
     var div = document.createElement("div");
     div.textContent = str == null ? "" : String(str);
     return div.innerHTML;
+  }
+
+  // Compartilhada por Editar e Criar — mesma regra nos dois processos.
+  function validarCamposCategoria(nomePt, descPt, nomeEn, descEn) {
+    if (!nomePt || !descPt || !nomeEn || !descEn) {
+      return "Preencha nome e descrição nos dois idiomas antes de salvar.";
+    }
+    if (nomePt.length > NOME_MAX || nomeEn.length > NOME_MAX) {
+      return "O nome da categoria deve ter no máximo " + NOME_MAX + " caracteres (em cada idioma).";
+    }
+    if (descPt.length > DESCRICAO_MAX || descEn.length > DESCRICAO_MAX) {
+      return "A descrição da categoria deve ter no máximo " + DESCRICAO_MAX + " caracteres (em cada idioma).";
+    }
+    return null;
   }
 
   function badgeTexto(qtd) {
@@ -171,8 +198,9 @@
       pt: { NM_CATEGORIA: namePtEl ? namePtEl.value.trim() : "", DS_CATEGORIA: descPtEl ? descPtEl.value.trim() : "" },
       en: { NM_CATEGORIA: nameEnEl ? nameEnEl.value.trim() : "", DS_CATEGORIA: descEnEl ? descEnEl.value.trim() : "" },
     };
-    if (!payload.pt.NM_CATEGORIA || !payload.pt.DS_CATEGORIA || !payload.en.NM_CATEGORIA || !payload.en.DS_CATEGORIA) {
-      if (window.showToast) showToast("warning", "Campos obrigatórios", "Preencha nome e descrição nos dois idiomas antes de salvar.");
+    var erroValidacao = validarCamposCategoria(payload.pt.NM_CATEGORIA, payload.pt.DS_CATEGORIA, payload.en.NM_CATEGORIA, payload.en.DS_CATEGORIA);
+    if (erroValidacao) {
+      if (window.showToast) showToast("warning", "Campo inválido", erroValidacao);
       return;
     }
 
@@ -239,7 +267,61 @@
       });
   }
 
+  // ── Criar (POST) — MESMA validação e formato de payload do Editar ──
+  function limparFormularioCriacao() {
+    if (addNamePtEl) addNamePtEl.value = "";
+    if (addNameEnEl) addNameEnEl.value = "";
+    if (addDescPtEl) {
+      addDescPtEl.value = "";
+      if (window.updateCategoryDescCounter) updateCategoryDescCounter(addDescPtEl, "catAdd", DESCRICAO_MAX);
+    }
+    if (addDescEnEl) addDescEnEl.value = "";
+  }
+
+  function salvarCriacao() {
+    var payload = {
+      pt: { NM_CATEGORIA: addNamePtEl ? addNamePtEl.value.trim() : "", DS_CATEGORIA: addDescPtEl ? addDescPtEl.value.trim() : "" },
+      en: { NM_CATEGORIA: addNameEnEl ? addNameEnEl.value.trim() : "", DS_CATEGORIA: addDescEnEl ? addDescEnEl.value.trim() : "" },
+    };
+    var erroValidacao = validarCamposCategoria(payload.pt.NM_CATEGORIA, payload.pt.DS_CATEGORIA, payload.en.NM_CATEGORIA, payload.en.DS_CATEGORIA);
+    if (erroValidacao) {
+      if (window.showToast) showToast("warning", "Campo inválido", erroValidacao);
+      return;
+    }
+
+    if (addSaveBtn) addSaveBtn.disabled = true;
+    fetch("/api/categorias", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          if (!res.ok) throw new Error(data.error || res.statusText);
+          return data;
+        });
+      })
+      .then(function () {
+        limparFormularioCriacao();
+        if (window.closeModal) closeModal("modalAddCategoria");
+        if (window.showToast) showToast("success", "Categoria criada", "Nova categoria adicionada com sucesso!");
+        carregarLista(); // recarrega do banco pra a categoria nova já aparecer na lista
+      })
+      .catch(function (err) {
+        console.error("[categorias] falha ao criar categoria:", err);
+        if (window.showToast) showToast("error", "Erro ao criar", err.message);
+      })
+      .finally(function () {
+        if (addSaveBtn) addSaveBtn.disabled = false;
+      });
+  }
+
   if (saveBtn) saveBtn.addEventListener("click", salvarEdicao);
+  if (addSaveBtn) addSaveBtn.addEventListener("click", salvarCriacao);
+  // Limpa o formulário sempre que o modal é aberto — nunca deixa
+  // sobrar texto de uma tentativa anterior (evita confundir com uma
+  // edição em andamento e evita reenviar o mesmo texto sem querer).
+  if (addTriggerBtn) addTriggerBtn.addEventListener("click", limparFormularioCriacao);
 
   carregarLista();
 })();
