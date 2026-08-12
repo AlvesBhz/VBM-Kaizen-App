@@ -217,10 +217,10 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
   <div class="entity-head"><div class="entity-icon">ID</div><div class="entity-title">KZN_IDIOMA</div></div>
   <div class="entity-body">
     <div class="field"><span class="field-name pk">ID_IDIOMA</span><span class="field-type">INT</span></div>
-    <div class="field"><span class="field-name">URL_ICONE</span><span class="field-type">VARCHAR(150)</span></div>
+    <div class="field"><span class="field-name">URL_ICONE</span><span class="field-type">VARCHAR(200)</span></div>
     <div class="field"><span class="field-name">SG_IDIOMA</span><span class="field-type">VARCHAR(5)</span></div>
-    <div class="field"><span class="field-name">NM_IDIOMA</span><span class="field-type">VARCHAR(20)</span></div>
-    <div class="field"><span class="field-name">NM_PAIS</span><span class="field-type">VARCHAR(20)</span></div>
+    <div class="field"><span class="field-name">NM_IDIOMA</span><span class="field-type">VARCHAR(30)</span></div>
+    <div class="field"><span class="field-name">NM_PAIS</span><span class="field-type">VARCHAR(30)</span></div>
     <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
   </div>
 </div>
@@ -228,9 +228,9 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
   <div class="entity-head"><div class="entity-icon">RH</div><div class="entity-title">KZN_MDM_HIERARQUIA</div></div>
   <div class="entity-body">
     <div class="field"><span class="field-name pk">ID_USUARIO</span><span class="field-type">INT</span></div>
-    <div class="field"><span class="field-name">CD_MATRICULA</span><span class="field-type">VARCHAR(20)</span></div>
-    <div class="field"><span class="field-name">NM_USUARIO</span><span class="field-type">VARCHAR(20)</span></div>
-    <div class="field"><span class="field-name">DS_EMAIL</span><span class="field-type">VARCHAR(40)</span></div>
+    <div class="field"><span class="field-name">CD_MATRICULA</span><span class="field-type">VARCHAR(30)</span></div>
+    <div class="field"><span class="field-name">NM_USUARIO</span><span class="field-type">VARCHAR(30)</span></div>
+    <div class="field"><span class="field-name">DS_EMAIL</span><span class="field-type">VARCHAR(100)</span></div>
     <div class="field note">NM_HIERARQUIA_N1…N8 (8x, VARCHAR(50))</div>
     <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
   </div>
@@ -250,9 +250,9 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
   <div class="entity-body">
     <div class="field"><span class="field-name pk">ID_CATEGORIA</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name pk fk">ID_IDIOMA</span><span class="field-type">INT</span></div>
-    <div class="field"><span class="field-name">URL_ICONE</span><span class="field-type">VARCHAR(150)</span></div>
-    <div class="field"><span class="field-name">NM_CATEGORIA</span><span class="field-type">VARCHAR(20)</span></div>
-    <div class="field"><span class="field-name">DS_CATEGORIA</span><span class="field-type">VARCHAR(40)</span></div>
+    <div class="field"><span class="field-name">URL_ICONE</span><span class="field-type">VARCHAR(200)</span></div>
+    <div class="field"><span class="field-name">NM_CATEGORIA</span><span class="field-type">VARCHAR(30)</span></div>
+    <div class="field"><span class="field-name">DS_CATEGORIA</span><span class="field-type">VARCHAR(100)</span></div>
     <div class="field"><span class="field-name">SG_ATIVO</span><span class="field-type">VARCHAR(1)</span></div>
     <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
   </div>
@@ -262,9 +262,9 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
   <div class="entity-body">
     <div class="field"><span class="field-name pk">ID_REPLICACAO</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name pk fk">ID_IDIOMA</span><span class="field-type">INT</span></div>
-    <div class="field"><span class="field-name">URL_ICONE</span><span class="field-type">VARCHAR(150)</span></div>
-    <div class="field"><span class="field-name">NM_REPLICACAO</span><span class="field-type">VARCHAR(20)</span></div>
-    <div class="field"><span class="field-name">DS_REPLICACAO</span><span class="field-type">VARCHAR(40)</span></div>
+    <div class="field"><span class="field-name">URL_ICONE</span><span class="field-type">VARCHAR(200)</span></div>
+    <div class="field"><span class="field-name">NM_REPLICACAO</span><span class="field-type">VARCHAR(30)</span></div>
+    <div class="field"><span class="field-name">DS_REPLICACAO</span><span class="field-type">VARCHAR(100)</span></div>
     <div class="field"><span class="field-name">SG_ATIVO</span><span class="field-type">VARCHAR(1)</span></div>
     <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
   </div>
@@ -274,9 +274,9 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
   <div class="entity-body">
     <div class="field"><span class="field-name pk">ID_DESPERDICIO</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name pk fk">ID_IDIOMA</span><span class="field-type">INT</span></div>
-    <div class="field"><span class="field-name">URL_ICONE</span><span class="field-type">VARCHAR(150)</span></div>
-    <div class="field"><span class="field-name">NM_DESPERDICIO</span><span class="field-type">VARCHAR(20)</span></div>
-    <div class="field"><span class="field-name">DS_DESPERDICIO</span><span class="field-type">VARCHAR(40)</span></div>
+    <div class="field"><span class="field-name">URL_ICONE</span><span class="field-type">VARCHAR(200)</span></div>
+    <div class="field"><span class="field-name">NM_DESPERDICIO</span><span class="field-type">VARCHAR(30)</span></div>
+    <div class="field"><span class="field-name">DS_DESPERDICIO</span><span class="field-type">VARCHAR(100)</span></div>
     <div class="field"><span class="field-name">SG_ATIVO</span><span class="field-type">VARCHAR(1)</span></div>
     <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
   </div>
@@ -285,9 +285,9 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
   <div class="entity-head"><div class="entity-icon">MO</div><div class="entity-title">KZN_MOEDA</div></div>
   <div class="entity-body">
     <div class="field"><span class="field-name pk">ID_MOEDA</span><span class="field-type">INT</span></div>
-    <div class="field"><span class="field-name">NM_MOEDA</span><span class="field-type">VARCHAR(20)</span></div>
+    <div class="field"><span class="field-name">NM_MOEDA</span><span class="field-type">VARCHAR(30)</span></div>
     <div class="field"><span class="field-name">SG_MOEDA</span><span class="field-type">CHAR(3)</span></div>
-    <div class="field"><span class="field-name">NM_PAIS</span><span class="field-type">VARCHAR(20)</span></div>
+    <div class="field"><span class="field-name">NM_PAIS</span><span class="field-type">VARCHAR(30)</span></div>
     <div class="field"><span class="field-name">SG_ATIVO</span><span class="field-type">VARCHAR(1)</span></div>
     <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
   </div>
@@ -297,7 +297,7 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
   <div class="entity-body">
     <div class="field"><span class="field-name pk">ID_TIPO_RESULTADO</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name pk fk">ID_IDIOMA</span><span class="field-type">INT</span></div>
-    <div class="field"><span class="field-name">NM_TIPO_RESULTADO</span><span class="field-type">VARCHAR(20)</span></div>
+    <div class="field"><span class="field-name">NM_TIPO_RESULTADO</span><span class="field-type">VARCHAR(30)</span></div>
     <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
   </div>
 </div>
@@ -307,10 +307,10 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
   <div class="entity-body">
     <div class="field"><span class="field-name pk">ID_RESULTADO</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name pk fk">ID_IDIOMA</span><span class="field-type">INT</span></div>
-    <div class="field"><span class="field-name">URL_ICONE</span><span class="field-type">VARCHAR(150)</span></div>
+    <div class="field"><span class="field-name">URL_ICONE</span><span class="field-type">VARCHAR(200)</span></div>
     <div class="field"><span class="field-name fk">ID_TIPO_RESULTADO</span><span class="field-type">INT</span></div>
-    <div class="field"><span class="field-name">NM_RESULTADO</span><span class="field-type">VARCHAR(20)</span></div>
-    <div class="field"><span class="field-name">DS_RESULTADO</span><span class="field-type">VARCHAR(40)</span></div>
+    <div class="field"><span class="field-name">NM_RESULTADO</span><span class="field-type">VARCHAR(30)</span></div>
+    <div class="field"><span class="field-name">DS_RESULTADO</span><span class="field-type">VARCHAR(100)</span></div>
     <div class="field"><span class="field-name">SG_ATIVO</span><span class="field-type">VARCHAR(1)</span></div>
     <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
   </div>
@@ -320,8 +320,8 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
   <div class="entity-body">
     <div class="field"><span class="field-name pk">ID_MOTIVO</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name pk fk">ID_IDIOMA</span><span class="field-type">INT</span></div>
-    <div class="field"><span class="field-name">NM_MOTIVO</span><span class="field-type">VARCHAR(20)</span></div>
-    <div class="field"><span class="field-name">DS_MOTIVO</span><span class="field-type">VARCHAR(40)</span></div>
+    <div class="field"><span class="field-name">NM_MOTIVO</span><span class="field-type">VARCHAR(30)</span></div>
+    <div class="field"><span class="field-name">DS_MOTIVO</span><span class="field-type">VARCHAR(100)</span></div>
     <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
   </div>
 </div>
@@ -333,23 +333,23 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
     <div class="field"><span class="field-name pk">ID_KAIZEN</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name fk">ID_USUARIO_CADASTRO</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name fk">ID_USUARIO_LIDER</span><span class="field-type">INT</span></div>
-    <div class="field"><span class="field-name">NM_KAIZEN</span><span class="field-type">VARCHAR(20)</span></div>
+    <div class="field"><span class="field-name">NM_KAIZEN</span><span class="field-type">VARCHAR(30)</span></div>
     <div class="field"><span class="field-name fk">ID_CATEGORIA</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name fk">ID_REPLICACAO</span><span class="field-type">INT</span></div>
-    <div class="field"><span class="field-name">DS_PROBLEMA</span><span class="field-type">VARCHAR(40)</span></div>
-    <div class="field"><span class="field-name">DS_OBJETIVO</span><span class="field-type">VARCHAR(40)</span></div>
-    <div class="field"><span class="field-name">SG_STATUS</span><span class="field-type">VARCHAR(20)</span></div>
+    <div class="field"><span class="field-name">DS_PROBLEMA</span><span class="field-type">VARCHAR(100)</span></div>
+    <div class="field"><span class="field-name">DS_OBJETIVO</span><span class="field-type">VARCHAR(100)</span></div>
+    <div class="field"><span class="field-name">SG_STATUS</span><span class="field-type">VARCHAR(30)</span></div>
     <div class="field"><span class="field-name fk">ID_APROVADOR</span><span class="field-type">INT</span></div>
-    <div class="field"><span class="field-name">URL_IMG_ANTES</span><span class="field-type">VARCHAR(150)</span></div>
-    <div class="field"><span class="field-name">DS_ESTADO_ANTES</span><span class="field-type">VARCHAR(40)</span></div>
-    <div class="field"><span class="field-name">URL_IMG_DEPOIS</span><span class="field-type">VARCHAR(150)</span></div>
-    <div class="field"><span class="field-name">DS_ESTADO_DEPOIS</span><span class="field-type">VARCHAR(40)</span></div>
-    <div class="field"><span class="field-name">URL_REFERENCIA</span><span class="field-type">VARCHAR(150)</span></div>
+    <div class="field"><span class="field-name">URL_IMG_ANTES</span><span class="field-type">VARCHAR(200)</span></div>
+    <div class="field"><span class="field-name">DS_ESTADO_ANTES</span><span class="field-type">VARCHAR(100)</span></div>
+    <div class="field"><span class="field-name">URL_IMG_DEPOIS</span><span class="field-type">VARCHAR(200)</span></div>
+    <div class="field"><span class="field-name">DS_ESTADO_DEPOIS</span><span class="field-type">VARCHAR(100)</span></div>
+    <div class="field"><span class="field-name">URL_REFERENCIA</span><span class="field-type">VARCHAR(200)</span></div>
     <div class="field"><span class="field-name fk">ID_DESPERDICIO</span><span class="field-type">INT</span></div>
-    <div class="field"><span class="field-name">DS_LICOES_APRENDIDAS</span><span class="field-type">VARCHAR(40)</span></div>
+    <div class="field"><span class="field-name">DS_LICOES_APRENDIDAS</span><span class="field-type">VARCHAR(100)</span></div>
     <div class="field"><span class="field-name">VL_RESULTADO_FINANCEIRO</span><span class="field-type">DECIMAL(18,2)</span></div>
     <div class="field"><span class="field-name fk">ID_MOEDA</span><span class="field-type">INT</span></div>
-    <div class="field"><span class="field-name">DS_RESULTADO_ESPERADO</span><span class="field-type">VARCHAR(40)</span></div>
+    <div class="field"><span class="field-name">DS_RESULTADO_ESPERADO</span><span class="field-type">VARCHAR(100)</span></div>
     <div class="field"><span class="field-name">DT_CONCLUSAO</span><span class="field-type">DATE</span></div>
     <div class="field"><span class="field-name fk">ID_MOTIVO</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name">DT_CRIACAO</span><span class="field-type">DATETIME2</span></div>
@@ -382,7 +382,7 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
   <div class="entity-body">
     <div class="field"><span class="field-name pk fk">ID_KAIZEN</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name pk fk">ID_RESULTADO</span><span class="field-type">INT</span></div>
-    <div class="field"><span class="field-name">URL_ICONE</span><span class="field-type">VARCHAR(150)</span></div>
+    <div class="field"><span class="field-name">URL_ICONE</span><span class="field-type">VARCHAR(200)</span></div>
     <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
   </div>
 </div>
