@@ -287,6 +287,11 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 .admin-item:hover .admin-item-actions{opacity:1;}
 .admin-item-inactive{opacity:.5;filter:grayscale(.3);}
 .admin-item-inactive .admin-item-actions{opacity:1;}
+/* Estado de carregamento/erro da lista de Categorias (vinda do Azure
+   SQL via /api/categorias) — ocupa as duas colunas do grid .admin-list. */
+.admin-list-status{grid-column:1/-1;display:flex;align-items:center;gap:.6rem;padding:1rem;font-size:.78rem;color:var(--vbm-mid);}
+.admin-list-status.is-error{color:#c0392b;}
+.admin-list-status .btn{margin-left:auto;}
 
 /* Botões de ação (editar/excluir), tema claro — acabamento executivo:
    base em vidro com contorno nítido (inset ring) sobre gradiente sutil,
@@ -616,75 +621,8 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <button class="btn btn-outline btn-sm admin-add-btn" data-modal-open="modalAddCategoria"><i class="fa-solid fa-plus"></i> <span data-i18n="adm.newCategory">Nova Categoria</span></button>
         </div>
       </div>
-      <div class="admin-list">
-        <!-- 1º card: conteúdo real, vindo de GET /api/categorias (ver
-             assets/categorias.js) — 1ª fase busca só 1 categoria. Os
-             demais cards abaixo continuam estáticos por enquanto. Os
-             valores/ícone fixos aqui servem de fallback visual até o
-             fetch responder (ou se ele falhar). -->
-        <div class="admin-item" id="categoriaCardDestaque">
-          <div class="admin-item-icon green" id="categoriaCardIcone"><i class="fa-solid fa-helmet-safety"></i></div>
-          <div class="admin-item-body"><div class="admin-item-name" id="categoriaCardNome">Segurança</div><div class="admin-item-sub" id="categoriaCardDescricao">EPI, bloqueios, riscos físicos e prevenção de acidentes</div></div>
-          <span class="admin-item-badge" id="categoriaCardBadge">12 <span data-i18n="adm.kaizensWord">kaizens</span></span>
-          <div class="admin-item-actions">
-            <button class="btn-icon btn-icon-blue btn-icon-sm" data-modal-open="modalEditCategoria"><i class="fa-solid fa-pen"></i></button>
-            <button class="btn-icon btn-icon-red btn-icon-sm" title="Desativar" data-i18n-title="common.desativar" onclick="toggleAdminItemStatus(this,'categoria Segurança')"><i class="fa-solid fa-ban"></i></button>
-          </div>
-        </div>
-        <div class="admin-item">
-          <div class="admin-item-icon green"><i class="fa-solid fa-broom"></i></div>
-          <div class="admin-item-body"><div class="admin-item-name">5S</div><div class="admin-item-sub">Organização, limpeza, padronização e disciplina no trabalho</div></div>
-          <span class="admin-item-badge">8 <span data-i18n="adm.kaizensWord">kaizens</span></span>
-          <div class="admin-item-actions">
-            <button class="btn-icon btn-icon-blue btn-icon-sm" data-modal-open="modalEditCategoria"><i class="fa-solid fa-pen"></i></button>
-            <button class="btn-icon btn-icon-red btn-icon-sm" title="Desativar" data-i18n-title="common.desativar" onclick="toggleAdminItemStatus(this,'categoria 5S')"><i class="fa-solid fa-ban"></i></button>
-          </div>
-        </div>
-        <div class="admin-item">
-          <div class="admin-item-icon green"><i class="fa-solid fa-bolt"></i></div>
-          <div class="admin-item-body"><div class="admin-item-name">Energia</div><div class="admin-item-sub">Redução de consumo de energia e recursos naturais</div></div>
-          <span class="admin-item-badge">5 <span data-i18n="adm.kaizensWord">kaizens</span></span>
-          <div class="admin-item-actions">
-            <button class="btn-icon btn-icon-blue btn-icon-sm" data-modal-open="modalEditCategoria"><i class="fa-solid fa-pen"></i></button>
-            <button class="btn-icon btn-icon-red btn-icon-sm" title="Desativar" data-i18n-title="common.desativar" onclick="toggleAdminItemStatus(this,'categoria Energia')"><i class="fa-solid fa-ban"></i></button>
-          </div>
-        </div>
-        <div class="admin-item">
-          <div class="admin-item-icon green"><i class="fa-solid fa-screwdriver-wrench"></i></div>
-          <div class="admin-item-body"><div class="admin-item-name">Manutenção</div><div class="admin-item-sub">Manutenção preditiva, preventiva e corretiva de equipamentos</div></div>
-          <span class="admin-item-badge">4 <span data-i18n="adm.kaizensWord">kaizens</span></span>
-          <div class="admin-item-actions">
-            <button class="btn-icon btn-icon-blue btn-icon-sm" data-modal-open="modalEditCategoria"><i class="fa-solid fa-pen"></i></button>
-            <button class="btn-icon btn-icon-red btn-icon-sm" title="Desativar" data-i18n-title="common.desativar" onclick="toggleAdminItemStatus(this,'categoria Manutenção')"><i class="fa-solid fa-ban"></i></button>
-          </div>
-        </div>
-        <div class="admin-item">
-          <div class="admin-item-icon green"><i class="fa-solid fa-circle-check"></i></div>
-          <div class="admin-item-body"><div class="admin-item-name">Qualidade</div><div class="admin-item-sub">Controle de qualidade, inspeção e redução de retrabalho</div></div>
-          <span class="admin-item-badge">3 <span data-i18n="adm.kaizensWord">kaizens</span></span>
-          <div class="admin-item-actions">
-            <button class="btn-icon btn-icon-blue btn-icon-sm" data-modal-open="modalEditCategoria"><i class="fa-solid fa-pen"></i></button>
-            <button class="btn-icon btn-icon-red btn-icon-sm" title="Desativar" data-i18n-title="common.desativar" onclick="toggleAdminItemStatus(this,'categoria Qualidade')"><i class="fa-solid fa-ban"></i></button>
-          </div>
-        </div>
-        <div class="admin-item">
-          <div class="admin-item-icon green"><i class="fa-solid fa-leaf"></i></div>
-          <div class="admin-item-body"><div class="admin-item-name">Meio Ambiente</div><div class="admin-item-sub">Sustentabilidade, descarte responsável e gestão ambiental</div></div>
-          <span class="admin-item-badge">2 <span data-i18n="adm.kaizensWord">kaizens</span></span>
-          <div class="admin-item-actions">
-            <button class="btn-icon btn-icon-blue btn-icon-sm" data-modal-open="modalEditCategoria"><i class="fa-solid fa-pen"></i></button>
-            <button class="btn-icon btn-icon-red btn-icon-sm" title="Desativar" data-i18n-title="common.desativar" onclick="toggleAdminItemStatus(this,'categoria Meio Ambiente')"><i class="fa-solid fa-ban"></i></button>
-          </div>
-        </div>
-        <div class="admin-item">
-          <div class="admin-item-icon green"><i class="fa-solid fa-truck"></i></div>
-          <div class="admin-item-body"><div class="admin-item-name">Logística</div><div class="admin-item-sub">Transporte, movimentação e fluxo de materiais</div></div>
-          <span class="admin-item-badge">1 <span data-i18n="adm.kaizenWord">kaizen</span></span>
-          <div class="admin-item-actions">
-            <button class="btn-icon btn-icon-blue btn-icon-sm" data-modal-open="modalEditCategoria"><i class="fa-solid fa-pen"></i></button>
-            <button class="btn-icon btn-icon-red btn-icon-sm" title="Desativar" data-i18n-title="common.desativar" onclick="toggleAdminItemStatus(this,'categoria Logística')"><i class="fa-solid fa-ban"></i></button>
-          </div>
-        </div>
+      <div class="admin-list" id="categoriasList" data-loading-text="Carregando categorias…" data-error-text="Não foi possível carregar as categorias no momento. Tente novamente em instantes.">
+        <div class="admin-list-status" id="categoriasStatus">Carregando categorias…</div>
       </div>
     </div>
 

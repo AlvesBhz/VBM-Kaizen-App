@@ -1,27 +1,26 @@
 /**
- * VBM Kaizen — aba "Categorias" (admin.html), 1ª fase.
+ * VBM Kaizen — aba "Categorias" (admin.html).
  *
- * Preenche só o card em destaque (o primeiro da lista) com dados reais
- * de GET /api/categorias (server.js -> kzn_categoria + contagem em
- * kzn_pendenciaconsolidada). Os demais cards continuam estáticos.
+ * Lista TODAS as categorias reais de GET /api/categorias (server.js ->
+ * kzn_categoria + contagem em kzn_pendenciaconsolidada). Nenhum item
+ * estático: a lista inteira vem do banco a cada carregamento da tela,
+ * inclusive o status ativo/inativo (SG_ATIVO).
  *
- * Falha ao carregar o card: mantém o conteúdo estático já presente no
- * HTML como fallback (nada quebra visualmente) — só loga no console.
+ * Cada card tem 2 ações:
+ *   - Editar: modal bilíngue PT/EN (GET/PUT /api/categorias/:id).
+ *   - Ativar/Desativar: grava SG_ATIVO no banco
+ *     (PUT /api/categorias/:id/status) — nunca só visual.
+ *
+ * Falha ao carregar a lista: mostra erro com botão de tentar de novo
+ * (não há mais fallback estático — a lista É o banco).
  */
 (function () {
-  var card = document.getElementById("categoriaCardDestaque");
-  if (!card) return; // esta página não tem o card de Categorias
+  var list = document.getElementById("categoriasList");
+  if (!list) return; // esta página não tem a aba Categorias
 
-  var iconeEl = document.getElementById("categoriaCardIcone");
-  var nomeEl = document.getElementById("categoriaCardNome");
-  var descricaoEl = document.getElementById("categoriaCardDescricao");
-  var badgeEl = document.getElementById("categoriaCardBadge");
+  var loadingText = list.dataset.loadingText || "Carregando…";
+  var errorText = list.dataset.errorText || "Não foi possível carregar os dados.";
 
-  // Edição (modal modalEditCategoria, compartilhado por todos os cards
-  // no HTML — só o botão Editar DESTE card, o dinâmico, é religado
-  // abaixo pra buscar/gravar de verdade; os outros 6 continuam com o
-  // comportamento estático de antes).
-  var editBtn = card.querySelector('[data-modal-open="modalEditCategoria"]');
   var namePtEl = document.getElementById("catEditNamePt");
   var nameEnEl = document.getElementById("catEditNameEn");
   var descPtEl = document.getElementById("catEditDescPt");
@@ -29,72 +28,113 @@
   var saveBtn = document.getElementById("btnSaveEditCategoria");
   var diagEl = document.getElementById("catEditDiagnostico");
 
-  var categoriaId = null; // ID_CATEGORIA em destaque, assim que descoberto (ver garantirCategoriaId)
+  var categoriaEmEdicaoId = null; // ID_CATEGORIA aberto no modal de edição no momento
 
-  function aplicarIcone(url) {
-    if (!iconeEl || !url) return;
-    var img = document.createElement("img");
-    img.src = url;
-    img.alt = "";
-    img.loading = "lazy";
-    iconeEl.innerHTML = "";
-    iconeEl.appendChild(img);
+  function escapeHtml(str) {
+    var div = document.createElement("div");
+    div.textContent = str == null ? "" : String(str);
+    return div.innerHTML;
   }
 
-  function aplicarBadge(qtd) {
-    if (!badgeEl) return;
-    if (qtd == null) {
-      badgeEl.textContent = "—";
+  function badgeTexto(qtd) {
+    if (qtd == null) return "—";
+    return qtd + " " + (qtd === 1 ? "kaizen" : "kaizens");
+  }
+
+  function renderItem(cat) {
+    var item = document.createElement("div");
+    item.className = "admin-item" + (cat.ATIVO ? "" : " admin-item-inactive");
+    item.dataset.id = cat.ID_CATEGORIA;
+    item.innerHTML =
+      '<div class="admin-item-icon green">' +
+        (cat.URL_ICONE ? '<img src="' + escapeHtml(cat.URL_ICONE) + '" alt="" loading="lazy">' : '<i class="fa-solid fa-tag"></i>') +
+      "</div>" +
+      '<div class="admin-item-body">' +
+        '<div class="admin-item-name">' + escapeHtml(cat.NM_CATEGORIA) + "</div>" +
+        '<div class="admin-item-sub">' + escapeHtml(cat.DS_CATEGORIA) + "</div>" +
+      "</div>" +
+      '<span class="admin-item-badge">' + badgeTexto(cat.QTD_KAIZENS) + "</span>" +
+      '<div class="admin-item-actions">' +
+        '<button type="button" class="btn-icon btn-icon-blue btn-icon-sm" data-action="editar" title="Editar"><i class="fa-solid fa-pen"></i></button>' +
+        '<button type="button" class="btn-icon ' + (cat.ATIVO ? "btn-icon-red" : "btn-icon-blue") + ' btn-icon-sm" data-action="status" title="' + (cat.ATIVO ? "Desativar" : "Reativar") + '"><i class="fa-solid ' + (cat.ATIVO ? "fa-ban" : "fa-rotate-right") + '"></i></button>' +
+      "</div>";
+
+    item.querySelector('[data-action="editar"]').addEventListener("click", function () {
+      abrirEdicao(cat);
+    });
+    item.querySelector('[data-action="status"]').addEventListener("click", function () {
+      alternarStatus(cat, item);
+    });
+    return item;
+  }
+
+  function renderLista(categorias) {
+    list.innerHTML = "";
+    if (!categorias.length) {
+      var empty = document.createElement("div");
+      empty.className = "admin-list-status";
+      empty.textContent = "Nenhuma categoria cadastrada.";
+      list.appendChild(empty);
       return;
     }
-    badgeEl.textContent = qtd + " " + (qtd === 1 ? "kaizen" : "kaizens");
+    categorias.forEach(function (cat) { list.appendChild(renderItem(cat)); });
   }
 
-  function carregarCard() {
-    return fetch("/api/categorias")
+  function renderCarregando() {
+    list.innerHTML = "";
+    var el = document.createElement("div");
+    el.className = "admin-list-status";
+    el.textContent = loadingText;
+    list.appendChild(el);
+  }
+
+  function renderErro() {
+    list.innerHTML = "";
+    var err = document.createElement("div");
+    err.className = "admin-list-status is-error";
+    err.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> <span></span>';
+    err.querySelector("span").textContent = errorText;
+    var retry = document.createElement("button");
+    retry.className = "btn btn-outline btn-sm";
+    retry.type = "button";
+    retry.textContent = "Tentar novamente";
+    retry.addEventListener("click", carregarLista);
+    err.appendChild(retry);
+    list.appendChild(err);
+  }
+
+  // Chamado no carregamento da tela E depois de qualquer edição/status
+  // — sempre busca do zero, nunca reaproveita estado velho, então o
+  // ativo/inativo mostrado é sempre o que está no banco agora.
+  function carregarLista() {
+    renderCarregando();
+    fetch("/api/categorias")
       .then(function (res) {
         if (!res.ok) return res.json().then(function (e) { throw new Error(e.error || res.statusText); });
         return res.json();
       })
-      .then(function (categoria) {
-        if (!categoria) return null; // nenhuma categoria cadastrada ainda: mantém o card estático
-        categoriaId = categoria.ID_CATEGORIA;
-        if (nomeEl) nomeEl.textContent = categoria.NM_CATEGORIA || "";
-        if (descricaoEl) descricaoEl.textContent = categoria.DS_CATEGORIA || "";
-        aplicarIcone(categoria.URL_ICONE);
-        aplicarBadge(categoria.QTD_KAIZENS);
-        return categoriaId;
+      .then(renderLista)
+      .catch(function (err) {
+        console.error("[categorias] falha ao carregar lista:", err);
+        renderErro();
       });
   }
 
-  // Garante o ID_CATEGORIA antes de editar — se o card ainda não
-  // carregou (ou o load inicial falhou), busca de novo agora em vez de
-  // desistir: quem clicou em Editar precisa mesmo ir ao banco, não só
-  // reaproveitar um estado que pode nem ter chegado a existir ainda.
-  function garantirCategoriaId() {
-    if (categoriaId != null) return Promise.resolve(categoriaId);
-    return carregarCard();
-  }
+  // ── Editar (modal bilíngue PT/EN) ──
+  function abrirEdicao(cat) {
+    categoriaEmEdicaoId = cat.ID_CATEGORIA;
+    if (window.openModal) openModal("modalEditCategoria");
 
-  // Editar: garante o ID_CATEGORIA e então busca as 2 linhas (PT/EN)
-  // desse registro no banco, populando o modal com dado fresco — nunca
-  // com o texto estático do HTML.
-  function carregarParaEdicao() {
-    garantirCategoriaId()
-      .then(function (id) {
-        if (id == null) throw new Error("Categoria ainda não carregada.");
-        return fetch("/api/categorias/" + encodeURIComponent(id)).then(function (res) {
-          return res.json().then(function (data) {
-            if (!res.ok) throw new Error(data.error || res.statusText);
-            return data;
-          });
+    fetch("/api/categorias/" + encodeURIComponent(cat.ID_CATEGORIA))
+      .then(function (res) {
+        return res.json().then(function (data) {
+          if (!res.ok) throw new Error(data.error || res.statusText);
+          return data;
         });
       })
       .then(function (data) {
-        // Sempre atribui (mesmo vazio) — nunca deixa o texto estático
-        // antigo do HTML no campo quando o idioma não existe ainda no
-        // banco (ex.: categoria só tem a linha PT cadastrada). Salvar
-        // com o campo em branco cria a linha que falta (ver PUT).
+        // Sempre atribui (mesmo vazio) — nunca deixa texto de uma
+        // edição anterior no campo quando o idioma não existe ainda.
         if (namePtEl) namePtEl.value = (data.pt && data.pt.NM_CATEGORIA) || "";
         if (nameEnEl) nameEnEl.value = (data.en && data.en.NM_CATEGORIA) || "";
         if (descPtEl) {
@@ -122,11 +162,8 @@
       });
   }
 
-  // Salvar: grava as 2 linhas (PT/EN) do MESMO ID_CATEGORIA (UPDATE,
-  // nunca INSERT — ver server.js) e reflete o nome/descrição PT no
-  // card sem precisar recarregar a página.
   function salvarEdicao() {
-    if (categoriaId == null) {
+    if (categoriaEmEdicaoId == null) {
       if (window.showToast) showToast("error", "Erro", "Categoria não identificada — feche e abra o formulário de novo.");
       return;
     }
@@ -140,7 +177,7 @@
     }
 
     if (saveBtn) saveBtn.disabled = true;
-    fetch("/api/categorias/" + encodeURIComponent(categoriaId), {
+    fetch("/api/categorias/" + encodeURIComponent(categoriaEmEdicaoId), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -152,11 +189,10 @@
         });
       })
       .then(function () {
-        if (nomeEl) nomeEl.textContent = payload.pt.NM_CATEGORIA;
-        if (descricaoEl) descricaoEl.textContent = payload.pt.DS_CATEGORIA;
-        if (diagEl) diagEl.style.display = "none"; // depois de salvar, as 2 linhas já existem
+        if (diagEl) diagEl.style.display = "none";
         if (window.closeModal) closeModal("modalEditCategoria");
         if (window.showToast) showToast("success", "Salvo", "Categoria atualizada com sucesso!");
+        carregarLista(); // recarrega do banco pra refletir o nome/descrição novos no card
       })
       .catch(function (err) {
         console.error("[categorias] falha ao salvar categoria:", err);
@@ -167,10 +203,43 @@
       });
   }
 
-  carregarCard().catch(function (err) {
-    console.error("[categorias] falha ao carregar o card em destaque:", err);
-  });
+  // ── Ativar/Desativar — grava SG_ATIVO no banco, nunca só visual ──
+  function alternarStatus(cat, item) {
+    var ativar = !cat.ATIVO;
+    var msg = ativar
+      ? 'Reativar "' + cat.NM_CATEGORIA + '"?'
+      : 'Desativar "' + cat.NM_CATEGORIA + '"? Ela deixará de aparecer como opção ativa, mas não será excluída.';
+    if (!window.confirm(msg)) return;
 
-  if (editBtn) editBtn.addEventListener("click", carregarParaEdicao);
+    fetch("/api/categorias/" + encodeURIComponent(cat.ID_CATEGORIA) + "/status", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ativo: ativar }),
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          if (!res.ok) throw new Error(data.error || res.statusText);
+          return data;
+        });
+      })
+      .then(function () {
+        cat.ATIVO = ativar;
+        item.replaceWith(renderItem(cat));
+        if (window.showToast) {
+          showToast(
+            "success",
+            ativar ? "Reativada" : "Desativada",
+            'Categoria "' + cat.NM_CATEGORIA + '" ' + (ativar ? "reativada" : "desativada") + " com sucesso."
+          );
+        }
+      })
+      .catch(function (err) {
+        console.error("[categorias] falha ao atualizar status:", err);
+        if (window.showToast) showToast("error", "Erro", "Não foi possível atualizar o status. " + err.message);
+      });
+  }
+
   if (saveBtn) saveBtn.addEventListener("click", salvarEdicao);
+
+  carregarLista();
 })();

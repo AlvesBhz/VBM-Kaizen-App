@@ -276,42 +276,47 @@ apiRouter.delete("/aprovadores/:id", async (req, res) => {
 });
 
 // ------------------------------------------------------------------
-// API — kzn_categoria (1ª fase: só leitura, 1 categoria)
+// API — kzn_categoria
 // ------------------------------------------------------------------
-// O card em destaque da aba "Categorias" mostra hoje só a 1ª categoria
-// retornada — os demais itens da lista continuam estáticos por
-// enquanto (ver assets/categorias.js). A contagem de Kaizens vem de
-// kzn_pendenciaconsolidada, casada por NM_CATEGORIA; se essa coluna
-// não existir na tabela real, a consulta de contagem falha sozinha
-// sem derrubar a categoria em si (mesmo espírito defensivo do
-// restante do arquivo) — devolve QTD_KAIZENS: null e só loga o motivo.
+// Lista TODAS as categorias (linha PT de cada uma — ID_IDIOMA fixo,
+// ver nota de ID_IDIOMA_PT/EN acima) pra aba "Categorias" de
+// admin.html, sem nenhum item estático misturado (ver
+// assets/categorias.js). Contagem de Kaizens vem de
+// kzn_pendenciaconsolidada, casada por NM_CATEGORIA, numa ÚNICA
+// consulta agrupada (não uma por categoria) — se essa tabela/coluna
+// não existir de verdade, a contagem falha sozinha sem derrubar a
+// lista (mesmo espírito defensivo do restante do arquivo): todo mundo
+// fica com QTD_KAIZENS null, só loga o motivo.
 apiRouter.get("/categorias", async (req, res) => {
   try {
-    // ID_IDIOMA fixo em PT: sem esse filtro, kzn_categoria devolveria a
-    // linha PT ou EN de forma imprevisível (existe 1 linha de cada por
-    // categoria — ver nota de ID_IDIOMA_PT/EN acima).
     const result = await runQuery(
-      `SELECT TOP (1) ID_CATEGORIA, NM_CATEGORIA, DS_CATEGORIA, URL_ICONE
+      `SELECT ID_CATEGORIA, NM_CATEGORIA, DS_CATEGORIA, URL_ICONE, SG_ATIVO
        FROM ${FULL_CATEGORIA_TABLE}
        WHERE ID_IDIOMA = @idIdioma
        ORDER BY NM_CATEGORIA`,
       [["idIdioma", sql.Int, ID_IDIOMA_PT]]
     );
-    const categoria = result.recordset[0] || null;
-    if (!categoria) return res.json(null);
 
-    let qtdKaizens = null;
+    let contagemPorNome = {};
     try {
       const contagem = await runQuery(
-        `SELECT COUNT(*) AS QTD FROM ${FULL_PENDENCIA_TABLE} WHERE NM_CATEGORIA = @nmCategoria`,
-        [["nmCategoria", sql.NVarChar(200), categoria.NM_CATEGORIA]]
+        `SELECT NM_CATEGORIA, COUNT(*) AS QTD FROM ${FULL_PENDENCIA_TABLE} GROUP BY NM_CATEGORIA`
       );
-      qtdKaizens = contagem.recordset[0].QTD;
+      contagem.recordset.forEach((r) => { contagemPorNome[r.NM_CATEGORIA] = r.QTD; });
     } catch (err) {
       console.warn(`[categorias] contagem de kaizens indisponível (${FULL_PENDENCIA_TABLE}): ${err.message}`);
     }
 
-    res.json({ ...categoria, QTD_KAIZENS: qtdKaizens });
+    res.json(
+      result.recordset.map((c) => ({
+        ID_CATEGORIA: c.ID_CATEGORIA,
+        NM_CATEGORIA: c.NM_CATEGORIA,
+        DS_CATEGORIA: c.DS_CATEGORIA,
+        URL_ICONE: c.URL_ICONE,
+        ATIVO: c.SG_ATIVO === "S",
+        QTD_KAIZENS: contagemPorNome[c.NM_CATEGORIA] != null ? contagemPorNome[c.NM_CATEGORIA] : null,
+      }))
+    );
   } catch (err) {
     console.error("[categorias] erro ao consultar:", err.message);
     res.status(500).json({ error: "Erro ao consultar categorias: " + err.message });
@@ -424,6 +429,41 @@ apiRouter.put("/categorias/:id", async (req, res) => {
   } catch (err) {
     console.error("[categorias] erro ao atualizar:", err.message);
     res.status(500).json({ error: "Erro ao atualizar categoria: " + err.message });
+  }
+});
+
+// Ativar/desativar (por ID_CATEGORIA) — grava SG_ATIVO ('S'/'N') nas
+// linhas de TODOS os idiomas desse ID_CATEGORIA de uma vez (o status
+// é da categoria, não de uma tradução específica), sem filtrar por
+// ID_IDIOMA.
+apiRouter.put("/categorias/:id/status", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({ error: "ID_CATEGORIA inválido." });
+    }
+    if (typeof req.body?.ativo !== "boolean") {
+      return res.status(400).json({ error: "Campo 'ativo' (true/false) é obrigatório." });
+    }
+    const sgAtivo = req.body.ativo ? "S" : "N";
+
+    const result = await runQuery(
+      `UPDATE ${FULL_CATEGORIA_TABLE}
+       SET SG_ATIVO = @sgAtivo, DT_ATUALIZACAO = GETDATE()
+       WHERE ID_CATEGORIA = @id`,
+      [
+        ["sgAtivo", sql.Char(1), sgAtivo],
+        ["id", sql.Int, id],
+      ]
+    );
+    if (!result.rowsAffected[0]) {
+      return res.status(404).json({ error: "Categoria não encontrada." });
+    }
+
+    res.json({ ok: true, ativo: req.body.ativo });
+  } catch (err) {
+    console.error("[categorias] erro ao atualizar status:", err.message);
+    res.status(500).json({ error: "Erro ao atualizar status da categoria: " + err.message });
   }
 });
 
