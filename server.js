@@ -62,6 +62,13 @@ const FULL_CATEGORIA_TABLE = `[${DB_SCHEMA}].[${DB_CATEGORIA_TABLE}]`;
 const DB_PENDENCIA_TABLE = safeIdentifier(process.env.AZURE_SQL_PENDENCIA_TABLE, "kzn_pendenciaconsolidada");
 const FULL_PENDENCIA_TABLE = `[${DB_SCHEMA}].[${DB_PENDENCIA_TABLE}]`;
 
+// kzn_categoria guarda 1 LINHA POR IDIOMA para a mesma categoria (mesmo
+// ID_CATEGORIA, ID_IDIOMA diferente) — confirmado no DER
+// (assets/DER_VBM_Kaizen_CI.html) e pelo time: ID_IDIOMA=1 é Português,
+// ID_IDIOMA=2 é Inglês (kzn_idioma).
+const ID_IDIOMA_PT = 1;
+const ID_IDIOMA_EN = 2;
+
 function checkConfig() {
   const missing = [
     ["AZURE_SQL_SERVER", DB_SERVER],
@@ -280,10 +287,15 @@ apiRouter.delete("/aprovadores/:id", async (req, res) => {
 // restante do arquivo) — devolve QTD_KAIZENS: null e só loga o motivo.
 apiRouter.get("/categorias", async (req, res) => {
   try {
+    // ID_IDIOMA fixo em PT: sem esse filtro, kzn_categoria devolveria a
+    // linha PT ou EN de forma imprevisível (existe 1 linha de cada por
+    // categoria — ver nota de ID_IDIOMA_PT/EN acima).
     const result = await runQuery(
-      `SELECT TOP (1) NM_CATEGORIA, DS_CATEGORIA, URL_ICONE
+      `SELECT TOP (1) ID_CATEGORIA, NM_CATEGORIA, DS_CATEGORIA, URL_ICONE
        FROM ${FULL_CATEGORIA_TABLE}
-       ORDER BY NM_CATEGORIA`
+       WHERE ID_IDIOMA = @idIdioma
+       ORDER BY NM_CATEGORIA`,
+      [["idIdioma", sql.Int, ID_IDIOMA_PT]]
     );
     const categoria = result.recordset[0] || null;
     if (!categoria) return res.json(null);
@@ -303,6 +315,89 @@ apiRouter.get("/categorias", async (req, res) => {
   } catch (err) {
     console.error("[categorias] erro ao consultar:", err.message);
     res.status(500).json({ error: "Erro ao consultar categorias: " + err.message });
+  }
+});
+
+// Buscar 1 categoria por ID — as duas linhas (PT e EN) do mesmo
+// ID_CATEGORIA, usadas para popular o modal de edição bilíngue.
+apiRouter.get("/categorias/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({ error: "ID_CATEGORIA inválido." });
+    }
+
+    const result = await runQuery(
+      `SELECT ID_IDIOMA, NM_CATEGORIA, DS_CATEGORIA
+       FROM ${FULL_CATEGORIA_TABLE}
+       WHERE ID_CATEGORIA = @id`,
+      [["id", sql.Int, id]]
+    );
+
+    const pt = result.recordset.find((r) => r.ID_IDIOMA === ID_IDIOMA_PT);
+    const en = result.recordset.find((r) => r.ID_IDIOMA === ID_IDIOMA_EN);
+    if (!pt && !en) {
+      return res.status(404).json({ error: "Categoria não encontrada." });
+    }
+
+    res.json({
+      ID_CATEGORIA: id,
+      pt: pt ? { NM_CATEGORIA: pt.NM_CATEGORIA, DS_CATEGORIA: pt.DS_CATEGORIA } : null,
+      en: en ? { NM_CATEGORIA: en.NM_CATEGORIA, DS_CATEGORIA: en.DS_CATEGORIA } : null,
+    });
+  } catch (err) {
+    console.error("[categorias] erro ao consultar por ID:", err.message);
+    res.status(500).json({ error: "Erro ao consultar categoria: " + err.message });
+  }
+});
+
+// Atualizar (por ID_CATEGORIA) — grava as duas linhas (PT e EN) do
+// mesmo ID_CATEGORIA, cada UPDATE isolado por ID_CATEGORIA + ID_IDIOMA
+// (nunca INSERT: edita o registro existente, não cria um novo).
+apiRouter.put("/categorias/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({ error: "ID_CATEGORIA inválido." });
+    }
+
+    const pt = req.body?.pt || {};
+    const en = req.body?.en || {};
+    const nomePt = (pt.NM_CATEGORIA || "").trim();
+    const descPt = (pt.DS_CATEGORIA || "").trim();
+    const nomeEn = (en.NM_CATEGORIA || "").trim();
+    const descEn = (en.DS_CATEGORIA || "").trim();
+
+    if (!nomePt || !descPt || !nomeEn || !descEn) {
+      return res.status(400).json({ error: "Nome e descrição são obrigatórios nos dois idiomas." });
+    }
+
+    const updateIdioma = (idIdioma, nome, descricao) =>
+      runQuery(
+        `UPDATE ${FULL_CATEGORIA_TABLE}
+         SET NM_CATEGORIA = @nome, DS_CATEGORIA = @descricao, DT_ATUALIZACAO = GETDATE()
+         WHERE ID_CATEGORIA = @id AND ID_IDIOMA = @idIdioma`,
+        [
+          ["nome", sql.NVarChar(200), nome],
+          ["descricao", sql.NVarChar(200), descricao],
+          ["id", sql.Int, id],
+          ["idIdioma", sql.Int, idIdioma],
+        ]
+      );
+
+    const [resultPt, resultEn] = await Promise.all([
+      updateIdioma(ID_IDIOMA_PT, nomePt, descPt),
+      updateIdioma(ID_IDIOMA_EN, nomeEn, descEn),
+    ]);
+
+    if (!resultPt.rowsAffected[0] && !resultEn.rowsAffected[0]) {
+      return res.status(404).json({ error: "Categoria não encontrada." });
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[categorias] erro ao atualizar:", err.message);
+    res.status(500).json({ error: "Erro ao atualizar categoria: " + err.message });
   }
 });
 
