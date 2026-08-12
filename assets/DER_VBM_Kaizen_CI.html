@@ -80,6 +80,7 @@ svg#links path.rel{fill:none;stroke:var(--line-color);stroke-width:1.6;opacity:.
 #arrow-key path{fill:var(--arrow-color);transition:fill .3s;}
 svg#links path.rel.dim{opacity:.12;}
 svg#links path.rel.hot{opacity:1;stroke-width:2.4;stroke:var(--vbm-blue-dark);}
+svg#links path.rel.soft{stroke-dasharray:5 4;}
 .group-label{position:absolute;font-family:'Poppins',sans-serif;font-weight:700;font-size:.74rem;text-transform:uppercase;letter-spacing:.09em;color:var(--vbm-blue-dark);transition:color .3s var(--ease-out);}
 body[data-bg="dark"] .group-label{color:var(--vbm-blue-light);}
 .entity{position:absolute;background:var(--card-bg);border-radius:1rem;border:1px solid var(--card-border);overflow:hidden;z-index:1;transition:box-shadow .25s,background .3s var(--ease-out),border-color .3s var(--ease-out);}
@@ -137,6 +138,7 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
   <span><span class="sw" style="background:var(--vbm-mid)"></span><span data-i18n="legend.log">Log de auditoria</span></span>
   <span><span class="sw" style="background:var(--aux)"></span><span data-i18n="legend.aux">Auxiliar / junção</span></span>
   <span>🔑 PK &nbsp; ↳ FK &nbsp; <span class="ln" style="background:var(--line-color)"></span> <span data-i18n="legend.line">conexão entre chaves</span></span>
+  <span><span class="ln" style="background:linear-gradient(90deg,var(--line-color) 0 60%,transparent 60% 100%);background-size:8px 3px;"></span> <span data-i18n="legend.soft">relação lógica, sem FK de banco</span></span>
 </div>
 
 <div class="toolbar">
@@ -195,18 +197,18 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
 <path class="rel" d="M795,1023 L757.5,1023 Q747.5,1023 747.5,1013 L747.5,71 Q747.5,61 737.5,61 L700,61" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_MDM" data-fk-row="1"/>
 <path class="rel" d="M795,1045 L757.5,1045 Q747.5,1045 747.5,1035 L747.5,71 Q747.5,61 737.5,61 L700,61" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_MDM" data-fk-row="2"/>
 <path class="rel" d="M795,1529 L757.5,1529 Q747.5,1529 747.5,1519 L747.5,71 Q747.5,61 737.5,61 L700,61" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_MDM" data-fk-row="24"/>
-<path class="rel" d="M475,1089 L357.5,1089 Q347.5,1089 347.5,1079 L347.5,367 Q347.5,357 337.5,357 L260,357" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_CATEGORIA" data-fk-row="4"/>
-<path class="rel" d="M475,1111 L512.5,1111 Q522.5,1111 522.5,1101 L522.5,367 Q522.5,357 532.5,357 L610,357" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_REPLICACAO" data-fk-row="5"/>
+<path class="rel soft" d="M475,1089 L357.5,1089 Q347.5,1089 347.5,1079 L347.5,367 Q347.5,357 337.5,357 L260,357" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_CATEGORIA" data-fk-row="4"/>
+<path class="rel soft" d="M475,1111 L512.5,1111 Q522.5,1111 522.5,1101 L522.5,367 Q522.5,357 532.5,357 L610,357" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_REPLICACAO" data-fk-row="5"/>
 <path class="rel" d="M795,1199 L1302.5,1199 Q1312.5,1199 1312.5,1189 L1312.5,71 Q1312.5,61 1322.5,61 L1050,61" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_APROVADOR" data-fk-row="9"/>
-<path class="rel" d="M795,1331 L795,1331 Q787.5,1331 787.5,1323.5 L787.5,364.5 Q787.5,357 780,357 L700,357" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_DESPERDICIO" data-fk-row="15"/>
+<path class="rel soft" d="M795,1331 L795,1331 Q787.5,1331 787.5,1323.5 L787.5,364.5 Q787.5,357 780,357 L700,357" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_DESPERDICIO" data-fk-row="15"/>
 <path class="rel" d="M795,1397 L1177.5,1397 Q1187.5,1397 1187.5,1387 L1187.5,367 Q1187.5,357 1197.5,357 L1050,357" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_MOEDA" data-fk-row="18"/>
-<path class="rel" d="M795,1463 L825,1463 Q835,1463 835,1453 L835,663 Q835,653 845,653 L875,653" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_MOTIVO" data-fk-row="21"/>
+<path class="rel soft" d="M795,1463 L825,1463 Q835,1463 835,1453 L835,663 Q835,653 845,653 L875,653" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_MOTIVO" data-fk-row="21"/>
 <path class="rel" d="M885,1023 L850,1023 Q840,1023 840,1013 L840,1011 Q840,1001 830,1001 L795,1001" marker-end="url(#arrow-key)" data-from="e_LOG" data-to="e_PVC" data-fk-row="1"/>
 <path class="rel" d="M885,1089 L912.5,1089 Q922.5,1089 922.5,1079 L922.5,71 Q922.5,61 932.5,61 L960,61" marker-end="url(#arrow-key)" data-from="e_LOG" data-to="e_MDM" data-fk-row="4"/>
 <path class="rel" d="M610,1693 L552.5,1693 Q542.5,1693 542.5,1683 L542.5,1011 Q542.5,1001 532.5,1001 L475,1001" marker-end="url(#arrow-key)" data-from="e_MEMBROS" data-to="e_PVC" data-fk-row="0"/>
 <path class="rel" d="M610,1715 L645,1715 Q655,1715 655,1705 L655,71 Q655,61 665,61 L700,61" marker-end="url(#arrow-key)" data-from="e_MEMBROS" data-to="e_MDM" data-fk-row="1"/>
 <path class="rel" d="M700,1693 L737.5,1693 Q747.5,1693 747.5,1683 L747.5,1011 Q747.5,1001 757.5,1001 L795,1001" marker-end="url(#arrow-key)" data-from="e_RESULTADO_KAIZEN" data-to="e_PVC" data-fk-row="0"/>
-<path class="rel" d="M700,1715 L787.5,1715 Q797.5,1715 797.5,1705 L797.5,663 Q797.5,653 807.5,653 L785,653" marker-end="url(#arrow-key)" data-from="e_RESULTADO_KAIZEN" data-to="e_RESULTADOS" data-fk-row="1"/>
+<path class="rel soft" d="M700,1715 L787.5,1715 Q797.5,1715 797.5,1705 L797.5,663 Q797.5,653 807.5,653 L785,653" marker-end="url(#arrow-key)" data-from="e_RESULTADO_KAIZEN" data-to="e_RESULTADOS" data-fk-row="1"/>
 <path class="rel" d="M1050,1715 L932.5,1715 Q922.5,1715 922.5,1705 L922.5,1011 Q922.5,1001 912.5,1001 L795,1001" marker-end="url(#arrow-key)" data-from="e_KAIZEN_HIERARQUIA" data-to="e_PVC" data-fk-row="1"/>
 </svg>
 
@@ -247,7 +249,7 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
   <div class="entity-head"><div class="entity-icon">CT</div><div class="entity-title">KZN_CATEGORIA</div></div>
   <div class="entity-body">
     <div class="field"><span class="field-name pk">ID_CATEGORIA</span><span class="field-type">INT</span></div>
-    <div class="field"><span class="field-name fk">ID_IDIOMA</span><span class="field-type">INT</span></div>
+    <div class="field"><span class="field-name pk fk">ID_IDIOMA</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name">URL_ICONE</span><span class="field-type">VARCHAR(150)</span></div>
     <div class="field"><span class="field-name">NM_CATEGORIA</span><span class="field-type">VARCHAR(20)</span></div>
     <div class="field"><span class="field-name">DS_CATEGORIA</span><span class="field-type">VARCHAR(40)</span></div>
@@ -259,7 +261,7 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
   <div class="entity-head"><div class="entity-icon">RP</div><div class="entity-title">KZN_REPLICACAO</div></div>
   <div class="entity-body">
     <div class="field"><span class="field-name pk">ID_REPLICACAO</span><span class="field-type">INT</span></div>
-    <div class="field"><span class="field-name fk">ID_IDIOMA</span><span class="field-type">INT</span></div>
+    <div class="field"><span class="field-name pk fk">ID_IDIOMA</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name">URL_ICONE</span><span class="field-type">VARCHAR(150)</span></div>
     <div class="field"><span class="field-name">NM_REPLICACAO</span><span class="field-type">VARCHAR(20)</span></div>
     <div class="field"><span class="field-name">DS_REPLICACAO</span><span class="field-type">VARCHAR(40)</span></div>
@@ -271,7 +273,7 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
   <div class="entity-head"><div class="entity-icon">DP</div><div class="entity-title">KZN_DESPERDICIO</div></div>
   <div class="entity-body">
     <div class="field"><span class="field-name pk">ID_DESPERDICIO</span><span class="field-type">INT</span></div>
-    <div class="field"><span class="field-name fk">ID_IDIOMA</span><span class="field-type">INT</span></div>
+    <div class="field"><span class="field-name pk fk">ID_IDIOMA</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name">URL_ICONE</span><span class="field-type">VARCHAR(150)</span></div>
     <div class="field"><span class="field-name">NM_DESPERDICIO</span><span class="field-type">VARCHAR(20)</span></div>
     <div class="field"><span class="field-name">DS_DESPERDICIO</span><span class="field-type">VARCHAR(40)</span></div>
@@ -294,7 +296,7 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
   <div class="entity-head"><div class="entity-icon">TR</div><div class="entity-title">KZN_TIPO_RESULTADO</div></div>
   <div class="entity-body">
     <div class="field"><span class="field-name pk">ID_TIPO_RESULTADO</span><span class="field-type">INT</span></div>
-    <div class="field"><span class="field-name fk">ID_IDIOMA</span><span class="field-type">INT</span></div>
+    <div class="field"><span class="field-name pk fk">ID_IDIOMA</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name">NM_TIPO_RESULTADO</span><span class="field-type">VARCHAR(20)</span></div>
     <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
   </div>
@@ -304,7 +306,7 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
   <div class="entity-head"><div class="entity-icon">RS</div><div class="entity-title">KZN_RESULTADOS</div></div>
   <div class="entity-body">
     <div class="field"><span class="field-name pk">ID_RESULTADO</span><span class="field-type">INT</span></div>
-    <div class="field"><span class="field-name fk">ID_IDIOMA</span><span class="field-type">INT</span></div>
+    <div class="field"><span class="field-name pk fk">ID_IDIOMA</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name">URL_ICONE</span><span class="field-type">VARCHAR(150)</span></div>
     <div class="field"><span class="field-name fk">ID_TIPO_RESULTADO</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name">NM_RESULTADO</span><span class="field-type">VARCHAR(20)</span></div>
@@ -317,7 +319,7 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
   <div class="entity-head"><div class="entity-icon">MR</div><div class="entity-title">KZN_MOTIVO_REPROVACAO</div></div>
   <div class="entity-body">
     <div class="field"><span class="field-name pk">ID_MOTIVO</span><span class="field-type">INT</span></div>
-    <div class="field"><span class="field-name fk">ID_IDIOMA</span><span class="field-type">INT</span></div>
+    <div class="field"><span class="field-name pk fk">ID_IDIOMA</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name">NM_MOTIVO</span><span class="field-type">VARCHAR(20)</span></div>
     <div class="field"><span class="field-name">DS_MOTIVO</span><span class="field-type">VARCHAR(40)</span></div>
     <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
@@ -625,6 +627,7 @@ document.getElementById('btnReset').addEventListener('click', ()=>{
       'legend.log': 'Log de auditoria',
       'legend.aux': 'Auxiliar / junção',
       'legend.line': 'conexão entre chaves',
+      'legend.soft': 'relação lógica, sem FK de banco',
       'toolbar.reset': '↺ Restaurar posições originais',
       'toolbar.hint': 'Arraste qualquer tabela (clique em qualquer ponto do card) pra mover — as linhas acompanham.',
       'group.masters': 'Mestres de referência',
@@ -649,6 +652,7 @@ document.getElementById('btnReset').addEventListener('click', ()=>{
       'legend.log': 'Audit log',
       'legend.aux': 'Auxiliary / junction',
       'legend.line': 'key-to-key connection',
+      'legend.soft': 'logical relation, no DB FK',
       'toolbar.reset': '↺ Reset original layout',
       'toolbar.hint': 'Drag any table (click anywhere on the card) to move it — the lines follow.',
       'group.masters': 'Reference masters',
