@@ -351,9 +351,18 @@ apiRouter.get("/categorias/:id", async (req, res) => {
   }
 });
 
-// Atualizar (por ID_CATEGORIA) — grava as duas linhas (PT e EN) do
-// mesmo ID_CATEGORIA, cada UPDATE isolado por ID_CATEGORIA + ID_IDIOMA
-// (nunca INSERT: edita o registro existente, não cria um novo).
+// Atualizar (por ID_CATEGORIA) — grava as duas linhas (PT e EN).
+// NA PRÁTICA A CATEGORIA PODE TER SÓ A LINHA PT CADASTRADA (a EN nunca
+// foi criada ainda) — por isso cada idioma faz um upsert (MERGE: edita
+// se a linha já existe, cria se não existe) em vez de um UPDATE puro,
+// senão digitar a tradução em inglês pela 1ª vez silenciosamente não
+// gravava nada (0 linhas afetadas, sem erro). O ID_CATEGORIA do ambos
+// os idiomas é sempre o mesmo, tanto no upsert quanto no ícone herdado
+// (abaixo) — nunca gera um ID novo/solto.
+// Ainda assim, só mexe em categoria que já existe: se NENHUMA linha
+// (nem PT nem EN) tiver esse ID_CATEGORIA, devolve 404 sem gravar nada
+// — não dá pra criar uma categoria do zero por aqui, só completar o
+// idioma que falta numa já existente.
 apiRouter.put("/categorias/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
@@ -372,11 +381,32 @@ apiRouter.put("/categorias/:id", async (req, res) => {
       return res.status(400).json({ error: "Nome e descrição são obrigatórios nos dois idiomas." });
     }
 
-    const updateIdioma = (idIdioma, nome, descricao) =>
+    const existe = await runQuery(
+      `SELECT TOP (1) 1 AS X FROM ${FULL_CATEGORIA_TABLE} WHERE ID_CATEGORIA = @id`,
+      [["id", sql.Int, id]]
+    );
+    if (!existe.recordset.length) {
+      return res.status(404).json({ error: "Categoria não encontrada." });
+    }
+
+    // WHEN NOT MATCHED: URL_ICONE herda o valor da linha do OUTRO
+    // idioma que já existir (mesma categoria, mesmo ícone nos dois
+    // idiomas); SG_ATIVO 'S' (ativo) — mesmo padrão das categorias já
+    // cadastradas hoje.
+    const upsertIdioma = (idIdioma, nome, descricao) =>
       runQuery(
-        `UPDATE ${FULL_CATEGORIA_TABLE}
-         SET NM_CATEGORIA = @nome, DS_CATEGORIA = @descricao, DT_ATUALIZACAO = GETDATE()
-         WHERE ID_CATEGORIA = @id AND ID_IDIOMA = @idIdioma`,
+        `MERGE INTO ${FULL_CATEGORIA_TABLE} AS target
+         USING (SELECT @id AS ID_CATEGORIA, @idIdioma AS ID_IDIOMA) AS src
+           ON target.ID_CATEGORIA = src.ID_CATEGORIA AND target.ID_IDIOMA = src.ID_IDIOMA
+         WHEN MATCHED THEN
+           UPDATE SET NM_CATEGORIA = @nome, DS_CATEGORIA = @descricao, DT_ATUALIZACAO = GETDATE()
+         WHEN NOT MATCHED THEN
+           INSERT (ID_CATEGORIA, ID_IDIOMA, URL_ICONE, NM_CATEGORIA, DS_CATEGORIA, SG_ATIVO, DT_ATUALIZACAO)
+           VALUES (
+             @id, @idIdioma,
+             (SELECT TOP (1) URL_ICONE FROM ${FULL_CATEGORIA_TABLE} WHERE ID_CATEGORIA = @id),
+             @nome, @descricao, 'S', GETDATE()
+           );`,
         [
           ["nome", sql.NVarChar(200), nome],
           ["descricao", sql.NVarChar(200), descricao],
@@ -385,14 +415,10 @@ apiRouter.put("/categorias/:id", async (req, res) => {
         ]
       );
 
-    const [resultPt, resultEn] = await Promise.all([
-      updateIdioma(ID_IDIOMA_PT, nomePt, descPt),
-      updateIdioma(ID_IDIOMA_EN, nomeEn, descEn),
+    await Promise.all([
+      upsertIdioma(ID_IDIOMA_PT, nomePt, descPt),
+      upsertIdioma(ID_IDIOMA_EN, nomeEn, descEn),
     ]);
-
-    if (!resultPt.rowsAffected[0] && !resultEn.rowsAffected[0]) {
-      return res.status(404).json({ error: "Categoria não encontrada." });
-    }
 
     res.json({ ok: true });
   } catch (err) {

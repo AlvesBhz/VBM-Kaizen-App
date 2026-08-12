@@ -90,13 +90,17 @@
         });
       })
       .then(function (data) {
-        if (namePtEl && data.pt) namePtEl.value = data.pt.NM_CATEGORIA || "";
-        if (nameEnEl && data.en) nameEnEl.value = data.en.NM_CATEGORIA || "";
-        if (descPtEl && data.pt) {
-          descPtEl.value = data.pt.DS_CATEGORIA || "";
+        // Sempre atribui (mesmo vazio) — nunca deixa o texto estático
+        // antigo do HTML no campo quando o idioma não existe ainda no
+        // banco (ex.: categoria só tem a linha PT cadastrada). Salvar
+        // com o campo em branco cria a linha que falta (ver PUT).
+        if (namePtEl) namePtEl.value = (data.pt && data.pt.NM_CATEGORIA) || "";
+        if (nameEnEl) nameEnEl.value = (data.en && data.en.NM_CATEGORIA) || "";
+        if (descPtEl) {
+          descPtEl.value = (data.pt && data.pt.DS_CATEGORIA) || "";
           if (window.updateCategoryDescCounter) updateCategoryDescCounter(descPtEl, "catEdit");
         }
-        if (descEnEl && data.en) descEnEl.value = data.en.DS_CATEGORIA || "";
+        if (descEnEl) descEnEl.value = (data.en && data.en.DS_CATEGORIA) || "";
       })
       .catch(function (err) {
         console.error("[categorias] falha ao carregar categoria para edição:", err);
