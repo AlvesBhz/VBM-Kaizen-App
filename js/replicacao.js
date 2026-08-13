@@ -13,8 +13,10 @@
     btnSalvarAddId: "btnSaveAddReplicacao", btnSalvarEditId: "btnSaveEditReplicacao",
     classeIcone: "blue", iconePadrao: "fa-solid fa-globe",
     palavraBadge: null, palavraBadgeSingular: null,
-    // Limites do DER (kzn_replicacao): NM_REPLICACAO 20 / DS_REPLICACAO 40.
-    maxNome: 20, maxDescricao: 40,
+    // Limites do DER (kzn_replicacao): NM_REPLICACAO VARCHAR(30) /
+    // DS_REPLICACAO VARCHAR(100) — mesmo tamanho das outras 3 tabelas
+    // bilíngues (server.js espelha isso em CADASTRO_LIMITES_DER).
+    maxNome: 30, maxDescricao: 100,
     rotuloSingular: "Potencial de replicação",
     textoCarregando: "Carregando potenciais de replicação…", textoVazio: "Nenhum potencial de replicação cadastrado.",
     textoErro: "Não foi possível carregar os potenciais de replicação no momento. Tente novamente em instantes.",

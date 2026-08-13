@@ -13,8 +13,10 @@
     btnSalvarAddId: "btnSaveAddResultado", btnSalvarEditId: "btnSaveEditResultado",
     classeIcone: "yellow", iconePadrao: "fa-solid fa-trophy",
     palavraBadge: null, palavraBadgeSingular: null,
-    // Limites do DER (kzn_resultados): NM_RESULTADO 20 / DS_RESULTADO 40.
-    maxNome: 20, maxDescricao: 40,
+    // Limites do DER (kzn_resultados): NM_RESULTADO VARCHAR(30) /
+    // DS_RESULTADO VARCHAR(100) — mesmo tamanho das outras 3 tabelas
+    // bilíngues (server.js espelha isso em CADASTRO_LIMITES_DER).
+    maxNome: 30, maxDescricao: 100,
     rotuloSingular: "Tipo de resultado",
     textoCarregando: "Carregando tipos de resultado…", textoVazio: "Nenhum tipo de resultado cadastrado.",
     textoErro: "Não foi possível carregar os tipos de resultado no momento. Tente novamente em instantes.",

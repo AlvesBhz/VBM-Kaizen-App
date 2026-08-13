@@ -397,10 +397,14 @@ apiRouter.get("/usuarios", async (req, res) => {
 // registrarCadastroBilingue() abaixo: listar, buscar por id (2
 // idiomas), criar, editar e ativar/desativar.
 //
-// TAMANHOS: vêm do DER (NM 20 / DS 40). Categoria é a exceção
-// deliberada — suas colunas já foram ampliadas no banco (30/100),
-// conforme solicitado, então o DER está desatualizado só para ela.
-const CADASTRO_LIMITES_DER = { nome: 20, descricao: 40 };
+// TAMANHOS: vêm do DER (database/DER_VBM_Kaizen_CI.html). Antes
+// deste ajuste o DER mostrava NM VARCHAR(20)/DS VARCHAR(40) e só a
+// tabela de Categoria estava marcada como "exceção" (colunas já
+// ampliadas para 30/100 no banco). A versão atual do DER mostra que
+// as 4 tabelas (categoria, replicacao, desperdicio, resultados) têm
+// exatamente as MESMAS colunas VARCHAR(30)/VARCHAR(100) — não há mais
+// exceção nenhuma, as 4 sempre tiveram o mesmo tamanho.
+const CADASTRO_LIMITES_DER = { nome: 30, descricao: 100 };
 
 function tabelaCadastro(envVar, padrao) {
   return `[${DB_SCHEMA}].[${safeIdentifier(process.env[envVar], padrao)}]`;
@@ -682,9 +686,10 @@ registrarCadastroBilingue({
   pk: "ID_CATEGORIA",
   colNome: "NM_CATEGORIA",
   colDescricao: "DS_CATEGORIA",
-  // Exceção ao DER: colunas já ampliadas no banco para esta tabela.
-  maxNome: 30,
-  maxDescricao: 100,
+  // Mesmo tamanho do DER que as outras 3 tabelas bilíngues (não é
+  // mais exceção — ver nota em CADASTRO_LIMITES_DER acima).
+  maxNome: CADASTRO_LIMITES_DER.nome,
+  maxDescricao: CADASTRO_LIMITES_DER.descricao,
   rotuloSing: "categoria",
   contagem: { tabela: FULL_PENDENCIA_TABLE, coluna: "NM_CATEGORIA" },
 });

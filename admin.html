@@ -39,7 +39,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>VBM Kaizen — Administração</title>
 <link href="css/vendor/e5e202e3c8995079_all.min.css" rel="stylesheet"/>
-<link href="css/vbm-app.css?v=20260814-2" rel="stylesheet"/>
+<link href="css/vbm-app.css?v=20260815-1" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
 <link href="https://fonts.gstatic.com" rel="preconnect" crossorigin/>
 <!-- Poppins carregada SEM bloquear a renderização: como "print" o navegador
@@ -958,12 +958,12 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="lang-slot">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
             <span class="lang-slot-divider"></span>
-            <input type="text" class="form-control lang-slot-input" placeholder="Ex: Unidades da mesma região" data-i18n-placeholder="adm.newReplicationPlaceholder" data-lang="pt-BR" id="replAddNamePt" maxlength="20" required/>
+            <input type="text" class="form-control lang-slot-input" placeholder="Ex: Unidades da mesma região" data-i18n-placeholder="adm.newReplicationPlaceholder" data-lang="pt-BR" id="replAddNamePt" maxlength="30" required/>
           </div>
           <div class="lang-slot">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
             <span class="lang-slot-divider"></span>
-            <input type="text" class="form-control lang-slot-input" placeholder="Ex: Units in the same region" data-lang="en" id="replAddNameEn" maxlength="20" required/>
+            <input type="text" class="form-control lang-slot-input" placeholder="Ex: Units in the same region" data-lang="en" id="replAddNameEn" maxlength="30" required/>
           </div>
         </div>
       </div>
@@ -973,15 +973,15 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="lang-slot lang-slot-textarea">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
             <span class="lang-slot-divider"></span>
-            <textarea class="form-control lang-slot-input" rows="1" maxlength="40" placeholder="Descreva o alcance de replicação..." data-i18n-placeholder="adm.replicationDescPlaceholder" data-lang="pt-BR" id="replAddDescPt" oninput="updateCategoryDescCounter(this,'replAdd',40)" required></textarea>
+            <textarea class="form-control lang-slot-input" rows="1" maxlength="100" placeholder="Descreva o alcance de replicação..." data-i18n-placeholder="adm.replicationDescPlaceholder" data-lang="pt-BR" id="replAddDescPt" oninput="updateCategoryDescCounter(this,'replAdd',100)" required></textarea>
           </div>
           <div class="lang-slot lang-slot-textarea">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
             <span class="lang-slot-divider"></span>
-            <textarea class="form-control lang-slot-input" rows="1" maxlength="40" placeholder="Describe the replication scope..." data-lang="en" id="replAddDescEn" required></textarea>
+            <textarea class="form-control lang-slot-input" rows="1" maxlength="100" placeholder="Describe the replication scope..." data-lang="en" id="replAddDescEn" required></textarea>
           </div>
         </div>
-        <div class="form-helper" style="text-align:right;" id="replAddDescCounter">0/40</div>
+        <div class="form-helper" style="text-align:right;" id="replAddDescCounter">0/100</div>
       </div>
     </div>
     <div class="modal-foot">
@@ -1015,12 +1015,12 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="lang-slot">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
             <span class="lang-slot-divider"></span>
-            <input type="text" class="form-control lang-slot-input" value="Todas as unidades" data-lang="pt-BR" id="replEditNamePt" maxlength="20" required/>
+            <input type="text" class="form-control lang-slot-input" value="Todas as unidades" data-lang="pt-BR" id="replEditNamePt" maxlength="30" required/>
           </div>
           <div class="lang-slot">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
             <span class="lang-slot-divider"></span>
-            <input type="text" class="form-control lang-slot-input" value="All units" data-lang="en" id="replEditNameEn" maxlength="20" required/>
+            <input type="text" class="form-control lang-slot-input" value="All units" data-lang="en" id="replEditNameEn" maxlength="30" required/>
           </div>
         </div>
       </div>
@@ -1030,15 +1030,15 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="lang-slot lang-slot-textarea">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
             <span class="lang-slot-divider"></span>
-            <textarea class="form-control lang-slot-input" rows="1" maxlength="40" data-lang="pt-BR" id="replEditDescPt" oninput="updateCategoryDescCounter(this,'replEdit',40)" required>Replicável em todas as operações da Vale Base Metals globalmente</textarea>
+            <textarea class="form-control lang-slot-input" rows="1" maxlength="100" data-lang="pt-BR" id="replEditDescPt" oninput="updateCategoryDescCounter(this,'replEdit',100)" required>Replicável em todas as operações da Vale Base Metals globalmente</textarea>
           </div>
           <div class="lang-slot lang-slot-textarea">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
             <span class="lang-slot-divider"></span>
-            <textarea class="form-control lang-slot-input" rows="1" maxlength="40" data-lang="en" id="replEditDescEn" required>Replicable across all Vale Base Metals operations globally</textarea>
+            <textarea class="form-control lang-slot-input" rows="1" maxlength="100" data-lang="en" id="replEditDescEn" required>Replicable across all Vale Base Metals operations globally</textarea>
           </div>
         </div>
-        <div class="form-helper" style="text-align:right;" id="replEditDescCounter">0/40</div>
+        <div class="form-helper" style="text-align:right;" id="replEditDescCounter">0/100</div>
       </div>
     </div>
     <div class="modal-foot">
@@ -1072,12 +1072,12 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="lang-slot">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
             <span class="lang-slot-divider"></span>
-            <input type="text" class="form-control lang-slot-input" placeholder="Nome do tipo de desperdício / Kaizen..." data-i18n-placeholder="adm.newWasteTypePlaceholder" data-lang="pt-BR" id="despAddNamePt" maxlength="20" required/>
+            <input type="text" class="form-control lang-slot-input" placeholder="Nome do tipo de desperdício / Kaizen..." data-i18n-placeholder="adm.newWasteTypePlaceholder" data-lang="pt-BR" id="despAddNamePt" maxlength="30" required/>
           </div>
           <div class="lang-slot">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
             <span class="lang-slot-divider"></span>
-            <input type="text" class="form-control lang-slot-input" placeholder="Waste / Kaizen type name..." data-lang="en" id="despAddNameEn" maxlength="20" required/>
+            <input type="text" class="form-control lang-slot-input" placeholder="Waste / Kaizen type name..." data-lang="en" id="despAddNameEn" maxlength="30" required/>
           </div>
         </div>
       </div>
@@ -1087,15 +1087,15 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="lang-slot lang-slot-textarea">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
             <span class="lang-slot-divider"></span>
-            <textarea class="form-control lang-slot-input" rows="1" maxlength="40" placeholder="Descrição curta..." data-i18n-placeholder="adm.shortDescPlaceholder" data-lang="pt-BR" id="despAddDescPt" oninput="updateCategoryDescCounter(this,'despAdd',40)" required></textarea>
+            <textarea class="form-control lang-slot-input" rows="1" maxlength="100" placeholder="Descrição curta..." data-i18n-placeholder="adm.shortDescPlaceholder" data-lang="pt-BR" id="despAddDescPt" oninput="updateCategoryDescCounter(this,'despAdd',100)" required></textarea>
           </div>
           <div class="lang-slot lang-slot-textarea">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
             <span class="lang-slot-divider"></span>
-            <textarea class="form-control lang-slot-input" rows="1" maxlength="40" placeholder="Short description..." data-lang="en" id="despAddDescEn" required></textarea>
+            <textarea class="form-control lang-slot-input" rows="1" maxlength="100" placeholder="Short description..." data-lang="en" id="despAddDescEn" required></textarea>
           </div>
         </div>
-        <div class="form-helper" style="text-align:right;" id="despAddDescCounter">0/40</div>
+        <div class="form-helper" style="text-align:right;" id="despAddDescCounter">0/100</div>
       </div>
     </div>
     <div class="modal-foot">
@@ -1129,12 +1129,12 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="lang-slot">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
             <span class="lang-slot-divider"></span>
-            <input type="text" class="form-control lang-slot-input" value="Kaizen Simples" data-lang="pt-BR" id="despEditNamePt" maxlength="20" required/>
+            <input type="text" class="form-control lang-slot-input" value="Kaizen Simples" data-lang="pt-BR" id="despEditNamePt" maxlength="30" required/>
           </div>
           <div class="lang-slot">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
             <span class="lang-slot-divider"></span>
-            <input type="text" class="form-control lang-slot-input" value="Simple Kaizen" data-lang="en" id="despEditNameEn" maxlength="20" required/>
+            <input type="text" class="form-control lang-slot-input" value="Simple Kaizen" data-lang="en" id="despEditNameEn" maxlength="30" required/>
           </div>
         </div>
       </div>
@@ -1144,15 +1144,15 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="lang-slot lang-slot-textarea">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
             <span class="lang-slot-divider"></span>
-            <textarea class="form-control lang-slot-input" rows="1" maxlength="40" data-lang="pt-BR" id="despEditDescPt" oninput="updateCategoryDescCounter(this,'despEdit',40)" required>Pequenas melhorias de baixa complexidade e custo. Execução &lt;30 dias.</textarea>
+            <textarea class="form-control lang-slot-input" rows="1" maxlength="100" data-lang="pt-BR" id="despEditDescPt" oninput="updateCategoryDescCounter(this,'despEdit',100)" required>Pequenas melhorias de baixa complexidade e custo. Execução &lt;30 dias.</textarea>
           </div>
           <div class="lang-slot lang-slot-textarea">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
             <span class="lang-slot-divider"></span>
-            <textarea class="form-control lang-slot-input" rows="1" maxlength="40" data-lang="en" id="despEditDescEn" required>Small, low-complexity, low-cost improvements. &lt;30 day execution.</textarea>
+            <textarea class="form-control lang-slot-input" rows="1" maxlength="100" data-lang="en" id="despEditDescEn" required>Small, low-complexity, low-cost improvements. &lt;30 day execution.</textarea>
           </div>
         </div>
-        <div class="form-helper" style="text-align:right;" id="despEditDescCounter">0/40</div>
+        <div class="form-helper" style="text-align:right;" id="despEditDescCounter">0/100</div>
       </div>
     </div>
     <div class="modal-foot">
@@ -1188,12 +1188,12 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="lang-slot">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
             <span class="lang-slot-divider"></span>
-            <input type="text" class="form-control lang-slot-input" placeholder="Resultado alcançado..." data-i18n-placeholder="adm.resultTypePlaceholder" data-lang="pt-BR" id="resAddNamePt" maxlength="20" required/>
+            <input type="text" class="form-control lang-slot-input" placeholder="Resultado alcançado..." data-i18n-placeholder="adm.resultTypePlaceholder" data-lang="pt-BR" id="resAddNamePt" maxlength="30" required/>
           </div>
           <div class="lang-slot">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
             <span class="lang-slot-divider"></span>
-            <input type="text" class="form-control lang-slot-input" placeholder="Result type..." data-lang="en" id="resAddNameEn" maxlength="20" required/>
+            <input type="text" class="form-control lang-slot-input" placeholder="Result type..." data-lang="en" id="resAddNameEn" maxlength="30" required/>
           </div>
         </div>
       </div>
@@ -1203,15 +1203,15 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="lang-slot lang-slot-textarea">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
             <span class="lang-slot-divider"></span>
-            <textarea class="form-control lang-slot-input" rows="1" maxlength="40" placeholder="Descreva o tipo de resultado..." data-i18n-placeholder="adm.resultDescPlaceholder" data-lang="pt-BR" id="resAddDescPt" oninput="updateCategoryDescCounter(this,'resAdd',40)" required></textarea>
+            <textarea class="form-control lang-slot-input" rows="1" maxlength="100" placeholder="Descreva o tipo de resultado..." data-i18n-placeholder="adm.resultDescPlaceholder" data-lang="pt-BR" id="resAddDescPt" oninput="updateCategoryDescCounter(this,'resAdd',100)" required></textarea>
           </div>
           <div class="lang-slot lang-slot-textarea">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
             <span class="lang-slot-divider"></span>
-            <textarea class="form-control lang-slot-input" rows="1" maxlength="40" placeholder="Describe the result type..." data-lang="en" id="resAddDescEn" required></textarea>
+            <textarea class="form-control lang-slot-input" rows="1" maxlength="100" placeholder="Describe the result type..." data-lang="en" id="resAddDescEn" required></textarea>
           </div>
         </div>
-        <div class="form-helper" style="text-align:right;" id="resAddDescCounter">0/40</div>
+        <div class="form-helper" style="text-align:right;" id="resAddDescCounter">0/100</div>
       </div>
     </div>
     <div class="modal-foot">
@@ -1247,12 +1247,12 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="lang-slot">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
             <span class="lang-slot-divider"></span>
-            <input type="text" class="form-control lang-slot-input" value="Redução de Custo" data-lang="pt-BR" id="resEditNamePt" maxlength="20" required/>
+            <input type="text" class="form-control lang-slot-input" value="Redução de Custo" data-lang="pt-BR" id="resEditNamePt" maxlength="30" required/>
           </div>
           <div class="lang-slot">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
             <span class="lang-slot-divider"></span>
-            <input type="text" class="form-control lang-slot-input" value="Cost Reduction" data-lang="en" id="resEditNameEn" maxlength="20" required/>
+            <input type="text" class="form-control lang-slot-input" value="Cost Reduction" data-lang="en" id="resEditNameEn" maxlength="30" required/>
           </div>
         </div>
       </div>
@@ -1262,15 +1262,15 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="lang-slot lang-slot-textarea">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
             <span class="lang-slot-divider"></span>
-            <textarea class="form-control lang-slot-input" rows="1" maxlength="40" data-lang="pt-BR" id="resEditDescPt" oninput="updateCategoryDescCounter(this,'resEdit',40)" required>Economia financeira direta mensurável em USD/CAD/BRL</textarea>
+            <textarea class="form-control lang-slot-input" rows="1" maxlength="100" data-lang="pt-BR" id="resEditDescPt" oninput="updateCategoryDescCounter(this,'resEdit',100)" required>Economia financeira direta mensurável em USD/CAD/BRL</textarea>
           </div>
           <div class="lang-slot lang-slot-textarea">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
             <span class="lang-slot-divider"></span>
-            <textarea class="form-control lang-slot-input" rows="1" maxlength="40" data-lang="en" id="resEditDescEn" required>Direct financial savings measurable in USD/CAD/BRL</textarea>
+            <textarea class="form-control lang-slot-input" rows="1" maxlength="100" data-lang="en" id="resEditDescEn" required>Direct financial savings measurable in USD/CAD/BRL</textarea>
           </div>
         </div>
-        <div class="form-helper" style="text-align:right;" id="resEditDescCounter">0/40</div>
+        <div class="form-helper" style="text-align:right;" id="resEditDescCounter">0/100</div>
       </div>
     </div>
     <div class="modal-foot">
@@ -1281,16 +1281,16 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 </div>
 
 <div class="toast-container"></div>
-<script src="js/vbm-app.js?v=20260814-2"></script>
-<script src="js/aprovadores.js?v=20260814-2"></script>
-<script src="js/usuarios.js?v=20260814-2"></script>
+<script src="js/vbm-app.js?v=20260815-1"></script>
+<script src="js/aprovadores.js?v=20260815-1"></script>
+<script src="js/usuarios.js?v=20260815-1"></script>
 <!-- cadastro-bilingue.js define o motor compartilhado (window.criarCadastroBilingue);
      os 4 arquivos seguintes só configuram sua própria aba com ele. -->
-<script src="js/cadastro-bilingue.js?v=20260814-2"></script>
-<script src="js/categorias.js?v=20260814-2"></script>
-<script src="js/replicacao.js?v=20260814-2"></script>
-<script src="js/desperdicios.js?v=20260814-2"></script>
-<script src="js/resultados.js?v=20260814-2"></script>
+<script src="js/cadastro-bilingue.js?v=20260815-1"></script>
+<script src="js/categorias.js?v=20260815-1"></script>
+<script src="js/replicacao.js?v=20260815-1"></script>
+<script src="js/desperdicios.js?v=20260815-1"></script>
+<script src="js/resultados.js?v=20260815-1"></script>
 <script>
 (function(){
   var tabs = document.querySelectorAll('[data-admin-tab]');

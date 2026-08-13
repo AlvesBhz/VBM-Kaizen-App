@@ -38,10 +38,10 @@
   var TEXTO_VAZIO = "Nenhuma categoria cadastrada.";
   var TEXTO_ERRO = "Não foi possível carregar as categorias no momento. Tente novamente em instantes.";
 
-  // Mesmos limites do server.js — checagem no cliente é só uma
-  // resposta mais rápida; o servidor sempre valida de novo antes de
-  // gravar. Exceção ao DER (NM 20 / DS 40): colunas já ampliadas no
-  // banco especificamente para Categoria (30/100).
+  // Mesmos limites do server.js (do DER: NM VARCHAR(30) / DS
+  // VARCHAR(100), igual nas 4 tabelas bilíngues) — checagem no
+  // cliente é só uma resposta mais rápida; o servidor sempre valida
+  // de novo antes de gravar.
   var NOME_MAX = 30;
   var DESCRICAO_MAX = 100;
 
