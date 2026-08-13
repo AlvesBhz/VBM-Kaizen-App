@@ -113,6 +113,16 @@
     return '<span class="admin-item-badge">' + escapeHtml(texto) + "</span>";
   }
 
+  // Sinaliza quando o nome/descrição exibidos são o texto em português
+  // por FALTA de tradução (não porque o usuário pediu português) — sem
+  // isso, o card em inglês mostra texto em português sem nenhuma pista
+  // de que a tradução simplesmente não foi cadastrada ainda.
+  function semTraducaoHtml(reg) {
+    if (!reg.SEM_TRADUCAO) return "";
+    return ' <i class="fa-solid fa-language" style="opacity:.55;font-size:.75em;" ' +
+      'title="Tradução em inglês não cadastrada — mostrando o texto em português"></i>';
+  }
+
   function renderItem(reg) {
     var item = document.createElement("div");
     item.className = "admin-item" + (reg.ATIVO ? "" : " admin-item-inactive");
@@ -124,7 +134,7 @@
           : '<i class="' + ICONE_PADRAO + '"></i>') +
       "</div>" +
       '<div class="admin-item-body">' +
-        '<div class="admin-item-name">' + escapeHtml(reg.NM) + "</div>" +
+        '<div class="admin-item-name">' + escapeHtml(reg.NM) + semTraducaoHtml(reg) + "</div>" +
         '<div class="admin-item-sub">' + escapeHtml(reg.DS) + "</div>" +
       "</div>" +
       badgeHtml(reg.QTD) +

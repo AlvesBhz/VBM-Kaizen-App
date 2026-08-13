@@ -496,19 +496,22 @@ function registrarCadastroBilingue(cfg) {
   // coluna, listar em inglês zeraria todos os badges.
   apiRouter.get(`/${rota}`, async (req, res) => {
     try {
+      const idIdiomaPedido = idIdiomaDaRequisicao(req);
       const result = await runQuery(
         `SELECT base.${pk} AS ID,
                 COALESCE(tr.${colNome}, base.${colNome}) AS NM,
                 COALESCE(tr.${colDescricao}, base.${colDescricao}) AS DS,
                 base.${colNome} AS NM_PT,
-                base.URL_ICONE, base.SG_ATIVO
+                base.URL_ICONE, base.SG_ATIVO,
+                CASE WHEN @idIdioma <> @idIdiomaBase AND tr.ID_IDIOMA IS NULL
+                     THEN 1 ELSE 0 END AS SEM_TRADUCAO
          FROM ${tabela} base
          LEFT JOIN ${tabela} tr
                 ON tr.${pk} = base.${pk} AND tr.ID_IDIOMA = @idIdioma
          WHERE base.ID_IDIOMA = @idIdiomaBase
          ORDER BY COALESCE(tr.${colNome}, base.${colNome})`,
         [
-          ["idIdioma", sql.Int, idIdiomaDaRequisicao(req)],
+          ["idIdioma", sql.Int, idIdiomaPedido],
           ["idIdiomaBase", sql.Int, ID_IDIOMA_PT],
         ]
       );
@@ -540,6 +543,12 @@ function registrarCadastroBilingue(cfg) {
           // casa pelo nome em PT: a tabela de pendências guarda o nome
           // em português, independentemente do idioma da tela.
           QTD: contagemPorNome[r.NM_PT] != null ? contagemPorNome[r.NM_PT] : null,
+          // true = pediu um idioma diferente de PT e este registro não
+          // tem aquela tradução cadastrada (o NM/DS acima vêm do PT por
+          // causa do COALESCE). O front-end usa isso para sinalizar o
+          // card, em vez de deixar parecer, em silêncio, que o texto em
+          // português É a tradução.
+          SEM_TRADUCAO: r.SEM_TRADUCAO === 1,
         }))
       );
     } catch (err) {
