@@ -6,8 +6,8 @@
  * SG_ATIVO, 1 linha por idioma) e a mesma tela (lista de .admin-item +
  * modais Add/Edit bilíngues). Este arquivo define o motor único
  * (window.criarCadastroBilingue) usado pelos 4 arquivos de aba —
- * assets/categorias.js, assets/replicacao.js, assets/desperdicios.js
- * e assets/resultados.js — cada um só passando a configuração da sua
+ * js/categorias.js, js/replicacao.js, js/desperdicios.js
+ * e js/resultados.js — cada um só passando a configuração da sua
  * própria aba (rota, ids dos elementos, textos, limites de campo).
  * Precisa ser carregado ANTES desses 4 arquivos.
  *

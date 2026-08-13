@@ -13,7 +13,7 @@
  *
  * Assim que o modelo ganhar essas colunas (ou uma tabela de vínculo
  * usuário↔papel/unidade/status), esta aba passa a usar a mesma fábrica
- * das outras — ver assets/admin-cadastros.js.
+ * das outras — ver js/cadastro-bilingue.js.
  */
 (function () {
   var tbody = document.getElementById("usuariosTableBody");

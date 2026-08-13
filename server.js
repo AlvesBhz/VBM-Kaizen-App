@@ -5,7 +5,7 @@
  * e expõe uma API REST para a tabela `kzn_aprovador`, usada hoje pela
  * aba "Aprovadores" de admin.html. Também expõe uma leitura (só GET)
  * de `kzn_categoria` + contagem em `kzn_pendenciaconsolidada`, usada
- * pelo card em destaque da aba "Categorias" (ver assets/categorias.js).
+ * pelo card em destaque da aba "Categorias" (ver js/categorias.js).
  *
  * MODELO DE CONEXÃO (igual ao app.py de teste / app.yaml fornecidos):
  *   - Conexão DIRETA ao Azure SQL Database, sem passar pelo Databricks
@@ -78,7 +78,7 @@ const FULL_MDM_TABLE = `[${DB_SCHEMA}].[${DB_MDM_TABLE}]`;
 
 // kzn_categoria guarda 1 LINHA POR IDIOMA para a mesma categoria (mesmo
 // ID_CATEGORIA, ID_IDIOMA diferente) — confirmado no DER
-// (assets/DER_VBM_Kaizen_CI.html) e pelo time: ID_IDIOMA=1 é Português,
+// (database/DER_VBM_Kaizen_CI.html) e pelo time: ID_IDIOMA=1 é Português,
 // ID_IDIOMA=2 é Inglês (kzn_idioma).
 const ID_IDIOMA_PT = 1;
 const ID_IDIOMA_EN = 2;
@@ -152,16 +152,20 @@ async function runQuery(query, params = []) {
 //
 // AGORA, por tipo de arquivo, sem perder atualização em deploy:
 //
-//   • assets/vendor/<hash>_nome.ext — o hash faz parte do nome, então
-//     conteúdo novo = nome novo. Pode ir de cache "para sempre"
-//     (immutable): zero requisição em navegações seguintes.
-//   • todo o resto (HTML, vbm-app.css/js, telas, SVGs de fundo) —
+//   • arquivos com hash no nome (<hash>_nome.ext, ex.: as fontes em
+//     assets/fonts, o favicon em assets/icons, as fotos em
+//     assets/images e o Font Awesome em css/vendor) — o hash faz parte
+//     do nome, então conteúdo novo = nome novo. Podem ir de cache
+//     "para sempre" (immutable): zero requisição em navegações
+//     seguintes. A regra olha só o nome do arquivo, não a pasta, para
+//     continuar valendo depois da reorganização de diretórios.
+//   • todo o resto (HTML, css/vbm-app.css, js/*.js, SVGs de fundo) —
 //     "no-cache" + ETag: o navegador SEMPRE revalida (deploy continua
 //     aparecendo na hora, igual a antes), mas quando nada mudou o
 //     servidor responde 304 sem corpo. Um fundo de 1,3 MB vira uma
 //     resposta de algumas centenas de bytes.
 const UM_ANO_EM_SEGUNDOS = 60 * 60 * 24 * 365;
-const ARQUIVO_COM_HASH_NO_NOME = /[\\/]assets[\\/]vendor[\\/][0-9a-f]{8,}_/i;
+const ARQUIVO_COM_HASH_NO_NOME = /(?:^|[\\/])[0-9a-f]{8,}_[^\\/]+$/i;
 
 app.use(
   express.static(__dirname, {
@@ -370,7 +374,7 @@ apiRouter.get("/usuarios", async (req, res) => {
 // kzn_desperdicio, kzn_resultados)
 // ------------------------------------------------------------------
 // Estas 4 tabelas têm exatamente o mesmo desenho no DER
-// (assets/DER_VBM_Kaizen_CI.html): PK própria + ID_IDIOMA, URL_ICONE,
+// (database/DER_VBM_Kaizen_CI.html): PK própria + ID_IDIOMA, URL_ICONE,
 // NM_*, DS_*, SG_ATIVO, DT_ATUALIZACAO — 1 LINHA POR IDIOMA para o
 // mesmo registro (mesmo ID, ID_IDIOMA diferente). Por isso todas
 // compartilham as mesmas rotas/regras, geradas por

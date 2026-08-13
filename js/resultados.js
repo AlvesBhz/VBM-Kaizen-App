@@ -1,7 +1,7 @@
 /**
  * VBM Kaizen — aba "Resultados" (admin.html).
  * Só a configuração; a lógica (listar/criar/editar/ativar) está em
- * assets/cadastro-bilingue.js (window.criarCadastroBilingue).
+ * js/cadastro-bilingue.js (window.criarCadastroBilingue).
  */
 (function () {
   if (!window.criarCadastroBilingue) return;

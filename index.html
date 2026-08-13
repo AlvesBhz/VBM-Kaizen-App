@@ -10,9 +10,9 @@
 
   DEPENDÊNCIAS (carregadas no <head> / fim do <body>)
     • Font Awesome 6  — ícones (fa-solid ...)
-    • assets/vbm-app.css — Design System VBM: tokens (--vbm-*), reset,
+    • css/vbm-app.css — Design System VBM: tokens (--vbm-*), reset,
       componentes compartilhados (.btn, .form-control, .modal, .badge...)
-    • assets/vbm-app.js  — comportamento compartilhado: modais, abas,
+    • js/vbm-app.js  — comportamento compartilhado: modais, abas,
       wizard, filtros, toasts, toggles. Auto-inicializa no DOMContentLoaded.
     NÃO usa jQuery, Bootstrap nem AOS — foram removidos por não terem
     uso real (economia de ~446 KB por página).
@@ -39,8 +39,8 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>VBM Kaizen — Dashboard</title>
-<link href="assets/vendor/e5e202e3c8995079_all.min.css" rel="stylesheet"/>
-<link href="assets/vbm-app.css" rel="stylesheet"/>
+<link href="css/vendor/e5e202e3c8995079_all.min.css" rel="stylesheet"/>
+<link href="css/vbm-app.css" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
 <link href="https://fonts.gstatic.com" rel="preconnect" crossorigin/>
 <!-- Poppins carregada SEM bloquear a renderização: como "print" o navegador
@@ -51,7 +51,7 @@
      mantém o comportamento original quando não há JS. -->
 <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet" media="print" onload="this.media='all';this.onload=null;"/>
 <noscript><link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet"/></noscript>
-<link href="assets/vendor/a1922a98664cc516_favicon-32x32-1.png" rel="icon"/>
+<link href="assets/icons/a1922a98664cc516_favicon-32x32-1.png" rel="icon"/>
 <style>
 /* ═══════════════════════════════════════════════════
    TOPNAV LAYOUT OVERRIDE
@@ -582,7 +582,7 @@ body[data-bg="dark"] {
 <!-- ═══ TOP NAVIGATION ═══ -->
 <nav class="topnav" id="topnav">
   <a href="index.html" class="topnav-logo">
-    <img src="assets/vale-logo.svg" alt="Vale"/>
+    <img src="assets/images/vale-logo.svg" alt="Vale"/>
   </a>
 
   <div class="topnav-links" id="topnavLinks">
@@ -700,7 +700,7 @@ body[data-bg="dark"] {
          ambiente e por exigir conferência visual do resultado. -->
     <div class="dash-hero">
       <img class="dash-hero-bg-img"
-           src="assets/svg_camadas/00_COMPOSICAO_COMPLETA.svg"
+           src="assets/images/00_COMPOSICAO_COMPLETA.svg"
            fetchpriority="high"
            decoding="async"
            alt="Gestão Kaizen — Pessoas. Método. Resultado."/>
@@ -711,7 +711,7 @@ body[data-bg="dark"] {
 </div>
 
 
-<script src="assets/vbm-app.js"></script>
+<script src="js/vbm-app.js"></script>
 <script>
 // ─── Login com conta Microsoft (MSAL.js / Azure AD - Entra ID) ───
 // PENDENTE DE CONFIGURAÇÃO: preencha clientId e authority abaixo com os

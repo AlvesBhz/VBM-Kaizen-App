@@ -338,7 +338,7 @@
     const win = window.open('', '_blank');
     win.document.write(
       '<html><head><title>Kaizen VBM</title>' +
-      '<link rel="stylesheet" href="assets/vbm-app.css"/>' +
+      '<link rel="stylesheet" href="css/vbm-app.css"/>' +
       '<link rel="stylesheet" href="Referencias/VBM - Design System/assets/e5e202e3c8995079_all.min.css"/>' +
       '<style>' +
         '@page{size:A4;margin:0;}' +

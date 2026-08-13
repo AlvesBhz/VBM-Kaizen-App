@@ -7,7 +7,7 @@
  * inclusive o status ativo/inativo (SG_ATIVO).
  *
  * Arquivo AUTOSSUFICIENTE de propósito — não depende de
- * assets/cadastro-bilingue.js. Esse motor compartilhado (usado por
+ * js/cadastro-bilingue.js. Esse motor compartilhado (usado por
  * Replicação/Desperdícios/Resultados) já causou a tela de Categorias
  * inteira parar de responder quando esse arquivo extra não chegava ao
  * ambiente publicado (ver "Falha ao carregar o motor de cadastros").
