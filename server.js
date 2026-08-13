@@ -62,6 +62,11 @@ const FULL_CATEGORIA_TABLE = `[${DB_SCHEMA}].[${DB_CATEGORIA_TABLE}]`;
 const DB_PENDENCIA_TABLE = safeIdentifier(process.env.AZURE_SQL_PENDENCIA_TABLE, "kzn_pendenciaconsolidada");
 const FULL_PENDENCIA_TABLE = `[${DB_SCHEMA}].[${DB_PENDENCIA_TABLE}]`;
 
+// Cadastro de pessoas (nome/matrícula/e-mail dos aprovadores) — pelo
+// DER é aqui que esses dados moram, não em kzn_aprovador.
+const DB_MDM_TABLE = safeIdentifier(process.env.AZURE_SQL_MDM_TABLE, "kzn_mdm_hierarquia");
+const FULL_MDM_TABLE = `[${DB_SCHEMA}].[${DB_MDM_TABLE}]`;
+
 // kzn_categoria guarda 1 LINHA POR IDIOMA para a mesma categoria (mesmo
 // ID_CATEGORIA, ID_IDIOMA diferente) — confirmado no DER
 // (assets/DER_VBM_Kaizen_CI.html) e pelo time: ID_IDIOMA=1 é Português,
@@ -162,116 +167,129 @@ apiRouter.get("/test", async (req, res) => {
 });
 
 // Listar
+// kzn_aprovador é uma tabela de PAPEL, não de cadastro: pelo DER ela
+// tem apenas ID_USUARIO (PK e FK para kzn_mdm_hierarquia), SG_ATIVO e
+// DT_ATUALIZACAO. Nome, matrícula e e-mail NÃO moram aqui — vêm do
+// MDM por join. (A versão anterior consultava NM_USER/CD_MATRICULA
+// direto nesta tabela, o que produzia o erro "Invalid column name
+// 'NM_USER'" visto na tela.)
+// Consequência de negócio: não existe "editar aprovador" — os dados
+// pessoais são do MDM e o único campo próprio é SG_ATIVO. Por isso a
+// aba tem listar, adicionar e ativar/desativar, sem edição.
 apiRouter.get("/aprovadores", async (req, res) => {
   try {
     const limite = Math.min(parseInt(req.query.limit, 10) || 500, 5000);
+    // LEFT JOIN de propósito: um aprovador cujo usuário saiu do MDM
+    // continua listado (com os campos vazios) em vez de sumir da tela
+    // sem explicação.
     const result = await runQuery(
-      `SELECT TOP (@limite) ID_USUARIO, CD_MATRICULA, NM_USER, DT_ATUALIZACAO
-       FROM ${FULL_TABLE_NAME}
-       ORDER BY DT_ATUALIZACAO DESC`,
+      `SELECT TOP (@limite)
+              a.ID_USUARIO, a.SG_ATIVO, a.DT_ATUALIZACAO,
+              m.CD_MATRICULA, m.NM_USUARIO, m.DS_EMAIL
+       FROM ${FULL_TABLE_NAME} a
+       LEFT JOIN ${FULL_MDM_TABLE} m ON m.ID_USUARIO = a.ID_USUARIO
+       ORDER BY m.NM_USUARIO, a.ID_USUARIO`,
       [["limite", sql.Int, limite]]
     );
-    res.json(result.recordset);
+    res.json(
+      result.recordset.map((r) => ({
+        ID_USUARIO: r.ID_USUARIO,
+        CD_MATRICULA: r.CD_MATRICULA,
+        NM_USUARIO: r.NM_USUARIO,
+        DS_EMAIL: r.DS_EMAIL,
+        ATIVO: r.SG_ATIVO === "S",
+        DT_ATUALIZACAO: r.DT_ATUALIZACAO,
+      }))
+    );
   } catch (err) {
     console.error("[aprovadores] erro ao listar:", err.message);
     res.status(500).json({ error: "Erro ao consultar aprovadores: " + err.message });
   }
 });
 
-// Inserir
+// Consulta um usuário no MDM pelo ID — usada pelo formulário de
+// "Novo Aprovador" para mostrar de quem é aquele ID antes de salvar
+// (nome/matrícula/e-mail não são digitados: pertencem ao MDM).
+apiRouter.get("/aprovadores/mdm/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: "ID_USUARIO inválido." });
+
+    const result = await runQuery(
+      `SELECT TOP (1) ID_USUARIO, CD_MATRICULA, NM_USUARIO, DS_EMAIL
+       FROM ${FULL_MDM_TABLE} WHERE ID_USUARIO = @id`,
+      [["id", sql.Int, id]]
+    );
+    if (!result.recordset.length) {
+      return res.status(404).json({ error: "Usuário não encontrado no MDM." });
+    }
+    res.json(result.recordset[0]);
+  } catch (err) {
+    console.error("[aprovadores] erro ao consultar MDM:", err.message);
+    res.status(500).json({ error: "Erro ao consultar o MDM: " + err.message });
+  }
+});
+
+// Adicionar — só o ID_USUARIO é gravado; ele precisa existir no MDM
+// (a FK garante isso no banco, mas checamos antes para devolver uma
+// mensagem clara em vez de um erro cru de constraint).
 apiRouter.post("/aprovadores", async (req, res) => {
   try {
-    const { ID_USUARIO, CD_MATRICULA, NM_USER } = req.body || {};
-
-    const idUsuario = parseInt(ID_USUARIO, 10);
-    const cdMatricula = (CD_MATRICULA || "").trim();
-    const nmUser = (NM_USER || "").trim();
-
+    const idUsuario = parseInt(req.body?.ID_USUARIO, 10);
     if (!Number.isInteger(idUsuario)) {
       return res.status(400).json({ error: "ID_USUARIO é obrigatório e deve ser um número inteiro." });
     }
-    if (!cdMatricula) {
-      return res.status(400).json({ error: "CD_MATRICULA é obrigatório." });
+
+    const noMdm = await runQuery(
+      `SELECT TOP (1) 1 AS X FROM ${FULL_MDM_TABLE} WHERE ID_USUARIO = @id`,
+      [["id", sql.Int, idUsuario]]
+    );
+    if (!noMdm.recordset.length) {
+      return res.status(400).json({ error: "Usuário não encontrado no MDM — verifique o ID_USUARIO." });
     }
-    if (!nmUser) {
-      return res.status(400).json({ error: "NM_USER é obrigatório." });
+
+    const jaExiste = await runQuery(
+      `SELECT TOP (1) 1 AS X FROM ${FULL_TABLE_NAME} WHERE ID_USUARIO = @id`,
+      [["id", sql.Int, idUsuario]]
+    );
+    if (jaExiste.recordset.length) {
+      return res.status(409).json({ error: "Este usuário já está cadastrado como aprovador." });
     }
 
     await runQuery(
-      `INSERT INTO ${FULL_TABLE_NAME} (ID_USUARIO, CD_MATRICULA, NM_USER, DT_ATUALIZACAO)
-       VALUES (@idUsuario, @cdMatricula, @nmUser, GETDATE())`,
-      [
-        ["idUsuario", sql.Int, idUsuario],
-        ["cdMatricula", sql.NVarChar(50), cdMatricula],
-        ["nmUser", sql.NVarChar(200), nmUser],
-      ]
+      `INSERT INTO ${FULL_TABLE_NAME} (ID_USUARIO, SG_ATIVO, DT_ATUALIZACAO)
+       VALUES (@id, 'S', GETDATE())`,
+      [["id", sql.Int, idUsuario]]
     );
-    res.status(201).json({ ok: true });
+    res.status(201).json({ ok: true, ID_USUARIO: idUsuario });
   } catch (err) {
     console.error("[aprovadores] erro ao inserir:", err.message);
     res.status(500).json({ error: "Erro ao inserir aprovador: " + err.message });
   }
 });
 
-// Atualizar (por ID_USUARIO)
-apiRouter.put("/aprovadores/:id", async (req, res) => {
+// Ativar/desativar — mesmo contrato das abas de cadastro.
+apiRouter.put("/aprovadores/:id/status", async (req, res) => {
   try {
-    const idUsuario = parseInt(req.params.id, 10);
-    if (!Number.isInteger(idUsuario)) {
-      return res.status(400).json({ error: "ID_USUARIO inválido." });
-    }
-
-    const cdMatricula = (req.body?.CD_MATRICULA || "").trim();
-    const nmUser = (req.body?.NM_USER || "").trim();
-
-    const sets = [];
-    const params = [["idUsuario", sql.Int, idUsuario]];
-    if (cdMatricula) {
-      sets.push("CD_MATRICULA = @cdMatricula");
-      params.push(["cdMatricula", sql.NVarChar(50), cdMatricula]);
-    }
-    if (nmUser) {
-      sets.push("NM_USER = @nmUser");
-      params.push(["nmUser", sql.NVarChar(200), nmUser]);
-    }
-    sets.push("DT_ATUALIZACAO = GETDATE()");
-
-    if (!sets.length) {
-      return res.status(400).json({ error: "Nenhum campo para atualizar foi enviado." });
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: "ID_USUARIO inválido." });
+    if (typeof req.body?.ativo !== "boolean") {
+      return res.status(400).json({ error: "Campo 'ativo' (true/false) é obrigatório." });
     }
 
     const result = await runQuery(
-      `UPDATE ${FULL_TABLE_NAME} SET ${sets.join(", ")} WHERE ID_USUARIO = @idUsuario`,
-      params
+      `UPDATE ${FULL_TABLE_NAME} SET SG_ATIVO = @sgAtivo, DT_ATUALIZACAO = GETDATE()
+       WHERE ID_USUARIO = @id`,
+      [
+        ["sgAtivo", sql.Char(1), req.body.ativo ? "S" : "N"],
+        ["id", sql.Int, id],
+      ]
     );
-    if (!result.rowsAffected[0]) {
-      return res.status(404).json({ error: "Aprovador não encontrado." });
-    }
-    res.json({ ok: true });
+    if (!result.rowsAffected[0]) return res.status(404).json({ error: "Aprovador não encontrado." });
+    res.json({ ok: true, ativo: req.body.ativo });
   } catch (err) {
-    console.error("[aprovadores] erro ao atualizar:", err.message);
-    res.status(500).json({ error: "Erro ao atualizar aprovador: " + err.message });
-  }
-});
-
-// Deletar (por ID_USUARIO)
-apiRouter.delete("/aprovadores/:id", async (req, res) => {
-  try {
-    const idUsuario = parseInt(req.params.id, 10);
-    if (!Number.isInteger(idUsuario)) {
-      return res.status(400).json({ error: "ID_USUARIO inválido." });
-    }
-    const result = await runQuery(
-      `DELETE FROM ${FULL_TABLE_NAME} WHERE ID_USUARIO = @idUsuario`,
-      [["idUsuario", sql.Int, idUsuario]]
-    );
-    if (!result.rowsAffected[0]) {
-      return res.status(404).json({ error: "Aprovador não encontrado." });
-    }
-    res.json({ ok: true });
-  } catch (err) {
-    console.error("[aprovadores] erro ao deletar:", err.message);
-    res.status(500).json({ error: "Erro ao deletar aprovador: " + err.message });
+    console.error("[aprovadores] erro ao atualizar status:", err.message);
+    res.status(500).json({ error: "Erro ao atualizar status do aprovador: " + err.message });
   }
 });
 

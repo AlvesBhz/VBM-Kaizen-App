@@ -754,38 +754,20 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       <button class="modal-close" data-modal-close><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
-      <!-- Campos = colunas reais de kzn_aprovador (ID_USUARIO, CD_MATRICULA, NM_USER).
+      <!-- kzn_aprovador guarda só ID_USUARIO + SG_ATIVO (ver DER): é o
+           ÚNICO campo digitado aqui. Matrícula e nome pertencem ao MDM
+           (kzn_mdm_hierarquia) e são preenchidos automaticamente ao
+           informar o ID, apenas para conferência — não são gravados.
            DT_ATUALIZACAO é gerada pelo servidor (GETDATE()). -->
       <div class="form-grid form-grid-2">
-        <div class="form-group"><label class="form-label" data-i18n="adm.idUsuario">ID_USUARIO</label><input type="number" step="1" class="form-control" id="addAprovadorIdUsuario" placeholder="Ex.: 10234"/></div>
-        <div class="form-group"><label class="form-label" data-i18n="adm.mdmRegistration">CD_MATRICULA</label><input type="text" class="form-control" id="addAprovadorMatricula" placeholder="MDM00000"/></div>
-        <div class="form-group" style="grid-column:1/-1;"><label class="form-label" data-i18n="adm.fullName">NM_USER (nome completo)</label><input type="text" class="form-control" id="addAprovadorNome" placeholder="Nome do aprovador"/></div>
+        <div class="form-group"><label class="form-label" data-i18n="adm.idUsuario">ID_USUARIO <span class="req">*</span></label><input type="number" step="1" class="form-control" id="addAprovadorIdUsuario" placeholder="Ex.: 10234"/></div>
+        <div class="form-group"><label class="form-label" data-i18n="adm.mdmRegistration">CD_MATRICULA</label><input type="text" class="form-control" id="addAprovadorMatricula" placeholder="preenchido pelo MDM" readonly/></div>
+        <div class="form-group" style="grid-column:1/-1;"><label class="form-label" data-i18n="adm.fullName">Nome completo</label><input type="text" class="form-control" id="addAprovadorNome" placeholder="preenchido pelo MDM" readonly/></div>
       </div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" data-modal-close data-i18n="common.cancelar">Cancelar</button>
       <button class="btn btn-primary" id="btnSaveAddAprovador"><span data-i18n="adm.saveApprover">Salvar Aprovador</span></button>
-    </div>
-  </div>
-</div>
-
-<div class="modal-backdrop" id="modalEditAprovador">
-  <div class="modal">
-    <div class="modal-head">
-      <div class="modal-icon" style="--hue:60,181,229;background:#e8f3fb;border-color:rgba(60,181,229,.28);"><i class="fa-solid fa-user-pen" style="color:var(--vbm-blue);"></i></div>
-      <div class="modal-title" data-i18n="adm.editApprover">Editar Aprovador</div>
-      <button class="modal-close" data-modal-close><i class="fa-solid fa-xmark"></i></button>
-    </div>
-    <div class="modal-body">
-      <div class="form-grid form-grid-2">
-        <div class="form-group"><label class="form-label" data-i18n="adm.idUsuario">ID_USUARIO</label><input type="number" class="form-control" id="editAprovadorIdUsuario" disabled/></div>
-        <div class="form-group"><label class="form-label" data-i18n="adm.mdmRegistration">CD_MATRICULA</label><input type="text" class="form-control" id="editAprovadorMatricula"/></div>
-        <div class="form-group" style="grid-column:1/-1;"><label class="form-label" data-i18n="adm.fullName">NM_USER (nome completo)</label><input type="text" class="form-control" id="editAprovadorNome"/></div>
-      </div>
-    </div>
-    <div class="modal-foot">
-      <button class="btn btn-ghost" data-modal-close data-i18n="common.cancelar">Cancelar</button>
-      <button class="btn btn-primary" id="btnSaveEditAprovador"><span data-i18n="common.salvar">Salvar</span></button>
     </div>
   </div>
 </div>

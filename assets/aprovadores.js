@@ -1,12 +1,21 @@
 /**
- * VBM Kaizen — aba "Aprovadores" (admin.html)
+ * VBM Kaizen — aba "Aprovadores" (admin.html).
  *
- * Conecta o painel à tabela `kzn_aprovador` via API própria do
- * server.js (GET/POST/PUT/DELETE /api/aprovadores). Só roda nesta
- * página: todo o código é guardado por `if (!listEl) return;`.
+ * kzn_aprovador é uma tabela de PAPEL: pelo DER guarda só ID_USUARIO
+ * (FK do MDM), SG_ATIVO e DT_ATUALIZACAO. Nome, matrícula e e-mail vêm
+ * de kzn_mdm_hierarquia por join, feito no servidor.
  *
- * Depende de funções globais já definidas em vbm-app.js:
- * openModal / closeModal / showToast.
+ * Por isso a aba tem listar / adicionar / ativar-desativar, mas NÃO
+ * tem editar: não há campo próprio editável — dados pessoais mudam no
+ * MDM, e o único atributo da tabela (SG_ATIVO) é justamente o
+ * ativar/desativar.
+ *
+ *   GET  /api/aprovadores            lista (join com o MDM)
+ *   GET  /api/aprovadores/mdm/:id    confere de quem é um ID_USUARIO
+ *   POST /api/aprovadores            adiciona (só ID_USUARIO)
+ *   PUT  /api/aprovadores/:id/status ativa/desativa (SG_ATIVO)
+ *
+ * Depende de funções globais de vbm-app.js: closeModal / showToast.
  */
 (function () {
   var listEl = document.getElementById("aprovadoresList");
@@ -21,16 +30,12 @@
   var addMatriculaInput = document.getElementById("addAprovadorMatricula");
   var addNomeInput = document.getElementById("addAprovadorNome");
   var btnSaveAdd = document.getElementById("btnSaveAddAprovador");
-
-  var editIdInput = document.getElementById("editAprovadorIdUsuario");
-  var editMatriculaInput = document.getElementById("editAprovadorMatricula");
-  var editNomeInput = document.getElementById("editAprovadorNome");
-  var btnSaveEdit = document.getElementById("btnSaveEditAprovador");
+  var addTrigger = document.querySelector('[data-modal-open="modalAddAprovador"]');
 
   function escapeHtml(str) {
-    return String(str == null ? "" : str).replace(/[&<>"']/g, function (c) {
-      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
-    });
+    var div = document.createElement("div");
+    div.textContent = str == null ? "" : String(str);
+    return div.innerHTML;
   }
 
   function initials(name) {
@@ -39,24 +44,39 @@
     return (parts[0][0] + (parts[1] ? parts[1][0] : "")).toUpperCase();
   }
 
-  function formatDate(value) {
-    if (!value) return "—";
-    var d = new Date(value);
-    if (isNaN(d.getTime())) return String(value);
-    return d.toLocaleString("pt-BR");
-  }
-
   function setState(msg, isError) {
     if (!stateEl) return;
     if (msg) {
       stateEl.style.display = "";
-      stateEl.style.color = isError ? "var(--vbm-red, #dc2626)" : "var(--vbm-mid)";
+      stateEl.style.color = isError ? "#c0392b" : "var(--vbm-mid)";
       stateEl.textContent = msg;
       listEl.style.display = "none";
     } else {
       stateEl.style.display = "none";
       listEl.style.display = "";
     }
+  }
+
+  function renderItem(row) {
+    var nome = row.NM_USUARIO || "(usuário fora do MDM)";
+    var item = document.createElement("div");
+    item.className = "admin-item" + (row.ATIVO ? "" : " admin-item-inactive");
+    item.dataset.id = row.ID_USUARIO;
+    item.innerHTML =
+      '<div class="admin-avatar" style="background:linear-gradient(135deg,#3cb5e5,#1a8bbf);">' + escapeHtml(initials(row.NM_USUARIO)) + "</div>" +
+      '<div class="admin-item-body">' +
+        '<div class="admin-item-name">' + escapeHtml(nome) + "</div>" +
+        '<div class="admin-item-sub">' + escapeHtml(row.DS_EMAIL || "—") + "</div>" +
+        '<div class="admin-item-sub">Matrícula ' + escapeHtml(row.CD_MATRICULA || "—") + " · ID " + escapeHtml(row.ID_USUARIO) + "</div>" +
+      "</div>" +
+      '<div class="admin-item-actions">' +
+        '<button type="button" class="btn-icon ' + (row.ATIVO ? "btn-icon-red" : "btn-icon-blue") + ' btn-icon-sm" data-action="status" title="' + (row.ATIVO ? "Desativar" : "Reativar") + '"><i class="fa-solid ' + (row.ATIVO ? "fa-ban" : "fa-rotate-right") + '"></i></button>' +
+      "</div>";
+
+    item.querySelector('[data-action="status"]').addEventListener("click", function () {
+      alternarStatus(row, item);
+    });
+    return item;
   }
 
   function renderList(rows) {
@@ -68,31 +88,7 @@
       return;
     }
     setState(null);
-
-    rows.forEach(function (row) {
-      var item = document.createElement("div");
-      item.className = "admin-item";
-      item.innerHTML =
-        '<div class="admin-avatar" style="background:linear-gradient(135deg,#3cb5e5,#1a8bbf);">' + escapeHtml(initials(row.NM_USER)) + "</div>" +
-        '<div class="admin-item-body">' +
-          '<div class="admin-item-name">' + escapeHtml(row.NM_USER) + "</div>" +
-          '<div class="admin-item-sub">Matrícula ' + escapeHtml(row.CD_MATRICULA) + " · ID " + escapeHtml(row.ID_USUARIO) + "</div>" +
-          '<div class="admin-item-sub">Atualizado em ' + escapeHtml(formatDate(row.DT_ATUALIZACAO)) + "</div>" +
-        "</div>" +
-        '<div class="admin-item-actions">' +
-          '<button class="btn-icon btn-icon-blue btn-icon-sm" title="Editar" data-action="edit"><i class="fa-solid fa-pen"></i></button>' +
-          '<button class="btn-icon btn-icon-red btn-icon-sm" title="Excluir" data-action="delete"><i class="fa-solid fa-trash"></i></button>' +
-        "</div>";
-
-      item.querySelector('[data-action="edit"]').addEventListener("click", function () {
-        openEditModal(row);
-      });
-      item.querySelector('[data-action="delete"]').addEventListener("click", function () {
-        deleteAprovador(row);
-      });
-
-      listEl.appendChild(item);
-    });
+    rows.forEach(function (row) { listEl.appendChild(renderItem(row)); });
   }
 
   function loadAprovadores() {
@@ -111,32 +107,55 @@
         console.error("[aprovadores] erro ao carregar:", err);
         setState("Erro ao carregar aprovadores: " + err.message, true);
         if (connStatusEl) connStatusEl.textContent = "Falha na conexão";
-        showToast("error", "Erro", "Não foi possível carregar os aprovadores. " + err.message);
       });
   }
 
-  function openEditModal(row) {
-    editIdInput.value = row.ID_USUARIO;
-    editMatriculaInput.value = row.CD_MATRICULA || "";
-    editNomeInput.value = row.NM_USER || "";
-    openModal("modalEditAprovador");
+  // ── Adicionar ──
+  // Nome/matrícula não são digitados: pertencem ao MDM. Ao informar o
+  // ID_USUARIO, buscamos lá para o usuário confirmar de quem é aquele
+  // ID antes de salvar; o POST envia só o ID.
+  function limparFormulario() {
+    if (addIdInput) addIdInput.value = "";
+    if (addMatriculaInput) addMatriculaInput.value = "";
+    if (addNomeInput) addNomeInput.value = "";
+  }
+
+  function consultarMdm() {
+    var id = addIdInput ? addIdInput.value.trim() : "";
+    if (!id) {
+      if (addMatriculaInput) addMatriculaInput.value = "";
+      if (addNomeInput) addNomeInput.value = "";
+      return;
+    }
+    fetch("/api/aprovadores/mdm/" + encodeURIComponent(id))
+      .then(function (res) {
+        return res.json().then(function (data) {
+          if (!res.ok) throw new Error(data.error || res.statusText);
+          return data;
+        });
+      })
+      .then(function (u) {
+        if (addMatriculaInput) addMatriculaInput.value = u.CD_MATRICULA || "";
+        if (addNomeInput) addNomeInput.value = u.NM_USUARIO || "";
+      })
+      .catch(function (err) {
+        if (addMatriculaInput) addMatriculaInput.value = "";
+        if (addNomeInput) addNomeInput.value = "";
+        if (window.showToast) showToast("warning", "Usuário não encontrado", err.message);
+      });
   }
 
   function saveAdd() {
-    var payload = {
-      ID_USUARIO: addIdInput.value,
-      CD_MATRICULA: addMatriculaInput.value,
-      NM_USER: addNomeInput.value,
-    };
-    if (!payload.ID_USUARIO || !payload.CD_MATRICULA || !payload.NM_USER.trim()) {
-      showToast("warning", "Campos obrigatórios", "Preencha ID_USUARIO, CD_MATRICULA e o nome antes de salvar.");
+    var id = addIdInput ? addIdInput.value.trim() : "";
+    if (!id) {
+      if (window.showToast) showToast("warning", "Campo obrigatório", "Informe o ID_USUARIO do aprovador.");
       return;
     }
-    btnSaveAdd.disabled = true;
+    if (btnSaveAdd) btnSaveAdd.disabled = true;
     fetch("/api/aprovadores", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ ID_USUARIO: id }),
     })
       .then(function (res) {
         return res.json().then(function (data) {
@@ -145,32 +164,32 @@
         });
       })
       .then(function () {
-        closeModal("modalAddAprovador");
-        addIdInput.value = "";
-        addMatriculaInput.value = "";
-        addNomeInput.value = "";
-        showToast("success", "Aprovador adicionado", "Aprovador cadastrado com sucesso!");
+        limparFormulario();
+        if (window.closeModal) closeModal("modalAddAprovador");
+        if (window.showToast) showToast("success", "Aprovador adicionado", "Aprovador cadastrado com sucesso!");
         loadAprovadores();
       })
       .catch(function (err) {
-        showToast("error", "Erro ao inserir", err.message);
+        if (window.showToast) showToast("error", "Erro ao inserir", err.message);
       })
       .finally(function () {
-        btnSaveAdd.disabled = false;
+        if (btnSaveAdd) btnSaveAdd.disabled = false;
       });
   }
 
-  function saveEdit() {
-    var id = editIdInput.value;
-    var payload = {
-      CD_MATRICULA: editMatriculaInput.value,
-      NM_USER: editNomeInput.value,
-    };
-    btnSaveEdit.disabled = true;
-    fetch("/api/aprovadores/" + encodeURIComponent(id), {
+  // ── Ativar/Desativar — grava SG_ATIVO no banco, nunca só visual ──
+  function alternarStatus(row, item) {
+    var ativar = !row.ATIVO;
+    var nome = row.NM_USUARIO || "ID " + row.ID_USUARIO;
+    var msg = ativar
+      ? 'Reativar "' + nome + '" como aprovador?'
+      : 'Desativar "' + nome + '"? Deixará de aparecer como aprovador ativo, mas não será excluído.';
+    if (!window.confirm(msg)) return;
+
+    fetch("/api/aprovadores/" + encodeURIComponent(row.ID_USUARIO) + "/status", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ ativo: ativar }),
     })
       .then(function (res) {
         return res.json().then(function (data) {
@@ -179,41 +198,23 @@
         });
       })
       .then(function () {
-        closeModal("modalEditAprovador");
-        showToast("success", "Salvo", "Aprovador atualizado com sucesso!");
-        loadAprovadores();
+        row.ATIVO = ativar;
+        item.replaceWith(renderItem(row));
+        if (window.showToast) {
+          showToast("success", ativar ? "Reativado" : "Desativado",
+            '"' + nome + '" ' + (ativar ? "reativado" : "desativado") + " com sucesso.");
+        }
       })
       .catch(function (err) {
-        showToast("error", "Erro ao atualizar", err.message);
-      })
-      .finally(function () {
-        btnSaveEdit.disabled = false;
-      });
-  }
-
-  function deleteAprovador(row) {
-    if (!window.confirm('Excluir o aprovador "' + row.NM_USER + '" (ID ' + row.ID_USUARIO + ')? Esta ação não pode ser desfeita.')) {
-      return;
-    }
-    fetch("/api/aprovadores/" + encodeURIComponent(row.ID_USUARIO), { method: "DELETE" })
-      .then(function (res) {
-        return res.json().then(function (data) {
-          if (!res.ok) throw new Error(data.error || res.statusText);
-          return data;
-        });
-      })
-      .then(function () {
-        showToast("success", "Excluído", "Aprovador removido com sucesso.");
-        loadAprovadores();
-      })
-      .catch(function (err) {
-        showToast("error", "Erro ao excluir", err.message);
+        console.error("[aprovadores] erro ao atualizar status:", err);
+        if (window.showToast) showToast("error", "Erro", "Não foi possível atualizar o status. " + err.message);
       });
   }
 
   if (btnSaveAdd) btnSaveAdd.addEventListener("click", saveAdd);
-  if (btnSaveEdit) btnSaveEdit.addEventListener("click", saveEdit);
   if (reloadBtn) reloadBtn.addEventListener("click", loadAprovadores);
+  if (addTrigger) addTrigger.addEventListener("click", limparFormulario);
+  if (addIdInput) addIdInput.addEventListener("change", consultarMdm);
 
   document.addEventListener("DOMContentLoaded", loadAprovadores);
   if (document.readyState === "complete" || document.readyState === "interactive") {
