@@ -262,7 +262,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 .admin-item-icon.blue{ /* Pot. Replicação → 25% opacity */ --hue:60,181,229; background:rgba(60,181,229,.16); color:var(--vbm-blue-dark); border-color:rgba(60,181,229,.32); }
 .admin-item-icon.orange{ /* Red. Desperdícios → Pale, mesmo padrão das demais abas */ --hue:60,181,229; background:linear-gradient(155deg,#eef6fb 0%,#d7ecf6 100%); color:var(--vbm-blue-dark); border-color:rgba(60,181,229,.22); }
 .admin-item-icon.yellow{ /* Resultados → Pale */ --hue:60,181,229; background:linear-gradient(155deg,var(--vbm-blue-pale) 0%,#dcf1fc 100%); color:var(--vbm-blue-dark); border-color:rgba(60,181,229,.2); }
-.admin-item-icon.purple{ /* Usuários → Neutral Dark */ --hue:26,26,26; background:linear-gradient(155deg,#f4f4f4 0%,#e6e6e6 100%); color:var(--vbm-dark); border-color:rgba(26,26,26,.14); }
+.admin-item-icon.purple{ /* Mot. Reprovação → Neutral Dark (reservado, nunca usado por Usuários) */ --hue:26,26,26; background:linear-gradient(155deg,#f4f4f4 0%,#e6e6e6 100%); color:var(--vbm-dark); border-color:rgba(26,26,26,.14); }
 .admin-item-icon.teal{ /* reserva → Primary */ --hue:60,181,229; background:linear-gradient(155deg,#eef8ff 0%,#dcf1fc 100%); color:var(--vbm-blue); border-color:rgba(60,181,229,.2); }
 .admin-item:hover .admin-item-icon{
   transform:translateY(-2px) scale(1.06);
@@ -593,6 +593,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
         <button class="admin-tab" data-admin-tab="desperdicios"><i class="fa-solid fa-recycle"></i> <span data-i18n="adm.tabDesperdicios">Red. Desperdícios</span></button>
         <button class="admin-tab" data-admin-tab="tiporesultados"><i class="fa-solid fa-layer-group"></i> <span data-i18n="adm.tabTipoResultados">Tipo Resultados</span></button>
         <button class="admin-tab" data-admin-tab="resultados"><i class="fa-solid fa-trophy"></i> <span data-i18n="adm.tabResultados">Resultados</span></button>
+        <button class="admin-tab" data-admin-tab="motivosreprovacao"><i class="fa-solid fa-circle-xmark"></i> <span data-i18n="adm.tabMotivosReprovacao">Mot. Reprovação</span></button>
         <button class="admin-tab" data-admin-tab="usuarios"><i class="fa-solid fa-users-gear"></i> <span data-i18n="adm.tabUsuarios">Usuários</span></button>
       </div>
     </div>
@@ -679,6 +680,22 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       </div>
       <div class="admin-list" id="resultadosList">
         <div class="admin-list-status">Carregando tipos de resultado…</div>
+      </div>
+    </div>
+
+    <!-- ═══ MOTIVOS DE REPROVAÇÃO ═══
+         Tabela (DER): kzn_motivo_reprovacao — ID_MOTIVO, ID_IDIOMA,
+         NM_MOTIVO, DS_MOTIVO, DT_ATUALIZACAO. Nome + descrição
+         bilíngues (sem ícone próprio); usa o mesmo motor de cadastro
+         bilíngue das outras abas (js/cadastro-bilingue.js +
+         js/motivosreprovacao.js). -->
+    <div class="admin-panel section-card reveal" id="panel-motivosreprovacao">
+      <div class="section-head" style="padding:1.25rem;">
+        <div class="section-title"><i class="fa-solid fa-circle-xmark" style="color:var(--vbm-blue-dark);"></i> <span data-i18n="adm.motivosReprovacaoTitle">Motivos de Reprovação</span></div>
+        <button class="btn btn-outline btn-sm admin-add-btn" data-modal-open="modalAddMotivoReprovacao"><i class="fa-solid fa-plus"></i> <span data-i18n="common.adicionar">Adicionar</span></button>
+      </div>
+      <div class="admin-list" id="motivosReprovacaoList">
+        <div class="admin-list-status">Carregando motivos de reprovação…</div>
       </div>
     </div>
 
@@ -1358,18 +1375,113 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
   </div>
 </div>
 
+<div class="modal-backdrop" id="modalAddMotivoReprovacao">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-icon" style="--hue:60,181,229;background:var(--vbm-blue-pale);border-color:rgba(60,181,229,.22);"><i class="fa-solid fa-circle-xmark" style="color:var(--vbm-blue-dark);"></i></div>
+      <div class="modal-title" data-i18n="adm.newMotivoReprovacao">Novo Motivo de Reprovação</div>
+      <button class="modal-close" data-modal-close><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" data-i18n="adm.motivoReprovacaoName">Nome <span class="req">*</span></label>
+        <div class="lang-stack lang-stack-row">
+          <div class="lang-slot">
+            <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
+            <span class="lang-slot-divider"></span>
+            <input type="text" class="form-control lang-slot-input" placeholder="Ex: Fora do escopo" data-i18n-placeholder="adm.motivoReprovacaoPlaceholder" data-lang="pt-BR" id="motRepAddNamePt" maxlength="30" required/>
+          </div>
+          <div class="lang-slot">
+            <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
+            <span class="lang-slot-divider"></span>
+            <input type="text" class="form-control lang-slot-input" placeholder="Ex: Out of scope" data-lang="en" id="motRepAddNameEn" maxlength="30" required/>
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" data-i18n="adm.description">Descrição <span class="req">*</span></label>
+        <div class="lang-stack">
+          <div class="lang-slot lang-slot-textarea">
+            <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
+            <span class="lang-slot-divider"></span>
+            <textarea class="form-control lang-slot-input" rows="1" maxlength="100" placeholder="Descreva o motivo de reprovação..." data-i18n-placeholder="adm.motivoReprovacaoDescPlaceholder" data-lang="pt-BR" id="motRepAddDescPt" oninput="updateCategoryDescCounter(this,'motRepAdd',100)" required></textarea>
+          </div>
+          <div class="lang-slot lang-slot-textarea">
+            <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
+            <span class="lang-slot-divider"></span>
+            <textarea class="form-control lang-slot-input" rows="1" maxlength="100" placeholder="Describe the rejection reason..." data-lang="en" id="motRepAddDescEn" required></textarea>
+          </div>
+        </div>
+        <div class="form-helper" style="text-align:right;" id="motRepAddDescCounter">0/100</div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" data-modal-close data-i18n="common.cancelar">Cancelar</button>
+      <button class="btn btn-primary" id="btnSaveAddMotivoReprovacao"><span data-i18n="common.adicionar">Adicionar</span></button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modalEditMotivoReprovacao">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-icon" style="--hue:60,181,229;background:var(--vbm-blue-pale);border-color:rgba(60,181,229,.22);"><i class="fa-solid fa-circle-xmark" style="color:var(--vbm-blue-dark);"></i></div>
+      <div class="modal-title" data-i18n="adm.editMotivoReprovacao">Editar Motivo de Reprovação</div>
+      <button class="modal-close" data-modal-close><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" data-i18n="adm.name">Nome <span class="req">*</span></label>
+        <div class="lang-stack lang-stack-row">
+          <div class="lang-slot">
+            <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
+            <span class="lang-slot-divider"></span>
+            <input type="text" class="form-control lang-slot-input" data-lang="pt-BR" id="motRepEditNamePt" maxlength="30" required/>
+          </div>
+          <div class="lang-slot">
+            <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
+            <span class="lang-slot-divider"></span>
+            <input type="text" class="form-control lang-slot-input" data-lang="en" id="motRepEditNameEn" maxlength="30" required/>
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" data-i18n="adm.description">Descrição <span class="req">*</span></label>
+        <div class="lang-stack">
+          <div class="lang-slot lang-slot-textarea">
+            <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
+            <span class="lang-slot-divider"></span>
+            <textarea class="form-control lang-slot-input" rows="1" maxlength="100" data-lang="pt-BR" id="motRepEditDescPt" oninput="updateCategoryDescCounter(this,'motRepEdit',100)" required></textarea>
+          </div>
+          <div class="lang-slot lang-slot-textarea">
+            <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
+            <span class="lang-slot-divider"></span>
+            <textarea class="form-control lang-slot-input" rows="1" maxlength="100" data-lang="en" id="motRepEditDescEn" required></textarea>
+          </div>
+        </div>
+        <div class="form-helper" style="text-align:right;" id="motRepEditDescCounter">0/100</div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" data-modal-close data-i18n="common.cancelar">Cancelar</button>
+      <button class="btn btn-primary" id="btnSaveEditMotivoReprovacao"><span data-i18n="common.salvar">Salvar</span></button>
+    </div>
+  </div>
+</div>
+
 <div class="toast-container"></div>
 <script src="js/vbm-app.js?v=20260815-1"></script>
 <script src="js/aprovadores.js?v=20260815-1"></script>
 <script src="js/usuarios.js?v=20260815-1"></script>
 <!-- cadastro-bilingue.js define o motor compartilhado (window.criarCadastroBilingue);
-     os 5 arquivos seguintes só configuram sua própria aba com ele. -->
+     os 6 arquivos seguintes só configuram sua própria aba com ele. -->
 <script src="js/cadastro-bilingue.js?v=20260815-2"></script>
 <script src="js/categorias.js?v=20260815-1"></script>
 <script src="js/replicacao.js?v=20260815-1"></script>
 <script src="js/desperdicios.js?v=20260815-1"></script>
 <script src="js/resultados.js?v=20260815-1"></script>
 <script src="js/tiporesultados.js?v=20260815-2"></script>
+<script src="js/motivosreprovacao.js?v=20260815-3"></script>
 <script>
 (function(){
   var tabs = document.querySelectorAll('[data-admin-tab]');
@@ -1584,6 +1696,11 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       'adm.editTipoResultado': 'Editar Classificação de Tipo de Resultado',
       'adm.tipoResultadoName': 'Nome',
       'adm.tipoResultadoPlaceholder': 'Ex: Financeiro',
+      'adm.newMotivoReprovacao': 'Novo Motivo de Reprovação',
+      'adm.editMotivoReprovacao': 'Editar Motivo de Reprovação',
+      'adm.motivoReprovacaoName': 'Nome',
+      'adm.motivoReprovacaoPlaceholder': 'Ex: Fora do escopo',
+      'adm.motivoReprovacaoDescPlaceholder': 'Descreva o motivo de reprovação...',
       'adm.allRoles': 'Todos os papéis',
       'adm.userCol': 'Usuário',
       'adm.site': 'Site',
@@ -1616,6 +1733,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       'adm.tabDesperdicios': 'Red. Desperdícios',
       'adm.tabTipoResultados': 'Tipo Resultados',
       'adm.tabResultados': 'Resultados',
+      'adm.tabMotivosReprovacao': 'Mot. Reprovação',
       'adm.tabUsuarios': 'Usuários',
       'adm.approversByUnit': 'Aprovadores por Unidade',
       'adm.approversTitle': 'Aprovadores',
@@ -1626,6 +1744,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       'adm.wasteTitle': 'Redução de Desperdícios (PNR28)',
       'adm.resultsTypesTitle': 'Tipos de Resultados Alcançados',
       'adm.tipoResultadosTitle': 'Classificações de Tipo de Resultado',
+      'adm.motivosReprovacaoTitle': 'Motivos de Reprovação',
       'adm.usersManagementTitle': 'Gerenciamento de Usuários (Terceiros)',
       'adm.newUser': 'Novo Usuário',
       'adm.searchUserPlaceholder': 'Buscar usuário por nome, e-mail ou MDM...',
@@ -1690,6 +1809,11 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       'adm.editTipoResultado': 'Edit Result Type Classification',
       'adm.tipoResultadoName': 'Name',
       'adm.tipoResultadoPlaceholder': 'E.g.: Financial',
+      'adm.newMotivoReprovacao': 'New Rejection Reason',
+      'adm.editMotivoReprovacao': 'Edit Rejection Reason',
+      'adm.motivoReprovacaoName': 'Name',
+      'adm.motivoReprovacaoPlaceholder': 'E.g.: Out of scope',
+      'adm.motivoReprovacaoDescPlaceholder': 'Describe the rejection reason...',
       'adm.allRoles': 'All roles',
       'adm.userCol': 'User',
       'adm.site': 'Site',
@@ -1722,6 +1846,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       'adm.tabDesperdicios': 'Waste Reduction',
       'adm.tabTipoResultados': 'Result Types',
       'adm.tabResultados': 'Results',
+      'adm.tabMotivosReprovacao': 'Rej. Reasons',
       'adm.tabUsuarios': 'Users',
       'adm.approversByUnit': 'Approvers by Unit',
       'adm.approversTitle': 'Approvers',
@@ -1732,6 +1857,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       'adm.wasteTitle': 'Waste Reduction (PNR28)',
       'adm.resultsTypesTitle': 'Result Types Achieved',
       'adm.tipoResultadosTitle': 'Result Type Classifications',
+      'adm.motivosReprovacaoTitle': 'Rejection Reasons',
       'adm.usersManagementTitle': 'User Management (Third-Party)',
       'adm.newUser': 'New User',
       'adm.searchUserPlaceholder': 'Search user by name, email or MDM...',
