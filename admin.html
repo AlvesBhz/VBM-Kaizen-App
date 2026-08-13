@@ -1277,7 +1277,13 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 <script src="assets/vbm-app.js"></script>
 <script src="assets/aprovadores.js"></script>
 <script src="assets/usuarios.js"></script>
-<script src="assets/admin-cadastros.js"></script>
+<!-- cadastro-bilingue.js define o motor compartilhado (window.criarCadastroBilingue);
+     os 4 arquivos seguintes só configuram sua própria aba com ele. -->
+<script src="assets/cadastro-bilingue.js"></script>
+<script src="assets/categorias.js"></script>
+<script src="assets/replicacao.js"></script>
+<script src="assets/desperdicios.js"></script>
+<script src="assets/resultados.js"></script>
 <script>
 (function(){
   var tabs = document.querySelectorAll('[data-admin-tab]');
