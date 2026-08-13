@@ -36,4 +36,4 @@ env:
   - name: 'AZURE_SQL_USER'
     value: 'KZNDEV'
   - name: 'AZURE_SQL_PASSWORD'
-    value: 'ReadDEVKZN@!13'
+    value: 'DEVKZN@!13'
