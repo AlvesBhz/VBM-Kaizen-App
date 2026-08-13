@@ -714,6 +714,13 @@ registrarCadastroBilingue({
   maxNome: CADASTRO_LIMITES_DER.nome,
   maxDescricao: CADASTRO_LIMITES_DER.descricao,
   rotuloSing: "tipo de desperdício",
+  // js/desperdicios.js já usa palavraBadge:"usos" (mesmo padrão do
+  // badge "kaizens" de Categoria), mas faltava esta config no servidor
+  // — sem ela, QTD vinha sempre null e o badge só mostrava "—". Mesma
+  // tabela/abordagem de Categoria (contagem falha em silêncio se a
+  // tabela/coluna não existir, sem derrubar a lista — ver nota de
+  // ressalva sobre esta tabela no relatório desta tarefa).
+  contagem: { tabela: FULL_PENDENCIA_TABLE, coluna: "NM_DESPERDICIO" },
 });
 
 registrarCadastroBilingue({
