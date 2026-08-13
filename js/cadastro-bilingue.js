@@ -64,17 +64,24 @@ window.criarCadastroBilingue = function (cfg) {
 
   var idEmEdicao = null;
 
+  // Algumas tabelas (ex.: kzn_tipo_resultado) não têm coluna de
+  // descrição — inferimos isso pela ausência dos campos DS no modal,
+  // sem precisar de uma flag extra na config das 4 abas existentes.
+  var temDescricao = !!(addDescPt || editDescPt);
+
   // Mesmos limites do server.js (que os tira do DER). A checagem no
   // cliente é só uma resposta mais rápida — o servidor valida de
   // novo antes de gravar, sempre.
   function validar(nomePt, descPt, nomeEn, descEn) {
-    if (!nomePt || !descPt || !nomeEn || !descEn) {
-      return "Preencha nome e descrição nos dois idiomas antes de salvar.";
+    if (!nomePt || !nomeEn || (temDescricao && (!descPt || !descEn))) {
+      return temDescricao
+        ? "Preencha nome e descrição nos dois idiomas antes de salvar."
+        : "Preencha o nome nos dois idiomas antes de salvar.";
     }
     if (nomePt.length > cfg.maxNome || nomeEn.length > cfg.maxNome) {
       return "O nome deve ter no máximo " + cfg.maxNome + " caracteres (em cada idioma).";
     }
-    if (descPt.length > cfg.maxDescricao || descEn.length > cfg.maxDescricao) {
+    if (temDescricao && (descPt.length > cfg.maxDescricao || descEn.length > cfg.maxDescricao)) {
       return "A descrição deve ter no máximo " + cfg.maxDescricao + " caracteres (em cada idioma).";
     }
     return null;
@@ -122,7 +129,7 @@ window.criarCadastroBilingue = function (cfg) {
       "</div>" +
       '<div class="admin-item-body">' +
         '<div class="admin-item-name">' + escapeHtml(reg.NM) + semTraducaoHtml(reg) + "</div>" +
-        '<div class="admin-item-sub">' + escapeHtml(reg.DS) + "</div>" +
+        (temDescricao ? '<div class="admin-item-sub">' + escapeHtml(reg.DS) + "</div>" : "") +
       "</div>" +
       badgeHtml(reg.QTD) +
       '<div class="admin-item-actions">' +

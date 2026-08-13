@@ -591,6 +591,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
         <button class="admin-tab" data-admin-tab="categorias"><i class="fa-solid fa-tags"></i> <span data-i18n="adm.tabCategorias">Categorias</span></button>
         <button class="admin-tab" data-admin-tab="replicacao"><i class="fa-solid fa-globe"></i> <span data-i18n="adm.tabReplicacao">Pot. Replicação</span></button>
         <button class="admin-tab" data-admin-tab="desperdicios"><i class="fa-solid fa-recycle"></i> <span data-i18n="adm.tabDesperdicios">Red. Desperdícios</span></button>
+        <button class="admin-tab" data-admin-tab="tiporesultados"><i class="fa-solid fa-layer-group"></i> <span data-i18n="adm.tabTipoResultados">Tipo Resultados</span></button>
         <button class="admin-tab" data-admin-tab="resultados"><i class="fa-solid fa-trophy"></i> <span data-i18n="adm.tabResultados">Resultados</span></button>
         <button class="admin-tab" data-admin-tab="usuarios"><i class="fa-solid fa-users-gear"></i> <span data-i18n="adm.tabUsuarios">Usuários</span></button>
       </div>
@@ -652,6 +653,21 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       </div>
       <div class="admin-list" id="desperdiciosList">
         <div class="admin-list-status">Carregando tipos de desperdício…</div>
+      </div>
+    </div>
+
+    <!-- ═══ TIPO RESULTADOS ═══
+         Tabela (DER): kzn_tipo_resultado — ID_TIPO_RESULTADO, ID_IDIOMA,
+         NM_TIPO_RESULTADO, DT_ATUALIZACAO. Sem descrição/ícone próprios
+         (só nome bilíngue); usa o mesmo motor de cadastro bilíngue das
+         outras abas (js/cadastro-bilingue.js + js/tiporesultados.js). -->
+    <div class="admin-panel section-card reveal" id="panel-tiporesultados">
+      <div class="section-head" style="padding:1.25rem;">
+        <div class="section-title"><i class="fa-solid fa-layer-group" style="color:var(--vbm-blue-dark);"></i> <span data-i18n="adm.tipoResultadosTitle">Classificações de Tipo de Resultado</span></div>
+        <button class="btn btn-outline btn-sm admin-add-btn" data-modal-open="modalAddTipoResultado"><i class="fa-solid fa-plus"></i> <span data-i18n="common.adicionar">Adicionar</span></button>
+      </div>
+      <div class="admin-list" id="tiporesultadosList">
+        <div class="admin-list-status">Carregando classificações…</div>
       </div>
     </div>
 
@@ -1280,17 +1296,80 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
   </div>
 </div>
 
+<div class="modal-backdrop" id="modalAddTipoResultado">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-icon" style="--hue:60,181,229;background:var(--vbm-blue-pale);border-color:rgba(60,181,229,.22);"><i class="fa-solid fa-layer-group" style="color:var(--vbm-blue-dark);"></i></div>
+      <div class="modal-title" data-i18n="adm.newTipoResultado">Nova Classificação de Tipo de Resultado</div>
+      <button class="modal-close" data-modal-close><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" data-i18n="adm.tipoResultadoName">Nome <span class="req">*</span></label>
+        <div class="lang-stack lang-stack-row">
+          <div class="lang-slot">
+            <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
+            <span class="lang-slot-divider"></span>
+            <input type="text" class="form-control lang-slot-input" placeholder="Ex: Financeiro" data-i18n-placeholder="adm.tipoResultadoPlaceholder" data-lang="pt-BR" id="tiporesAddNamePt" maxlength="30" required/>
+          </div>
+          <div class="lang-slot">
+            <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
+            <span class="lang-slot-divider"></span>
+            <input type="text" class="form-control lang-slot-input" placeholder="Ex: Financial" data-lang="en" id="tiporesAddNameEn" maxlength="30" required/>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" data-modal-close data-i18n="common.cancelar">Cancelar</button>
+      <button class="btn btn-primary" id="btnSaveAddTipoResultado"><span data-i18n="common.adicionar">Adicionar</span></button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modalEditTipoResultado">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-icon" style="--hue:60,181,229;background:var(--vbm-blue-pale);border-color:rgba(60,181,229,.22);"><i class="fa-solid fa-layer-group" style="color:var(--vbm-blue-dark);"></i></div>
+      <div class="modal-title" data-i18n="adm.editTipoResultado">Editar Classificação de Tipo de Resultado</div>
+      <button class="modal-close" data-modal-close><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" data-i18n="adm.name">Nome <span class="req">*</span></label>
+        <div class="lang-stack lang-stack-row">
+          <div class="lang-slot">
+            <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
+            <span class="lang-slot-divider"></span>
+            <input type="text" class="form-control lang-slot-input" data-lang="pt-BR" id="tiporesEditNamePt" maxlength="30" required/>
+          </div>
+          <div class="lang-slot">
+            <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
+            <span class="lang-slot-divider"></span>
+            <input type="text" class="form-control lang-slot-input" data-lang="en" id="tiporesEditNameEn" maxlength="30" required/>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" data-modal-close data-i18n="common.cancelar">Cancelar</button>
+      <button class="btn btn-primary" id="btnSaveEditTipoResultado"><span data-i18n="common.salvar">Salvar</span></button>
+    </div>
+  </div>
+</div>
+
 <div class="toast-container"></div>
 <script src="js/vbm-app.js?v=20260815-1"></script>
 <script src="js/aprovadores.js?v=20260815-1"></script>
 <script src="js/usuarios.js?v=20260815-1"></script>
 <!-- cadastro-bilingue.js define o motor compartilhado (window.criarCadastroBilingue);
-     os 4 arquivos seguintes só configuram sua própria aba com ele. -->
-<script src="js/cadastro-bilingue.js?v=20260815-1"></script>
+     os 5 arquivos seguintes só configuram sua própria aba com ele. -->
+<script src="js/cadastro-bilingue.js?v=20260815-2"></script>
 <script src="js/categorias.js?v=20260815-1"></script>
 <script src="js/replicacao.js?v=20260815-1"></script>
 <script src="js/desperdicios.js?v=20260815-1"></script>
 <script src="js/resultados.js?v=20260815-1"></script>
+<script src="js/tiporesultados.js?v=20260815-2"></script>
 <script>
 (function(){
   var tabs = document.querySelectorAll('[data-admin-tab]');
@@ -1501,6 +1580,10 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       'adm.editResultType': 'Editar Resultado Alcançado',
       'adm.resultTypeName': 'Resultados Alcançados',
       'adm.resultDescPlaceholder': 'Descreva o tipo de resultado...',
+      'adm.newTipoResultado': 'Nova Classificação de Tipo de Resultado',
+      'adm.editTipoResultado': 'Editar Classificação de Tipo de Resultado',
+      'adm.tipoResultadoName': 'Nome',
+      'adm.tipoResultadoPlaceholder': 'Ex: Financeiro',
       'adm.allRoles': 'Todos os papéis',
       'adm.userCol': 'Usuário',
       'adm.site': 'Site',
@@ -1531,6 +1614,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       'adm.tabCategorias': 'Categorias',
       'adm.tabReplicacao': 'Pot. Replicação',
       'adm.tabDesperdicios': 'Red. Desperdícios',
+      'adm.tabTipoResultados': 'Tipo Resultados',
       'adm.tabResultados': 'Resultados',
       'adm.tabUsuarios': 'Usuários',
       'adm.approversByUnit': 'Aprovadores por Unidade',
@@ -1541,6 +1625,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       'adm.replicationTitle': 'Potencial de Replicação',
       'adm.wasteTitle': 'Redução de Desperdícios (PNR28)',
       'adm.resultsTypesTitle': 'Tipos de Resultados Alcançados',
+      'adm.tipoResultadosTitle': 'Classificações de Tipo de Resultado',
       'adm.usersManagementTitle': 'Gerenciamento de Usuários (Terceiros)',
       'adm.newUser': 'Novo Usuário',
       'adm.searchUserPlaceholder': 'Buscar usuário por nome, e-mail ou MDM...',
@@ -1601,6 +1686,10 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       'adm.editResultType': 'Edit Achieved Result',
       'adm.resultTypeName': 'Achieved Results',
       'adm.resultDescPlaceholder': 'Describe the result type...',
+      'adm.newTipoResultado': 'New Result Type Classification',
+      'adm.editTipoResultado': 'Edit Result Type Classification',
+      'adm.tipoResultadoName': 'Name',
+      'adm.tipoResultadoPlaceholder': 'E.g.: Financial',
       'adm.allRoles': 'All roles',
       'adm.userCol': 'User',
       'adm.site': 'Site',
@@ -1631,6 +1720,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       'adm.tabCategorias': 'Categories',
       'adm.tabReplicacao': 'Repl. Potential',
       'adm.tabDesperdicios': 'Waste Reduction',
+      'adm.tabTipoResultados': 'Result Types',
       'adm.tabResultados': 'Results',
       'adm.tabUsuarios': 'Users',
       'adm.approversByUnit': 'Approvers by Unit',
@@ -1641,6 +1731,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       'adm.replicationTitle': 'Replication Potential',
       'adm.wasteTitle': 'Waste Reduction (PNR28)',
       'adm.resultsTypesTitle': 'Result Types Achieved',
+      'adm.tipoResultadosTitle': 'Result Type Classifications',
       'adm.usersManagementTitle': 'User Management (Third-Party)',
       'adm.newUser': 'New User',
       'adm.searchUserPlaceholder': 'Search user by name, email or MDM...',

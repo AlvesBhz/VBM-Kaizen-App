@@ -418,9 +418,17 @@ function tabelaCadastro(envVar, padrao) {
  *   tabela        — nome completo já escapado ([schema].[tabela])
  *   pk            — coluna de chave primária (ex.: "ID_CATEGORIA")
  *   colNome       — coluna de nome (ex.: "NM_CATEGORIA")
- *   colDescricao  — coluna de descrição (ex.: "DS_CATEGORIA")
+ *   colDescricao  — coluna de descrição (ex.: "DS_CATEGORIA"). OPCIONAL:
+ *                   omitir quando a tabela não tem coluna de descrição
+ *                   (ex.: kzn_tipo_resultado, que só tem NM_*) — nesse
+ *                   caso a rota nunca lê/grava DS e a validação exige
+ *                   só o nome.
  *   maxNome       — limite de caracteres do nome (do DER)
- *   maxDescricao  — limite de caracteres da descrição (do DER)
+ *   maxDescricao  — limite de caracteres da descrição (do DER).
+ *                   Ignorado quando colDescricao não é passado.
+ *   temIcone      — false quando a tabela não tem URL_ICONE (ex.:
+ *                   kzn_tipo_resultado). Padrão true (as 4 tabelas
+ *                   originais sempre tiveram essa coluna).
  *   rotuloSing    — rótulo em mensagens de erro (ex.: "categoria")
  *   colunasExtras — colunas adicionais a preservar no INSERT do MERGE,
  *                   herdadas da linha do outro idioma (ex.: a FK
@@ -431,18 +439,21 @@ function tabelaCadastro(envVar, padrao) {
 function registrarCadastroBilingue(cfg) {
   const { rota, tabela, pk, colNome, colDescricao, maxNome, maxDescricao, rotuloSing } = cfg;
   const extras = cfg.colunasExtras || [];
+  const temIcone = cfg.temIcone !== false;
   const log = `[${rota}]`;
 
   // Validação única, compartilhada por POST (criar) e PUT (editar) —
   // garante que os dois processos apliquem exatamente a mesma regra.
   function validarCampos(nomePt, descPt, nomeEn, descEn) {
-    if (!nomePt || !descPt || !nomeEn || !descEn) {
-      return "Nome e descrição são obrigatórios nos dois idiomas.";
+    if (!nomePt || !nomeEn || (colDescricao && (!descPt || !descEn))) {
+      return colDescricao
+        ? "Nome e descrição são obrigatórios nos dois idiomas."
+        : "Nome é obrigatório nos dois idiomas.";
     }
     if (nomePt.length > maxNome || nomeEn.length > maxNome) {
       return `O nome deve ter no máximo ${maxNome} caracteres (em cada idioma).`;
     }
-    if (descPt.length > maxDescricao || descEn.length > maxDescricao) {
+    if (colDescricao && (descPt.length > maxDescricao || descEn.length > maxDescricao)) {
       return `A descrição deve ter no máximo ${maxDescricao} caracteres (em cada idioma).`;
     }
     return null;
@@ -467,26 +478,34 @@ function registrarCadastroBilingue(cfg) {
   // WHEN NOT MATCHED: URL_ICONE (e demais colunasExtras) herdam o valor
   // da linha do OUTRO idioma que já existir — mesmo registro, mesmo
   // ícone/FK nos dois idiomas; ficam NULL na criação, quando nenhuma
-  // linha existe ainda.
-  const colsHerdadas = ["URL_ICONE"].concat(extras);
+  // linha existe ainda. Tabela sem URL_ICONE (temIcone:false): a coluna
+  // simplesmente não entra no MERGE, senão o SQL Server rejeitaria a
+  // query inteira com "Invalid column name".
+  const colsHerdadas = (temIcone ? ["URL_ICONE"] : []).concat(extras);
   const selectHerdado = (col) => `(SELECT TOP (1) ${col} FROM ${tabela} WHERE ${pk} = @id)`;
 
   function upsertIdioma(id, idIdioma, nome, descricao) {
+    const colsInsert = [pk, "ID_IDIOMA"].concat(colsHerdadas, [colNome], colDescricao ? [colDescricao] : [], ["SG_ATIVO", "DT_ATUALIZACAO"]);
+    const valsInsert = ["@id", "@idIdioma"].concat(colsHerdadas.map(selectHerdado), ["@nome"], colDescricao ? ["@descricao"] : [], ["'S'", "GETDATE()"]);
+    const setUpdate = `${colNome} = @nome` + (colDescricao ? `, ${colDescricao} = @descricao` : "") + `, DT_ATUALIZACAO = GETDATE()`;
+
+    const params = [
+      ["nome", sql.NVarChar(maxNome), nome],
+      ["id", sql.Int, id],
+      ["idIdioma", sql.Int, idIdioma],
+    ];
+    if (colDescricao) params.push(["descricao", sql.NVarChar(maxDescricao), descricao]);
+
     return runQuery(
       `MERGE INTO ${tabela} AS target
        USING (SELECT @id AS ${pk}, @idIdioma AS ID_IDIOMA) AS src
          ON target.${pk} = src.${pk} AND target.ID_IDIOMA = src.ID_IDIOMA
        WHEN MATCHED THEN
-         UPDATE SET ${colNome} = @nome, ${colDescricao} = @descricao, DT_ATUALIZACAO = GETDATE()
+         UPDATE SET ${setUpdate}
        WHEN NOT MATCHED THEN
-         INSERT (${pk}, ID_IDIOMA, ${colsHerdadas.join(", ")}, ${colNome}, ${colDescricao}, SG_ATIVO, DT_ATUALIZACAO)
-         VALUES (@id, @idIdioma, ${colsHerdadas.map(selectHerdado).join(", ")}, @nome, @descricao, 'S', GETDATE());`,
-      [
-        ["nome", sql.NVarChar(maxNome), nome],
-        ["descricao", sql.NVarChar(maxDescricao), descricao],
-        ["id", sql.Int, id],
-        ["idIdioma", sql.Int, idIdioma],
-      ]
+         INSERT (${colsInsert.join(", ")})
+         VALUES (${valsInsert.join(", ")});`,
+      params
     );
   }
 
@@ -505,14 +524,16 @@ function registrarCadastroBilingue(cfg) {
   apiRouter.get(`/${rota}`, async (req, res) => {
     try {
       const idIdiomaPedido = idIdiomaDaRequisicao(req);
+      const colsSelect = [`base.${pk} AS ID`, `COALESCE(tr.${colNome}, base.${colNome}) AS NM`];
+      if (colDescricao) colsSelect.push(`COALESCE(tr.${colDescricao}, base.${colDescricao}) AS DS`);
+      colsSelect.push(`base.${colNome} AS NM_PT`);
+      if (temIcone) colsSelect.push(`base.URL_ICONE`);
+      colsSelect.push(
+        `base.SG_ATIVO`,
+        `CASE WHEN @idIdioma <> @idIdiomaBase AND tr.ID_IDIOMA IS NULL THEN 1 ELSE 0 END AS SEM_TRADUCAO`
+      );
       const result = await runQuery(
-        `SELECT base.${pk} AS ID,
-                COALESCE(tr.${colNome}, base.${colNome}) AS NM,
-                COALESCE(tr.${colDescricao}, base.${colDescricao}) AS DS,
-                base.${colNome} AS NM_PT,
-                base.URL_ICONE, base.SG_ATIVO,
-                CASE WHEN @idIdioma <> @idIdiomaBase AND tr.ID_IDIOMA IS NULL
-                     THEN 1 ELSE 0 END AS SEM_TRADUCAO
+        `SELECT ${colsSelect.join(", ")}
          FROM ${tabela} base
          LEFT JOIN ${tabela} tr
                 ON tr.${pk} = base.${pk} AND tr.ID_IDIOMA = @idIdioma
@@ -545,8 +566,8 @@ function registrarCadastroBilingue(cfg) {
         result.recordset.map((r) => ({
           ID: r.ID,
           NM: r.NM,
-          DS: r.DS,
-          URL_ICONE: r.URL_ICONE,
+          DS: colDescricao ? r.DS : null,
+          URL_ICONE: temIcone ? r.URL_ICONE : null,
           ATIVO: r.SG_ATIVO === "S",
           // casa pelo nome em PT: a tabela de pendências guarda o nome
           // em português, independentemente do idioma da tela.
@@ -572,8 +593,10 @@ function registrarCadastroBilingue(cfg) {
       const id = parseInt(req.params.id, 10);
       if (!Number.isInteger(id)) return res.status(400).json({ error: `${pk} inválido.` });
 
+      const colsSelectId = ["ID_IDIOMA", `${colNome} AS NM`];
+      if (colDescricao) colsSelectId.push(`${colDescricao} AS DS`);
       const result = await runQuery(
-        `SELECT ID_IDIOMA, ${colNome} AS NM, ${colDescricao} AS DS FROM ${tabela} WHERE ${pk} = @id`,
+        `SELECT ${colsSelectId.join(", ")} FROM ${tabela} WHERE ${pk} = @id`,
         [["id", sql.Int, id]]
       );
 
@@ -583,8 +606,8 @@ function registrarCadastroBilingue(cfg) {
 
       res.json({
         ID: id,
-        pt: pt ? { NM: pt.NM, DS: pt.DS } : null,
-        en: en ? { NM: en.NM, DS: en.DS } : null,
+        pt: pt ? { NM: pt.NM, DS: colDescricao ? pt.DS : "" } : null,
+        en: en ? { NM: en.NM, DS: colDescricao ? en.DS : "" } : null,
       });
     } catch (err) {
       console.error(`${log} erro ao consultar por ID:`, err.message);
@@ -736,6 +759,22 @@ registrarCadastroBilingue({
   // ícone ao criar a linha do 2º idioma. Numa criação do zero fica
   // NULL — a tela não coleta esse campo hoje.
   colunasExtras: ["ID_TIPO_RESULTADO"],
+});
+
+// kzn_tipo_resultado (DER): ID_TIPO_RESULTADO, ID_IDIOMA,
+// NM_TIPO_RESULTADO, DT_ATUALIZACAO — SEM URL_ICONE e SEM DS_* (só
+// nome). SG_ATIVO ainda não existe na tabela real; a UI de
+// ativar/desativar foi implementada a pedido, para quando a coluna for
+// adicionada — até lá, o PUT .../status vai falhar com "Invalid column
+// name 'SG_ATIVO'" (erro claro, não silencioso: aparece no toast).
+registrarCadastroBilingue({
+  rota: "tiporesultados",
+  tabela: tabelaCadastro("AZURE_SQL_TIPO_RESULTADO_TABLE", "kzn_tipo_resultado"),
+  pk: "ID_TIPO_RESULTADO",
+  colNome: "NM_TIPO_RESULTADO",
+  maxNome: CADASTRO_LIMITES_DER.nome,
+  temIcone: false,
+  rotuloSing: "tipo de resultado (classificação)",
 });
 
 app.use("/api", apiRouter);
