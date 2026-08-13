@@ -372,7 +372,11 @@ apiRouter.get("/usuarios", async (req, res) => {
         CD_MATRICULA: r.CD_MATRICULA,
         NM_USUARIO: r.NM_USUARIO,
         DS_EMAIL: r.DS_EMAIL,
-        PAPEL: r.EH_APROVADOR ? "Aprovador" : "Operador",
+        // Booleano, não texto: "Aprovador"/"Operador" é rótulo de tela,
+        // não dado do banco (kzn_aprovador não tem coluna de idioma).
+        // Faixa fixa em PT aqui nunca acompanhava a troca de idioma —
+        // quem traduz é o front-end (ver js/usuarios.js).
+        EH_APROVADOR: !!r.EH_APROVADOR,
       }))
     );
   } catch (err) {

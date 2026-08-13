@@ -38,6 +38,22 @@
       (erro ? "#c0392b" : "var(--vbm-mid)") + ';">' + escapeHtml(texto) + "</td></tr>";
   }
 
+  // "Aprovador"/"Operador" é rótulo de tela (kzn_aprovador não é
+  // bilíngue — não tem ID_IDIOMA), então NÃO vem do banco: o servidor
+  // manda só o booleano EH_APROVADOR e a tradução é local. O
+  // data-i18n faz o badge já existente acompanhar trocas de idioma
+  // seguintes sem precisar re-render (ver translatePanel no <script>
+  // de idioma de admin.html, que reaplica em todo elemento marcado).
+  function papelBadge(ehAprovador) {
+    var chave = ehAprovador ? "role.aprovador" : "role.operador";
+    var idiomaAtual = (window.VBMIdioma && window.VBMIdioma.atual()) || "pt-BR";
+    var emIngles = String(idiomaAtual).toLowerCase().indexOf("en") === 0;
+    var texto = ehAprovador
+      ? (emIngles ? "Approver" : "Aprovador")
+      : (emIngles ? "Operator" : "Operador");
+    return '<span class="admin-item-badge role-badge" data-i18n="' + chave + '">' + escapeHtml(texto) + "</span>";
+  }
+
   function render(usuarios) {
     if (!usuarios.length) {
       tbody.innerHTML = linhaAviso("Nenhum usuário encontrado no MDM.", false);
@@ -51,7 +67,7 @@
           "<span>" + escapeHtml(u.NM_USUARIO || "—") + "</span></div></td>" +
         '<td style="font-size:.78rem;">' + escapeHtml(u.DS_EMAIL || "—") + "</td>" +
         vazio + /* Site: sem coluna no modelo atual */
-        '<td><span class="admin-item-badge role-badge">' + escapeHtml(u.PAPEL) + "</span></td>" +
+        "<td>" + papelBadge(u.EH_APROVADOR) + "</td>" +
         vazio + /* Empresa: sem coluna no modelo atual */
         vazio + /* Status: sem SG_ATIVO no modelo atual */
         '<td style="font-size:.72rem;color:var(--vbm-mid);">' + escapeHtml(u.CD_MATRICULA || "—") + "</td>" +
