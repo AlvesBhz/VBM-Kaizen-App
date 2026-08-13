@@ -43,7 +43,14 @@
 <link href="assets/vbm-app.css" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
 <link href="https://fonts.gstatic.com" rel="preconnect" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet"/>
+<!-- Poppins carregada SEM bloquear a renderização: como "print" o navegador
+     baixa a folha mas não espera por ela para pintar a tela; o onload a
+     promove para "all" e a fonte entra assim que chega. Antes, esta linha
+     era render-blocking — num ambiente sem saída para a internet a página
+     ficava em branco até o timeout do fonts.googleapis.com. O <noscript>
+     mantém o comportamento original quando não há JS. -->
+<link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet" media="print" onload="this.media='all';this.onload=null;"/>
+<noscript><link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet"/></noscript>
 <link href="assets/vendor/a1922a98664cc516_favicon-32x32-1.png" rel="icon"/>
 <style>
 /* ═══════════════════════════════════════════════════
@@ -677,9 +684,25 @@ body[data-bg="dark"] {
   <div class="page-content">
 
     <!-- ═══ HERO BANNER ═══ -->
+    <!-- NÃO usar loading="lazy" aqui: esta é a maior imagem visível na
+         primeira dobra (o LCP da tela), e adiar seu início só atrasaria a
+         pintura. O que dá para melhorar sem mudar o visual:
+           • fetchpriority="high" — sobe na fila do navegador, à frente de
+             recursos menos importantes;
+           • decoding="async" — a decodificação sai da thread principal,
+             então a interface não congela enquanto a imagem é processada.
+         ATENÇÃO (ver relatório): este arquivo tem 7,1 MB porque embute 5
+         PNGs em base64 — um deles é uma FOTO 2400x1145 salva como PNG
+         (3,9 MB). Por ser base64 ele quase não comprime (gzip só tira 31%)
+         e é, disparado, o maior gargalo do app. A correção de verdade é
+         reexportar essa foto como WebP/JPEG (fica na casa de 200–400 KB),
+         o que não foi feito aqui por não haver ferramenta de imagem neste
+         ambiente e por exigir conferência visual do resultado. -->
     <div class="dash-hero">
       <img class="dash-hero-bg-img"
            src="assets/svg_camadas/00_COMPOSICAO_COMPLETA.svg"
+           fetchpriority="high"
+           decoding="async"
            alt="Gestão Kaizen — Pessoas. Método. Resultado."/>
     </div>
 
@@ -689,7 +712,6 @@ body[data-bg="dark"] {
 
 
 <script src="assets/vbm-app.js"></script>
-<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
 <script>
 // ─── Login com conta Microsoft (MSAL.js / Azure AD - Entra ID) ───
 // PENDENTE DE CONFIGURAÇÃO: preencha clientId e authority abaixo com os
@@ -715,7 +737,26 @@ body[data-bg="dark"] {
 
   var isConfigured = MSAL_CONFIG.clientId !== 'SEU_CLIENT_ID_AQUI'
     && MSAL_CONFIG.authority.indexOf('SEU_TENANT_ID_AQUI') === -1;
-  if (!isConfigured || typeof msal === 'undefined') return;
+  if (!isConfigured) return;
+
+  // A msal-browser.min.js (~200 KB, CDN externo) só é baixada a partir
+  // daqui — ou seja, apenas quando o login está de fato configurado.
+  // Antes ela vinha num <script src> fixo no HTML e era baixada em todo
+  // carregamento do dashboard, mesmo com os placeholders acima fazendo
+  // este bloco sair na linha anterior sem usá-la para nada.
+  var MSAL_CDN = 'https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js';
+
+  function carregarMsal() {
+    return new Promise(function (resolve, reject) {
+      if (typeof msal !== 'undefined') return resolve();
+      var s = document.createElement('script');
+      s.src = MSAL_CDN;
+      s.async = true;
+      s.onload = resolve;
+      s.onerror = function () { reject(new Error('Falha ao carregar ' + MSAL_CDN)); };
+      document.head.appendChild(s);
+    });
+  }
 
   var nameEl   = document.getElementById('topnavUserName');
   var roleEl   = document.getElementById('topnavUserRole');
@@ -751,6 +792,15 @@ body[data-bg="dark"] {
   }
 
   (async function () {
+    try {
+      await carregarMsal();
+    } catch (e) {
+      // CDN indisponível: mantém o usuário mockado, como já acontecia
+      // quando o <script src> externo falhava.
+      console.warn('Login Microsoft indisponível, mantendo usuário padrão.', e);
+      return;
+    }
+
     var msalInstance = new msal.PublicClientApplication({
       auth: {
         clientId: MSAL_CONFIG.clientId,

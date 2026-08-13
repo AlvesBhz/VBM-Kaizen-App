@@ -318,5 +318,21 @@
   // sobrar texto de uma tentativa anterior (evita reenviar sem querer).
   if (addTrigger) addTrigger.addEventListener("click", limparFormularioCriacao);
 
-  carregarLista();
+  // Carrega sob demanda: as 6 abas do admin ficam todas no mesmo HTML,
+  // mas só uma está visível. Antes, cada aba disparava sua consulta no
+  // load da página — 6 idas ao Azure SQL para mostrar 1 lista. Agora a
+  // aba visível carrega na hora e as demais só na primeira vez que são
+  // abertas (uma vez só; depois disso o comportamento é o de sempre).
+  var painel = list.closest(".admin-panel");
+  if (!painel || painel.classList.contains("active") || typeof MutationObserver === "undefined") {
+    carregarLista();
+  } else {
+    var observador = new MutationObserver(function () {
+      if (painel.classList.contains("active")) {
+        observador.disconnect();
+        carregarLista();
+      }
+    });
+    observador.observe(painel, { attributes: true, attributeFilter: ["class"] });
+  }
 })();

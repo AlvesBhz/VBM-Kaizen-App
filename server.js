@@ -23,9 +23,18 @@
 
 const path = require("path");
 const express = require("express");
+const compression = require("compression");
 const sql = require("mssql");
 
 const app = express();
+
+// gzip em tudo que é texto (HTML/CSS/JS/JSON/SVG). Já estava no
+// package.json mas nunca tinha sido ligado — o app servia os ~110 KB de
+// admin.html e os ~65 KB de vbm-app.css crus. Com gzip esses caem para
+// ~20 KB e ~12 KB (>80% menos). Só afeta o transporte: o conteúdo que
+// chega ao navegador é byte a byte o mesmo.
+app.use(compression());
+
 app.use(express.json());
 
 // ------------------------------------------------------------------
@@ -135,15 +144,37 @@ async function runQuery(query, params = []) {
 // ------------------------------------------------------------------
 // Estáticos
 // ------------------------------------------------------------------
-// Sem maxAge/index automático — mesmo raciocínio de outros apps deste
-// workspace: evita que o navegador/proxy prenda HTML/JS/CSS numa
-// versão antiga entre deploys. etag:true ainda permite 304 quando
-// nada mudou.
+// ANTES: "no-store" em TUDO. Isso proíbe o navegador até de guardar
+// uma cópia, então cada ida e volta entre index/admin/biblioteca/etc.
+// rebaixava de novo os mesmos ~160 KB de CSS, ~154 KB de fontes e os
+// fundos de 0,6–1,3 MB — era o principal motivo da navegação lenta
+// entre as páginas.
+//
+// AGORA, por tipo de arquivo, sem perder atualização em deploy:
+//
+//   • assets/vendor/<hash>_nome.ext — o hash faz parte do nome, então
+//     conteúdo novo = nome novo. Pode ir de cache "para sempre"
+//     (immutable): zero requisição em navegações seguintes.
+//   • todo o resto (HTML, vbm-app.css/js, telas, SVGs de fundo) —
+//     "no-cache" + ETag: o navegador SEMPRE revalida (deploy continua
+//     aparecendo na hora, igual a antes), mas quando nada mudou o
+//     servidor responde 304 sem corpo. Um fundo de 1,3 MB vira uma
+//     resposta de algumas centenas de bytes.
+const UM_ANO_EM_SEGUNDOS = 60 * 60 * 24 * 365;
+const ARQUIVO_COM_HASH_NO_NOME = /[\\/]assets[\\/]vendor[\\/][0-9a-f]{8,}_/i;
+
 app.use(
   express.static(__dirname, {
     etag: true,
     index: false,
-    setHeaders: (res) => res.set("Cache-Control", "no-store"),
+    lastModified: true,
+    setHeaders: (res, filePath) => {
+      if (ARQUIVO_COM_HASH_NO_NOME.test(filePath)) {
+        res.set("Cache-Control", `public, max-age=${UM_ANO_EM_SEGUNDOS}, immutable`);
+      } else {
+        res.set("Cache-Control", "no-cache");
+      }
+    },
   })
 );
 
@@ -653,7 +684,9 @@ app.use("/api", apiRouter);
 // Fallback de rota principal
 // ------------------------------------------------------------------
 app.get("/", (req, res) => {
-  res.set("Cache-Control", "no-store");
+  // Mesmo critério do index.html servido pelo express.static acima:
+  // revalida sempre (deploy aparece na hora), mas aproveita 304.
+  res.set("Cache-Control", "no-cache");
   res.sendFile(path.join(__dirname, "index.html"));
 });
 

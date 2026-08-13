@@ -41,7 +41,14 @@
 <link href="assets/vbm-app.css" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
 <link href="https://fonts.gstatic.com" rel="preconnect" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet"/>
+<!-- Poppins carregada SEM bloquear a renderização: como "print" o navegador
+     baixa a folha mas não espera por ela para pintar a tela; o onload a
+     promove para "all" e a fonte entra assim que chega. Antes, esta linha
+     era render-blocking — num ambiente sem saída para a internet a página
+     ficava em branco até o timeout do fonts.googleapis.com. O <noscript>
+     mantém o comportamento original quando não há JS. -->
+<link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet" media="print" onload="this.media='all';this.onload=null;"/>
+<noscript><link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet"/></noscript>
 <link href="assets/vendor/a1922a98664cc516_favicon-32x32-1.png" rel="icon"/>
 <style>
 /* ═══════════════════════════════════════════════════
@@ -518,11 +525,11 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
             <div class="kd-section-body">
               <div class="kd-before-after">
                 <div class="kd-photo-box">
-                  <img src="assets/vendor/ce66108fa7e62190_Our-Operations_E2_80_8B.webp" alt="Antes"/>
+                  <img src="assets/vendor/ce66108fa7e62190_Our-Operations_E2_80_8B.webp" alt="Antes" loading="lazy" decoding="async"/>
                   <div class="kd-photo-box-body"><div class="kd-photo-label" data-i18n="kd.before">Antes</div><div class="kd-photo-desc">Ferramentas desorganizadas.</div></div>
                 </div>
                 <div class="kd-photo-box">
-                  <img src="assets/vendor/73e6a83bc9ed2360_Our-products.webp" alt="Depois"/>
+                  <img src="assets/vendor/73e6a83bc9ed2360_Our-products.webp" alt="Depois" loading="lazy" decoding="async"/>
                   <div class="kd-photo-box-body"><div class="kd-photo-label" data-i18n="kd.after">Depois</div><div class="kd-photo-desc">Shadowboard organizado.</div></div>
                 </div>
               </div>

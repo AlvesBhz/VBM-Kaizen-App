@@ -42,7 +42,14 @@
 <link href="assets/vbm-app.css" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
 <link href="https://fonts.gstatic.com" rel="preconnect" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet"/>
+<!-- Poppins carregada SEM bloquear a renderização: como "print" o navegador
+     baixa a folha mas não espera por ela para pintar a tela; o onload a
+     promove para "all" e a fonte entra assim que chega. Antes, esta linha
+     era render-blocking — num ambiente sem saída para a internet a página
+     ficava em branco até o timeout do fonts.googleapis.com. O <noscript>
+     mantém o comportamento original quando não há JS. -->
+<link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet" media="print" onload="this.media='all';this.onload=null;"/>
+<noscript><link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet"/></noscript>
 <link href="assets/vendor/a1922a98664cc516_favicon-32x32-1.png" rel="icon"/>
 <style>
 /* ═══════════════════════════════════════════════════

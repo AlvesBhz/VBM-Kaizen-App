@@ -73,5 +73,19 @@
       });
   }
 
-  carregar();
+  // Carrega sob demanda: esta aba nasce escondida, mas antes já
+  // consultava o MDM no load da página. Agora só na primeira vez que
+  // for realmente aberta.
+  var painel = tbody.closest(".admin-panel");
+  if (!painel || painel.classList.contains("active") || typeof MutationObserver === "undefined") {
+    carregar();
+  } else {
+    var observador = new MutationObserver(function () {
+      if (painel.classList.contains("active")) {
+        observador.disconnect();
+        carregar();
+      }
+    });
+    observador.observe(painel, { attributes: true, attributeFilter: ["class"] });
+  }
 })();

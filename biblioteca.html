@@ -41,7 +41,14 @@
 <link href="assets/vbm-app.css" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
 <link href="https://fonts.gstatic.com" rel="preconnect" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet"/>
+<!-- Poppins carregada SEM bloquear a renderização: como "print" o navegador
+     baixa a folha mas não espera por ela para pintar a tela; o onload a
+     promove para "all" e a fonte entra assim que chega. Antes, esta linha
+     era render-blocking — num ambiente sem saída para a internet a página
+     ficava em branco até o timeout do fonts.googleapis.com. O <noscript>
+     mantém o comportamento original quando não há JS. -->
+<link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet" media="print" onload="this.media='all';this.onload=null;"/>
+<noscript><link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet"/></noscript>
 <link href="assets/vendor/a1922a98664cc516_favicon-32x32-1.png" rel="icon"/>
 <style>
 /* ═══════════════════════════════════════════════════
@@ -819,11 +826,11 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         <div class="kd-section-body">
           <div class="kd-before-after">
             <div class="kd-photo-box">
-              <img src="assets/vendor/8fe997d64b2290fc_About-us.webp" alt="Antes" style="height:160px;"/>
+              <img src="assets/vendor/8fe997d64b2290fc_About-us.webp" alt="Antes" style="height:160px;" loading="lazy" decoding="async"/>
               <div class="kd-photo-box-body"><div class="kd-photo-label" data-i18n="kd.before">Antes</div><div class="kd-photo-desc">Sem controle visual de EPI. Operadores sem identificação visual da conformidade.</div></div>
             </div>
             <div class="kd-photo-box">
-              <img src="assets/vendor/c392f7cd5f5881d2_Sustainability.webp" alt="Depois" style="height:160px;"/>
+              <img src="assets/vendor/c392f7cd5f5881d2_Sustainability.webp" alt="Depois" style="height:160px;" loading="lazy" decoding="async"/>
               <div class="kd-photo-box-body"><div class="kd-photo-label" data-i18n="kd.after">Depois</div><div class="kd-photo-desc">Estação de controle EPI com espelho e check-list. Verde = conformidade. Auditorias mensais digitais.</div></div>
             </div>
           </div>

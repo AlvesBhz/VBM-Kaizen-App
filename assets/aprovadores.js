@@ -216,8 +216,15 @@
   if (addTrigger) addTrigger.addEventListener("click", limparFormulario);
   if (addIdInput) addIdInput.addEventListener("change", consultarMdm);
 
-  document.addEventListener("DOMContentLoaded", loadAprovadores);
-  if (document.readyState === "complete" || document.readyState === "interactive") {
+  // CONSULTA DUPLICADA (corrigida): este arquivo é carregado no fim do
+  // <body>, então document.readyState já era "interactive" quando ele
+  // rodava — o if disparava loadAprovadores() na hora E o listener de
+  // DOMContentLoaded disparava de novo em seguida. Eram 2x GET
+  // /api/aprovadores (2 consultas ao Azure SQL, com JOIN no MDM) em todo
+  // carregamento do admin. Agora roda uma vez só, nos dois cenários.
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", loadAprovadores, { once: true });
+  } else {
     loadAprovadores();
   }
 })();
