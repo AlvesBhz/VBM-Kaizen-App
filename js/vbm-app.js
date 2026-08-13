@@ -442,4 +442,70 @@
     initAOS();
   });
 
+  /* ──────────────────────────────────────────────────────────────
+     IDIOMA DOS DADOS (window.VBMIdioma)
+     ──────────────────────────────────────────────────────────────
+     O seletor de idioma das configurações traduz só os textos fixos
+     da tela (data-i18n). As listas vindas do banco são bilíngues no
+     próprio banco (1 linha por ID_IDIOMA), então precisam ser
+     RECONSULTADAS quando o idioma muda — senão a tela fica em inglês
+     com os dados em português.
+
+     Este helper avisa quem estiver mostrando dados do banco. Cobre as
+     três formas de o idioma mudar:
+       • nesta mesma página  -> evento 'vbm:idioma' (disparado pelo
+         applyLang de cada tela);
+       • em OUTRA aba/página -> evento 'storage' do localStorage;
+       • enquanto esta página estava oculta -> ao voltar o foco
+         (visibilitychange/focus), compara o idioma guardado com o que
+         está em uso e recarrega se divergir.
+
+     A recarga só acontece com a página VISÍVEL: se o idioma mudar com
+     a aba em segundo plano, ela fica pendente e dispara quando o
+     usuário volta — evita ir ao banco para uma tela que ninguém está
+     olhando.
+     ────────────────────────────────────────────────────────────── */
+  var CHAVE_IDIOMA = 'vdt-lang';
+
+  function idiomaAtual() {
+    try { return localStorage.getItem(CHAVE_IDIOMA) || 'pt-BR'; }
+    catch (e) { return 'pt-BR'; }
+  }
+
+  window.VBMIdioma = {
+    /** Idioma da tela agora ('pt-BR' | 'en'). */
+    atual: idiomaAtual,
+
+    /**
+     * Registra um recarregador de dados.
+     * @param {function(string)} recarregar chamado com o novo idioma
+     *        sempre que ele mudar e a página estiver visível.
+     * @returns {function(): string} idioma em uso pelo assinante —
+     *        usado para montar a URL da consulta.
+     */
+    aoMudar: function (recarregar) {
+      var emUso = idiomaAtual();
+
+      function verificar() {
+        var agora = idiomaAtual();
+        if (agora === emUso) return;
+        // Página oculta: não consulta agora. Ao voltar o foco esta
+        // mesma função roda de novo e faz a recarga.
+        if (document.hidden) return;
+        emUso = agora;
+        try { recarregar(agora); }
+        catch (e) { console.error('[idioma] falha ao recarregar dados:', e); }
+      }
+
+      window.addEventListener('vbm:idioma', verificar);
+      window.addEventListener('storage', function (e) {
+        if (!e.key || e.key === CHAVE_IDIOMA) verificar();
+      });
+      document.addEventListener('visibilitychange', verificar);
+      window.addEventListener('focus', verificar);
+
+      return function () { return emUso; };
+    },
+  };
+
 })();

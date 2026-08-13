@@ -67,6 +67,20 @@
     return div.innerHTML;
   }
 
+  // Idioma em uso pelos DADOS desta aba + recarga automática quando ele
+  // muda (só com a página visível). Sem o helper, cai para português e
+  // a aba segue funcionando como antes.
+  var jaCarregouAlgumaVez = false;
+  var idiomaEmUso = window.VBMIdioma
+    ? window.VBMIdioma.aoMudar(function () {
+        // Só reconsulta abas que o usuário já abriu. Uma aba que nunca
+        // carregou não precisa de nada agora: quando for aberta, já vai
+        // buscar direto no idioma novo (ver carregamento sob demanda no
+        // fim do arquivo).
+        if (jaCarregouAlgumaVez) carregarLista();
+      })
+    : function () { return "pt-BR"; };
+
   function validar(nomePt, descPt, nomeEn, descEn) {
     if (!nomePt || !descPt || !nomeEn || !descEn) {
       return "Preencha nome e descrição nos dois idiomas antes de salvar.";
@@ -126,11 +140,17 @@
 
   // Recarrega sempre do banco — nunca reaproveita estado anterior,
   // então o ativo/inativo exibido é o SG_ATIVO atual.
+  //
+  // IDIOMA: nome e descrição vêm do banco (1 linha por ID_IDIOMA), por
+  // isso a consulta informa em qual idioma quer os dados. Quando o
+  // idioma da tela muda e a página está visível, o assinante logo
+  // abaixo reconsulta o banco. Ver window.VBMIdioma em js/vbm-app.js.
   function carregarLista() {
+    jaCarregouAlgumaVez = true;
     list.innerHTML = "";
     list.appendChild(statusEl(TEXTO_CARREGANDO, false));
 
-    fetch("/api/" + ROTA)
+    fetch("/api/" + ROTA + "?idioma=" + encodeURIComponent(idiomaEmUso()))
       .then(function (res) {
         if (!res.ok) return res.json().then(function (e) { throw new Error(e.error || res.statusText); });
         return res.json();

@@ -996,6 +996,9 @@ body[data-bg="dark"] {
     select.value = lang;
     translate(lang);
     try { localStorage.setItem('vdt-lang', lang); } catch (e) {}
+    // Avisa quem mostra dados do banco (listas bilíngues) para
+    // reconsultar no novo idioma — ver window.VBMIdioma em vbm-app.js.
+    try { window.dispatchEvent(new Event('vbm:idioma')); } catch (e) {}
   }
 
   select.addEventListener('change', function () { applyLang(select.value); });

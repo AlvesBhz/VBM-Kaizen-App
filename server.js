@@ -83,6 +83,18 @@ const FULL_MDM_TABLE = `[${DB_SCHEMA}].[${DB_MDM_TABLE}]`;
 const ID_IDIOMA_PT = 1;
 const ID_IDIOMA_EN = 2;
 
+// Traduz o idioma da tela (?idioma=pt-BR|en, o mesmo valor guardado em
+// localStorage 'vdt-lang') para o ID_IDIOMA do banco. Qualquer valor
+// desconhecido/ausente cai em português — nunca deixa a lista vazia
+// por causa de um parâmetro estranho.
+function idIdiomaDaRequisicao(req) {
+  const bruto = String(req.query.idioma || "").trim().toLowerCase();
+  if (bruto === "en" || bruto.startsWith("en-") || bruto === String(ID_IDIOMA_EN)) {
+    return ID_IDIOMA_EN;
+  }
+  return ID_IDIOMA_PT;
+}
+
 function checkConfig() {
   const missing = [
     ["AZURE_SQL_SERVER", DB_SERVER],
@@ -470,18 +482,35 @@ function registrarCadastroBilingue(cfg) {
     );
   }
 
-  // Listar — linha PT de cada registro (ID_IDIOMA fixo: sem esse
-  // filtro viriam as duas linhas, PT e EN, como se fossem registros
-  // diferentes). SG_ATIVO real vai junto, então a tela sempre mostra o
-  // status que está no banco agora.
+  // Listar — um registro por linha, no idioma pedido em ?idioma=
+  // (pt-BR/en). Antes o ID_IDIOMA era fixo em PT, então a tela em
+  // inglês continuava mostrando os nomes/descrições em português.
+  //
+  // A linha PT é a BASE (todo registro tem a dela; a tradução pode
+  // nunca ter sido cadastrada). O idioma pedido entra por LEFT JOIN e
+  // o COALESCE cai para o texto PT quando falta a tradução — assim
+  // trocar para inglês nunca faz um registro sumir da lista.
+  //
+  // NM_PT vai junto de propósito: a contagem do badge casa por NOME na
+  // tabela de pendências, que guarda o nome em português. Sem essa
+  // coluna, listar em inglês zeraria todos os badges.
   apiRouter.get(`/${rota}`, async (req, res) => {
     try {
       const result = await runQuery(
-        `SELECT ${pk} AS ID, ${colNome} AS NM, ${colDescricao} AS DS, URL_ICONE, SG_ATIVO
-         FROM ${tabela}
-         WHERE ID_IDIOMA = @idIdioma
-         ORDER BY ${colNome}`,
-        [["idIdioma", sql.Int, ID_IDIOMA_PT]]
+        `SELECT base.${pk} AS ID,
+                COALESCE(tr.${colNome}, base.${colNome}) AS NM,
+                COALESCE(tr.${colDescricao}, base.${colDescricao}) AS DS,
+                base.${colNome} AS NM_PT,
+                base.URL_ICONE, base.SG_ATIVO
+         FROM ${tabela} base
+         LEFT JOIN ${tabela} tr
+                ON tr.${pk} = base.${pk} AND tr.ID_IDIOMA = @idIdioma
+         WHERE base.ID_IDIOMA = @idIdiomaBase
+         ORDER BY COALESCE(tr.${colNome}, base.${colNome})`,
+        [
+          ["idIdioma", sql.Int, idIdiomaDaRequisicao(req)],
+          ["idIdiomaBase", sql.Int, ID_IDIOMA_PT],
+        ]
       );
 
       // Contagem opcional (badge "N kaizens"), numa ÚNICA consulta
@@ -508,7 +537,9 @@ function registrarCadastroBilingue(cfg) {
           DS: r.DS,
           URL_ICONE: r.URL_ICONE,
           ATIVO: r.SG_ATIVO === "S",
-          QTD: contagemPorNome[r.NM] != null ? contagemPorNome[r.NM] : null,
+          // casa pelo nome em PT: a tabela de pendências guarda o nome
+          // em português, independentemente do idioma da tela.
+          QTD: contagemPorNome[r.NM_PT] != null ? contagemPorNome[r.NM_PT] : null,
         }))
       );
     } catch (err) {

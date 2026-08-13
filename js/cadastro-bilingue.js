@@ -34,6 +34,20 @@ window.criarCadastroBilingue = function (cfg) {
   var list = document.getElementById(cfg.listaId);
   if (!list) return; // esta página não tem esta aba
 
+  // Idioma em uso pelos DADOS desta aba + recarga automática quando ele
+  // muda (só com a página visível). Sem o helper, cai para português e
+  // a aba segue funcionando como antes.
+  var jaCarregouAlgumaVez = false;
+  var idiomaEmUso = window.VBMIdioma
+    ? window.VBMIdioma.aoMudar(function () {
+        // Só reconsulta abas que o usuário já abriu. Uma aba que nunca
+        // carregou não precisa de nada agora: quando for aberta, já vai
+        // buscar direto no idioma novo (ver carregamento sob demanda no
+        // fim do arquivo).
+        if (jaCarregouAlgumaVez) carregarLista();
+      })
+    : function () { return "pt-BR"; };
+
   var el = function (id) { return document.getElementById(id); };
   var addNamePt = el(cfg.prefixoAdd + "NamePt");
   var addNameEn = el(cfg.prefixoAdd + "NameEn");
@@ -114,10 +128,11 @@ window.criarCadastroBilingue = function (cfg) {
   // Recarrega sempre do banco — nunca reaproveita estado anterior,
   // então o ativo/inativo exibido é o SG_ATIVO atual.
   function carregarLista() {
+    jaCarregouAlgumaVez = true;
     list.innerHTML = "";
     list.appendChild(statusEl(cfg.textoCarregando, false));
 
-    fetch("/api/" + cfg.rota)
+    fetch("/api/" + cfg.rota + "?idioma=" + encodeURIComponent(idiomaEmUso()))
       .then(function (res) {
         if (!res.ok) return res.json().then(function (e) { throw new Error(e.error || res.statusText); });
         return res.json();
