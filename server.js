@@ -276,261 +276,316 @@ apiRouter.delete("/aprovadores/:id", async (req, res) => {
 });
 
 // ------------------------------------------------------------------
-// API — kzn_categoria
+// API — cadastros bilíngues (kzn_categoria, kzn_replicacao,
+// kzn_desperdicio, kzn_resultados)
 // ------------------------------------------------------------------
-// Limites de campo (mesmos para INSERT e UPDATE — ver
-// validarCategoriaCampos abaixo, usada pelos dois).
-const CATEGORIA_NOME_MAX = 30;
-const CATEGORIA_DESCRICAO_MAX = 100;
+// Estas 4 tabelas têm exatamente o mesmo desenho no DER
+// (assets/DER_VBM_Kaizen_CI.html): PK própria + ID_IDIOMA, URL_ICONE,
+// NM_*, DS_*, SG_ATIVO, DT_ATUALIZACAO — 1 LINHA POR IDIOMA para o
+// mesmo registro (mesmo ID, ID_IDIOMA diferente). Por isso todas
+// compartilham as mesmas rotas/regras, geradas por
+// registrarCadastroBilingue() abaixo: listar, buscar por id (2
+// idiomas), criar, editar e ativar/desativar.
+//
+// TAMANHOS: vêm do DER (NM 20 / DS 40). Categoria é a exceção
+// deliberada — suas colunas já foram ampliadas no banco (30/100),
+// conforme solicitado, então o DER está desatualizado só para ela.
+const CADASTRO_LIMITES_DER = { nome: 20, descricao: 40 };
 
-// Validação única, compartilhada pelo POST (criar) e PUT (editar) —
-// garante que os dois processos apliquem exatamente a mesma regra.
-function validarCategoriaCampos(nomePt, descPt, nomeEn, descEn) {
-  if (!nomePt || !descPt || !nomeEn || !descEn) {
-    return "Nome e descrição são obrigatórios nos dois idiomas.";
-  }
-  if (nomePt.length > CATEGORIA_NOME_MAX || nomeEn.length > CATEGORIA_NOME_MAX) {
-    return `O nome da categoria deve ter no máximo ${CATEGORIA_NOME_MAX} caracteres (em cada idioma).`;
-  }
-  if (descPt.length > CATEGORIA_DESCRICAO_MAX || descEn.length > CATEGORIA_DESCRICAO_MAX) {
-    return `A descrição da categoria deve ter no máximo ${CATEGORIA_DESCRICAO_MAX} caracteres (em cada idioma).`;
-  }
-  return null;
+function tabelaCadastro(envVar, padrao) {
+  return `[${DB_SCHEMA}].[${safeIdentifier(process.env[envVar], padrao)}]`;
 }
 
-// Upsert de 1 linha (1 idioma) de kzn_categoria — MERGE: atualiza se a
-// linha (ID_CATEGORIA + ID_IDIOMA) já existe, cria se não existe.
-// Usada tanto pelo POST (criar — as 2 linhas caem sempre no ramo
-// INSERT, já que o ID_CATEGORIA é sempre novo) quanto pelo PUT (editar
-// — cai em UPDATE pra quem já existe, INSERT só pro idioma que
-// faltava). Mesma função, mesma regra, nos dois processos.
-// WHEN NOT MATCHED: URL_ICONE herda o valor da linha do OUTRO idioma
-// que já existir (mesma categoria, mesmo ícone nos dois idiomas — fica
-// NULL na criação, quando nenhuma linha existe ainda); SG_ATIVO 'S'
-// (ativo), mesmo padrão das categorias já cadastradas.
-function upsertCategoriaIdioma(id, idIdioma, nome, descricao) {
-  return runQuery(
-    `MERGE INTO ${FULL_CATEGORIA_TABLE} AS target
-     USING (SELECT @id AS ID_CATEGORIA, @idIdioma AS ID_IDIOMA) AS src
-       ON target.ID_CATEGORIA = src.ID_CATEGORIA AND target.ID_IDIOMA = src.ID_IDIOMA
-     WHEN MATCHED THEN
-       UPDATE SET NM_CATEGORIA = @nome, DS_CATEGORIA = @descricao, DT_ATUALIZACAO = GETDATE()
-     WHEN NOT MATCHED THEN
-       INSERT (ID_CATEGORIA, ID_IDIOMA, URL_ICONE, NM_CATEGORIA, DS_CATEGORIA, SG_ATIVO, DT_ATUALIZACAO)
-       VALUES (
-         @id, @idIdioma,
-         (SELECT TOP (1) URL_ICONE FROM ${FULL_CATEGORIA_TABLE} WHERE ID_CATEGORIA = @id),
-         @nome, @descricao, 'S', GETDATE()
-       );`,
-    [
-      ["nome", sql.NVarChar(CATEGORIA_NOME_MAX), nome],
-      ["descricao", sql.NVarChar(CATEGORIA_DESCRICAO_MAX), descricao],
-      ["id", sql.Int, id],
-      ["idIdioma", sql.Int, idIdioma],
-    ]
-  );
-}
+/**
+ * Registra as 5 rotas REST de um cadastro bilíngue.
+ *
+ * cfg:
+ *   rota          — segmento da URL (ex.: "categorias")
+ *   tabela        — nome completo já escapado ([schema].[tabela])
+ *   pk            — coluna de chave primária (ex.: "ID_CATEGORIA")
+ *   colNome       — coluna de nome (ex.: "NM_CATEGORIA")
+ *   colDescricao  — coluna de descrição (ex.: "DS_CATEGORIA")
+ *   maxNome       — limite de caracteres do nome (do DER)
+ *   maxDescricao  — limite de caracteres da descrição (do DER)
+ *   rotuloSing    — rótulo em mensagens de erro (ex.: "categoria")
+ *   colunasExtras — colunas adicionais a preservar no INSERT do MERGE,
+ *                   herdadas da linha do outro idioma (ex.: a FK
+ *                   ID_TIPO_RESULTADO de kzn_resultados). Opcional.
+ *   contagem      — { tabela, coluna } para o badge "N kaizens".
+ *                   Opcional: sem isso, QTD_KAIZENS vem null.
+ */
+function registrarCadastroBilingue(cfg) {
+  const { rota, tabela, pk, colNome, colDescricao, maxNome, maxDescricao, rotuloSing } = cfg;
+  const extras = cfg.colunasExtras || [];
+  const log = `[${rota}]`;
 
-// Lista TODAS as categorias (linha PT de cada uma — ID_IDIOMA fixo,
-// ver nota de ID_IDIOMA_PT/EN acima) pra aba "Categorias" de
-// admin.html, sem nenhum item estático misturado (ver
-// assets/categorias.js). Contagem de Kaizens vem de
-// kzn_pendenciaconsolidada, casada por NM_CATEGORIA, numa ÚNICA
-// consulta agrupada (não uma por categoria) — se essa tabela/coluna
-// não existir de verdade, a contagem falha sozinha sem derrubar a
-// lista (mesmo espírito defensivo do restante do arquivo): todo mundo
-// fica com QTD_KAIZENS null, só loga o motivo.
-apiRouter.get("/categorias", async (req, res) => {
-  try {
-    const result = await runQuery(
-      `SELECT ID_CATEGORIA, NM_CATEGORIA, DS_CATEGORIA, URL_ICONE, SG_ATIVO
-       FROM ${FULL_CATEGORIA_TABLE}
-       WHERE ID_IDIOMA = @idIdioma
-       ORDER BY NM_CATEGORIA`,
-      [["idIdioma", sql.Int, ID_IDIOMA_PT]]
-    );
-
-    let contagemPorNome = {};
-    try {
-      const contagem = await runQuery(
-        `SELECT NM_CATEGORIA, COUNT(*) AS QTD FROM ${FULL_PENDENCIA_TABLE} GROUP BY NM_CATEGORIA`
-      );
-      contagem.recordset.forEach((r) => { contagemPorNome[r.NM_CATEGORIA] = r.QTD; });
-    } catch (err) {
-      console.warn(`[categorias] contagem de kaizens indisponível (${FULL_PENDENCIA_TABLE}): ${err.message}`);
+  // Validação única, compartilhada por POST (criar) e PUT (editar) —
+  // garante que os dois processos apliquem exatamente a mesma regra.
+  function validarCampos(nomePt, descPt, nomeEn, descEn) {
+    if (!nomePt || !descPt || !nomeEn || !descEn) {
+      return "Nome e descrição são obrigatórios nos dois idiomas.";
     }
-
-    res.json(
-      result.recordset.map((c) => ({
-        ID_CATEGORIA: c.ID_CATEGORIA,
-        NM_CATEGORIA: c.NM_CATEGORIA,
-        DS_CATEGORIA: c.DS_CATEGORIA,
-        URL_ICONE: c.URL_ICONE,
-        ATIVO: c.SG_ATIVO === "S",
-        QTD_KAIZENS: contagemPorNome[c.NM_CATEGORIA] != null ? contagemPorNome[c.NM_CATEGORIA] : null,
-      }))
-    );
-  } catch (err) {
-    console.error("[categorias] erro ao consultar:", err.message);
-    res.status(500).json({ error: "Erro ao consultar categorias: " + err.message });
+    if (nomePt.length > maxNome || nomeEn.length > maxNome) {
+      return `O nome deve ter no máximo ${maxNome} caracteres (em cada idioma).`;
+    }
+    if (descPt.length > maxDescricao || descEn.length > maxDescricao) {
+      return `A descrição deve ter no máximo ${maxDescricao} caracteres (em cada idioma).`;
+    }
+    return null;
   }
-});
 
-// Buscar 1 categoria por ID — as duas linhas (PT e EN) do mesmo
-// ID_CATEGORIA, usadas para popular o modal de edição bilíngue.
-apiRouter.get("/categorias/:id", async (req, res) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    if (!Number.isInteger(id)) {
-      return res.status(400).json({ error: "ID_CATEGORIA inválido." });
-    }
-
-    const result = await runQuery(
-      `SELECT ID_IDIOMA, NM_CATEGORIA, DS_CATEGORIA
-       FROM ${FULL_CATEGORIA_TABLE}
-       WHERE ID_CATEGORIA = @id`,
-      [["id", sql.Int, id]]
-    );
-
-    const pt = result.recordset.find((r) => r.ID_IDIOMA === ID_IDIOMA_PT);
-    const en = result.recordset.find((r) => r.ID_IDIOMA === ID_IDIOMA_EN);
-    if (!pt && !en) {
-      return res.status(404).json({ error: "Categoria não encontrada." });
-    }
-
-    res.json({
-      ID_CATEGORIA: id,
-      pt: pt ? { NM_CATEGORIA: pt.NM_CATEGORIA, DS_CATEGORIA: pt.DS_CATEGORIA } : null,
-      en: en ? { NM_CATEGORIA: en.NM_CATEGORIA, DS_CATEGORIA: en.DS_CATEGORIA } : null,
-    });
-  } catch (err) {
-    console.error("[categorias] erro ao consultar por ID:", err.message);
-    res.status(500).json({ error: "Erro ao consultar categoria: " + err.message });
-  }
-});
-
-// Atualizar (por ID_CATEGORIA) — grava as duas linhas (PT e EN).
-// NA PRÁTICA A CATEGORIA PODE TER SÓ A LINHA PT CADASTRADA (a EN nunca
-// foi criada ainda) — por isso cada idioma faz um upsert (MERGE: edita
-// se a linha já existe, cria se não existe) em vez de um UPDATE puro,
-// senão digitar a tradução em inglês pela 1ª vez silenciosamente não
-// gravava nada (0 linhas afetadas, sem erro). O ID_CATEGORIA do ambos
-// os idiomas é sempre o mesmo, tanto no upsert quanto no ícone herdado
-// (abaixo) — nunca gera um ID novo/solto.
-// Ainda assim, só mexe em categoria que já existe: se NENHUMA linha
-// (nem PT nem EN) tiver esse ID_CATEGORIA, devolve 404 sem gravar nada
-// — não dá pra criar uma categoria do zero por aqui, só completar o
-// idioma que falta numa já existente.
-apiRouter.put("/categorias/:id", async (req, res) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    if (!Number.isInteger(id)) {
-      return res.status(400).json({ error: "ID_CATEGORIA inválido." });
-    }
-
+  function lerCorpo(req) {
     const pt = req.body?.pt || {};
     const en = req.body?.en || {};
-    const nomePt = (pt.NM_CATEGORIA || "").trim();
-    const descPt = (pt.DS_CATEGORIA || "").trim();
-    const nomeEn = (en.NM_CATEGORIA || "").trim();
-    const descEn = (en.DS_CATEGORIA || "").trim();
-
-    const erroValidacao = validarCategoriaCampos(nomePt, descPt, nomeEn, descEn);
-    if (erroValidacao) {
-      return res.status(400).json({ error: erroValidacao });
-    }
-
-    const existe = await runQuery(
-      `SELECT TOP (1) 1 AS X FROM ${FULL_CATEGORIA_TABLE} WHERE ID_CATEGORIA = @id`,
-      [["id", sql.Int, id]]
-    );
-    if (!existe.recordset.length) {
-      return res.status(404).json({ error: "Categoria não encontrada." });
-    }
-
-    await Promise.all([
-      upsertCategoriaIdioma(id, ID_IDIOMA_PT, nomePt, descPt),
-      upsertCategoriaIdioma(id, ID_IDIOMA_EN, nomeEn, descEn),
-    ]);
-
-    res.json({ ok: true });
-  } catch (err) {
-    console.error("[categorias] erro ao atualizar:", err.message);
-    res.status(500).json({ error: "Erro ao atualizar categoria: " + err.message });
+    return {
+      nomePt: (pt.NM || "").trim(),
+      descPt: (pt.DS || "").trim(),
+      nomeEn: (en.NM || "").trim(),
+      descEn: (en.DS || "").trim(),
+    };
   }
-});
 
-// Criar (POST) — MESMA validação e MESMA função de upsert do PUT
-// acima (upsertCategoriaIdioma): a única diferença é que aqui o
-// ID_CATEGORIA é sempre novo (próximo disponível), então as 2 chamadas
-// caem sempre no ramo INSERT do MERGE. Sem transação explícita: numa
-// falha a meio caminho (ex.: EN falha depois do PT já ter gravado), a
-// categoria fica só com a linha PT — mesma situação já tratada pelo
-// PUT (upsert completa o idioma que faltar depois, numa edição normal).
-apiRouter.post("/categorias", async (req, res) => {
-  try {
-    const pt = req.body?.pt || {};
-    const en = req.body?.en || {};
-    const nomePt = (pt.NM_CATEGORIA || "").trim();
-    const descPt = (pt.DS_CATEGORIA || "").trim();
-    const nomeEn = (en.NM_CATEGORIA || "").trim();
-    const descEn = (en.DS_CATEGORIA || "").trim();
+  // Upsert de 1 linha (1 idioma) — MERGE: atualiza se a linha
+  // (pk + ID_IDIOMA) já existe, cria se não existe. Usada tanto pelo
+  // POST (id novo → sempre INSERT) quanto pelo PUT (UPDATE pra quem já
+  // existe, INSERT só pro idioma que faltava). Mesma função, mesma
+  // regra, nos dois processos.
+  // WHEN NOT MATCHED: URL_ICONE (e demais colunasExtras) herdam o valor
+  // da linha do OUTRO idioma que já existir — mesmo registro, mesmo
+  // ícone/FK nos dois idiomas; ficam NULL na criação, quando nenhuma
+  // linha existe ainda.
+  const colsHerdadas = ["URL_ICONE"].concat(extras);
+  const selectHerdado = (col) => `(SELECT TOP (1) ${col} FROM ${tabela} WHERE ${pk} = @id)`;
 
-    const erroValidacao = validarCategoriaCampos(nomePt, descPt, nomeEn, descEn);
-    if (erroValidacao) {
-      return res.status(400).json({ error: erroValidacao });
-    }
-
-    const proximoId = await runQuery(
-      `SELECT ISNULL(MAX(ID_CATEGORIA), 0) + 1 AS PROXIMO_ID FROM ${FULL_CATEGORIA_TABLE}`
-    );
-    const id = proximoId.recordset[0].PROXIMO_ID;
-
-    await Promise.all([
-      upsertCategoriaIdioma(id, ID_IDIOMA_PT, nomePt, descPt),
-      upsertCategoriaIdioma(id, ID_IDIOMA_EN, nomeEn, descEn),
-    ]);
-
-    res.status(201).json({ ok: true, ID_CATEGORIA: id });
-  } catch (err) {
-    console.error("[categorias] erro ao criar:", err.message);
-    res.status(500).json({ error: "Erro ao criar categoria: " + err.message });
-  }
-});
-
-// Ativar/desativar (por ID_CATEGORIA) — grava SG_ATIVO ('S'/'N') nas
-// linhas de TODOS os idiomas desse ID_CATEGORIA de uma vez (o status
-// é da categoria, não de uma tradução específica), sem filtrar por
-// ID_IDIOMA.
-apiRouter.put("/categorias/:id/status", async (req, res) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    if (!Number.isInteger(id)) {
-      return res.status(400).json({ error: "ID_CATEGORIA inválido." });
-    }
-    if (typeof req.body?.ativo !== "boolean") {
-      return res.status(400).json({ error: "Campo 'ativo' (true/false) é obrigatório." });
-    }
-    const sgAtivo = req.body.ativo ? "S" : "N";
-
-    const result = await runQuery(
-      `UPDATE ${FULL_CATEGORIA_TABLE}
-       SET SG_ATIVO = @sgAtivo, DT_ATUALIZACAO = GETDATE()
-       WHERE ID_CATEGORIA = @id`,
+  function upsertIdioma(id, idIdioma, nome, descricao) {
+    return runQuery(
+      `MERGE INTO ${tabela} AS target
+       USING (SELECT @id AS ${pk}, @idIdioma AS ID_IDIOMA) AS src
+         ON target.${pk} = src.${pk} AND target.ID_IDIOMA = src.ID_IDIOMA
+       WHEN MATCHED THEN
+         UPDATE SET ${colNome} = @nome, ${colDescricao} = @descricao, DT_ATUALIZACAO = GETDATE()
+       WHEN NOT MATCHED THEN
+         INSERT (${pk}, ID_IDIOMA, ${colsHerdadas.join(", ")}, ${colNome}, ${colDescricao}, SG_ATIVO, DT_ATUALIZACAO)
+         VALUES (@id, @idIdioma, ${colsHerdadas.map(selectHerdado).join(", ")}, @nome, @descricao, 'S', GETDATE());`,
       [
-        ["sgAtivo", sql.Char(1), sgAtivo],
+        ["nome", sql.NVarChar(maxNome), nome],
+        ["descricao", sql.NVarChar(maxDescricao), descricao],
         ["id", sql.Int, id],
+        ["idIdioma", sql.Int, idIdioma],
       ]
     );
-    if (!result.rowsAffected[0]) {
-      return res.status(404).json({ error: "Categoria não encontrada." });
-    }
-
-    res.json({ ok: true, ativo: req.body.ativo });
-  } catch (err) {
-    console.error("[categorias] erro ao atualizar status:", err.message);
-    res.status(500).json({ error: "Erro ao atualizar status da categoria: " + err.message });
   }
+
+  // Listar — linha PT de cada registro (ID_IDIOMA fixo: sem esse
+  // filtro viriam as duas linhas, PT e EN, como se fossem registros
+  // diferentes). SG_ATIVO real vai junto, então a tela sempre mostra o
+  // status que está no banco agora.
+  apiRouter.get(`/${rota}`, async (req, res) => {
+    try {
+      const result = await runQuery(
+        `SELECT ${pk} AS ID, ${colNome} AS NM, ${colDescricao} AS DS, URL_ICONE, SG_ATIVO
+         FROM ${tabela}
+         WHERE ID_IDIOMA = @idIdioma
+         ORDER BY ${colNome}`,
+        [["idIdioma", sql.Int, ID_IDIOMA_PT]]
+      );
+
+      // Contagem opcional (badge "N kaizens"), numa ÚNICA consulta
+      // agrupada — não uma por registro. Se a tabela/coluna não existir
+      // de verdade, falha sozinha sem derrubar a lista: todo mundo fica
+      // com QTD_KAIZENS null e só loga o motivo.
+      let contagemPorNome = {};
+      if (cfg.contagem) {
+        try {
+          const contagem = await runQuery(
+            `SELECT ${cfg.contagem.coluna} AS CHAVE, COUNT(*) AS QTD
+             FROM ${cfg.contagem.tabela} GROUP BY ${cfg.contagem.coluna}`
+          );
+          contagem.recordset.forEach((r) => { contagemPorNome[r.CHAVE] = r.QTD; });
+        } catch (err) {
+          console.warn(`${log} contagem indisponível (${cfg.contagem.tabela}): ${err.message}`);
+        }
+      }
+
+      res.json(
+        result.recordset.map((r) => ({
+          ID: r.ID,
+          NM: r.NM,
+          DS: r.DS,
+          URL_ICONE: r.URL_ICONE,
+          ATIVO: r.SG_ATIVO === "S",
+          QTD: contagemPorNome[r.NM] != null ? contagemPorNome[r.NM] : null,
+        }))
+      );
+    } catch (err) {
+      console.error(`${log} erro ao consultar:`, err.message);
+      res.status(500).json({ error: `Erro ao consultar ${rotuloSing}: ` + err.message });
+    }
+  });
+
+  // Buscar 1 registro por ID — as duas linhas (PT e EN) do mesmo ID,
+  // usadas para popular o formulário de edição bilíngue.
+  apiRouter.get(`/${rota}/:id`, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isInteger(id)) return res.status(400).json({ error: `${pk} inválido.` });
+
+      const result = await runQuery(
+        `SELECT ID_IDIOMA, ${colNome} AS NM, ${colDescricao} AS DS FROM ${tabela} WHERE ${pk} = @id`,
+        [["id", sql.Int, id]]
+      );
+
+      const pt = result.recordset.find((r) => r.ID_IDIOMA === ID_IDIOMA_PT);
+      const en = result.recordset.find((r) => r.ID_IDIOMA === ID_IDIOMA_EN);
+      if (!pt && !en) return res.status(404).json({ error: `Registro de ${rotuloSing} não encontrado.` });
+
+      res.json({
+        ID: id,
+        pt: pt ? { NM: pt.NM, DS: pt.DS } : null,
+        en: en ? { NM: en.NM, DS: en.DS } : null,
+      });
+    } catch (err) {
+      console.error(`${log} erro ao consultar por ID:`, err.message);
+      res.status(500).json({ error: `Erro ao consultar ${rotuloSing}: ` + err.message });
+    }
+  });
+
+  // Editar — grava as duas linhas (PT e EN) do mesmo ID. O registro
+  // pode ter só a linha PT cadastrada (a EN nunca criada): por isso
+  // upsert, não UPDATE puro — senão digitar a tradução pela 1ª vez não
+  // gravaria nada (0 linhas afetadas, sem erro). Só mexe em registro
+  // que já existe: sem NENHUMA linha com esse ID, devolve 404 —
+  // criar do zero é só pelo POST.
+  apiRouter.put(`/${rota}/:id`, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isInteger(id)) return res.status(400).json({ error: `${pk} inválido.` });
+
+      const { nomePt, descPt, nomeEn, descEn } = lerCorpo(req);
+      const erro = validarCampos(nomePt, descPt, nomeEn, descEn);
+      if (erro) return res.status(400).json({ error: erro });
+
+      const existe = await runQuery(
+        `SELECT TOP (1) 1 AS X FROM ${tabela} WHERE ${pk} = @id`,
+        [["id", sql.Int, id]]
+      );
+      if (!existe.recordset.length) {
+        return res.status(404).json({ error: `Registro de ${rotuloSing} não encontrado.` });
+      }
+
+      await Promise.all([
+        upsertIdioma(id, ID_IDIOMA_PT, nomePt, descPt),
+        upsertIdioma(id, ID_IDIOMA_EN, nomeEn, descEn),
+      ]);
+      res.json({ ok: true });
+    } catch (err) {
+      console.error(`${log} erro ao atualizar:`, err.message);
+      res.status(500).json({ error: `Erro ao atualizar ${rotuloSing}: ` + err.message });
+    }
+  });
+
+  // Criar — MESMA validação e MESMO upsert do editar; a única
+  // diferença é que o ID é novo (próximo disponível), então as 2
+  // chamadas caem sempre no ramo INSERT do MERGE.
+  // Sem transação explícita: numa falha a meio caminho (EN falha
+  // depois do PT gravado), o registro fica só com a linha PT — mesma
+  // situação que o upsert do editar já resolve numa edição seguinte.
+  apiRouter.post(`/${rota}`, async (req, res) => {
+    try {
+      const { nomePt, descPt, nomeEn, descEn } = lerCorpo(req);
+      const erro = validarCampos(nomePt, descPt, nomeEn, descEn);
+      if (erro) return res.status(400).json({ error: erro });
+
+      const proximo = await runQuery(`SELECT ISNULL(MAX(${pk}), 0) + 1 AS PROXIMO FROM ${tabela}`);
+      const id = proximo.recordset[0].PROXIMO;
+
+      await Promise.all([
+        upsertIdioma(id, ID_IDIOMA_PT, nomePt, descPt),
+        upsertIdioma(id, ID_IDIOMA_EN, nomeEn, descEn),
+      ]);
+      res.status(201).json({ ok: true, ID: id });
+    } catch (err) {
+      console.error(`${log} erro ao criar:`, err.message);
+      res.status(500).json({ error: `Erro ao criar ${rotuloSing}: ` + err.message });
+    }
+  });
+
+  // Ativar/desativar — grava SG_ATIVO ('S'/'N') nas linhas de TODOS os
+  // idiomas desse ID (o status é do registro, não de uma tradução).
+  apiRouter.put(`/${rota}/:id/status`, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isInteger(id)) return res.status(400).json({ error: `${pk} inválido.` });
+      if (typeof req.body?.ativo !== "boolean") {
+        return res.status(400).json({ error: "Campo 'ativo' (true/false) é obrigatório." });
+      }
+
+      const result = await runQuery(
+        `UPDATE ${tabela} SET SG_ATIVO = @sgAtivo, DT_ATUALIZACAO = GETDATE() WHERE ${pk} = @id`,
+        [
+          ["sgAtivo", sql.Char(1), req.body.ativo ? "S" : "N"],
+          ["id", sql.Int, id],
+        ]
+      );
+      if (!result.rowsAffected[0]) {
+        return res.status(404).json({ error: `Registro de ${rotuloSing} não encontrado.` });
+      }
+      res.json({ ok: true, ativo: req.body.ativo });
+    } catch (err) {
+      console.error(`${log} erro ao atualizar status:`, err.message);
+      res.status(500).json({ error: `Erro ao atualizar status de ${rotuloSing}: ` + err.message });
+    }
+  });
+}
+
+registrarCadastroBilingue({
+  rota: "categorias",
+  tabela: FULL_CATEGORIA_TABLE,
+  pk: "ID_CATEGORIA",
+  colNome: "NM_CATEGORIA",
+  colDescricao: "DS_CATEGORIA",
+  // Exceção ao DER: colunas já ampliadas no banco para esta tabela.
+  maxNome: 30,
+  maxDescricao: 100,
+  rotuloSing: "categoria",
+  contagem: { tabela: FULL_PENDENCIA_TABLE, coluna: "NM_CATEGORIA" },
+});
+
+registrarCadastroBilingue({
+  rota: "replicacoes",
+  tabela: tabelaCadastro("AZURE_SQL_REPLICACAO_TABLE", "kzn_replicacao"),
+  pk: "ID_REPLICACAO",
+  colNome: "NM_REPLICACAO",
+  colDescricao: "DS_REPLICACAO",
+  maxNome: CADASTRO_LIMITES_DER.nome,
+  maxDescricao: CADASTRO_LIMITES_DER.descricao,
+  rotuloSing: "potencial de replicação",
+});
+
+registrarCadastroBilingue({
+  rota: "desperdicios",
+  tabela: tabelaCadastro("AZURE_SQL_DESPERDICIO_TABLE", "kzn_desperdicio"),
+  pk: "ID_DESPERDICIO",
+  colNome: "NM_DESPERDICIO",
+  colDescricao: "DS_DESPERDICIO",
+  maxNome: CADASTRO_LIMITES_DER.nome,
+  maxDescricao: CADASTRO_LIMITES_DER.descricao,
+  rotuloSing: "tipo de desperdício",
+});
+
+registrarCadastroBilingue({
+  rota: "resultados",
+  tabela: tabelaCadastro("AZURE_SQL_RESULTADO_TABLE", "kzn_resultados"),
+  pk: "ID_RESULTADO",
+  colNome: "NM_RESULTADO",
+  colDescricao: "DS_RESULTADO",
+  maxNome: CADASTRO_LIMITES_DER.nome,
+  maxDescricao: CADASTRO_LIMITES_DER.descricao,
+  rotuloSing: "tipo de resultado",
+  // FK própria desta tabela (as outras 3 não têm): preservada junto do
+  // ícone ao criar a linha do 2º idioma. Numa criação do zero fica
+  // NULL — a tela não coleta esse campo hoje.
+  colunasExtras: ["ID_TIPO_RESULTADO"],
 });
 
 app.use("/api", apiRouter);

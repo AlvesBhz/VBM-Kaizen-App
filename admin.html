@@ -632,39 +632,8 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
         <div class="section-title"><i class="fa-solid fa-globe" style="color:var(--vbm-blue);"></i> <span data-i18n="adm.replicationTitle">Potencial de Replicação</span></div>
         <button class="btn btn-outline btn-sm admin-add-btn" data-modal-open="modalAddReplicacao"><i class="fa-solid fa-plus"></i> <span data-i18n="common.adicionar">Adicionar</span></button>
       </div>
-      <div class="admin-list">
-        <div class="admin-item">
-          <div class="admin-item-icon blue"><i class="fa-solid fa-globe"></i></div>
-          <div class="admin-item-body"><div class="admin-item-name">Todas as unidades</div><div class="admin-item-sub">Replicável em todas as operações da Vale Base Metals globalmente</div></div>
-          <div class="admin-item-actions">
-            <button class="btn-icon btn-icon-blue btn-icon-sm" title="Editar" data-i18n-title="common.editar" data-modal-open="modalEditReplicacao"><i class="fa-solid fa-pen"></i></button>
-            <button class="btn-icon btn-icon-red btn-icon-sm" title="Desativar" data-i18n-title="common.desativar" onclick="toggleAdminItemStatus(this,'tipo Todas as unidades')"><i class="fa-solid fa-ban"></i></button>
-          </div>
-        </div>
-        <div class="admin-item">
-          <div class="admin-item-icon blue"><i class="fa-solid fa-building"></i></div>
-          <div class="admin-item-body"><div class="admin-item-name">Mesma unidade</div><div class="admin-item-sub">Replicável somente dentro da própria unidade operacional</div></div>
-          <div class="admin-item-actions">
-            <button class="btn-icon btn-icon-blue btn-icon-sm" title="Editar" data-i18n-title="common.editar" data-modal-open="modalEditReplicacao"><i class="fa-solid fa-pen"></i></button>
-            <button class="btn-icon btn-icon-red btn-icon-sm" title="Desativar" data-i18n-title="common.desativar" onclick="toggleAdminItemStatus(this,'tipo Mesma unidade')"><i class="fa-solid fa-ban"></i></button>
-          </div>
-        </div>
-        <div class="admin-item">
-          <div class="admin-item-icon blue"><i class="fa-solid fa-map-location-dot"></i></div>
-          <div class="admin-item-body"><div class="admin-item-name">Unidades do mesmo país</div><div class="admin-item-sub">Replicável nas operações localizadas no mesmo país</div></div>
-          <div class="admin-item-actions">
-            <button class="btn-icon btn-icon-blue btn-icon-sm" title="Editar" data-i18n-title="common.editar" data-modal-open="modalEditReplicacao"><i class="fa-solid fa-pen"></i></button>
-            <button class="btn-icon btn-icon-red btn-icon-sm" title="Desativar" data-i18n-title="common.desativar" onclick="toggleAdminItemStatus(this,'tipo Unidades do mesmo país')"><i class="fa-solid fa-ban"></i></button>
-          </div>
-        </div>
-        <div class="admin-item">
-          <div class="admin-item-icon blue"><i class="fa-solid fa-ban"></i></div>
-          <div class="admin-item-body"><div class="admin-item-name">Não replicável</div><div class="admin-item-sub">Solução específica para um contexto particular, sem replicação</div></div>
-          <div class="admin-item-actions">
-            <button class="btn-icon btn-icon-blue btn-icon-sm" title="Editar" data-i18n-title="common.editar" data-modal-open="modalEditReplicacao"><i class="fa-solid fa-pen"></i></button>
-            <button class="btn-icon btn-icon-red btn-icon-sm" title="Desativar" data-i18n-title="common.desativar" onclick="toggleAdminItemStatus(this,'tipo Não replicável')"><i class="fa-solid fa-ban"></i></button>
-          </div>
-        </div>
+      <div class="admin-list" id="replicacoesList">
+        <div class="admin-list-status">Carregando potenciais de replicação…</div>
       </div>
     </div>
 
@@ -674,43 +643,8 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
         <div class="section-title"><i class="fa-solid fa-recycle" style="color:var(--vbm-blue);"></i> <span data-i18n="adm.wasteTitle">Redução de Desperdícios (PNR28)</span></div>
         <button class="btn btn-outline btn-sm admin-add-btn" data-modal-open="modalAddDesperdicio"><i class="fa-solid fa-plus"></i> <span data-i18n="common.adicionar">Adicionar</span></button>
       </div>
-      <div class="admin-list">
-        <div class="admin-item">
-          <div class="admin-item-icon orange"><i class="fa-solid fa-bolt"></i></div>
-          <div class="admin-item-body"><div class="admin-item-name">Kaizen Simples</div><div class="admin-item-sub">Pequenas melhorias de baixa complexidade e custo. Execução &lt;30 dias.</div></div>
-          <span class="admin-item-badge">18 <span data-i18n="adm.usosWord">usos</span></span>
-          <div class="admin-item-actions">
-            <button class="btn-icon btn-icon-blue btn-icon-sm" title="Editar" data-i18n-title="common.editar" data-modal-open="modalEditDesperdicio"><i class="fa-solid fa-pen"></i></button>
-            <button class="btn-icon btn-icon-red btn-icon-sm" title="Desativar" data-i18n-title="common.desativar" onclick="toggleAdminItemStatus(this,'tipo Kaizen Simples')"><i class="fa-solid fa-ban"></i></button>
-          </div>
-        </div>
-        <div class="admin-item">
-          <div class="admin-item-icon orange"><i class="fa-solid fa-wrench"></i></div>
-          <div class="admin-item-body"><div class="admin-item-name">Kaizen Complexo</div><div class="admin-item-sub">Projetos de maior complexidade. Requer equipe multidisciplinar.</div></div>
-          <span class="admin-item-badge">7 <span data-i18n="adm.usosWord">usos</span></span>
-          <div class="admin-item-actions">
-            <button class="btn-icon btn-icon-blue btn-icon-sm" title="Editar" data-i18n-title="common.editar" data-modal-open="modalEditDesperdicio"><i class="fa-solid fa-pen"></i></button>
-            <button class="btn-icon btn-icon-red btn-icon-sm" title="Desativar" data-i18n-title="common.desativar" onclick="toggleAdminItemStatus(this,'tipo Kaizen Complexo')"><i class="fa-solid fa-ban"></i></button>
-          </div>
-        </div>
-        <div class="admin-item">
-          <div class="admin-item-icon orange"><i class="fa-solid fa-lightbulb"></i></div>
-          <div class="admin-item-body"><div class="admin-item-name">Inovação</div><div class="admin-item-sub">Mudanças disruptivas com tecnologia ou processo completamente novo.</div></div>
-          <span class="admin-item-badge">3 <span data-i18n="adm.usosWord">usos</span></span>
-          <div class="admin-item-actions">
-            <button class="btn-icon btn-icon-blue btn-icon-sm" title="Editar" data-i18n-title="common.editar" data-modal-open="modalEditDesperdicio"><i class="fa-solid fa-pen"></i></button>
-            <button class="btn-icon btn-icon-red btn-icon-sm" title="Desativar" data-i18n-title="common.desativar" onclick="toggleAdminItemStatus(this,'tipo Inovação')"><i class="fa-solid fa-ban"></i></button>
-          </div>
-        </div>
-        <div class="admin-item">
-          <div class="admin-item-icon orange"><i class="fa-solid fa-shield-halved"></i></div>
-          <div class="admin-item-body"><div class="admin-item-name">Segurança</div><div class="admin-item-sub">Focado em eliminação de riscos e melhoria das condições de trabalho.</div></div>
-          <span class="admin-item-badge">9 <span data-i18n="adm.usosWord">usos</span></span>
-          <div class="admin-item-actions">
-            <button class="btn-icon btn-icon-blue btn-icon-sm" title="Editar" data-i18n-title="common.editar" data-modal-open="modalEditDesperdicio"><i class="fa-solid fa-pen"></i></button>
-            <button class="btn-icon btn-icon-red btn-icon-sm" title="Desativar" data-i18n-title="common.desativar" onclick="toggleAdminItemStatus(this,'tipo Segurança')"><i class="fa-solid fa-ban"></i></button>
-          </div>
-        </div>
+      <div class="admin-list" id="desperdiciosList">
+        <div class="admin-list-status">Carregando tipos de desperdício…</div>
       </div>
     </div>
 
@@ -720,55 +654,8 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
         <div class="section-title"><i class="fa-solid fa-trophy" style="color:var(--vbm-blue-dark);"></i> <span data-i18n="adm.resultsTypesTitle">Tipos de Resultados Alcançados</span></div>
         <button class="btn btn-outline btn-sm admin-add-btn" data-modal-open="modalAddResultado"><i class="fa-solid fa-plus"></i> <span data-i18n="common.adicionar">Adicionar</span></button>
       </div>
-      <div class="admin-list">
-        <div class="admin-item">
-          <div class="admin-item-icon yellow"><i class="fa-solid fa-dollar-sign"></i></div>
-          <div class="admin-item-body"><div class="admin-item-name">Redução de Custo</div><div class="admin-item-sub">Economia financeira direta mensurável em USD/CAD/BRL</div></div>
-          <div class="admin-item-actions">
-            <button class="btn-icon btn-icon-blue btn-icon-sm" title="Editar" data-i18n-title="common.editar" data-modal-open="modalEditResultado"><i class="fa-solid fa-pen"></i></button>
-            <button class="btn-icon btn-icon-red btn-icon-sm" title="Desativar" data-i18n-title="common.desativar" onclick="toggleAdminItemStatus(this,'resultado Redução de Custo')"><i class="fa-solid fa-ban"></i></button>
-          </div>
-        </div>
-        <div class="admin-item">
-          <div class="admin-item-icon yellow"><i class="fa-solid fa-chart-line"></i></div>
-          <div class="admin-item-body"><div class="admin-item-name">Ganho de Produtividade</div><div class="admin-item-sub">Melhoria mensurável de OEE, throughput ou tempo de ciclo</div></div>
-          <div class="admin-item-actions">
-            <button class="btn-icon btn-icon-blue btn-icon-sm" title="Editar" data-i18n-title="common.editar" data-modal-open="modalEditResultado"><i class="fa-solid fa-pen"></i></button>
-            <button class="btn-icon btn-icon-red btn-icon-sm" title="Desativar" data-i18n-title="common.desativar" onclick="toggleAdminItemStatus(this,'resultado Ganho de Produtividade')"><i class="fa-solid fa-ban"></i></button>
-          </div>
-        </div>
-        <div class="admin-item">
-          <div class="admin-item-icon yellow"><i class="fa-solid fa-shield-halved"></i></div>
-          <div class="admin-item-body"><div class="admin-item-name">Melhoria de Segurança</div><div class="admin-item-sub">Eliminação ou redução de risco, HiPo ou acidente. Prioridade máxima.</div></div>
-          <div class="admin-item-actions">
-            <button class="btn-icon btn-icon-blue btn-icon-sm" title="Editar" data-i18n-title="common.editar" data-modal-open="modalEditResultado"><i class="fa-solid fa-pen"></i></button>
-            <button class="btn-icon btn-icon-red btn-icon-sm" title="Desativar" data-i18n-title="common.desativar" onclick="toggleAdminItemStatus(this,'resultado Melhoria de Segurança')"><i class="fa-solid fa-ban"></i></button>
-          </div>
-        </div>
-        <div class="admin-item">
-          <div class="admin-item-icon yellow"><i class="fa-solid fa-leaf"></i></div>
-          <div class="admin-item-body"><div class="admin-item-name">Sustentabilidade</div><div class="admin-item-sub">Redução de emissões, consumo de água ou resíduos gerados</div></div>
-          <div class="admin-item-actions">
-            <button class="btn-icon btn-icon-blue btn-icon-sm" title="Editar" data-i18n-title="common.editar" data-modal-open="modalEditResultado"><i class="fa-solid fa-pen"></i></button>
-            <button class="btn-icon btn-icon-red btn-icon-sm" title="Desativar" data-i18n-title="common.desativar" onclick="toggleAdminItemStatus(this,'resultado Sustentabilidade')"><i class="fa-solid fa-ban"></i></button>
-          </div>
-        </div>
-        <div class="admin-item">
-          <div class="admin-item-icon yellow"><i class="fa-solid fa-circle-check"></i></div>
-          <div class="admin-item-body"><div class="admin-item-name">Qualidade</div><div class="admin-item-sub">Redução de defeitos, retrabalho ou melhoria de especificação</div></div>
-          <div class="admin-item-actions">
-            <button class="btn-icon btn-icon-blue btn-icon-sm" title="Editar" data-i18n-title="common.editar" data-modal-open="modalEditResultado"><i class="fa-solid fa-pen"></i></button>
-            <button class="btn-icon btn-icon-red btn-icon-sm" title="Desativar" data-i18n-title="common.desativar" onclick="toggleAdminItemStatus(this,'resultado Qualidade')"><i class="fa-solid fa-ban"></i></button>
-          </div>
-        </div>
-        <div class="admin-item">
-          <div class="admin-item-icon yellow"><i class="fa-solid fa-hand-holding-hand"></i></div>
-          <div class="admin-item-body"><div class="admin-item-name">Engajamento / Cultura</div><div class="admin-item-sub">Melhoria de clima, engajamento e cultura de melhoria contínua</div></div>
-          <div class="admin-item-actions">
-            <button class="btn-icon btn-icon-blue btn-icon-sm" title="Editar" data-i18n-title="common.editar" data-modal-open="modalEditResultado"><i class="fa-solid fa-pen"></i></button>
-            <button class="btn-icon btn-icon-red btn-icon-sm" title="Desativar" data-i18n-title="common.desativar" onclick="toggleAdminItemStatus(this,'resultado Engajamento / Cultura')"><i class="fa-solid fa-ban"></i></button>
-          </div>
-        </div>
+      <div class="admin-list" id="resultadosList">
+        <div class="admin-list-status">Carregando tipos de resultado…</div>
       </div>
     </div>
 
@@ -1025,10 +912,6 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
         </div>
         <div class="form-helper" style="text-align:right;" id="catEditDescCounter">56/100</div>
       </div>
-      <!-- Diagnóstico do que veio do banco pra este registro — mostra o
-           ID_CATEGORIA em edição e se cada idioma tem linha própria.
-           Some sozinho quando os dois idiomas existem. -->
-      <div class="form-helper" id="catEditDiagnostico" style="display:none;"></div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" data-modal-close data-i18n="common.cancelar">Cancelar</button>
@@ -1121,12 +1004,12 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="lang-slot">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
             <span class="lang-slot-divider"></span>
-            <input type="text" class="form-control lang-slot-input" placeholder="Ex: Unidades da mesma região" data-i18n-placeholder="adm.newReplicationPlaceholder" data-lang="pt-BR" id="replAddNamePt" required/>
+            <input type="text" class="form-control lang-slot-input" placeholder="Ex: Unidades da mesma região" data-i18n-placeholder="adm.newReplicationPlaceholder" data-lang="pt-BR" id="replAddNamePt" maxlength="20" required/>
           </div>
           <div class="lang-slot">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
             <span class="lang-slot-divider"></span>
-            <input type="text" class="form-control lang-slot-input" placeholder="Ex: Units in the same region" data-lang="en" id="replAddNameEn" required/>
+            <input type="text" class="form-control lang-slot-input" placeholder="Ex: Units in the same region" data-lang="en" id="replAddNameEn" maxlength="20" required/>
           </div>
         </div>
       </div>
@@ -1136,20 +1019,20 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="lang-slot lang-slot-textarea">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
             <span class="lang-slot-divider"></span>
-            <textarea class="form-control lang-slot-input" rows="1" maxlength="140" placeholder="Descreva o alcance de replicação..." data-i18n-placeholder="adm.replicationDescPlaceholder" data-lang="pt-BR" id="replAddDescPt" oninput="updateCategoryDescCounter(this,'replAdd')" required></textarea>
+            <textarea class="form-control lang-slot-input" rows="1" maxlength="40" placeholder="Descreva o alcance de replicação..." data-i18n-placeholder="adm.replicationDescPlaceholder" data-lang="pt-BR" id="replAddDescPt" oninput="updateCategoryDescCounter(this,'replAdd',40)" required></textarea>
           </div>
           <div class="lang-slot lang-slot-textarea">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
             <span class="lang-slot-divider"></span>
-            <textarea class="form-control lang-slot-input" rows="1" maxlength="140" placeholder="Describe the replication scope..." data-lang="en" id="replAddDescEn" required></textarea>
+            <textarea class="form-control lang-slot-input" rows="1" maxlength="40" placeholder="Describe the replication scope..." data-lang="en" id="replAddDescEn" required></textarea>
           </div>
         </div>
-        <div class="form-helper" style="text-align:right;" id="replAddDescCounter">0/140</div>
+        <div class="form-helper" style="text-align:right;" id="replAddDescCounter">0/40</div>
       </div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" data-modal-close data-i18n="common.cancelar">Cancelar</button>
-      <button class="btn btn-primary" onclick="closeModal('modalAddReplicacao');showToast('success','Criado','Potencial de replicação adicionado com sucesso!')"><span data-i18n="common.adicionar">Adicionar</span></button>
+      <button class="btn btn-primary" id="btnSaveAddReplicacao"><span data-i18n="common.adicionar">Adicionar</span></button>
     </div>
   </div>
 </div>
@@ -1178,12 +1061,12 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="lang-slot">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
             <span class="lang-slot-divider"></span>
-            <input type="text" class="form-control lang-slot-input" value="Todas as unidades" data-lang="pt-BR" id="replEditNamePt" required/>
+            <input type="text" class="form-control lang-slot-input" value="Todas as unidades" data-lang="pt-BR" id="replEditNamePt" maxlength="20" required/>
           </div>
           <div class="lang-slot">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
             <span class="lang-slot-divider"></span>
-            <input type="text" class="form-control lang-slot-input" value="All units" data-lang="en" id="replEditNameEn" required/>
+            <input type="text" class="form-control lang-slot-input" value="All units" data-lang="en" id="replEditNameEn" maxlength="20" required/>
           </div>
         </div>
       </div>
@@ -1193,20 +1076,20 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="lang-slot lang-slot-textarea">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
             <span class="lang-slot-divider"></span>
-            <textarea class="form-control lang-slot-input" rows="1" maxlength="140" data-lang="pt-BR" id="replEditDescPt" oninput="updateCategoryDescCounter(this,'replEdit')" required>Replicável em todas as operações da Vale Base Metals globalmente</textarea>
+            <textarea class="form-control lang-slot-input" rows="1" maxlength="40" data-lang="pt-BR" id="replEditDescPt" oninput="updateCategoryDescCounter(this,'replEdit',40)" required>Replicável em todas as operações da Vale Base Metals globalmente</textarea>
           </div>
           <div class="lang-slot lang-slot-textarea">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
             <span class="lang-slot-divider"></span>
-            <textarea class="form-control lang-slot-input" rows="1" maxlength="140" data-lang="en" id="replEditDescEn" required>Replicable across all Vale Base Metals operations globally</textarea>
+            <textarea class="form-control lang-slot-input" rows="1" maxlength="40" data-lang="en" id="replEditDescEn" required>Replicable across all Vale Base Metals operations globally</textarea>
           </div>
         </div>
-        <div class="form-helper" style="text-align:right;" id="replEditDescCounter">65/140</div>
+        <div class="form-helper" style="text-align:right;" id="replEditDescCounter">0/40</div>
       </div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" data-modal-close data-i18n="common.cancelar">Cancelar</button>
-      <button class="btn btn-primary" onclick="closeModal('modalEditReplicacao');showToast('success','Salvo','Potencial de replicação atualizado!')"><span data-i18n="common.salvar">Salvar</span></button>
+      <button class="btn btn-primary" id="btnSaveEditReplicacao"><span data-i18n="common.salvar">Salvar</span></button>
     </div>
   </div>
 </div>
@@ -1235,12 +1118,12 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="lang-slot">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
             <span class="lang-slot-divider"></span>
-            <input type="text" class="form-control lang-slot-input" placeholder="Nome do tipo de desperdício / Kaizen..." data-i18n-placeholder="adm.newWasteTypePlaceholder" data-lang="pt-BR" id="despAddNamePt" required/>
+            <input type="text" class="form-control lang-slot-input" placeholder="Nome do tipo de desperdício / Kaizen..." data-i18n-placeholder="adm.newWasteTypePlaceholder" data-lang="pt-BR" id="despAddNamePt" maxlength="20" required/>
           </div>
           <div class="lang-slot">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
             <span class="lang-slot-divider"></span>
-            <input type="text" class="form-control lang-slot-input" placeholder="Waste / Kaizen type name..." data-lang="en" id="despAddNameEn" required/>
+            <input type="text" class="form-control lang-slot-input" placeholder="Waste / Kaizen type name..." data-lang="en" id="despAddNameEn" maxlength="20" required/>
           </div>
         </div>
       </div>
@@ -1250,20 +1133,20 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="lang-slot lang-slot-textarea">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
             <span class="lang-slot-divider"></span>
-            <textarea class="form-control lang-slot-input" rows="1" maxlength="140" placeholder="Descrição curta..." data-i18n-placeholder="adm.shortDescPlaceholder" data-lang="pt-BR" id="despAddDescPt" oninput="updateCategoryDescCounter(this,'despAdd')" required></textarea>
+            <textarea class="form-control lang-slot-input" rows="1" maxlength="40" placeholder="Descrição curta..." data-i18n-placeholder="adm.shortDescPlaceholder" data-lang="pt-BR" id="despAddDescPt" oninput="updateCategoryDescCounter(this,'despAdd',40)" required></textarea>
           </div>
           <div class="lang-slot lang-slot-textarea">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
             <span class="lang-slot-divider"></span>
-            <textarea class="form-control lang-slot-input" rows="1" maxlength="140" placeholder="Short description..." data-lang="en" id="despAddDescEn" required></textarea>
+            <textarea class="form-control lang-slot-input" rows="1" maxlength="40" placeholder="Short description..." data-lang="en" id="despAddDescEn" required></textarea>
           </div>
         </div>
-        <div class="form-helper" style="text-align:right;" id="despAddDescCounter">0/140</div>
+        <div class="form-helper" style="text-align:right;" id="despAddDescCounter">0/40</div>
       </div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" data-modal-close data-i18n="common.cancelar">Cancelar</button>
-      <button class="btn btn-primary" onclick="closeModal('modalAddDesperdicio');showToast('success','Criado','Tipo de desperdício adicionado com sucesso!')"><span data-i18n="common.adicionar">Adicionar</span></button>
+      <button class="btn btn-primary" id="btnSaveAddDesperdicio"><span data-i18n="common.adicionar">Adicionar</span></button>
     </div>
   </div>
 </div>
@@ -1292,12 +1175,12 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="lang-slot">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
             <span class="lang-slot-divider"></span>
-            <input type="text" class="form-control lang-slot-input" value="Kaizen Simples" data-lang="pt-BR" id="despEditNamePt" required/>
+            <input type="text" class="form-control lang-slot-input" value="Kaizen Simples" data-lang="pt-BR" id="despEditNamePt" maxlength="20" required/>
           </div>
           <div class="lang-slot">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
             <span class="lang-slot-divider"></span>
-            <input type="text" class="form-control lang-slot-input" value="Simple Kaizen" data-lang="en" id="despEditNameEn" required/>
+            <input type="text" class="form-control lang-slot-input" value="Simple Kaizen" data-lang="en" id="despEditNameEn" maxlength="20" required/>
           </div>
         </div>
       </div>
@@ -1307,20 +1190,20 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="lang-slot lang-slot-textarea">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
             <span class="lang-slot-divider"></span>
-            <textarea class="form-control lang-slot-input" rows="1" maxlength="140" data-lang="pt-BR" id="despEditDescPt" oninput="updateCategoryDescCounter(this,'despEdit')" required>Pequenas melhorias de baixa complexidade e custo. Execução &lt;30 dias.</textarea>
+            <textarea class="form-control lang-slot-input" rows="1" maxlength="40" data-lang="pt-BR" id="despEditDescPt" oninput="updateCategoryDescCounter(this,'despEdit',40)" required>Pequenas melhorias de baixa complexidade e custo. Execução &lt;30 dias.</textarea>
           </div>
           <div class="lang-slot lang-slot-textarea">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
             <span class="lang-slot-divider"></span>
-            <textarea class="form-control lang-slot-input" rows="1" maxlength="140" data-lang="en" id="despEditDescEn" required>Small, low-complexity, low-cost improvements. &lt;30 day execution.</textarea>
+            <textarea class="form-control lang-slot-input" rows="1" maxlength="40" data-lang="en" id="despEditDescEn" required>Small, low-complexity, low-cost improvements. &lt;30 day execution.</textarea>
           </div>
         </div>
-        <div class="form-helper" style="text-align:right;" id="despEditDescCounter">70/140</div>
+        <div class="form-helper" style="text-align:right;" id="despEditDescCounter">0/40</div>
       </div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" data-modal-close data-i18n="common.cancelar">Cancelar</button>
-      <button class="btn btn-primary" onclick="closeModal('modalEditDesperdicio');showToast('success','Salvo','Tipo de desperdício atualizado!')"><span data-i18n="common.salvar">Salvar</span></button>
+      <button class="btn btn-primary" id="btnSaveEditDesperdicio"><span data-i18n="common.salvar">Salvar</span></button>
     </div>
   </div>
 </div>
@@ -1351,12 +1234,12 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="lang-slot">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
             <span class="lang-slot-divider"></span>
-            <input type="text" class="form-control lang-slot-input" placeholder="Resultado alcançado..." data-i18n-placeholder="adm.resultTypePlaceholder" data-lang="pt-BR" id="resAddNamePt" required/>
+            <input type="text" class="form-control lang-slot-input" placeholder="Resultado alcançado..." data-i18n-placeholder="adm.resultTypePlaceholder" data-lang="pt-BR" id="resAddNamePt" maxlength="20" required/>
           </div>
           <div class="lang-slot">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
             <span class="lang-slot-divider"></span>
-            <input type="text" class="form-control lang-slot-input" placeholder="Result type..." data-lang="en" id="resAddNameEn" required/>
+            <input type="text" class="form-control lang-slot-input" placeholder="Result type..." data-lang="en" id="resAddNameEn" maxlength="20" required/>
           </div>
         </div>
       </div>
@@ -1366,20 +1249,20 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="lang-slot lang-slot-textarea">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
             <span class="lang-slot-divider"></span>
-            <textarea class="form-control lang-slot-input" rows="1" maxlength="140" placeholder="Descreva o tipo de resultado..." data-i18n-placeholder="adm.resultDescPlaceholder" data-lang="pt-BR" id="resAddDescPt" oninput="updateCategoryDescCounter(this,'resAdd')" required></textarea>
+            <textarea class="form-control lang-slot-input" rows="1" maxlength="40" placeholder="Descreva o tipo de resultado..." data-i18n-placeholder="adm.resultDescPlaceholder" data-lang="pt-BR" id="resAddDescPt" oninput="updateCategoryDescCounter(this,'resAdd',40)" required></textarea>
           </div>
           <div class="lang-slot lang-slot-textarea">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
             <span class="lang-slot-divider"></span>
-            <textarea class="form-control lang-slot-input" rows="1" maxlength="140" placeholder="Describe the result type..." data-lang="en" id="resAddDescEn" required></textarea>
+            <textarea class="form-control lang-slot-input" rows="1" maxlength="40" placeholder="Describe the result type..." data-lang="en" id="resAddDescEn" required></textarea>
           </div>
         </div>
-        <div class="form-helper" style="text-align:right;" id="resAddDescCounter">0/140</div>
+        <div class="form-helper" style="text-align:right;" id="resAddDescCounter">0/40</div>
       </div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" data-modal-close data-i18n="common.cancelar">Cancelar</button>
-      <button class="btn btn-primary" onclick="closeModal('modalAddResultado');showToast('success','Criado','Tipo de resultado adicionado com sucesso!')"><span data-i18n="common.adicionar">Adicionar</span></button>
+      <button class="btn btn-primary" id="btnSaveAddResultado"><span data-i18n="common.adicionar">Adicionar</span></button>
     </div>
   </div>
 </div>
@@ -1410,12 +1293,12 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="lang-slot">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
             <span class="lang-slot-divider"></span>
-            <input type="text" class="form-control lang-slot-input" value="Redução de Custo" data-lang="pt-BR" id="resEditNamePt" required/>
+            <input type="text" class="form-control lang-slot-input" value="Redução de Custo" data-lang="pt-BR" id="resEditNamePt" maxlength="20" required/>
           </div>
           <div class="lang-slot">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
             <span class="lang-slot-divider"></span>
-            <input type="text" class="form-control lang-slot-input" value="Cost Reduction" data-lang="en" id="resEditNameEn" required/>
+            <input type="text" class="form-control lang-slot-input" value="Cost Reduction" data-lang="en" id="resEditNameEn" maxlength="20" required/>
           </div>
         </div>
       </div>
@@ -1425,20 +1308,20 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="lang-slot lang-slot-textarea">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
             <span class="lang-slot-divider"></span>
-            <textarea class="form-control lang-slot-input" rows="1" maxlength="140" data-lang="pt-BR" id="resEditDescPt" oninput="updateCategoryDescCounter(this,'resEdit')" required>Economia financeira direta mensurável em USD/CAD/BRL</textarea>
+            <textarea class="form-control lang-slot-input" rows="1" maxlength="40" data-lang="pt-BR" id="resEditDescPt" oninput="updateCategoryDescCounter(this,'resEdit',40)" required>Economia financeira direta mensurável em USD/CAD/BRL</textarea>
           </div>
           <div class="lang-slot lang-slot-textarea">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-gb"></span> EN</span>
             <span class="lang-slot-divider"></span>
-            <textarea class="form-control lang-slot-input" rows="1" maxlength="140" data-lang="en" id="resEditDescEn" required>Direct financial savings measurable in USD/CAD/BRL</textarea>
+            <textarea class="form-control lang-slot-input" rows="1" maxlength="40" data-lang="en" id="resEditDescEn" required>Direct financial savings measurable in USD/CAD/BRL</textarea>
           </div>
         </div>
-        <div class="form-helper" style="text-align:right;" id="resEditDescCounter">54/140</div>
+        <div class="form-helper" style="text-align:right;" id="resEditDescCounter">0/40</div>
       </div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" data-modal-close data-i18n="common.cancelar">Cancelar</button>
-      <button class="btn btn-primary" onclick="closeModal('modalEditResultado');showToast('success','Salvo','Tipo de resultado atualizado!')"><span data-i18n="common.salvar">Salvar</span></button>
+      <button class="btn btn-primary" id="btnSaveEditResultado"><span data-i18n="common.salvar">Salvar</span></button>
     </div>
   </div>
 </div>
@@ -1446,7 +1329,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 <div class="toast-container"></div>
 <script src="assets/vbm-app.js"></script>
 <script src="assets/aprovadores.js"></script>
-<script src="assets/categorias.js"></script>
+<script src="assets/admin-cadastros.js"></script>
 <script>
 (function(){
   var tabs = document.querySelectorAll('[data-admin-tab]');
