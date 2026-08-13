@@ -135,7 +135,11 @@ window.criarCadastroBilingue = function (cfg) {
         list.innerHTML = "";
         var box = statusEl("", true);
         box.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> <span></span>';
-        box.querySelector("span").textContent = cfg.textoErro;
+        // Mostra o motivo real (erro do banco/rede), não só o texto genérico
+        // — sem isso, uma falha de conexão/permissão no Azure SQL aparecia
+        // igual a qualquer outra, sem nenhuma pista do que checar.
+        box.querySelector("span").textContent =
+          cfg.textoErro + (err && err.message ? " Detalhe: " + err.message : "");
         var retry = document.createElement("button");
         retry.className = "btn btn-outline btn-sm";
         retry.type = "button";

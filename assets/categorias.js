@@ -4,7 +4,23 @@
  * assets/cadastro-bilingue.js (window.criarCadastroBilingue).
  */
 (function () {
-  if (!window.criarCadastroBilingue) return;
+  if (!window.criarCadastroBilingue) {
+    // Sem isso, uma falha em carregar assets/cadastro-bilingue.js (deploy
+    // incompleto, cache, etc.) deixava a lista travada pra sempre no
+    // "Carregando…" estático do HTML, sem NENHUM sinal de erro — quem via
+    // a tela não tinha como saber que algo tinha quebrado.
+    console.error("[categorias] assets/cadastro-bilingue.js não carregou — window.criarCadastroBilingue está indefinido.");
+    var list = document.getElementById("categoriasList");
+    if (list) {
+      list.innerHTML =
+        '<div class="admin-list-status is-error">' +
+        '<i class="fa-solid fa-triangle-exclamation"></i> ' +
+        "<span>Falha ao carregar o motor de cadastros (assets/cadastro-bilingue.js). " +
+        "Atualize a página (Ctrl+Shift+R); se persistir, o arquivo pode não ter sido publicado no último deploy.</span>" +
+        "</div>";
+    }
+    return;
+  }
 
   criarCadastroBilingue({
     rota: "categorias", listaId: "categoriasList",
