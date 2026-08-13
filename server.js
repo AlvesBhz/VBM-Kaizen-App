@@ -294,6 +294,47 @@ apiRouter.put("/aprovadores/:id/status", async (req, res) => {
 });
 
 // ------------------------------------------------------------------
+// API — kzn_mdm_hierarquia (aba "Usuários")
+// ------------------------------------------------------------------
+// SOMENTE LEITURA, de propósito. Pelo DER esta tabela tem apenas
+// ID_USUARIO, CD_MATRICULA, NM_USUARIO, DS_EMAIL, NM_HIERARQUIA_N1..N8
+// e DT_ATUALIZACAO: não existe coluna de status (SG_ATIVO), papel,
+// empresa nem unidade — e o próprio modal da tela diz que os dados são
+// sincronizados do MDM corporativo. Por isso não há POST/PUT aqui:
+// criar/editar/inativar usuário exigiria colunas (ou uma tabela de
+// vínculo) que o modelo atual não tem.
+// O papel exibido é DERIVADO: quem está em kzn_aprovador aparece como
+// "Aprovador"; os demais, como "Operador". É a única fonte de papel
+// disponível hoje no modelo.
+apiRouter.get("/usuarios", async (req, res) => {
+  try {
+    const limite = Math.min(parseInt(req.query.limit, 10) || 500, 5000);
+    const result = await runQuery(
+      `SELECT TOP (@limite)
+              m.ID_USUARIO, m.CD_MATRICULA, m.NM_USUARIO, m.DS_EMAIL,
+              CASE WHEN a.ID_USUARIO IS NULL THEN 0 ELSE 1 END AS EH_APROVADOR,
+              a.SG_ATIVO AS SG_ATIVO_APROVADOR
+       FROM ${FULL_MDM_TABLE} m
+       LEFT JOIN ${FULL_TABLE_NAME} a ON a.ID_USUARIO = m.ID_USUARIO
+       ORDER BY m.NM_USUARIO`,
+      [["limite", sql.Int, limite]]
+    );
+    res.json(
+      result.recordset.map((r) => ({
+        ID_USUARIO: r.ID_USUARIO,
+        CD_MATRICULA: r.CD_MATRICULA,
+        NM_USUARIO: r.NM_USUARIO,
+        DS_EMAIL: r.DS_EMAIL,
+        PAPEL: r.EH_APROVADOR ? "Aprovador" : "Operador",
+      }))
+    );
+  } catch (err) {
+    console.error("[usuarios] erro ao listar:", err.message);
+    res.status(500).json({ error: "Erro ao consultar usuários: " + err.message });
+  }
+});
+
+// ------------------------------------------------------------------
 // API — cadastros bilíngues (kzn_categoria, kzn_replicacao,
 // kzn_desperdicio, kzn_resultados)
 // ------------------------------------------------------------------

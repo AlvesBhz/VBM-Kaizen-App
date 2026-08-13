@@ -698,43 +698,8 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
               <th></th>
             </tr>
           </thead>
-          <tbody>
-            <tr>
-              <td><div style="display:flex;align-items:center;gap:.5rem;"><div class="admin-avatar" style="width:28px;height:28px;font-size:.65rem;background:linear-gradient(135deg,#3cb5e5,#1a8bbf);">JS</div><span>João Silva</span></div></td>
-              <td style="font-size:.78rem;">joao.silva@valebasemetals.com</td>
-              <td>Sudbury, CA</td>
-              <td><span class="admin-item-badge role-badge" data-i18n="role.operador">Operador</span></td>
-              <td style="font-size:.75rem;color:var(--vbm-mid);">Vale Base Metals</td>
-              <td><span class="badge status-badge status-ativo" data-i18n="adm.ativo">Ativo</span></td>
-              <td><div class="row-actions"><button class="btn-icon btn-icon-blue btn-icon-sm" data-modal-open="modalEditUser"><i class="fa-solid fa-pen"></i></button><button class="btn-icon btn-icon-red btn-icon-sm" title="Desativar" data-i18n-title="common.desativar" onclick="toggleAdminItemStatus(this,'usuário João Silva')"><i class="fa-solid fa-ban"></i></button></div></td>
-            </tr>
-            <tr>
-              <td><div style="display:flex;align-items:center;gap:.5rem;"><div class="admin-avatar" style="width:28px;height:28px;font-size:.65rem;background:linear-gradient(135deg,#16a34a,#15803d);">MT</div><span>Maria Torres</span></div></td>
-              <td style="font-size:.78rem;">maria.torres@valebasemetals.com</td>
-              <td>Sudbury, CA</td>
-              <td><span class="admin-item-badge role-badge" data-i18n="role.aprovador">Aprovador</span></td>
-              <td style="font-size:.75rem;color:var(--vbm-mid);">Vale Base Metals</td>
-              <td><span class="badge status-badge status-ativo" data-i18n="adm.ativo">Ativo</span></td>
-              <td><div class="row-actions"><button class="btn-icon btn-icon-blue btn-icon-sm" data-modal-open="modalEditUser"><i class="fa-solid fa-pen"></i></button><button class="btn-icon btn-icon-red btn-icon-sm" title="Desativar" data-i18n-title="common.desativar" onclick="toggleAdminItemStatus(this,'usuário Maria Torres')"><i class="fa-solid fa-ban"></i></button></div></td>
-            </tr>
-            <tr>
-              <td><div style="display:flex;align-items:center;gap:.5rem;"><div class="admin-avatar" style="width:28px;height:28px;font-size:.65rem;background:linear-gradient(135deg,#7c3aed,#a855f7);">AB</div><span>Admin Brasil</span></div></td>
-              <td style="font-size:.78rem;">admin.brasil@valebasemetals.com</td>
-              <td>Global</td>
-              <td><span class="admin-item-badge role-badge">ADM</span></td>
-              <td style="font-size:.75rem;color:var(--vbm-mid);">Vale Base Metals</td>
-              <td><span class="badge status-badge status-ativo" data-i18n="adm.ativo">Ativo</span></td>
-              <td><div class="row-actions"><button class="btn-icon btn-icon-blue btn-icon-sm" data-modal-open="modalEditUser"><i class="fa-solid fa-pen"></i></button><button class="btn-icon btn-icon-red btn-icon-sm" disabled style="opacity:.3;"><i class="fa-solid fa-ban"></i></button></div></td>
-            </tr>
-            <tr>
-              <td><div style="display:flex;align-items:center;gap:.5rem;"><div class="admin-avatar" style="width:28px;height:28px;font-size:.65rem;background:linear-gradient(135deg,#64748b,#475569);">CP</div><span>Carlos Pereira</span></div></td>
-              <td style="font-size:.78rem;">carlos.pereira@valebasemetals.com</td>
-              <td>Voisey's Bay</td>
-              <td><span class="admin-item-badge role-badge" data-i18n="role.operador">Operador</span></td>
-              <td style="font-size:.75rem;color:var(--vbm-mid);">Contractor Solutions Inc.</td>
-              <td><span class="badge status-badge status-inativo" data-i18n="adm.inativo">Inativo</span></td>
-              <td><div class="row-actions"><button class="btn-icon btn-icon-blue btn-icon-sm" data-modal-open="modalEditUser"><i class="fa-solid fa-pen"></i></button><button class="btn-icon btn-icon-blue btn-icon-sm" title="Reativar" data-i18n-title="adm.reactivate" onclick="toggleAdminItemStatus(this,'usuário Carlos Pereira')"><i class="fa-solid fa-rotate-right"></i></button></div></td>
-            </tr>
+          <tbody id="usuariosTableBody">
+            <tr><td colspan="7" style="padding:1.25rem;color:var(--vbm-mid);font-size:.8rem;">Carregando usuários…</td></tr>
           </tbody>
         </table>
       </div>
@@ -1311,6 +1276,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 <div class="toast-container"></div>
 <script src="assets/vbm-app.js"></script>
 <script src="assets/aprovadores.js"></script>
+<script src="assets/usuarios.js"></script>
 <script src="assets/admin-cadastros.js"></script>
 <script>
 (function(){
