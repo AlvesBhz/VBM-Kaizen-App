@@ -307,12 +307,14 @@
   }
 
   // ── Ativar/Desativar — grava SG_ATIVO no banco, nunca só visual ──
-  function alternarStatus(reg, item) {
+  async function alternarStatus(reg, item) {
     var ativar = !reg.ATIVO;
-    var msg = ativar
-      ? 'Reativar "' + reg.NM + '"?'
-      : 'Desativar "' + reg.NM + '"? Ela deixará de aparecer como opção ativa, mas não será excluída.';
-    if (!window.confirm(msg)) return;
+    var confirmado = await confirmarAcao({
+      variant: ativar ? "ativar" : "desativar",
+      titulo: (ativar ? 'Reativar "' : 'Desativar "') + reg.NM + '"?',
+      mensagem: ativar ? "" : "Ela deixará de aparecer como opção ativa, mas não será excluída.",
+    });
+    if (!confirmado) return;
 
     fetch("/api/" + ROTA + "/" + encodeURIComponent(reg.ID) + "/status", {
       method: "PUT",

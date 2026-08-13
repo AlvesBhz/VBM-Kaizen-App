@@ -289,12 +289,14 @@ window.criarCadastroBilingue = function (cfg) {
   }
 
   // ── Ativar/Desativar — grava SG_ATIVO no banco, nunca só visual ──
-  function alternarStatus(reg, item) {
+  async function alternarStatus(reg, item) {
     var ativar = !reg.ATIVO;
-    var msg = ativar
-      ? 'Reativar "' + reg.NM + '"?'
-      : 'Desativar "' + reg.NM + '"? Deixará de aparecer como opção ativa, mas não será excluído.';
-    if (!window.confirm(msg)) return;
+    var confirmado = await confirmarAcao({
+      variant: ativar ? "ativar" : "desativar",
+      titulo: (ativar ? 'Reativar "' : 'Desativar "') + reg.NM + '"?',
+      mensagem: ativar ? "" : "Deixará de aparecer como opção ativa, mas não será excluído.",
+    });
+    if (!confirmado) return;
 
     fetch("/api/" + cfg.rota + "/" + encodeURIComponent(reg.ID) + "/status", {
       method: "PUT",

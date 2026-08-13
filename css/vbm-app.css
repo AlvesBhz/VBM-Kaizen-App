@@ -1452,6 +1452,51 @@ textarea.lang-slot-input.form-control { min-height: 1.4rem; resize: vertical; }
 }
 
 /* ═══════════════════════════════════════════════════
+   CONFIRMAÇÃO DE AÇÃO (window.confirmarAcao)
+   Substitui o window.confirm() nativo nas ações de ativar/desativar.
+   Reaproveita .modal/.modal-head/.modal-icon/.modal-body/.modal-foot
+   (mesmo visual dos modais de Add/Edit), só numa camada própria
+   (.confirm-backdrop em vez de .modal-backdrop): os listeners
+   genéricos de Escape/clique-fora em initModals() varrem
+   ".modal-backdrop" pensando em modais fixos no HTML — este é criado
+   em runtime e tem que resolver uma Promise ao fechar, então cuida do
+   próprio ciclo de vida sem se misturar com esse mecanismo.
+═══════════════════════════════════════════════════ */
+.confirm-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 10000;
+  display: none; align-items: center; justify-content: center;
+  padding: 1rem;
+}
+.confirm-backdrop.open { display: flex; animation: fadeIn .2s ease; }
+.confirm-backdrop.closing { animation: fadeOut .2s ease forwards; }
+.confirm-backdrop.open .modal { animation: scaleIn .28s var(--ease-spring); }
+.confirm-backdrop.closing .modal { animation: scaleOut .2s ease forwards; }
+.confirm-backdrop .modal { max-width: 420px; }
+.confirm-backdrop .modal-body { padding: 1.5rem 2rem .25rem; }
+.confirm-msg { font-size: .85rem; color: var(--vbm-mid); line-height: 1.6; margin: 0; }
+[data-bg="dark"] .confirm-backdrop .modal {
+  background: linear-gradient(160deg, #10131a 0%, var(--vbm-blue-deep) 100%);
+  border: 1px solid rgba(255,255,255,.08);
+}
+[data-bg="dark"] .confirm-backdrop .modal-head { border-color: rgba(255,255,255,.08); }
+[data-bg="dark"] .confirm-backdrop .modal-foot { border-color: rgba(255,255,255,.08); }
+
+.btn-danger {
+  background: #dc2626; color: #fff;
+  border-color: #dc2626;
+  padding: 0.6rem 1.6rem;
+}
+.btn-danger:hover {
+  background: #b91c1c;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(220,38,38,.35);
+}
+
+/* ═══════════════════════════════════════════════════
    APPROVAL ITEMS
 ═══════════════════════════════════════════════════ */
 .approval-item {
@@ -1596,12 +1641,24 @@ textarea.lang-slot-input.form-control { min-height: 1.4rem; resize: vertical; }
   min-width: 280px; max-width: 360px;
   animation: slideRight 0.4s var(--ease-spring);
 }
+/* Saída animada (manual ou automática) — antes o toast era removido
+   do DOM na hora, sem transição, só a entrada tinha animação. */
+.toast.closing { animation: slideOutRight .28s var(--ease-out) forwards; }
+[data-bg="dark"] .toast { background: var(--vbm-blue-deep); box-shadow: 0 8px 32px rgba(0,0,0,.4); }
 .toast.toast-success { border-left-color: #16a34a; }
 .toast.toast-error { border-left-color: #dc2626; }
 .toast.toast-warning { border-left-color: #c2770e; }
+.toast.toast-info { border-left-color: var(--vbm-blue); }
 .toast-icon { font-size: 1rem; flex-shrink: 0; margin-top: 0.05rem; }
 .toast-body { flex: 1; }
 .toast-title { font-family:'Poppins', sans-serif;font-weight:600; font-size: 0.82rem; color: var(--vbm-dark); margin-bottom: 0.15rem; }
+.toast-close {
+  background: none; border: none; cursor: pointer; padding: 0;
+  color: var(--vbm-mid); font-size: .8rem; line-height: 1;
+  flex-shrink: 0; align-self: flex-start;
+  transition: color .2s var(--ease-out);
+}
+.toast-close:hover { color: var(--vbm-dark); }
 .toast-msg { font-size: 0.75rem; color: var(--vbm-mid); line-height: 1.45; }
 
 /* ═══════════════════════════════════════════════════
@@ -1611,6 +1668,9 @@ textarea.lang-slot-input.form-control { min-height: 1.4rem; resize: vertical; }
 @keyframes fadeUp     { from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:none} }
 @keyframes fadeDown   { from{opacity:0;transform:translateY(-16px)}to{opacity:1;transform:none} }
 @keyframes scaleIn    { from{opacity:0;transform:scale(.92)}to{opacity:1;transform:scale(1)} }
+@keyframes fadeOut    { from{opacity:1}to{opacity:0} }
+@keyframes scaleOut   { from{opacity:1;transform:scale(1)}to{opacity:0;transform:scale(.92)} }
+@keyframes slideOutRight { from{transform:none;opacity:1}to{transform:translateX(20px);opacity:0} }
 @keyframes shimmer    { from{background-position:-200% center}to{background-position:200% center} }
 @keyframes glowPulse  { 0%,100%{opacity:.4;transform:scale(1)}50%{opacity:1;transform:scale(1.1)} }
 @keyframes glow       { 0%,100%{box-shadow:0 0 16px rgba(60,181,229,.4)}50%{box-shadow:0 0 36px rgba(60,181,229,.8),0 0 60px rgba(60,181,229,.3)} }

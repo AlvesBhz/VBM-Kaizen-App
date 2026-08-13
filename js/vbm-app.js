@@ -321,9 +321,119 @@
     const colors = { success: '#16a34a', error: '#dc2626', warning: '#c2770e', info: '#3cb5e5' };
     const toast = document.createElement('div');
     toast.className = 'toast toast-' + type;
-    toast.innerHTML = '<i class="fa-solid ' + (icons[type] || 'fa-circle-info') + ' toast-icon" style="color:' + (colors[type] || '#3cb5e5') + '"></i><div class="toast-body"><div class="toast-title">' + title + '</div><div class="toast-msg">' + msg + '</div></div><button onclick="this.parentElement.remove()" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:0.9rem;padding:0;line-height:1;flex-shrink:0;align-self:flex-start;"><i class="fa-solid fa-xmark"></i></button>';
+    toast.innerHTML = '<i class="fa-solid ' + (icons[type] || 'fa-circle-info') + ' toast-icon" style="color:' + (colors[type] || '#3cb5e5') + '"></i><div class="toast-body"><div class="toast-title">' + title + '</div><div class="toast-msg">' + msg + '</div></div><button type="button" class="toast-close" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>';
     container.appendChild(toast);
-    setTimeout(function() { if (toast.parentElement) toast.remove(); }, duration);
+
+    // Fechamento animado (manual ou automático) — antes o toast era
+    // removido do DOM na hora (this.parentElement.remove()), sem
+    // nenhuma transição de saída, só a entrada tinha animação.
+    let fechado = false;
+    function fechar() {
+      if (fechado || !toast.parentElement) return;
+      fechado = true;
+      toast.classList.add('closing');
+      toast.addEventListener('animationend', function () { toast.remove(); }, { once: true });
+      setTimeout(function () { toast.remove(); }, 400); // salvaguarda se a animação não disparar
+    }
+    toast.querySelector('.toast-close').addEventListener('click', fechar);
+    setTimeout(fechar, duration);
+  };
+
+  /* ── Confirmação de ação (window.confirmarAcao) ──
+     Substitui o window.confirm() nativo nas ações de ativar/desativar
+     por um modal do próprio Design System — mesmas classes dos modais
+     de Add/Edit (.modal/.modal-head/.modal-icon/.modal-body/.modal-foot),
+     só numa camada própria (.confirm-backdrop, ver vbm-app.css) pra não
+     cair nos listeners genéricos de .modal-backdrop em initModals()
+     (Escape/clique-fora), que assumem modais fixos no HTML — este é
+     criado em runtime e precisa resolver uma Promise ao fechar.
+
+     Uso: const ok = await confirmarAcao({ variant, titulo, mensagem });
+     variant: 'ativar' (azul) | 'desativar' (vermelho suave).
+     Resolve true se confirmado, false se cancelado (botão, clique fora,
+     Esc ou X) — mesmo contrato de retorno booleano do confirm() nativo
+     que substitui, então os call sites só trocam o gatilho, não o fluxo. */
+  let confirmAcaoEl = null;
+  function confirmAcaoModal() {
+    if (confirmAcaoEl) return confirmAcaoEl;
+    const el = document.createElement('div');
+    el.className = 'confirm-backdrop';
+    el.innerHTML =
+      '<div class="modal">' +
+        '<div class="modal-head">' +
+          '<div class="modal-icon" data-role="icon"><i class="fa-solid"></i></div>' +
+          '<div class="modal-title" data-role="title"></div>' +
+        '</div>' +
+        '<div class="modal-body"><p class="confirm-msg" data-role="msg"></p></div>' +
+        '<div class="modal-foot">' +
+          '<button type="button" class="btn btn-ghost" data-role="cancelar">Cancelar</button>' +
+          '<button type="button" class="btn" data-role="confirmar"></button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(el);
+    confirmAcaoEl = el;
+    return el;
+  }
+
+  window.confirmarAcao = function (opcoes) {
+    opcoes = opcoes || {};
+    const perigoso = opcoes.variant === 'desativar';
+    const el = confirmAcaoModal();
+    const icone = el.querySelector('[data-role="icon"]');
+    const iconeI = icone.querySelector('i');
+    const titulo = el.querySelector('[data-role="title"]');
+    const msg = el.querySelector('[data-role="msg"]');
+    const btnOk = el.querySelector('[data-role="confirmar"]');
+    const btnCancelar = el.querySelector('[data-role="cancelar"]');
+
+    titulo.textContent = opcoes.titulo || 'Confirmar ação?';
+    msg.textContent = opcoes.mensagem || '';
+    msg.style.display = opcoes.mensagem ? '' : 'none';
+    iconeI.className = 'fa-solid ' + (perigoso ? 'fa-triangle-exclamation' : 'fa-circle-check');
+    btnOk.textContent = opcoes.confirmarLabel || (perigoso ? 'Desativar' : 'Confirmar');
+    btnOk.className = 'btn ' + (perigoso ? 'btn-danger' : 'btn-primary');
+
+    // Mesma convenção visual dos ícones de cabeçalho dos outros modais
+    // (--hue dirige o tom translúcido no modo escuro; o modo claro fica
+    // explícito aqui mesmo, já que cada instância tem sua própria cor).
+    icone.style.setProperty('--hue', perigoso ? '220,38,38' : '60,181,229');
+    icone.style.background = perigoso ? '#fef2f2' : '#e8f3fb';
+    icone.style.borderColor = perigoso ? 'rgba(220,38,38,.28)' : 'rgba(60,181,229,.28)';
+    iconeI.style.color = perigoso ? '#dc2626' : 'var(--vbm-blue)';
+
+    return new Promise(function (resolve) {
+      function fechar(resultado) {
+        document.removeEventListener('keydown', onKey);
+        el.removeEventListener('click', onBackdrop);
+        btnOk.removeEventListener('click', onOk);
+        btnCancelar.removeEventListener('click', onCancel);
+
+        el.classList.add('closing');
+        let fechado = false;
+        function finalizar() {
+          if (fechado) return;
+          fechado = true;
+          el.classList.remove('open', 'closing');
+          document.body.style.overflow = '';
+        }
+        el.addEventListener('animationend', finalizar, { once: true });
+        setTimeout(finalizar, 300); // salvaguarda se a animação não disparar
+        resolve(resultado);
+      }
+      function onOk() { fechar(true); }
+      function onCancel() { fechar(false); }
+      function onKey(e) { if (e.key === 'Escape') onCancel(); }
+      function onBackdrop(e) { if (e.target === el) onCancel(); }
+
+      btnOk.addEventListener('click', onOk);
+      btnCancelar.addEventListener('click', onCancel);
+      document.addEventListener('keydown', onKey);
+      el.addEventListener('click', onBackdrop);
+
+      el.classList.remove('closing');
+      el.classList.add('open');
+      document.body.style.overflow = 'hidden';
+    });
   };
 
   /* ── Print A4 Kaizen (single page, identical to on-screen view) ── */
@@ -388,15 +498,17 @@
   }
 
   /* ── Admin CRUD helpers ── */
-  window.toggleAdminItemStatus = function(btn, label) {
+  window.toggleAdminItemStatus = async function(btn, label) {
     const row = btn.closest('.admin-item') || btn.closest('tr');
     if (!row) return;
     const icon = btn.querySelector('i');
     const activating = icon.classList.contains('fa-rotate-right');
-    const confirmMsg = activating
-      ? 'Reativar ' + (label || 'este item') + '?'
-      : 'Desativar ' + (label || 'este item') + '? Ele deixará de aparecer como opção ativa, mas não será excluído.';
-    if (!confirm(confirmMsg)) return;
+    const confirmado = await confirmarAcao({
+      variant: activating ? 'ativar' : 'desativar',
+      titulo: activating ? ('Reativar ' + (label || 'este item') + '?') : ('Desativar ' + (label || 'este item') + '?'),
+      mensagem: activating ? '' : 'Ele deixará de aparecer como opção ativa, mas não será excluído.',
+    });
+    if (!confirmado) return;
 
     icon.className = activating ? 'fa-solid fa-ban' : 'fa-solid fa-rotate-right';
     btn.classList.toggle('btn-icon-red', activating);

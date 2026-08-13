@@ -178,13 +178,15 @@
   }
 
   // ── Ativar/Desativar — grava SG_ATIVO no banco, nunca só visual ──
-  function alternarStatus(row, item) {
+  async function alternarStatus(row, item) {
     var ativar = !row.ATIVO;
     var nome = row.NM_USUARIO || "ID " + row.ID_USUARIO;
-    var msg = ativar
-      ? 'Reativar "' + nome + '" como aprovador?'
-      : 'Desativar "' + nome + '"? Deixará de aparecer como aprovador ativo, mas não será excluído.';
-    if (!window.confirm(msg)) return;
+    var confirmado = await confirmarAcao({
+      variant: ativar ? "ativar" : "desativar",
+      titulo: ativar ? ('Reativar "' + nome + '" como aprovador?') : ('Desativar "' + nome + '"?'),
+      mensagem: ativar ? "" : "Deixará de aparecer como aprovador ativo, mas não será excluído.",
+    });
+    if (!confirmado) return;
 
     fetch("/api/aprovadores/" + encodeURIComponent(row.ID_USUARIO) + "/status", {
       method: "PUT",
