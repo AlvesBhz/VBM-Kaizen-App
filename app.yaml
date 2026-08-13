@@ -34,6 +34,6 @@ env:
   # (texto puro) só para manter o mesmo comportamento por enquanto —
   # troque pelo valueFrom acima antes de ir para produção.
   - name: 'AZURE_SQL_USER'
-    value: 'pcivbmreader'
+    value: 'KZNDEV'
   - name: 'AZURE_SQL_PASSWORD'
-    value: 'Readpci@13'
+    value: 'ReadDEVKZN@!13'
