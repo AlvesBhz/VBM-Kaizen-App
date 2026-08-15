@@ -1231,6 +1231,12 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
         </div>
       </div>
       <div class="form-group">
+        <label class="form-label" data-i18n="adm.resultTypeClassification">Tipo de Resultado</label>
+        <select class="form-control" id="resAddTipoResultado">
+          <option value="" data-i18n="f.select">Selecione...</option>
+        </select>
+      </div>
+      <div class="form-group">
         <label class="form-label" data-i18n="adm.description">Descrição <span class="req">*</span></label>
         <div class="lang-stack">
           <div class="lang-slot lang-slot-textarea">
@@ -1288,6 +1294,12 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
             <input type="text" class="form-control lang-slot-input" value="Cost Reduction" data-lang="en" id="resEditNameEn" maxlength="30" required/>
           </div>
         </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" data-i18n="adm.resultTypeClassification">Tipo de Resultado</label>
+        <select class="form-control" id="resEditTipoResultado">
+          <option value="" data-i18n="f.select">Selecione...</option>
+        </select>
       </div>
       <div class="form-group">
         <label class="form-label" data-i18n="adm.description">Descrição <span class="req">*</span></label>
@@ -1478,11 +1490,11 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 <script src="js/usuarios.js?v=20260815-1"></script>
 <!-- cadastro-bilingue.js define o motor compartilhado (window.criarCadastroBilingue);
      os 6 arquivos seguintes só configuram sua própria aba com ele. -->
-<script src="js/cadastro-bilingue.js?v=20260815-2"></script>
+<script src="js/cadastro-bilingue.js?v=20260815-3"></script>
 <script src="js/categorias.js?v=20260815-1"></script>
 <script src="js/replicacao.js?v=20260815-1"></script>
 <script src="js/desperdicios.js?v=20260815-1"></script>
-<script src="js/resultados.js?v=20260815-1"></script>
+<script src="js/resultados.js?v=20260815-2"></script>
 <script src="js/tiporesultados.js?v=20260815-2"></script>
 <script src="js/motivosreprovacao.js?v=20260815-3"></script>
 <script>
@@ -1694,6 +1706,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       'adm.newResultType': 'Novo Resultado Alcançado',
       'adm.editResultType': 'Editar Resultado Alcançado',
       'adm.resultTypeName': 'Resultados Alcançados',
+      'adm.resultTypeClassification': 'Tipo de Resultado',
       'adm.resultDescPlaceholder': 'Descreva o tipo de resultado...',
       'adm.newTipoResultado': 'Nova Classificação de Tipo de Resultado',
       'adm.editTipoResultado': 'Editar Classificação de Tipo de Resultado',
@@ -1807,6 +1820,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       'adm.newResultType': 'New Achieved Result',
       'adm.editResultType': 'Edit Achieved Result',
       'adm.resultTypeName': 'Achieved Results',
+      'adm.resultTypeClassification': 'Result Type',
       'adm.resultDescPlaceholder': 'Describe the result type...',
       'adm.newTipoResultado': 'New Result Type Classification',
       'adm.editTipoResultado': 'Edit Result Type Classification',

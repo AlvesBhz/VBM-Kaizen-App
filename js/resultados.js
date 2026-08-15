@@ -20,5 +20,12 @@
     rotuloSingular: "Tipo de resultado",
     textoCarregando: "Carregando tipos de resultado…", textoVazio: "Nenhum tipo de resultado cadastrado.",
     textoErro: "Não foi possível carregar os tipos de resultado no momento. Tente novamente em instantes.",
+    // Combo "Tipo de Resultado" (ID_TIPO_RESULTADO em kzn_resultados):
+    // opções vêm de /api/tiporesultados (aba "Tipo Resultados", mesma
+    // fonte que já existe), escolhidas pelo nome e gravadas como ID.
+    comboExtra: {
+      campo: "idTipoResultado", rota: "tiporesultados",
+      addSelectId: "resAddTipoResultado", editSelectId: "resEditTipoResultado",
+    },
   });
 })();

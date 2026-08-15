@@ -568,12 +568,24 @@ function tabelaCadastro(envVar, padrao) {
  *                   nunca bloqueia o salvamento.
  *   colUsuario    — nome da coluna, só usado quando
  *                   capturarUsuarioResponsavel é true. Padrão "ID_USUARIO".
+ *   campoExtraEditavel — { col, campo } para 1 FK escolhida pelo usuário
+ *                   num <select> do formulário (ex.: ID_TIPO_RESULTADO
+ *                   em kzn_resultados, escolhido pelo nome na aba "Tipo
+ *                   Resultados", gravado como ID). Diferente de
+ *                   colunasExtras (que só HERDA o valor da linha do
+ *                   outro idioma): aqui o valor vem do corpo da
+ *                   requisição (campo `campo`, nível raiz — não dentro
+ *                   de pt/en, é o mesmo nos 2 idiomas) e é gravado
+ *                   direto, tanto ao criar quanto ao editar. Opcional
+ *                   (aceita null) — não bloqueia o salvamento sem
+ *                   valor escolhido.
  */
 function registrarCadastroBilingue(cfg) {
   const { rota, tabela, pk, colNome, colDescricao, maxNome, maxDescricao, rotuloSing } = cfg;
   const extras = cfg.colunasExtras || [];
   const temIcone = cfg.temIcone !== false;
   const capturarUsuario = !!cfg.capturarUsuarioResponsavel;
+  const extraEditavel = cfg.campoExtraEditavel || null;
   const colUsuario = cfg.colUsuario || "ID_USUARIO";
   const log = `[${rota}]`;
 
@@ -597,12 +609,17 @@ function registrarCadastroBilingue(cfg) {
   function lerCorpo(req) {
     const pt = req.body?.pt || {};
     const en = req.body?.en || {};
-    return {
+    const corpo = {
       nomePt: (pt.NM || "").trim(),
       descPt: (pt.DS || "").trim(),
       nomeEn: (en.NM || "").trim(),
       descEn: (en.DS || "").trim(),
     };
+    if (extraEditavel) {
+      const bruto = req.body?.[extraEditavel.campo];
+      corpo.extra = bruto === "" || bruto == null ? null : parseInt(bruto, 10);
+    }
+    return corpo;
   }
 
   // Upsert de 1 linha (1 idioma) — MERGE: atualiza se a linha
@@ -619,15 +636,22 @@ function registrarCadastroBilingue(cfg) {
   const colsHerdadas = (temIcone ? ["URL_ICONE"] : []).concat(extras);
   const selectHerdado = (col) => `(SELECT TOP (1) ${col} FROM ${tabela} WHERE ${pk} = @id)`;
 
-  function upsertIdioma(id, idIdioma, nome, descricao, idUsuario) {
+  function upsertIdioma(id, idIdioma, nome, descricao, idUsuario, extraValor) {
     const colsInsert = [pk, "ID_IDIOMA"].concat(colsHerdadas, [colNome], colDescricao ? [colDescricao] : [], ["SG_ATIVO", "DT_ATUALIZACAO"])
-      .concat(capturarUsuario ? [colUsuario] : []);
+      .concat(capturarUsuario ? [colUsuario] : [])
+      .concat(extraEditavel ? [extraEditavel.col] : []);
     const valsInsert = ["@id", "@idIdioma"].concat(colsHerdadas.map(selectHerdado), ["@nome"], colDescricao ? ["@descricao"] : [], ["'S'", "GETDATE()"])
       // Sempre quem está salvando agora — criar ou editar, sem distinguir
       // (mesmo desenho de DT_ATUALIZACAO, ao lado).
-      .concat(capturarUsuario ? ["@idUsuario"] : []);
+      .concat(capturarUsuario ? ["@idUsuario"] : [])
+      // Diferente de colsHerdadas: não herda da linha do outro idioma,
+      // é sempre o que veio no corpo desta requisição (mesmo valor nos
+      // 2 idiomas, porque os 2 upserts do mesmo POST/PUT usam o mesmo
+      // extraValor).
+      .concat(extraEditavel ? ["@extra"] : []);
     const setUpdate = `${colNome} = @nome` + (colDescricao ? `, ${colDescricao} = @descricao` : "") + `, DT_ATUALIZACAO = GETDATE()`
-      + (capturarUsuario ? `, ${colUsuario} = @idUsuario` : "");
+      + (capturarUsuario ? `, ${colUsuario} = @idUsuario` : "")
+      + (extraEditavel ? `, ${extraEditavel.col} = @extra` : "");
 
     const params = [
       ["nome", sql.NVarChar(maxNome), nome],
@@ -638,6 +662,8 @@ function registrarCadastroBilingue(cfg) {
     // Usuário não identificado (fora do Databricks Apps, e-mail sem
     // correspondência no MDM): grava NULL, nunca bloqueia o salvamento.
     if (capturarUsuario) params.push(["idUsuario", sql.Int, idUsuario ?? null]);
+    // Sem seleção no combo: grava NULL, nunca bloqueia o salvamento.
+    if (extraEditavel) params.push(["extra", sql.Int, extraValor ?? null]);
 
     return runQuery(
       `MERGE INTO ${tabela} AS target
@@ -738,6 +764,7 @@ function registrarCadastroBilingue(cfg) {
 
       const colsSelectId = ["ID_IDIOMA", `${colNome} AS NM`];
       if (colDescricao) colsSelectId.push(`${colDescricao} AS DS`);
+      if (extraEditavel) colsSelectId.push(`${extraEditavel.col} AS EXTRA`);
       const result = await runQuery(
         `SELECT ${colsSelectId.join(", ")} FROM ${tabela} WHERE ${pk} = @id`,
         [["id", sql.Int, id]]
@@ -751,6 +778,9 @@ function registrarCadastroBilingue(cfg) {
         ID: id,
         pt: pt ? { NM: pt.NM, DS: colDescricao ? pt.DS : "" } : null,
         en: en ? { NM: en.NM, DS: colDescricao ? en.DS : "" } : null,
+        // Mesmo valor nos 2 idiomas (não é um dado bilíngue) — pega de
+        // qualquer linha que exista.
+        ...(extraEditavel ? { [extraEditavel.campo]: (pt && pt.EXTRA) ?? (en && en.EXTRA) ?? null } : {}),
       });
     } catch (err) {
       console.error(`${log} erro ao consultar por ID:`, err.message);
@@ -769,9 +799,12 @@ function registrarCadastroBilingue(cfg) {
       const id = parseInt(req.params.id, 10);
       if (!Number.isInteger(id)) return res.status(400).json({ error: `${pk} inválido.` });
 
-      const { nomePt, descPt, nomeEn, descEn } = lerCorpo(req);
+      const { nomePt, descPt, nomeEn, descEn, extra } = lerCorpo(req);
       const erro = validarCampos(nomePt, descPt, nomeEn, descEn);
       if (erro) return res.status(400).json({ error: erro });
+      if (extraEditavel && extra != null && Number.isNaN(extra)) {
+        return res.status(400).json({ error: `${extraEditavel.col} inválido.` });
+      }
 
       const existe = await runQuery(
         `SELECT TOP (1) 1 AS X FROM ${tabela} WHERE ${pk} = @id`,
@@ -786,8 +819,8 @@ function registrarCadastroBilingue(cfg) {
       const idUsuario = capturarUsuario ? await idUsuarioLogado(req) : null;
 
       await Promise.all([
-        upsertIdioma(id, ID_IDIOMA_PT, nomePt, descPt, idUsuario),
-        upsertIdioma(id, ID_IDIOMA_EN, nomeEn, descEn, idUsuario),
+        upsertIdioma(id, ID_IDIOMA_PT, nomePt, descPt, idUsuario, extra),
+        upsertIdioma(id, ID_IDIOMA_EN, nomeEn, descEn, idUsuario, extra),
       ]);
       res.json({ ok: true });
     } catch (err) {
@@ -804,9 +837,12 @@ function registrarCadastroBilingue(cfg) {
   // situação que o upsert do editar já resolve numa edição seguinte.
   apiRouter.post(`/${rota}`, async (req, res) => {
     try {
-      const { nomePt, descPt, nomeEn, descEn } = lerCorpo(req);
+      const { nomePt, descPt, nomeEn, descEn, extra } = lerCorpo(req);
       const erro = validarCampos(nomePt, descPt, nomeEn, descEn);
       if (erro) return res.status(400).json({ error: erro });
+      if (extraEditavel && extra != null && Number.isNaN(extra)) {
+        return res.status(400).json({ error: `${extraEditavel.col} inválido.` });
+      }
 
       const proximo = await runQuery(`SELECT ISNULL(MAX(${pk}), 0) + 1 AS PROXIMO FROM ${tabela}`);
       const id = proximo.recordset[0].PROXIMO;
@@ -814,8 +850,8 @@ function registrarCadastroBilingue(cfg) {
       const idUsuario = capturarUsuario ? await idUsuarioLogado(req) : null;
 
       await Promise.all([
-        upsertIdioma(id, ID_IDIOMA_PT, nomePt, descPt, idUsuario),
-        upsertIdioma(id, ID_IDIOMA_EN, nomeEn, descEn, idUsuario),
+        upsertIdioma(id, ID_IDIOMA_PT, nomePt, descPt, idUsuario, extra),
+        upsertIdioma(id, ID_IDIOMA_EN, nomeEn, descEn, idUsuario, extra),
       ]);
       res.status(201).json({ ok: true, ID: id });
     } catch (err) {
@@ -920,10 +956,10 @@ registrarCadastroBilingue({
   maxNome: CADASTRO_LIMITES_DER.nome,
   maxDescricao: CADASTRO_LIMITES_DER.descricao,
   rotuloSing: "tipo de resultado",
-  // FK própria desta tabela (as outras 3 não têm): preservada junto do
-  // ícone ao criar a linha do 2º idioma. Numa criação do zero fica
-  // NULL — a tela não coleta esse campo hoje.
-  colunasExtras: ["ID_TIPO_RESULTADO"],
+  // ID_TIPO_RESULTADO: FK própria desta tabela, agora escolhida pelo
+  // usuário num combo (por nome, kzn_tipo_resultado/aba "Tipo
+  // Resultados"), gravado como ID — ver campoExtraEditavel.
+  campoExtraEditavel: { col: "ID_TIPO_RESULTADO", campo: "idTipoResultado" },
   // ID_USUARIO: mesmo padrão das demais abas — grava automaticamente
   // quem criou/editou.
   capturarUsuarioResponsavel: true,

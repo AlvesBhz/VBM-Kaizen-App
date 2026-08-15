@@ -1,15 +1,17 @@
 /**
  * VBM Kaizen — motor compartilhado dos cadastros bilíngues do admin.html.
  *
- * Categorias, Pot. Replicação, Red. Desperdícios e Resultados têm o
- * MESMO desenho no banco (ver DER: PK + ID_IDIOMA + NM/DS/URL_ICONE/
- * SG_ATIVO, 1 linha por idioma) e a mesma tela (lista de .admin-item +
- * modais Add/Edit bilíngues). Este arquivo define o motor único
- * (window.criarCadastroBilingue) usado pelos 4 arquivos de aba —
- * js/categorias.js, js/replicacao.js, js/desperdicios.js
- * e js/resultados.js — cada um só passando a configuração da sua
+ * As 6 abas de cadastro (Categorias, Pot. Replicação, Red. Desperdícios,
+ * Resultados, Tipo Resultados, Mot. Reprovação) têm o MESMO desenho no
+ * banco (ver DER: PK + ID_IDIOMA + NM/DS/URL_ICONE/SG_ATIVO/ID_USUARIO,
+ * 1 linha por idioma) e a mesma tela (lista de .admin-item + modais
+ * Add/Edit bilíngues). Este arquivo define o motor único
+ * (window.criarCadastroBilingue) usado por js/replicacao.js,
+ * js/desperdicios.js, js/resultados.js, js/tiporesultados.js e
+ * js/motivosreprovacao.js — cada um só passando a configuração da sua
  * própria aba (rota, ids dos elementos, textos, limites de campo).
- * Precisa ser carregado ANTES desses 4 arquivos.
+ * js/categorias.js é a exceção: fica de fora deste motor de propósito
+ * (ver header desse arquivo). Precisa ser carregado ANTES dos 5 acima.
  *
  * Rotas REST que cada aba usa (registradas em server.js por
  * registrarCadastroBilingue(), o espelho desta fábrica no servidor):
@@ -23,6 +25,10 @@
  * Nada é estático: a lista inteira vem do banco a cada carregamento,
  * inclusive o estado ativo/inativo. Falha ao carregar mostra erro com
  * "tentar novamente" (não há fallback local — a lista É o banco).
+ *
+ * cfg.comboExtra (opcional): 1 FK escolhida pelo NOME num <select> do
+ * modal (ex.: "Tipo de Resultado" em Resultados), gravada como ID —
+ * ver comentário na declaração de comboExtra logo abaixo.
  */
 window.criarCadastroBilingue = function (cfg) {
   function escapeHtml(str) {
@@ -44,7 +50,10 @@ window.criarCadastroBilingue = function (cfg) {
         // carregou não precisa de nada agora: quando for aberta, já vai
         // buscar direto no idioma novo (ver carregamento sob demanda no
         // fim do arquivo).
-        if (jaCarregouAlgumaVez) carregarLista();
+        if (jaCarregouAlgumaVez) {
+          carregarLista();
+          carregarOpcoesCombo(); // nomes do combo também mudam de idioma
+        }
       })
     : function () { return "pt-BR"; };
 
@@ -69,6 +78,14 @@ window.criarCadastroBilingue = function (cfg) {
   // sem precisar de uma flag extra na config das 4 abas existentes.
   var temDescricao = !!(addDescPt || editDescPt);
 
+  // Combo opcional de 1 FK escolhida pelo nome (ex.: "Tipo de
+  // Resultado" em Resultados) — grava o ID. cfg.comboExtra = { campo,
+  // rota, addSelectId, editSelectId }; sem essa chave, tudo abaixo vira
+  // no-op e a aba funciona exatamente como antes.
+  var comboExtra = cfg.comboExtra || null;
+  var addComboEl = comboExtra ? el(comboExtra.addSelectId) : null;
+  var editComboEl = comboExtra ? el(comboExtra.editSelectId) : null;
+
   // Mesmos limites do server.js (que os tira do DER). A checagem no
   // cliente é só uma resposta mais rápida — o servidor valida de
   // novo antes de gravar, sempre.
@@ -87,11 +104,45 @@ window.criarCadastroBilingue = function (cfg) {
     return null;
   }
 
-  function montarPayload(nomePtEl, descPtEl, nomeEnEl, descEnEl) {
-    return {
+  function montarPayload(nomePtEl, descPtEl, nomeEnEl, descEnEl, comboEl) {
+    var payload = {
       pt: { NM: nomePtEl ? nomePtEl.value.trim() : "", DS: descPtEl ? descPtEl.value.trim() : "" },
       en: { NM: nomeEnEl ? nomeEnEl.value.trim() : "", DS: descEnEl ? descEnEl.value.trim() : "" },
     };
+    if (comboExtra) {
+      var bruto = comboEl ? comboEl.value : "";
+      payload[comboExtra.campo] = bruto ? parseInt(bruto, 10) : null;
+    }
+    return payload;
+  }
+
+  // Preenche um <select> com as opções vindas de /api/<comboExtra.rota>
+  // (mesmo endpoint que a aba de origem já usa para listar) — sem
+  // valorForcado, mantém o que já estava selecionado nele.
+  function popularCombo(sel, registros, valorForcado) {
+    if (!sel) return;
+    var manter = valorForcado !== undefined ? valorForcado : sel.value;
+    sel.innerHTML = '<option value="">Selecione...</option>' +
+      registros.map(function (r) {
+        return '<option value="' + r.ID + '">' + escapeHtml(r.NM) + "</option>";
+      }).join("");
+    sel.value = manter != null ? String(manter) : "";
+  }
+
+  // valorEdicao: força a seleção do combo de EDITAR (ex.: valor já
+  // gravado no registro, vindo do GET /:id). O combo de CRIAR nunca é
+  // forçado aqui — mantém o que o usuário já tiver escolhido.
+  function carregarOpcoesCombo(valorEdicao) {
+    if (!comboExtra) return;
+    fetch("/api/" + comboExtra.rota + "?idioma=" + encodeURIComponent(idiomaEmUso()))
+      .then(function (res) { return res.ok ? res.json() : []; })
+      .then(function (registros) {
+        popularCombo(addComboEl, registros);
+        popularCombo(editComboEl, registros, valorEdicao);
+      })
+      .catch(function (err) {
+        console.error("[" + cfg.rota + "] falha ao carregar opções de " + comboExtra.rota + ":", err);
+      });
   }
 
   function statusEl(texto, erro) {
@@ -204,6 +255,7 @@ window.criarCadastroBilingue = function (cfg) {
           if (window.updateCategoryDescCounter) updateCategoryDescCounter(editDescPt, cfg.prefixoEdit, cfg.maxDescricao);
         }
         if (editDescEn) editDescEn.value = (data.en && data.en.DS) || "";
+        if (comboExtra) carregarOpcoesCombo(data[comboExtra.campo]);
       })
       .catch(function (err) {
         console.error("[" + cfg.rota + "] falha ao carregar para edição:", err);
@@ -216,7 +268,7 @@ window.criarCadastroBilingue = function (cfg) {
       if (window.showToast) showToast("error", "Erro", "Registro não identificado — feche e abra o formulário de novo.");
       return;
     }
-    var payload = montarPayload(editNamePt, editDescPt, editNameEn, editDescEn);
+    var payload = montarPayload(editNamePt, editDescPt, editNameEn, editDescEn, editComboEl);
     var erro = validar(payload.pt.NM, payload.pt.DS, payload.en.NM, payload.en.DS);
     if (erro) {
       if (window.showToast) showToast("warning", "Campo inválido", erro);
@@ -258,10 +310,11 @@ window.criarCadastroBilingue = function (cfg) {
       if (window.updateCategoryDescCounter) updateCategoryDescCounter(addDescPt, cfg.prefixoAdd, cfg.maxDescricao);
     }
     if (addDescEn) addDescEn.value = "";
+    if (addComboEl) addComboEl.value = "";
   }
 
   function salvarCriacao() {
-    var payload = montarPayload(addNamePt, addDescPt, addNameEn, addDescEn);
+    var payload = montarPayload(addNamePt, addDescPt, addNameEn, addDescEn, addComboEl);
     var erro = validar(payload.pt.NM, payload.pt.DS, payload.en.NM, payload.en.DS);
     if (erro) {
       if (window.showToast) showToast("warning", "Campo inválido", erro);
@@ -344,11 +397,13 @@ window.criarCadastroBilingue = function (cfg) {
   var painel = list.closest(".admin-panel");
   if (!painel || painel.classList.contains("active") || typeof MutationObserver === "undefined") {
     carregarLista();
+    carregarOpcoesCombo();
   } else {
     var observador = new MutationObserver(function () {
       if (painel.classList.contains("active")) {
         observador.disconnect();
         carregarLista();
+        carregarOpcoesCombo();
       }
     });
     observador.observe(painel, { attributes: true, attributeFilter: ["class"] });
