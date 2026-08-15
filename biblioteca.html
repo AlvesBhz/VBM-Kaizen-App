@@ -876,6 +876,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
 <div class="toast-container"></div>
 <script src="js/vbm-app.js?v=20260815-1"></script>
+<!-- Dados do usuário logado (Microsoft Graph) — reaproveita o token do
+     login já existente; sem MSAL próprio, sem alterar o fluxo de auth. -->
+<script src="js/usuario-graph.js?v=20260815-4"></script>
 <script>
 (function(){
   var topnav=document.getElementById('topnav');

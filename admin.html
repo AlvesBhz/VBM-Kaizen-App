@@ -1471,6 +1471,9 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 
 <div class="toast-container"></div>
 <script src="js/vbm-app.js?v=20260815-1"></script>
+<!-- Dados do usuário logado (Microsoft Graph) — reaproveita o token do
+     login já existente; sem MSAL próprio, sem alterar o fluxo de auth. -->
+<script src="js/usuario-graph.js?v=20260815-4"></script>
 <script src="js/aprovadores.js?v=20260815-1"></script>
 <script src="js/usuarios.js?v=20260815-1"></script>
 <!-- cadastro-bilingue.js define o motor compartilhado (window.criarCadastroBilingue);

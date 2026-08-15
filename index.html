@@ -712,6 +712,9 @@ body[data-bg="dark"] {
 
 
 <script src="js/vbm-app.js?v=20260815-1"></script>
+<!-- Dados do usuário logado (Microsoft Graph) — reaproveita o token do
+     login já existente; sem MSAL próprio, sem alterar o fluxo de auth. -->
+<script src="js/usuario-graph.js?v=20260815-4"></script>
 <script>
 // ─── Login com conta Microsoft (MSAL.js / Azure AD - Entra ID) ───
 // PENDENTE DE CONFIGURAÇÃO: preencha clientId e authority abaixo com os
@@ -759,7 +762,6 @@ body[data-bg="dark"] {
   }
 
   var nameEl   = document.getElementById('topnavUserName');
-  var roleEl   = document.getElementById('topnavUserRole');
   var avatarEl = document.getElementById('topnavUserAvatar');
 
   function initials(name) {
@@ -769,26 +771,30 @@ body[data-bg="dark"] {
     return (first + last).toUpperCase();
   }
 
-  function renderAccount(account, jobTitle) {
+  // Render imediato, só com o que o token já traz (nome + iniciais).
+  // A segunda linha NÃO é tocada aqui: ela é a empresa, que vem do
+  // Graph logo em seguida (js/usuario-graph.js). Se o Graph falhar, a
+  // linha continua com o texto padrão do HTML em vez de exibir o
+  // e-mail do usuário no lugar da empresa.
+  function renderAccount(account) {
     if (!account) return;
     var name = account.name || account.username;
     if (nameEl) nameEl.textContent = name;
     if (avatarEl) avatarEl.textContent = initials(name);
-    if (roleEl) roleEl.textContent = jobTitle || account.username;
   }
 
-  async function fetchJobTitle(msalInstance, account) {
-    try {
+  // Perfil completo (nome, empresa, foto, cargo, gestor, etc.) fica a
+  // cargo do js/usuario-graph.js, que reaproveita ESTE token — mesmo
+  // escopo delegado User.Read, sem login novo. Só entregamos aqui a
+  // função que devolve o access token; a busca no Graph, o cache da
+  // sessão e a renderização no cabeçalho ficam lá, compartilhados com
+  // as demais telas.
+  function carregarPerfilGraph(msalInstance, account) {
+    if (!window.VBMUsuario) return Promise.resolve(null);
+    return VBMUsuario.carregarDoGraph(async function () {
       var tokenResp = await msalInstance.acquireTokenSilent({ scopes: LOGIN_SCOPES, account: account });
-      var res = await fetch('https://graph.microsoft.com/v1.0/me?$select=jobTitle,officeLocation', {
-        headers: { Authorization: 'Bearer ' + tokenResp.accessToken }
-      });
-      if (!res.ok) return null;
-      var me = await res.json();
-      return [me.jobTitle, me.officeLocation].filter(Boolean).join(' · ');
-    } catch (e) {
-      return null;
-    }
+      return tokenResp.accessToken;
+    });
   }
 
   (async function () {
@@ -828,9 +834,10 @@ body[data-bg="dark"] {
       }
 
       msalInstance.setActiveAccount(account);
+      // Nome/iniciais na hora, direto do token — a foto e a empresa
+      // chegam logo depois, quando o Graph responder.
       renderAccount(account);
-      var jobTitle = await fetchJobTitle(msalInstance, account);
-      if (jobTitle) renderAccount(account, jobTitle);
+      await carregarPerfilGraph(msalInstance, account);
     } catch (e) {
       // Falha de autenticação: mantém o usuário mockado como fallback.
       console.warn('Login Microsoft indisponível, mantendo usuário padrão.', e);
