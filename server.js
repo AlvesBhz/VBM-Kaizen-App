@@ -586,6 +586,23 @@ function tabelaCadastro(envVar, padrao) {
  *                   mensagem de erro de "obrigatório" — sem ele, usa
  *                   o próprio nome da coluna (col).
  */
+
+// Traduz o erro cru do SQL Server pra algo que o usuário entenda. Erros
+// SEM tradução conhecida (retorno null) continuam aparecendo crus, como
+// sempre — nunca escondidos. Hoje só cobre violação de UNIQUE KEY (nome
+// duplicado no mesmo idioma) — o caso real observado em produção
+// ("Violation of UNIQUE KEY constraint 'UQ_KZN_RESULTADOS_NM'...").
+// Compartilhada por todas as 6 tabelas bilíngues: qualquer uma delas
+// pode ter a mesma constraint de nome único.
+function mensagemErroSql(err, rotuloSing) {
+  const numero = err && err.number;
+  const texto = (err && err.message) || "";
+  if (numero === 2627 || numero === 2601 || /violation of unique key constraint|cannot insert duplicate key/i.test(texto)) {
+    return `Já existe um(a) ${rotuloSing} cadastrado(a) com esse nome neste idioma.`;
+  }
+  return null; // sem tradução conhecida: quem chamou usa a mensagem crua do err
+}
+
 function registrarCadastroBilingue(cfg) {
   const { rota, tabela, pk, colNome, colDescricao, maxNome, maxDescricao, rotuloSing } = cfg;
   const extras = cfg.colunasExtras || [];
@@ -844,7 +861,8 @@ function registrarCadastroBilingue(cfg) {
       res.json({ ok: true });
     } catch (err) {
       console.error(`${log} erro ao atualizar:`, err.message);
-      res.status(500).json({ error: `Erro ao atualizar ${rotuloSing}: ` + err.message });
+      const amigavel = mensagemErroSql(err, rotuloSing);
+      res.status(amigavel ? 409 : 500).json({ error: amigavel || `Erro ao atualizar ${rotuloSing}: ` + err.message });
     }
   });
 
@@ -874,7 +892,8 @@ function registrarCadastroBilingue(cfg) {
       res.status(201).json({ ok: true, ID: id });
     } catch (err) {
       console.error(`${log} erro ao criar:`, err.message);
-      res.status(500).json({ error: `Erro ao criar ${rotuloSing}: ` + err.message });
+      const amigavel = mensagemErroSql(err, rotuloSing);
+      res.status(amigavel ? 409 : 500).json({ error: amigavel || `Erro ao criar ${rotuloSing}: ` + err.message });
     }
   });
 
