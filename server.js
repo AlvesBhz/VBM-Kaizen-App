@@ -926,12 +926,9 @@ registrarCadastroBilingue({
   colunasExtras: ["ID_TIPO_RESULTADO"],
 });
 
-// kzn_tipo_resultado (DER): ID_TIPO_RESULTADO, ID_IDIOMA,
-// NM_TIPO_RESULTADO, DT_ATUALIZACAO — SEM URL_ICONE e SEM DS_* (só
-// nome). SG_ATIVO ainda não existe na tabela real; a UI de
-// ativar/desativar foi implementada a pedido, para quando a coluna for
-// adicionada — até lá, o PUT .../status vai falhar com "Invalid column
-// name 'SG_ATIVO'" (erro claro, não silencioso: aparece no toast).
+// kzn_tipo_resultado (DER atualizado): ID_TIPO_RESULTADO, ID_IDIOMA,
+// NM_TIPO_RESULTADO, SG_ATIVO, ID_USUARIO, DT_ATUALIZACAO — SEM
+// URL_ICONE e SEM DS_* (só nome).
 registrarCadastroBilingue({
   rota: "tiporesultados",
   tabela: tabelaCadastro("AZURE_SQL_TIPO_RESULTADO_TABLE", "kzn_tipo_resultado"),
@@ -940,6 +937,9 @@ registrarCadastroBilingue({
   maxNome: CADASTRO_LIMITES_DER.nome,
   temIcone: false,
   rotuloSing: "tipo de resultado (classificação)",
+  // ID_USUARIO: mesmo padrão de Categoria/Replicação/Desperdícios —
+  // grava automaticamente quem criou/editou.
+  capturarUsuarioResponsavel: true,
 });
 
 // kzn_motivo_reprovacao (DER): ID_MOTIVO, ID_IDIOMA, NM_MOTIVO
