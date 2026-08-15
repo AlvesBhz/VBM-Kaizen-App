@@ -884,6 +884,10 @@ registrarCadastroBilingue({
   maxNome: CADASTRO_LIMITES_DER.nome,
   maxDescricao: CADASTRO_LIMITES_DER.descricao,
   rotuloSing: "potencial de replicação",
+  // ID_USUARIO (DER atualizado): mesmo padrão de Categoria — grava
+  // automaticamente quem criou/editou, via idUsuarioLogado(); interface
+  // não expõe nem permite editar esse campo.
+  capturarUsuarioResponsavel: true,
 });
 
 registrarCadastroBilingue({
