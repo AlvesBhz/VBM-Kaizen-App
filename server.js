@@ -542,23 +542,24 @@ function tabelaCadastro(envVar, padrao) {
  *   capturarUsuarioResponsavel — true grava, de forma automática e
  *                   transparente (a interface nunca expõe nem permite
  *                   editar isso), o ID_USUARIO (kzn_mdm_hierarquia) de
- *                   quem criou/editou o registro — resolvido no
+ *                   quem gravou o registro por último — resolvido no
  *                   servidor via idUsuarioLogado(req), nunca enviado
- *                   pelo cliente. Padrão false (as 5 tabelas originais
- *                   não têm essas colunas). Usuário não identificado
- *                   (fora do Databricks Apps, e-mail sem correspondência
- *                   no MDM) grava NULL — nunca bloqueia o salvamento.
- *   colUsuarioCriacao / colUsuarioAtualizacao — nomes das colunas,
- *                   só usados quando capturarUsuarioResponsavel é true.
- *                   Padrão "ID_USUARIO_CRIACAO" / "ID_USUARIO_ATUALIZACAO".
+ *                   pelo cliente. 1 coluna só (sem distinguir criação de
+ *                   edição — mesmo desenho de DT_ATUALIZACAO, que já é
+ *                   "a última gravação", não "a criação"). Padrão false
+ *                   (as 5 tabelas originais não têm essa coluna).
+ *                   Usuário não identificado (fora do Databricks Apps,
+ *                   e-mail sem correspondência no MDM) grava NULL —
+ *                   nunca bloqueia o salvamento.
+ *   colUsuario    — nome da coluna, só usado quando
+ *                   capturarUsuarioResponsavel é true. Padrão "ID_USUARIO".
  */
 function registrarCadastroBilingue(cfg) {
   const { rota, tabela, pk, colNome, colDescricao, maxNome, maxDescricao, rotuloSing } = cfg;
   const extras = cfg.colunasExtras || [];
   const temIcone = cfg.temIcone !== false;
   const capturarUsuario = !!cfg.capturarUsuarioResponsavel;
-  const colUsuarioCriacao = cfg.colUsuarioCriacao || "ID_USUARIO_CRIACAO";
-  const colUsuarioAtualizacao = cfg.colUsuarioAtualizacao || "ID_USUARIO_ATUALIZACAO";
+  const colUsuario = cfg.colUsuario || "ID_USUARIO";
   const log = `[${rota}]`;
 
   // Validação única, compartilhada por POST (criar) e PUT (editar) —
@@ -605,17 +606,13 @@ function registrarCadastroBilingue(cfg) {
 
   function upsertIdioma(id, idIdioma, nome, descricao, idUsuario) {
     const colsInsert = [pk, "ID_IDIOMA"].concat(colsHerdadas, [colNome], colDescricao ? [colDescricao] : [], ["SG_ATIVO", "DT_ATUALIZACAO"])
-      .concat(capturarUsuario ? [colUsuarioCriacao, colUsuarioAtualizacao] : []);
+      .concat(capturarUsuario ? [colUsuario] : []);
     const valsInsert = ["@id", "@idIdioma"].concat(colsHerdadas.map(selectHerdado), ["@nome"], colDescricao ? ["@descricao"] : [], ["'S'", "GETDATE()"])
-      // Criação: herda da linha do OUTRO idioma se ela já existir (mesmo
-      // padrão de URL_ICONE acima); sem nenhuma linha ainda, é a
-      // primeira, então usa quem está salvando agora. Atualização:
-      // SEMPRE quem está salvando agora, mesmo na criação (linha nova
-      // = "última atualização" é o próprio criador).
-      .concat(capturarUsuario ? [`COALESCE(${selectHerdado(colUsuarioCriacao)}, @idUsuario)`, "@idUsuario"] : []);
+      // Sempre quem está salvando agora — criar ou editar, sem distinguir
+      // (mesmo desenho de DT_ATUALIZACAO, ao lado).
+      .concat(capturarUsuario ? ["@idUsuario"] : []);
     const setUpdate = `${colNome} = @nome` + (colDescricao ? `, ${colDescricao} = @descricao` : "") + `, DT_ATUALIZACAO = GETDATE()`
-      // Edição: só ATUALIZACAO muda — CRIACAO não é tocada num UPDATE.
-      + (capturarUsuario ? `, ${colUsuarioAtualizacao} = @idUsuario` : "");
+      + (capturarUsuario ? `, ${colUsuario} = @idUsuario` : "");
 
     const params = [
       ["nome", sql.NVarChar(maxNome), nome],
@@ -852,13 +849,14 @@ registrarCadastroBilingue({
   maxDescricao: CADASTRO_LIMITES_DER.descricao,
   rotuloSing: "categoria",
   contagem: { tabela: FULL_PENDENCIA_TABLE, coluna: "NM_CATEGORIA" },
-  // ID_USUARIO_CRIACAO / ID_USUARIO_ATUALIZACAO: colunas novas em
-  // kzn_categoria (a serem adicionadas ao banco — ainda não existem
-  // no DER atual). Gravadas automaticamente a partir do usuário logado
-  // (ver idUsuarioLogado() acima); a interface não expõe nem permite
-  // editar esse campo. Só Categorias tem essa auditoria por enquanto —
-  // capturarUsuarioResponsavel é opt-in por tabela, então as outras 5
-  // abas bilíngues continuam exatamente como estavam.
+  // ID_USUARIO: coluna nova em kzn_categoria (a ser adicionada ao banco
+  // — ainda não existe no DER atual; só ID_USUARIO + DT_ATUALIZACAO,
+  // sem distinguir criação de edição). Gravada automaticamente a
+  // partir do usuário logado (ver idUsuarioLogado() acima); a interface
+  // não expõe nem permite editar esse campo. Só Categorias tem essa
+  // auditoria por enquanto — capturarUsuarioResponsavel é opt-in por
+  // tabela, então as outras 5 abas bilíngues continuam exatamente como
+  // estavam.
   capturarUsuarioResponsavel: true,
 });
 
