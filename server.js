@@ -203,6 +203,56 @@ apiRouter.use((req, res, next) => {
   next();
 });
 
+// Identidade do usuário logado, na visão do Databricks Apps.
+//
+// O app roda ATRÁS do proxy do Databricks Apps, que já autenticou a
+// pessoa (Entra ID) antes de a requisição chegar aqui e repassa a
+// identidade em cabeçalhos X-Forwarded-*. Isso dá nome/e-mail reais sem
+// nenhuma configuração extra e sem segundo login.
+//
+// NÃO substitui o Microsoft Graph: aqui não há foto, empresa, cargo nem
+// gestor — esses campos só vêm do Graph (ver js/usuario-graph.js). Este
+// endpoint é o piso: garante que o cabeçalho mostre a pessoa certa
+// mesmo antes de o MSAL estar configurado.
+//
+// Segurança: os X-Forwarded-* são reescritos pelo proxy do Databricks a
+// cada requisição, então não são forjáveis por quem acessa o app pela
+// URL publicada. O access token repassado NÃO é devolvido ao navegador
+// — só informamos se ele existe, para diagnóstico.
+apiRouter.get("/me", (req, res) => {
+  const h = (nome) => req.get(nome) || null;
+
+  const email = h("X-Forwarded-Email");
+  const usuario = h("X-Forwarded-Preferred-Username") || h("X-Forwarded-User");
+  // O proxy não manda nome de exibição; derivamos algo apresentável do
+  // e-mail ("maria.souza@vale.com" -> "Maria Souza") só como fallback,
+  // até o Graph (que tem o displayName real) responder.
+  const base = (email || usuario || "").split("@")[0];
+  const nome = base
+    ? base
+        .split(/[._-]+/)
+        .filter(Boolean)
+        .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+        .join(" ")
+    : null;
+
+  res.json({
+    autenticado: !!(email || usuario),
+    nome: nome,
+    email: email,
+    usuario: usuario,
+    idUsuario: h("X-Forwarded-User"),
+    // Diagnóstico: mostra QUAIS cabeçalhos o Databricks está mandando,
+    // sem expor o valor do token.
+    _diagnostico: {
+      temAccessToken: !!req.get("X-Forwarded-Access-Token"),
+      cabecalhosRecebidos: Object.keys(req.headers)
+        .filter((k) => k.toLowerCase().startsWith("x-forwarded"))
+        .sort(),
+    },
+  });
+});
+
 // Conectividade (equivalente ao botão "Testar conexão" do app.py)
 apiRouter.get("/test", async (req, res) => {
   try {

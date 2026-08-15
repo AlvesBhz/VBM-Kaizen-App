@@ -230,17 +230,65 @@
     },
   };
 
+  /**
+   * Piso de identidade, sem depender de MSAL: o Databricks Apps já
+   * autenticou a pessoa e repassa e-mail/usuário ao servidor, que os
+   * expõe em GET /api/me. Serve para o cabeçalho mostrar quem está
+   * logado de verdade mesmo antes de o MSAL estar configurado.
+   *
+   * Nunca sobrepõe dados do Graph: se o perfil completo já chegou (ou
+   * veio do cache da sessão), esta função não faz nada.
+   */
+  async function carregarDoDatabricks() {
+    if (perfil) return null; // Graph já respondeu: ele manda
+    try {
+      var res = await fetch("/api/me", { headers: { Accept: "application/json" } });
+      if (!res.ok) return null;
+      var dados = await res.json();
+      if (!dados || !dados.autenticado) return null;
+
+      // Só os campos que o proxy realmente conhece. O resto continua
+      // null até o Graph responder — nada é inventado aqui.
+      var parcial = {
+        displayName: dados.nome || null,
+        givenName: null, surname: null,
+        mail: dados.email || null,
+        userPrincipalName: dados.usuario || dados.email || null,
+        jobTitle: null, department: null, companyName: null,
+        officeLocation: null, mobilePhone: null, businessPhones: [],
+        preferredLanguage: null,
+        id: dados.idUsuario || null,
+        gestor: null,
+        fotoBase64: null,
+        // Marca a procedência: quem consumir dados() sabe que este
+        // perfil é o parcial do proxy, não o completo do Graph.
+        origem: "databricks",
+      };
+      if (perfil) return null; // o Graph pode ter respondido nesse meio-tempo
+      publicar(parcial);
+      return parcial;
+    } catch (e) {
+      return null; // sem /api/me (front servido fora do Databricks): silencioso
+    }
+  }
+
   // Nas telas sem MSAL (admin, biblioteca, aprovação, kaizen-novo), o
   // perfil vem do que o index.html já buscou nesta mesma aba. Sem cache
-  // (acesso direto à URL, aba nova), nada acontece e o cabeçalho segue
-  // com o conteúdo padrão do HTML.
-  var doCache = lerCache();
-  if (doCache) {
-    perfil = doCache;
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", function () { aplicarNoTopo(perfil); });
-    } else {
+  // (acesso direto à URL, aba nova), cai no /api/me do Databricks e, se
+  // nem isso existir, o cabeçalho segue com o conteúdo padrão do HTML.
+  function iniciar() {
+    var doCache = lerCache();
+    if (doCache) {
+      perfil = doCache;
       aplicarNoTopo(perfil);
+      return;
     }
+    carregarDoDatabricks();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", iniciar);
+  } else {
+    iniciar();
   }
 })();
