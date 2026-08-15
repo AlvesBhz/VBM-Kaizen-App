@@ -576,9 +576,15 @@ function tabelaCadastro(envVar, padrao) {
  *                   outro idioma): aqui o valor vem do corpo da
  *                   requisição (campo `campo`, nível raiz — não dentro
  *                   de pt/en, é o mesmo nos 2 idiomas) e é gravado
- *                   direto, tanto ao criar quanto ao editar. Opcional
- *                   (aceita null) — não bloqueia o salvamento sem
- *                   valor escolhido.
+ *                   direto, tanto ao criar quanto ao editar. Por padrão
+ *                   aceita null (não bloqueia o salvamento sem valor
+ *                   escolhido) — passe `obrigatorio: true` dentro do
+ *                   objeto quando a coluna real for NOT NULL (ex.:
+ *                   ID_TIPO_RESULTADO em kzn_resultados — "Cannot
+ *                   insert the value NULL..." se salvar sem escolher).
+ *                   `rotulo` (opcional): nome amigável usado na
+ *                   mensagem de erro de "obrigatório" — sem ele, usa
+ *                   o próprio nome da coluna (col).
  */
 function registrarCadastroBilingue(cfg) {
   const { rota, tabela, pk, colNome, colDescricao, maxNome, maxDescricao, rotuloSing } = cfg;
@@ -602,6 +608,20 @@ function registrarCadastroBilingue(cfg) {
     }
     if (colDescricao && (descPt.length > maxDescricao || descEn.length > maxDescricao)) {
       return `A descrição deve ter no máximo ${maxDescricao} caracteres (em cada idioma).`;
+    }
+    return null;
+  }
+
+  // Mesma regra nos dois processos (criar/editar): valor não numérico
+  // é erro de formato; ausente só é erro se a coluna real for NOT NULL
+  // (extraEditavel.obrigatorio) — sem isso, o INSERT falha só lá no
+  // banco com "Cannot insert the value NULL...", uma mensagem que não
+  // diz ao usuário qual campo faltou.
+  function validarExtra(extra) {
+    if (!extraEditavel) return null;
+    if (extra != null && Number.isNaN(extra)) return `${extraEditavel.col} inválido.`;
+    if (extraEditavel.obrigatorio && extra == null) {
+      return `${extraEditavel.rotulo || extraEditavel.col} é obrigatório.`;
     }
     return null;
   }
@@ -802,9 +822,8 @@ function registrarCadastroBilingue(cfg) {
       const { nomePt, descPt, nomeEn, descEn, extra } = lerCorpo(req);
       const erro = validarCampos(nomePt, descPt, nomeEn, descEn);
       if (erro) return res.status(400).json({ error: erro });
-      if (extraEditavel && extra != null && Number.isNaN(extra)) {
-        return res.status(400).json({ error: `${extraEditavel.col} inválido.` });
-      }
+      const erroExtra = validarExtra(extra);
+      if (erroExtra) return res.status(400).json({ error: erroExtra });
 
       const existe = await runQuery(
         `SELECT TOP (1) 1 AS X FROM ${tabela} WHERE ${pk} = @id`,
@@ -840,9 +859,8 @@ function registrarCadastroBilingue(cfg) {
       const { nomePt, descPt, nomeEn, descEn, extra } = lerCorpo(req);
       const erro = validarCampos(nomePt, descPt, nomeEn, descEn);
       if (erro) return res.status(400).json({ error: erro });
-      if (extraEditavel && extra != null && Number.isNaN(extra)) {
-        return res.status(400).json({ error: `${extraEditavel.col} inválido.` });
-      }
+      const erroExtra = validarExtra(extra);
+      if (erroExtra) return res.status(400).json({ error: erroExtra });
 
       const proximo = await runQuery(`SELECT ISNULL(MAX(${pk}), 0) + 1 AS PROXIMO FROM ${tabela}`);
       const id = proximo.recordset[0].PROXIMO;
@@ -959,7 +977,9 @@ registrarCadastroBilingue({
   // ID_TIPO_RESULTADO: FK própria desta tabela, agora escolhida pelo
   // usuário num combo (por nome, kzn_tipo_resultado/aba "Tipo
   // Resultados"), gravado como ID — ver campoExtraEditavel.
-  campoExtraEditavel: { col: "ID_TIPO_RESULTADO", campo: "idTipoResultado" },
+  // obrigatorio:true — a coluna real é NOT NULL (confirmado em produção:
+  // "Cannot insert the value NULL into column 'ID_TIPO_RESULTADO'...").
+  campoExtraEditavel: { col: "ID_TIPO_RESULTADO", campo: "idTipoResultado", obrigatorio: true, rotulo: "Tipo de Resultado" },
   // ID_USUARIO: mesmo padrão das demais abas — grava automaticamente
   // quem criou/editou.
   capturarUsuarioResponsavel: true,

@@ -89,7 +89,7 @@ window.criarCadastroBilingue = function (cfg) {
   // Mesmos limites do server.js (que os tira do DER). A checagem no
   // cliente é só uma resposta mais rápida — o servidor valida de
   // novo antes de gravar, sempre.
-  function validar(nomePt, descPt, nomeEn, descEn) {
+  function validar(nomePt, descPt, nomeEn, descEn, comboValor) {
     if (!nomePt || !nomeEn || (temDescricao && (!descPt || !descEn))) {
       return temDescricao
         ? "Preencha nome e descrição nos dois idiomas antes de salvar."
@@ -100,6 +100,12 @@ window.criarCadastroBilingue = function (cfg) {
     }
     if (temDescricao && (descPt.length > cfg.maxDescricao || descEn.length > cfg.maxDescricao)) {
       return "A descrição deve ter no máximo " + cfg.maxDescricao + " caracteres (em cada idioma).";
+    }
+    // A coluna real pode ser NOT NULL (ex.: ID_TIPO_RESULTADO em
+    // kzn_resultados) — sem essa checagem, o erro só aparece lá no
+    // servidor, num SQL cru que não diz ao usuário qual campo faltou.
+    if (comboExtra && comboExtra.obrigatorio && !comboValor) {
+      return (comboExtra.rotulo || "Campo") + " é obrigatório.";
     }
     return null;
   }
@@ -269,7 +275,7 @@ window.criarCadastroBilingue = function (cfg) {
       return;
     }
     var payload = montarPayload(editNamePt, editDescPt, editNameEn, editDescEn, editComboEl);
-    var erro = validar(payload.pt.NM, payload.pt.DS, payload.en.NM, payload.en.DS);
+    var erro = validar(payload.pt.NM, payload.pt.DS, payload.en.NM, payload.en.DS, editComboEl ? editComboEl.value : null);
     if (erro) {
       if (window.showToast) showToast("warning", "Campo inválido", erro);
       return;
@@ -315,7 +321,7 @@ window.criarCadastroBilingue = function (cfg) {
 
   function salvarCriacao() {
     var payload = montarPayload(addNamePt, addDescPt, addNameEn, addDescEn, addComboEl);
-    var erro = validar(payload.pt.NM, payload.pt.DS, payload.en.NM, payload.en.DS);
+    var erro = validar(payload.pt.NM, payload.pt.DS, payload.en.NM, payload.en.DS, addComboEl ? addComboEl.value : null);
     if (erro) {
       if (window.showToast) showToast("warning", "Campo inválido", erro);
       return;

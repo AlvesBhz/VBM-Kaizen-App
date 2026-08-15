@@ -23,9 +23,13 @@
     // Combo "Tipo de Resultado" (ID_TIPO_RESULTADO em kzn_resultados):
     // opções vêm de /api/tiporesultados (aba "Tipo Resultados", mesma
     // fonte que já existe), escolhidas pelo nome e gravadas como ID.
+    // obrigatorio:true — a coluna real é NOT NULL (confirmado em
+    // produção: "Cannot insert the value NULL into column
+    // 'ID_TIPO_RESULTADO'...").
     comboExtra: {
       campo: "idTipoResultado", rota: "tiporesultados",
       addSelectId: "resAddTipoResultado", editSelectId: "resEditTipoResultado",
+      obrigatorio: true, rotulo: "Tipo de Resultado",
     },
   });
 })();
