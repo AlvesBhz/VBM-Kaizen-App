@@ -203,23 +203,48 @@ apiRouter.use((req, res, next) => {
   next();
 });
 
-// Busca CD_MATRICULA + NM_USUARIO no MDM (kzn_mdm_hierarquia) por
-// e-mail — mesma tabela já usada nas abas Aprovadores/Usuários, aqui
+// Busca ID_USUARIO + CD_MATRICULA + NM_USUARIO no MDM (kzn_mdm_hierarquia)
+// por e-mail — mesma tabela já usada nas abas Aprovadores/Usuários, aqui
 // só com outra chave de busca (e-mail em vez de ID_USUARIO). Devolve
-// null em qualquer falha: matrícula é um "extra" no cabeçalho, uma
-// falha aqui não pode derrubar a identidade do usuário.
+// null em qualquer falha: os 3 campos são "extras" (cabeçalho e/ou
+// auditoria de cadastro) — uma falha aqui nunca pode derrubar a
+// identidade do usuário nem impedir um salvamento.
+//
+// Reaproveitada por GET /api/me (matrícula no cabeçalho) e por
+// idUsuarioLogado() (usuário responsável ao criar/editar categoria) —
+// mesma consulta, dois consumidores, sem duplicar SQL.
 async function buscarMdmPorEmail(email) {
   if (!email) return null;
   try {
     const result = await runQuery(
-      `SELECT TOP (1) CD_MATRICULA, NM_USUARIO FROM ${FULL_MDM_TABLE} WHERE LOWER(DS_EMAIL) = LOWER(@email)`,
+      `SELECT TOP (1) ID_USUARIO, CD_MATRICULA, NM_USUARIO FROM ${FULL_MDM_TABLE} WHERE LOWER(DS_EMAIL) = LOWER(@email)`,
       [["email", sql.NVarChar(255), email]]
     );
     return result.recordset[0] || null;
   } catch (err) {
-    console.warn("[me] falha ao consultar matrícula no MDM:", err.message);
+    console.warn("[mdm] falha ao consultar usuário por e-mail:", err.message);
     return null;
   }
+}
+
+// ID_USUARIO (kzn_mdm_hierarquia) do usuário logado, a partir do e-mail
+// que o proxy do Databricks Apps já autenticou e repassa em
+// X-Forwarded-Email (mesma identidade usada em GET /api/me e no
+// cabeçalho — ver js/usuario-graph.js). Não depende do Microsoft Graph:
+// o servidor nunca tem o token do Graph (ele mora só no navegador), e
+// confiar num e-mail vindo do CLIENTE para gravar "quem criou/editou"
+// permitiria forjar o campo pela própria requisição — o cabeçalho do
+// proxy é reescrito a cada chamada e não é forjável por quem acessa a
+// URL publicada, então é a fonte confiável para um campo de auditoria.
+//
+// null em qualquer cenário sem quebrar quem chamou: sem cabeçalho
+// (fora do Databricks Apps), e-mail sem correspondência no MDM, ou
+// falha na consulta.
+async function idUsuarioLogado(req) {
+  const email = req.get("X-Forwarded-Email");
+  if (!email) return null;
+  const mdm = await buscarMdmPorEmail(email);
+  return (mdm && mdm.ID_USUARIO) || null;
 }
 
 // Identidade do usuário logado, na visão do Databricks Apps + MDM.
@@ -514,11 +539,26 @@ function tabelaCadastro(envVar, padrao) {
  *                   ID_TIPO_RESULTADO de kzn_resultados). Opcional.
  *   contagem      — { tabela, coluna } para o badge "N kaizens".
  *                   Opcional: sem isso, QTD_KAIZENS vem null.
+ *   capturarUsuarioResponsavel — true grava, de forma automática e
+ *                   transparente (a interface nunca expõe nem permite
+ *                   editar isso), o ID_USUARIO (kzn_mdm_hierarquia) de
+ *                   quem criou/editou o registro — resolvido no
+ *                   servidor via idUsuarioLogado(req), nunca enviado
+ *                   pelo cliente. Padrão false (as 5 tabelas originais
+ *                   não têm essas colunas). Usuário não identificado
+ *                   (fora do Databricks Apps, e-mail sem correspondência
+ *                   no MDM) grava NULL — nunca bloqueia o salvamento.
+ *   colUsuarioCriacao / colUsuarioAtualizacao — nomes das colunas,
+ *                   só usados quando capturarUsuarioResponsavel é true.
+ *                   Padrão "ID_USUARIO_CRIACAO" / "ID_USUARIO_ATUALIZACAO".
  */
 function registrarCadastroBilingue(cfg) {
   const { rota, tabela, pk, colNome, colDescricao, maxNome, maxDescricao, rotuloSing } = cfg;
   const extras = cfg.colunasExtras || [];
   const temIcone = cfg.temIcone !== false;
+  const capturarUsuario = !!cfg.capturarUsuarioResponsavel;
+  const colUsuarioCriacao = cfg.colUsuarioCriacao || "ID_USUARIO_CRIACAO";
+  const colUsuarioAtualizacao = cfg.colUsuarioAtualizacao || "ID_USUARIO_ATUALIZACAO";
   const log = `[${rota}]`;
 
   // Validação única, compartilhada por POST (criar) e PUT (editar) —
@@ -563,10 +603,19 @@ function registrarCadastroBilingue(cfg) {
   const colsHerdadas = (temIcone ? ["URL_ICONE"] : []).concat(extras);
   const selectHerdado = (col) => `(SELECT TOP (1) ${col} FROM ${tabela} WHERE ${pk} = @id)`;
 
-  function upsertIdioma(id, idIdioma, nome, descricao) {
-    const colsInsert = [pk, "ID_IDIOMA"].concat(colsHerdadas, [colNome], colDescricao ? [colDescricao] : [], ["SG_ATIVO", "DT_ATUALIZACAO"]);
-    const valsInsert = ["@id", "@idIdioma"].concat(colsHerdadas.map(selectHerdado), ["@nome"], colDescricao ? ["@descricao"] : [], ["'S'", "GETDATE()"]);
-    const setUpdate = `${colNome} = @nome` + (colDescricao ? `, ${colDescricao} = @descricao` : "") + `, DT_ATUALIZACAO = GETDATE()`;
+  function upsertIdioma(id, idIdioma, nome, descricao, idUsuario) {
+    const colsInsert = [pk, "ID_IDIOMA"].concat(colsHerdadas, [colNome], colDescricao ? [colDescricao] : [], ["SG_ATIVO", "DT_ATUALIZACAO"])
+      .concat(capturarUsuario ? [colUsuarioCriacao, colUsuarioAtualizacao] : []);
+    const valsInsert = ["@id", "@idIdioma"].concat(colsHerdadas.map(selectHerdado), ["@nome"], colDescricao ? ["@descricao"] : [], ["'S'", "GETDATE()"])
+      // Criação: herda da linha do OUTRO idioma se ela já existir (mesmo
+      // padrão de URL_ICONE acima); sem nenhuma linha ainda, é a
+      // primeira, então usa quem está salvando agora. Atualização:
+      // SEMPRE quem está salvando agora, mesmo na criação (linha nova
+      // = "última atualização" é o próprio criador).
+      .concat(capturarUsuario ? [`COALESCE(${selectHerdado(colUsuarioCriacao)}, @idUsuario)`, "@idUsuario"] : []);
+    const setUpdate = `${colNome} = @nome` + (colDescricao ? `, ${colDescricao} = @descricao` : "") + `, DT_ATUALIZACAO = GETDATE()`
+      // Edição: só ATUALIZACAO muda — CRIACAO não é tocada num UPDATE.
+      + (capturarUsuario ? `, ${colUsuarioAtualizacao} = @idUsuario` : "");
 
     const params = [
       ["nome", sql.NVarChar(maxNome), nome],
@@ -574,6 +623,9 @@ function registrarCadastroBilingue(cfg) {
       ["idIdioma", sql.Int, idIdioma],
     ];
     if (colDescricao) params.push(["descricao", sql.NVarChar(maxDescricao), descricao]);
+    // Usuário não identificado (fora do Databricks Apps, e-mail sem
+    // correspondência no MDM): grava NULL, nunca bloqueia o salvamento.
+    if (capturarUsuario) params.push(["idUsuario", sql.Int, idUsuario ?? null]);
 
     return runQuery(
       `MERGE INTO ${tabela} AS target
@@ -717,9 +769,13 @@ function registrarCadastroBilingue(cfg) {
         return res.status(404).json({ error: `Registro de ${rotuloSing} não encontrado.` });
       }
 
+      // Resolvido uma vez (não por idioma) e nunca a partir do corpo da
+      // requisição — a interface não tem (nem pode ter) campo para isso.
+      const idUsuario = capturarUsuario ? await idUsuarioLogado(req) : null;
+
       await Promise.all([
-        upsertIdioma(id, ID_IDIOMA_PT, nomePt, descPt),
-        upsertIdioma(id, ID_IDIOMA_EN, nomeEn, descEn),
+        upsertIdioma(id, ID_IDIOMA_PT, nomePt, descPt, idUsuario),
+        upsertIdioma(id, ID_IDIOMA_EN, nomeEn, descEn, idUsuario),
       ]);
       res.json({ ok: true });
     } catch (err) {
@@ -743,9 +799,11 @@ function registrarCadastroBilingue(cfg) {
       const proximo = await runQuery(`SELECT ISNULL(MAX(${pk}), 0) + 1 AS PROXIMO FROM ${tabela}`);
       const id = proximo.recordset[0].PROXIMO;
 
+      const idUsuario = capturarUsuario ? await idUsuarioLogado(req) : null;
+
       await Promise.all([
-        upsertIdioma(id, ID_IDIOMA_PT, nomePt, descPt),
-        upsertIdioma(id, ID_IDIOMA_EN, nomeEn, descEn),
+        upsertIdioma(id, ID_IDIOMA_PT, nomePt, descPt, idUsuario),
+        upsertIdioma(id, ID_IDIOMA_EN, nomeEn, descEn, idUsuario),
       ]);
       res.status(201).json({ ok: true, ID: id });
     } catch (err) {
@@ -794,6 +852,14 @@ registrarCadastroBilingue({
   maxDescricao: CADASTRO_LIMITES_DER.descricao,
   rotuloSing: "categoria",
   contagem: { tabela: FULL_PENDENCIA_TABLE, coluna: "NM_CATEGORIA" },
+  // ID_USUARIO_CRIACAO / ID_USUARIO_ATUALIZACAO: colunas novas em
+  // kzn_categoria (a serem adicionadas ao banco — ainda não existem
+  // no DER atual). Gravadas automaticamente a partir do usuário logado
+  // (ver idUsuarioLogado() acima); a interface não expõe nem permite
+  // editar esse campo. Só Categorias tem essa auditoria por enquanto —
+  // capturarUsuarioResponsavel é opt-in por tabela, então as outras 5
+  // abas bilíngues continuam exatamente como estavam.
+  capturarUsuarioResponsavel: true,
 });
 
 registrarCadastroBilingue({
