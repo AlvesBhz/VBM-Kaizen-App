@@ -924,6 +924,9 @@ registrarCadastroBilingue({
   // ícone ao criar a linha do 2º idioma. Numa criação do zero fica
   // NULL — a tela não coleta esse campo hoje.
   colunasExtras: ["ID_TIPO_RESULTADO"],
+  // ID_USUARIO: mesmo padrão das demais abas — grava automaticamente
+  // quem criou/editou.
+  capturarUsuarioResponsavel: true,
 });
 
 // kzn_tipo_resultado (DER atualizado): ID_TIPO_RESULTADO, ID_IDIOMA,
