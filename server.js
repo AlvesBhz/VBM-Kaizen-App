@@ -906,6 +906,9 @@ registrarCadastroBilingue({
   // tabela/coluna não existir, sem derrubar a lista — ver nota de
   // ressalva sobre esta tabela no relatório desta tarefa).
   contagem: { tabela: FULL_PENDENCIA_TABLE, coluna: "NM_DESPERDICIO" },
+  // ID_USUARIO (DER atualizado): mesmo padrão de Categoria/Replicação —
+  // grava automaticamente quem criou/editou.
+  capturarUsuarioResponsavel: true,
 });
 
 registrarCadastroBilingue({
