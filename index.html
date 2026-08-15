@@ -619,10 +619,10 @@ body[data-bg="dark"] {
     </button>
     <div class="topnav-user" id="topnavUser">
       <div class="topnav-user-text">
-        <span class="topnav-user-name" id="topnavUserName">João Silva</span>
-        <span class="topnav-user-role" id="topnavUserRole"><span data-i18n="role.operador">Operador</span> · Sudbury</span>
+        <span class="topnav-user-name" id="topnavUserName"></span>
+        <span class="topnav-user-role" id="topnavUserRole"></span>
       </div>
-      <div class="topnav-user-avatar" id="topnavUserAvatar">JS</div>
+      <div class="topnav-user-avatar" id="topnavUserAvatar"></div>
     </div>
     <button class="topnav-mobile-toggle" id="mobileToggle" title="Menu">
       <i class="fa-solid fa-bars"></i>
@@ -714,7 +714,7 @@ body[data-bg="dark"] {
 <script src="js/vbm-app.js?v=20260815-1"></script>
 <!-- Dados do usuário logado (Microsoft Graph) — reaproveita o token do
      login já existente; sem MSAL próprio, sem alterar o fluxo de auth. -->
-<script src="js/usuario-graph.js?v=20260815-4"></script>
+<script src="js/usuario-graph.js?v=20260815-5"></script>
 <script>
 // ─── Login com conta Microsoft (MSAL.js / Azure AD - Entra ID) ───
 // PENDENTE DE CONFIGURAÇÃO: preencha clientId e authority abaixo com os
@@ -728,8 +728,10 @@ body[data-bg="dark"] {
 //     Redirect URI do tipo SPA: a própria URL desta página (ex.:
 //     http://localhost/index.html ou o domínio final de produção).
 //   • Em "API permissions", garanta o escopo "User.Read" (Microsoft Graph).
-// Enquanto os campos abaixo estiverem com os placeholders, o app mantém o
-// usuário mockado (João Silva) e não tenta nenhum login — nada quebra.
+// Enquanto os campos abaixo estiverem com os placeholders, este bloco não
+// tenta nenhum login — nada quebra. O cabeçalho ainda mostra a pessoa
+// real: js/usuario-graph.js usa a identidade que o proxy do Databricks
+// Apps já repassa (ver GET /api/me em server.js), sem depender do MSAL.
 (function () {
   var MSAL_CONFIG = {
     clientId: 'SEU_CLIENT_ID_AQUI',
@@ -772,10 +774,9 @@ body[data-bg="dark"] {
   }
 
   // Render imediato, só com o que o token já traz (nome + iniciais).
-  // A segunda linha NÃO é tocada aqui: ela é a empresa, que vem do
-  // Graph logo em seguida (js/usuario-graph.js). Se o Graph falhar, a
-  // linha continua com o texto padrão do HTML em vez de exibir o
-  // e-mail do usuário no lugar da empresa.
+  // A segunda linha (matrícula) NÃO é tocada aqui: ela vem do MDM via
+  // js/usuario-graph.js, que já roda antes deste bloco (piso Databricks)
+  // e é reforçada quando o Graph responder.
   function renderAccount(account) {
     if (!account) return;
     var name = account.name || account.username;

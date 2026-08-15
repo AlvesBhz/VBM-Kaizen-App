@@ -353,10 +353,10 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
     </button>
     <div class="topnav-user">
       <div class="topnav-user-text">
-        <span class="topnav-user-name">João Silva</span>
-        <span class="topnav-user-role"><span data-i18n="role.aprovador">Aprovador</span> · Sudbury</span>
+        <span class="topnav-user-name"></span>
+        <span class="topnav-user-role"></span>
       </div>
-      <div class="topnav-user-avatar">JS</div>
+      <div class="topnav-user-avatar"></div>
     </div>
     <button class="topnav-mobile-toggle" id="mobileToggle"><i class="fa-solid fa-bars"></i></button>
   </div>
@@ -632,7 +632,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 <script src="js/vbm-app.js?v=20260815-1"></script>
 <!-- Dados do usuário logado (Microsoft Graph) — reaproveita o token do
      login já existente; sem MSAL próprio, sem alterar o fluxo de auth. -->
-<script src="js/usuario-graph.js?v=20260815-4"></script>
+<script src="js/usuario-graph.js?v=20260815-5"></script>
 <script>
 function handleApprove() {
   showToast('success', 'Kaizen Aprovado!', 'KZN-2026-047 foi aprovado. O autor será notificado por e-mail.');

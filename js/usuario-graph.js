@@ -12,16 +12,20 @@
  *   2. Guarda o resultado em sessionStorage, para as demais telas
  *      (admin, biblioteca, aprovação, kaizen-novo) mostrarem o mesmo
  *      usuário sem repetir a chamada ao Graph nem embutir MSAL nelas.
- *   3. Renderiza no canto superior direito apenas nome + empresa +
- *      foto (bolinha), reaproveitando a estrutura .topnav-user que já
- *      existe nas 5 páginas — sem markup ou CSS novos.
- *   4. Deixa o restante dos campos (e-mail, cargo, departamento,
+ *   3. Renderiza no canto superior direito nome + matrícula + foto
+ *      (bolinha), reaproveitando a estrutura .topnav-user que já
+ *      existe nas 5 páginas — sem markup ou CSS novos. A matrícula não
+ *      vem do Graph nem do proxy: é buscada no MDM (mesma tabela das
+ *      abas Aprovadores/Usuários) pelo e-mail, via GET /api/me.
+ *   4. Deixa o restante dos campos (e-mail, cargo, empresa, departamento,
  *      localização, telefones, idioma, Object ID, gestor) disponível
  *      para o resto da aplicação via window.VBMUsuario.dados().
  *
  * Tudo é tolerante a falha: token expirado, permissão negada, usuário
- * sem foto ou campo nulo não quebram a tela — o cabeçalho simplesmente
- * mantém o que já estava (iniciais + texto padrão).
+ * sem foto, sem matrícula no MDM ou campo nulo não quebram a tela — o
+ * campo em questão simplesmente não é preenchido (o HTML não tem mais
+ * usuário mockado: os 3 elementos nascem vazios e só ganham conteúdo
+ * quando um dado real chega).
  *
  * Segurança: guarda só os campos de perfil abaixo, nunca o access token
  * (quem gerencia o token é o MSAL). sessionStorage é limpo ao fechar a
@@ -65,18 +69,18 @@
   }
 
   /**
-   * Aplica nome + empresa + foto no bloco .topnav-user (canto superior
-   * direito). Usa as classes que já existem nas 5 páginas, então não
-   * depende de id novo nem de alteração de markup.
+   * Aplica nome + matrícula + foto no bloco .topnav-user (canto
+   * superior direito). Usa as classes que já existem nas 5 páginas,
+   * então não depende de id novo nem de alteração de markup.
    *
-   * Campo vazio nunca apaga o que está na tela: sem empresa cadastrada,
-   * a segunda linha continua com o texto que o HTML já trazia.
+   * Campo vazio nunca apaga o que está na tela: sem matrícula ainda
+   * carregada, a segunda linha só é tocada quando o valor chegar.
    */
   function aplicarNoTopo(dados) {
     if (!dados) return;
     try {
       var nomeEl = document.querySelector(".topnav-user-name");
-      var empresaEl = document.querySelector(".topnav-user-role");
+      var matriculaEl = document.querySelector(".topnav-user-role");
       var avatarEl = document.querySelector(".topnav-user-avatar");
 
       var nome = dados.displayName
@@ -84,7 +88,7 @@
         || dados.mail || dados.userPrincipalName;
 
       if (nomeEl && nome) nomeEl.textContent = nome;
-      if (empresaEl && dados.companyName) empresaEl.textContent = dados.companyName;
+      if (matriculaEl && dados.matricula) matriculaEl.textContent = "Matrícula " + dados.matricula;
 
       if (avatarEl) {
         if (dados.fotoBase64) {
@@ -124,6 +128,26 @@
       var res = await fetch(url, { headers: { Authorization: "Bearer " + token } });
       if (!res.ok) return null; // 401/403/404 tratados como "sem dado"
       return await res.json();
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
+   * Matrícula + nome do MDM pelo e-mail, via GET /api/me?email=... (o
+   * mesmo endpoint do piso Databricks, aqui só para a consulta ao MDM —
+   * o Graph não tem esse campo). Falha em silêncio: sem matrícula, a
+   * 2ª linha do cabeçalho simplesmente não é preenchida.
+   */
+  async function buscarMatriculaLocal(email) {
+    if (!email) return null;
+    try {
+      var res = await fetch("/api/me?email=" + encodeURIComponent(email), {
+        headers: { Accept: "application/json" },
+      });
+      if (!res.ok) return null;
+      var dados = await res.json();
+      return dados || null;
     } catch (e) {
       return null;
     }
@@ -193,6 +217,11 @@
 
         if (!me) return null; // sem o /me não há o que exibir
 
+        // A matrícula não existe no Graph — só depois de saber o e-mail
+        // real (me.mail) é que dá para buscá-la no MDM.
+        var emailReal = me.mail || me.userPrincipalName || null;
+        var mdm = await buscarMatriculaLocal(emailReal);
+
         var dados = {
           displayName: me.displayName || null,
           givenName: me.givenName || null,
@@ -216,6 +245,7 @@
               }
             : null,
           fotoBase64: foto,
+          matricula: (mdm && mdm.matricula) || null,
         };
 
         gravarCache(dados);
@@ -260,6 +290,7 @@
         id: dados.idUsuario || null,
         gestor: null,
         fotoBase64: null,
+        matricula: dados.matricula || null,
         // Marca a procedência: quem consumir dados() sabe que este
         // perfil é o parcial do proxy, não o completo do Graph.
         origem: "databricks",

@@ -203,32 +203,58 @@ apiRouter.use((req, res, next) => {
   next();
 });
 
-// Identidade do usuário logado, na visão do Databricks Apps.
+// Busca CD_MATRICULA + NM_USUARIO no MDM (kzn_mdm_hierarquia) por
+// e-mail — mesma tabela já usada nas abas Aprovadores/Usuários, aqui
+// só com outra chave de busca (e-mail em vez de ID_USUARIO). Devolve
+// null em qualquer falha: matrícula é um "extra" no cabeçalho, uma
+// falha aqui não pode derrubar a identidade do usuário.
+async function buscarMdmPorEmail(email) {
+  if (!email) return null;
+  try {
+    const result = await runQuery(
+      `SELECT TOP (1) CD_MATRICULA, NM_USUARIO FROM ${FULL_MDM_TABLE} WHERE LOWER(DS_EMAIL) = LOWER(@email)`,
+      [["email", sql.NVarChar(255), email]]
+    );
+    return result.recordset[0] || null;
+  } catch (err) {
+    console.warn("[me] falha ao consultar matrícula no MDM:", err.message);
+    return null;
+  }
+}
+
+// Identidade do usuário logado, na visão do Databricks Apps + MDM.
 //
 // O app roda ATRÁS do proxy do Databricks Apps, que já autenticou a
 // pessoa (Entra ID) antes de a requisição chegar aqui e repassa a
 // identidade em cabeçalhos X-Forwarded-*. Isso dá nome/e-mail reais sem
-// nenhuma configuração extra e sem segundo login.
+// nenhuma configuração extra e sem segundo login. A matrícula (que não
+// vem do proxy nem do Graph) é buscada no MDM pelo e-mail.
 //
-// NÃO substitui o Microsoft Graph: aqui não há foto, empresa, cargo nem
+// NÃO substitui o Microsoft Graph: aqui não há foto, cargo, empresa nem
 // gestor — esses campos só vêm do Graph (ver js/usuario-graph.js). Este
-// endpoint é o piso: garante que o cabeçalho mostre a pessoa certa
+// endpoint é o piso de identidade + a matrícula, usados no cabeçalho
 // mesmo antes de o MSAL estar configurado.
+//
+// ?email=<e-mail> permite consultar a matrícula pelo e-mail do GRAPH,
+// para quando o MSAL já resolveu a conta mas o proxy do Databricks não
+// mandou X-Forwarded-Email (ex.: acesso fora do Databricks Apps).
 //
 // Segurança: os X-Forwarded-* são reescritos pelo proxy do Databricks a
 // cada requisição, então não são forjáveis por quem acessa o app pela
 // URL publicada. O access token repassado NÃO é devolvido ao navegador
 // — só informamos se ele existe, para diagnóstico.
-apiRouter.get("/me", (req, res) => {
+apiRouter.get("/me", async (req, res) => {
   const h = (nome) => req.get(nome) || null;
 
   const email = h("X-Forwarded-Email");
   const usuario = h("X-Forwarded-Preferred-Username") || h("X-Forwarded-User");
+  const emailParaMdm = (typeof req.query.email === "string" && req.query.email.trim()) || email;
+
   // O proxy não manda nome de exibição; derivamos algo apresentável do
-  // e-mail ("maria.souza@vale.com" -> "Maria Souza") só como fallback,
-  // até o Graph (que tem o displayName real) responder.
+  // e-mail ("maria.souza@vale.com" -> "Maria Souza") só como último
+  // fallback — o MDM (nome real) e o Graph (displayName) têm prioridade.
   const base = (email || usuario || "").split("@")[0];
-  const nome = base
+  const nomeDerivado = base
     ? base
         .split(/[._-]+/)
         .filter(Boolean)
@@ -236,12 +262,15 @@ apiRouter.get("/me", (req, res) => {
         .join(" ")
     : null;
 
+  const mdm = await buscarMdmPorEmail(emailParaMdm);
+
   res.json({
     autenticado: !!(email || usuario),
-    nome: nome,
+    nome: (mdm && mdm.NM_USUARIO) || nomeDerivado,
     email: email,
     usuario: usuario,
     idUsuario: h("X-Forwarded-User"),
+    matricula: (mdm && mdm.CD_MATRICULA) || null,
     // Diagnóstico: mostra QUAIS cabeçalhos o Databricks está mandando,
     // sem expor o valor do token.
     _diagnostico: {
