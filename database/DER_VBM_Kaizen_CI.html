@@ -34,8 +34,8 @@ body[data-bg="dark"] h1{color:var(--vbm-blue-light);}
 .sw{width:13px;height:13px;border-radius:.25rem;display:inline-block;vertical-align:-2px;margin-right:.35rem;}
 .ln{display:inline-block;width:20px;height:3px;border-radius:2px;vertical-align:2px;margin-right:.35rem;}
 .scroll{overflow:auto;padding-bottom:1.5rem;border:1px dashed var(--border);border-radius:.5rem;transition:border-color .3s var(--ease-out);}
-#canvas{position:relative;width:2200px;height:2300px;margin:40px;}
-svg#links{position:absolute;top:0;left:0;width:2200px;height:2300px;overflow:visible;filter:drop-shadow(0 1px 1px rgba(0,0,0,.06));pointer-events:none;}
+#canvas{position:relative;width:2200px;height:2432px;margin:40px;}
+svg#links{position:absolute;top:0;left:0;width:2200px;height:2432px;overflow:visible;filter:drop-shadow(0 1px 1px rgba(0,0,0,.06));pointer-events:none;}
 .entity{cursor:grab;user-select:none;}
 .entity:active{cursor:grabbing;}
 .entity.dragging{z-index:9;box-shadow:0 16px 40px rgba(0,0,0,.22);}
@@ -121,7 +121,7 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
 <div class="header-row">
   <div>
     <h1>DER — VBM Kaizen</h1>
-    <p class="subtitle" data-i18n="der.subtitle">Schema <b>CI</b> · SQL Server 2016+ · 15 tabelas · gerado a partir do CI_KZN_DDL_v2.sql</p>
+    <p class="subtitle" data-i18n="der.subtitle">Schema <b>CI</b> · SQL Server 2016+ · 17 tabelas · gerado a partir do CI_KZN_DDL_v2.sql</p>
   </div>
   <button class="settings-btn" id="settingsBtn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="settingsPanel" title="Configurações" data-i18n-title="settings.btnTitle">
     <svg width="17" height="17" viewBox="0 0 20 20" fill="none">
@@ -186,34 +186,45 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
 <svg id="links"><defs>
   <marker id="arrow-key" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker>
 </defs>
-<path class="rel" d="M260,379 L295,379 Q305,379 305,369 L305,71 Q305,61 315,61 L350,61" marker-end="url(#arrow-key)" data-from="e_CATEGORIA" data-to="e_IDIOMA" data-fk-row="1"/>
-<path class="rel" d="M610,379 L490,379 Q480,379 480,369 L480,71 Q480,61 470,61 L350,61" marker-end="url(#arrow-key)" data-from="e_REPLICACAO" data-to="e_IDIOMA" data-fk-row="1"/>
-<path class="rel" d="M700,379 L665,379 Q655,379 655,369 L655,71 Q655,61 645,61 L610,61" marker-end="url(#arrow-key)" data-from="e_DESPERDICIO" data-to="e_IDIOMA" data-fk-row="1"/>
-<path class="rel" d="M1400,379 L1015,379 Q1005,379 1005,369 L1005,71 Q1005,61 995,61 L610,61" marker-end="url(#arrow-key)" data-from="e_TIPO_RESULTADO" data-to="e_IDIOMA" data-fk-row="1"/>
-<path class="rel" d="M525,675 L610,675 Q612.5,675 612.5,672.5 L612.5,63.5 Q612.5,61 615,61 L610,61" marker-end="url(#arrow-key)" data-from="e_RESULTADOS" data-to="e_IDIOMA" data-fk-row="1"/>
-<path class="rel" d="M785,719 L1082.5,719 Q1092.5,719 1092.5,709 L1092.5,367 Q1092.5,357 1102.5,357 L1400,357" marker-end="url(#arrow-key)" data-from="e_RESULTADOS" data-to="e_TIPO_RESULTADO" data-fk-row="3"/>
-<path class="rel" d="M875,675 L752.5,675 Q742.5,675 742.5,665 L742.5,71 Q742.5,61 732.5,61 L610,61" marker-end="url(#arrow-key)" data-from="e_MOTIVO" data-to="e_IDIOMA" data-fk-row="1"/>
-<path class="rel" d="M1050,61 L960,61" marker-end="url(#arrow-key)" data-from="e_APROVADOR" data-to="e_MDM" data-fk-row="0"/>
-<path class="rel" d="M795,1023 L757.5,1023 Q747.5,1023 747.5,1013 L747.5,71 Q747.5,61 737.5,61 L700,61" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_MDM" data-fk-row="1"/>
-<path class="rel" d="M795,1045 L757.5,1045 Q747.5,1045 747.5,1035 L747.5,71 Q747.5,61 737.5,61 L700,61" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_MDM" data-fk-row="2"/>
-<path class="rel" d="M795,1529 L757.5,1529 Q747.5,1529 747.5,1519 L747.5,71 Q747.5,61 737.5,61 L700,61" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_MDM" data-fk-row="24"/>
-<path class="rel soft" d="M475,1089 L357.5,1089 Q347.5,1089 347.5,1079 L347.5,367 Q347.5,357 337.5,357 L260,357" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_CATEGORIA" data-fk-row="4"/>
-<path class="rel soft" d="M475,1111 L512.5,1111 Q522.5,1111 522.5,1101 L522.5,367 Q522.5,357 532.5,357 L610,357" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_REPLICACAO" data-fk-row="5"/>
-<path class="rel" d="M795,1199 L1302.5,1199 Q1312.5,1199 1312.5,1189 L1312.5,71 Q1312.5,61 1322.5,61 L1050,61" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_APROVADOR" data-fk-row="9"/>
-<path class="rel soft" d="M795,1331 L795,1331 Q787.5,1331 787.5,1323.5 L787.5,364.5 Q787.5,357 780,357 L700,357" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_DESPERDICIO" data-fk-row="15"/>
-<path class="rel" d="M795,1397 L1177.5,1397 Q1187.5,1397 1187.5,1387 L1187.5,367 Q1187.5,357 1197.5,357 L1050,357" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_MOEDA" data-fk-row="18"/>
-<path class="rel soft" d="M795,1463 L825,1463 Q835,1463 835,1453 L835,663 Q835,653 845,653 L875,653" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_MOTIVO" data-fk-row="21"/>
-<path class="rel" d="M885,1023 L850,1023 Q840,1023 840,1013 L840,1011 Q840,1001 830,1001 L795,1001" marker-end="url(#arrow-key)" data-from="e_LOG" data-to="e_PVC" data-fk-row="1"/>
-<path class="rel" d="M885,1089 L912.5,1089 Q922.5,1089 922.5,1079 L922.5,71 Q922.5,61 932.5,61 L960,61" marker-end="url(#arrow-key)" data-from="e_LOG" data-to="e_MDM" data-fk-row="4"/>
-<path class="rel" d="M610,1693 L552.5,1693 Q542.5,1693 542.5,1683 L542.5,1011 Q542.5,1001 532.5,1001 L475,1001" marker-end="url(#arrow-key)" data-from="e_MEMBROS" data-to="e_PVC" data-fk-row="0"/>
-<path class="rel" d="M610,1715 L645,1715 Q655,1715 655,1705 L655,71 Q655,61 665,61 L700,61" marker-end="url(#arrow-key)" data-from="e_MEMBROS" data-to="e_MDM" data-fk-row="1"/>
-<path class="rel" d="M700,1693 L737.5,1693 Q747.5,1693 747.5,1683 L747.5,1011 Q747.5,1001 757.5,1001 L795,1001" marker-end="url(#arrow-key)" data-from="e_RESULTADO_KAIZEN" data-to="e_PVC" data-fk-row="0"/>
-<path class="rel soft" d="M700,1715 L787.5,1715 Q797.5,1715 797.5,1705 L797.5,663 Q797.5,653 807.5,653 L785,653" marker-end="url(#arrow-key)" data-from="e_RESULTADO_KAIZEN" data-to="e_RESULTADOS" data-fk-row="1"/>
-<path class="rel" d="M1050,1715 L932.5,1715 Q922.5,1715 922.5,1705 L922.5,1011 Q922.5,1001 912.5,1001 L795,1001" marker-end="url(#arrow-key)" data-from="e_KAIZEN_HIERARQUIA" data-to="e_PVC" data-fk-row="1"/>
+<path class="rel" d="M260,511 L295,511 Q305,511 305,501 L305,71 Q305,61 315,61 L350,61" marker-end="url(#arrow-key)" data-from="e_CATEGORIA" data-to="e_IDIOMA" data-fk-row="1"/>
+<path class="rel" d="M610,511 L490,511 Q480,511 480,501 L480,71 Q480,61 470,61 L350,61" marker-end="url(#arrow-key)" data-from="e_REPLICACAO" data-to="e_IDIOMA" data-fk-row="1"/>
+<path class="rel" d="M700,511 L665,511 Q655,511 655,501 L655,71 Q655,61 645,61 L610,61" marker-end="url(#arrow-key)" data-from="e_DESPERDICIO" data-to="e_IDIOMA" data-fk-row="1"/>
+<path class="rel" d="M1400,511 L1015,511 Q1005,511 1005,501 L1005,71 Q1005,61 995,61 L610,61" marker-end="url(#arrow-key)" data-from="e_TIPO_RESULTADO" data-to="e_IDIOMA" data-fk-row="1"/>
+<path class="rel" d="M525,807 L610,807 Q612.5,807 612.5,804.5 L612.5,63.5 Q612.5,61 615,61 L610,61" marker-end="url(#arrow-key)" data-from="e_RESULTADOS" data-to="e_IDIOMA" data-fk-row="1"/>
+<path class="rel" d="M785,851 L1082.5,851 Q1092.5,851 1092.5,841 L1092.5,499 Q1092.5,489 1102.5,489 L1400,489" marker-end="url(#arrow-key)" data-from="e_RESULTADOS" data-to="e_TIPO_RESULTADO" data-fk-row="3"/>
+<path class="rel" d="M875,807 L752.5,807 Q742.5,807 742.5,797 L742.5,71 Q742.5,61 732.5,61 L610,61" marker-end="url(#arrow-key)" data-from="e_MOTIVO" data-to="e_IDIOMA" data-fk-row="1"/>
+<path class="rel" d="M1050,83 L1015,83 Q1005,83 1005,73 L1005,71 Q1005,61 995,61 L960,61" marker-end="url(#arrow-key)" data-from="e_APROVADOR" data-to="e_MDM" data-fk-row="1"/>
+<path class="rel" d="M1400,83 L1190,83 Q1180,83 1180,73 L1180,71 Q1180,61 1170,61 L960,61" marker-end="url(#arrow-key)" data-from="e_ADMIN" data-to="e_MDM" data-fk-row="1"/>
+<path class="rel" d="M1750,105 L1365,105 Q1355,105 1355,95 L1355,71 Q1355,61 1345,61 L960,61" marker-end="url(#arrow-key)" data-from="e_TIPO_USUARIO" data-to="e_MDM" data-fk-row="2"/>
+<path class="rel" d="M960,105 L1345,105 Q1355,105 1355,95 L1355,71 Q1355,61 1365,61 L1750,61" marker-end="url(#arrow-key)" data-from="e_MDM" data-to="e_TIPO_USUARIO" data-fk-row="2"/>
+<path class="rel" d="M610,193 L645,193 Q655,193 655,183 L655,71 Q655,61 665,61 L700,61" marker-end="url(#arrow-key)" data-from="e_IDIOMA" data-to="e_MDM" data-fk-row="6"/>
+<path class="rel" d="M260,621 L470,621 Q480,621 480,611 L480,71 Q480,61 490,61 L700,61" marker-end="url(#arrow-key)" data-from="e_CATEGORIA" data-to="e_MDM" data-fk-row="6"/>
+<path class="rel" d="M610,621 L645,621 Q655,621 655,611 L655,71 Q655,61 665,61 L700,61" marker-end="url(#arrow-key)" data-from="e_REPLICACAO" data-to="e_MDM" data-fk-row="6"/>
+<path class="rel" d="M960,621 L840,621 Q830,621 830,611 L830,71 Q830,61 820,61 L700,61" marker-end="url(#arrow-key)" data-from="e_DESPERDICIO" data-to="e_MDM" data-fk-row="6"/>
+<path class="rel" d="M1050,599 L1015,599 Q1005,599 1005,589 L1005,71 Q1005,61 995,61 L960,61" marker-end="url(#arrow-key)" data-from="e_MOEDA" data-to="e_MDM" data-fk-row="5"/>
+<path class="rel" d="M1400,577 L1190,577 Q1180,577 1180,567 L1180,71 Q1180,61 1170,61 L960,61" marker-end="url(#arrow-key)" data-from="e_TIPO_RESULTADO" data-to="e_MDM" data-fk-row="4"/>
+<path class="rel" d="M875,895 L960,895 Q962.5,895 962.5,892.5 L962.5,63.5 Q962.5,61 965,61 L960,61" marker-end="url(#arrow-key)" data-from="e_MOTIVO" data-to="e_MDM" data-fk-row="5"/>
+<path class="rel" d="M785,939 L700,939 Q697.5,939 697.5,936.5 L697.5,63.5 Q697.5,61 695,61 L700,61" marker-end="url(#arrow-key)" data-from="e_RESULTADOS" data-to="e_MDM" data-fk-row="7"/>
+<path class="rel" d="M795,1155 L757.5,1155 Q747.5,1155 747.5,1145 L747.5,71 Q747.5,61 737.5,61 L700,61" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_MDM" data-fk-row="1"/>
+<path class="rel" d="M795,1177 L757.5,1177 Q747.5,1177 747.5,1167 L747.5,71 Q747.5,61 737.5,61 L700,61" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_MDM" data-fk-row="2"/>
+<path class="rel" d="M795,1661 L757.5,1661 Q747.5,1661 747.5,1651 L747.5,71 Q747.5,61 737.5,61 L700,61" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_MDM" data-fk-row="24"/>
+<path class="rel soft" d="M475,1221 L357.5,1221 Q347.5,1221 347.5,1211 L347.5,499 Q347.5,489 337.5,489 L260,489" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_CATEGORIA" data-fk-row="4"/>
+<path class="rel soft" d="M475,1243 L512.5,1243 Q522.5,1243 522.5,1233 L522.5,499 Q522.5,489 532.5,489 L610,489" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_REPLICACAO" data-fk-row="5"/>
+<path class="rel" d="M795,1331 L1302.5,1331 Q1312.5,1331 1312.5,1321 L1312.5,71 Q1312.5,61 1322.5,61 L1050,61" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_APROVADOR" data-fk-row="9"/>
+<path class="rel soft" d="M795,1463 L795,1463 Q787.5,1463 787.5,1455.5 L787.5,496.5 Q787.5,489 780,489 L700,489" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_DESPERDICIO" data-fk-row="15"/>
+<path class="rel" d="M795,1529 L1177.5,1529 Q1187.5,1529 1187.5,1519 L1187.5,499 Q1187.5,489 1197.5,489 L1050,489" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_MOEDA" data-fk-row="18"/>
+<path class="rel soft" d="M795,1617 L825,1617 Q835,1617 835,1607 L835,795 Q835,785 845,785 L875,785" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_MOTIVO" data-fk-row="22"/>
+<path class="rel" d="M885,1155 L850,1155 Q840,1155 840,1145 L840,1143 Q840,1133 830,1133 L795,1133" marker-end="url(#arrow-key)" data-from="e_LOG" data-to="e_PVC" data-fk-row="1"/>
+<path class="rel" d="M885,1221 L912.5,1221 Q922.5,1221 922.5,1211 L922.5,71 Q922.5,61 932.5,61 L960,61" marker-end="url(#arrow-key)" data-from="e_LOG" data-to="e_MDM" data-fk-row="4"/>
+<path class="rel" d="M610,1825 L552.5,1825 Q542.5,1825 542.5,1815 L542.5,1143 Q542.5,1133 532.5,1133 L475,1133" marker-end="url(#arrow-key)" data-from="e_MEMBROS" data-to="e_PVC" data-fk-row="0"/>
+<path class="rel" d="M610,1847 L645,1847 Q655,1847 655,1837 L655,71 Q655,61 665,61 L700,61" marker-end="url(#arrow-key)" data-from="e_MEMBROS" data-to="e_MDM" data-fk-row="1"/>
+<path class="rel" d="M700,1825 L737.5,1825 Q747.5,1825 747.5,1815 L747.5,1143 Q747.5,1133 757.5,1133 L795,1133" marker-end="url(#arrow-key)" data-from="e_RESULTADO_KAIZEN" data-to="e_PVC" data-fk-row="0"/>
+<path class="rel soft" d="M700,1847 L787.5,1847 Q797.5,1847 797.5,1837 L797.5,795 Q797.5,785 807.5,785 L785,785" marker-end="url(#arrow-key)" data-from="e_RESULTADO_KAIZEN" data-to="e_RESULTADOS" data-fk-row="1"/>
+<path class="rel" d="M1050,1847 L932.5,1847 Q922.5,1847 922.5,1837 L922.5,1143 Q922.5,1133 912.5,1133 L795,1133" marker-end="url(#arrow-key)" data-from="e_KAIZEN_HIERARQUIA" data-to="e_PVC" data-fk-row="1"/>
 </svg>
 
 <div class="group-label" style="left:0;top:-26px;" data-i18n="group.masters">Mestres de referência</div>
-<div class="entity" id="e_IDIOMA" style="left:350px;top:0;width:260px;height:186px;">
+<div class="entity" id="e_IDIOMA" style="left:350px;top:0;width:260px;height:230px;">
   <div class="entity-head"><div class="entity-icon">ID</div><div class="entity-title">KZN_IDIOMA</div></div>
   <div class="entity-body">
     <div class="field"><span class="field-name pk">ID_IDIOMA</span><span class="field-type">INT</span></div>
@@ -221,31 +232,60 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
     <div class="field"><span class="field-name">SG_IDIOMA</span><span class="field-type">VARCHAR(5)</span></div>
     <div class="field"><span class="field-name">NM_IDIOMA</span><span class="field-type">VARCHAR(30)</span></div>
     <div class="field"><span class="field-name">NM_PAIS</span><span class="field-type">VARCHAR(30)</span></div>
+    <div class="field"><span class="field-name">SG_ATIVO</span><span class="field-type">VARCHAR(1)</span></div>
+    <div class="field"><span class="field-name fk">ID_USUARIO</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
   </div>
 </div>
-<div class="entity" id="e_MDM" style="left:700px;top:0;width:260px;height:186px;">
+<div class="entity" id="e_MDM" style="left:700px;top:0;width:260px;height:362px;">
   <div class="entity-head"><div class="entity-icon">RH</div><div class="entity-title">KZN_MDM_HIERARQUIA</div></div>
   <div class="entity-body">
     <div class="field"><span class="field-name pk">ID_USUARIO</span><span class="field-type">INT</span></div>
-    <div class="field"><span class="field-name">CD_MATRICULA</span><span class="field-type">VARCHAR(30)</span></div>
+    <div class="field"><span class="field-name pk">CD_MATRICULA</span><span class="field-type">VARCHAR(30)</span></div>
+    <div class="field"><span class="field-name fk">ID_TIPO_USUARIO</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name">NM_USUARIO</span><span class="field-type">VARCHAR(30)</span></div>
-    <div class="field"><span class="field-name">DS_EMAIL</span><span class="field-type">VARCHAR(100)</span></div>
+    <div class="field"><span class="field-name">CD_EMAIL</span><span class="field-type">VARCHAR(100)</span></div>
+    <div class="field"><span class="field-name">NM_SITUACAO</span><span class="field-type">VARCHAR(30)</span></div>
+    <div class="field"><span class="field-name">SG_ATIVO</span><span class="field-type">VARCHAR(1)</span></div>
+    <div class="field"><span class="field-name">NM_POSICAO</span><span class="field-type">VARCHAR(30)</span></div>
+    <div class="field"><span class="field-name">NM_PAIS</span><span class="field-type">VARCHAR(30)</span></div>
+    <div class="field"><span class="field-name">NM_ESTADO</span><span class="field-type">VARCHAR(30)</span></div>
+    <div class="field"><span class="field-name">NM_CIDADE</span><span class="field-type">VARCHAR(30)</span></div>
+    <div class="field"><span class="field-name">NM_SITE</span><span class="field-type">VARCHAR(30)</span></div>
     <div class="field note">NM_HIERARQUIA_N1…N8 (8x, VARCHAR(50))</div>
     <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
   </div>
 </div>
-<div class="entity role" id="e_APROVADOR" style="left:1050px;top:0;width:260px;height:120px;">
+<div class="entity role" id="e_APROVADOR" style="left:1050px;top:0;width:260px;height:142px;">
   <div class="entity-head"><div class="entity-icon">AP</div><div class="entity-title">KZN_APROVADOR</div></div>
   <div class="entity-body">
+    <div class="field"><span class="field-name pk">ID_APROVADOR</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name pk fk">ID_USUARIO</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name">SG_ATIVO</span><span class="field-type">VARCHAR(1)</span></div>
     <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
   </div>
 </div>
+<div class="entity role" id="e_ADMIN" style="left:1400px;top:0;width:260px;height:142px;">
+  <div class="entity-head"><div class="entity-icon">AD</div><div class="entity-title">KZN_ADMIN</div></div>
+  <div class="entity-body">
+    <div class="field"><span class="field-name pk">ID_ADMIN</span><span class="field-type">INT</span></div>
+    <div class="field"><span class="field-name pk fk">ID_USUARIO</span><span class="field-type">INT</span></div>
+    <div class="field"><span class="field-name">SG_ATIVO</span><span class="field-type">VARCHAR(1)</span></div>
+    <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
+  </div>
+</div>
+<div class="entity" id="e_TIPO_USUARIO" style="left:1750px;top:0;width:260px;height:142px;">
+  <div class="entity-head"><div class="entity-icon">TU</div><div class="entity-title">KZN_TIPO_USUARIO</div></div>
+  <div class="entity-body">
+    <div class="field"><span class="field-name pk">ID_TIPO_USUARIO</span><span class="field-type">INT</span></div>
+    <div class="field"><span class="field-name">NM_USUARIO</span><span class="field-type">VARCHAR(30)</span></div>
+    <div class="field"><span class="field-name fk">ID_USUARIO</span><span class="field-type">INT</span></div>
+    <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
+  </div>
+</div>
 
-<div class="group-label" style="left:0;top:270px;" data-i18n="group.domain">Domínio do Kaizen (cadastros padronizados)</div>
-<div class="entity" id="e_CATEGORIA" style="left:0;top:296px;width:260px;height:208px;">
+<div class="group-label" style="left:0;top:402px;" data-i18n="group.domain">Domínio do Kaizen (cadastros padronizados)</div>
+<div class="entity" id="e_CATEGORIA" style="left:0;top:428px;width:260px;height:230px;">
   <div class="entity-head"><div class="entity-icon">CT</div><div class="entity-title">KZN_CATEGORIA</div></div>
   <div class="entity-body">
     <div class="field"><span class="field-name pk">ID_CATEGORIA</span><span class="field-type">INT</span></div>
@@ -254,10 +294,11 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
     <div class="field"><span class="field-name">NM_CATEGORIA</span><span class="field-type">VARCHAR(30)</span></div>
     <div class="field"><span class="field-name">DS_CATEGORIA</span><span class="field-type">VARCHAR(100)</span></div>
     <div class="field"><span class="field-name">SG_ATIVO</span><span class="field-type">VARCHAR(1)</span></div>
+    <div class="field"><span class="field-name fk">ID_USUARIO</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
   </div>
 </div>
-<div class="entity" id="e_REPLICACAO" style="left:350px;top:296px;width:260px;height:208px;">
+<div class="entity" id="e_REPLICACAO" style="left:350px;top:428px;width:260px;height:230px;">
   <div class="entity-head"><div class="entity-icon">RP</div><div class="entity-title">KZN_REPLICACAO</div></div>
   <div class="entity-body">
     <div class="field"><span class="field-name pk">ID_REPLICACAO</span><span class="field-type">INT</span></div>
@@ -266,10 +307,11 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
     <div class="field"><span class="field-name">NM_REPLICACAO</span><span class="field-type">VARCHAR(30)</span></div>
     <div class="field"><span class="field-name">DS_REPLICACAO</span><span class="field-type">VARCHAR(100)</span></div>
     <div class="field"><span class="field-name">SG_ATIVO</span><span class="field-type">VARCHAR(1)</span></div>
+    <div class="field"><span class="field-name fk">ID_USUARIO</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
   </div>
 </div>
-<div class="entity" id="e_DESPERDICIO" style="left:700px;top:296px;width:260px;height:208px;">
+<div class="entity" id="e_DESPERDICIO" style="left:700px;top:428px;width:260px;height:230px;">
   <div class="entity-head"><div class="entity-icon">DP</div><div class="entity-title">KZN_DESPERDICIO</div></div>
   <div class="entity-body">
     <div class="field"><span class="field-name pk">ID_DESPERDICIO</span><span class="field-type">INT</span></div>
@@ -278,10 +320,11 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
     <div class="field"><span class="field-name">NM_DESPERDICIO</span><span class="field-type">VARCHAR(30)</span></div>
     <div class="field"><span class="field-name">DS_DESPERDICIO</span><span class="field-type">VARCHAR(100)</span></div>
     <div class="field"><span class="field-name">SG_ATIVO</span><span class="field-type">VARCHAR(1)</span></div>
+    <div class="field"><span class="field-name fk">ID_USUARIO</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
   </div>
 </div>
-<div class="entity" id="e_MOEDA" style="left:1050px;top:296px;width:260px;height:186px;">
+<div class="entity" id="e_MOEDA" style="left:1050px;top:428px;width:260px;height:208px;">
   <div class="entity-head"><div class="entity-icon">MO</div><div class="entity-title">KZN_MOEDA</div></div>
   <div class="entity-body">
     <div class="field"><span class="field-name pk">ID_MOEDA</span><span class="field-type">INT</span></div>
@@ -289,20 +332,23 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
     <div class="field"><span class="field-name">SG_MOEDA</span><span class="field-type">CHAR(3)</span></div>
     <div class="field"><span class="field-name">NM_PAIS</span><span class="field-type">VARCHAR(30)</span></div>
     <div class="field"><span class="field-name">SG_ATIVO</span><span class="field-type">VARCHAR(1)</span></div>
+    <div class="field"><span class="field-name fk">ID_USUARIO</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
   </div>
 </div>
-<div class="entity" id="e_TIPO_RESULTADO" style="left:1400px;top:296px;width:260px;height:142px;">
+<div class="entity" id="e_TIPO_RESULTADO" style="left:1400px;top:428px;width:260px;height:186px;">
   <div class="entity-head"><div class="entity-icon">TR</div><div class="entity-title">KZN_TIPO_RESULTADO</div></div>
   <div class="entity-body">
     <div class="field"><span class="field-name pk">ID_TIPO_RESULTADO</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name pk fk">ID_IDIOMA</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name">NM_TIPO_RESULTADO</span><span class="field-type">VARCHAR(30)</span></div>
+    <div class="field"><span class="field-name">SG_ATIVO</span><span class="field-type">VARCHAR(1)</span></div>
+    <div class="field"><span class="field-name fk">ID_USUARIO</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
   </div>
 </div>
 
-<div class="entity" id="e_RESULTADOS" style="left:525px;top:592px;width:260px;height:230px;">
+<div class="entity" id="e_RESULTADOS" style="left:525px;top:724px;width:260px;height:252px;">
   <div class="entity-head"><div class="entity-icon">RS</div><div class="entity-title">KZN_RESULTADOS</div></div>
   <div class="entity-body">
     <div class="field"><span class="field-name pk">ID_RESULTADO</span><span class="field-type">INT</span></div>
@@ -312,22 +358,25 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
     <div class="field"><span class="field-name">NM_RESULTADO</span><span class="field-type">VARCHAR(30)</span></div>
     <div class="field"><span class="field-name">DS_RESULTADO</span><span class="field-type">VARCHAR(100)</span></div>
     <div class="field"><span class="field-name">SG_ATIVO</span><span class="field-type">VARCHAR(1)</span></div>
+    <div class="field"><span class="field-name fk">ID_USUARIO</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
   </div>
 </div>
-<div class="entity" id="e_MOTIVO" style="left:875px;top:592px;width:260px;height:164px;">
+<div class="entity" id="e_MOTIVO" style="left:875px;top:724px;width:260px;height:208px;">
   <div class="entity-head"><div class="entity-icon">MR</div><div class="entity-title">KZN_MOTIVO_REPROVACAO</div></div>
   <div class="entity-body">
     <div class="field"><span class="field-name pk">ID_MOTIVO</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name pk fk">ID_IDIOMA</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name">NM_MOTIVO</span><span class="field-type">VARCHAR(30)</span></div>
     <div class="field"><span class="field-name">DS_MOTIVO</span><span class="field-type">VARCHAR(100)</span></div>
+    <div class="field"><span class="field-name">SG_ATIVO</span><span class="field-type">VARCHAR(1)</span></div>
+    <div class="field"><span class="field-name fk">ID_USUARIO</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
   </div>
 </div>
 
-<div class="group-label" style="left:0;top:914px;" data-i18n="group.main">Tabela principal &amp; auditoria</div>
-<div class="entity main" id="e_PVC" style="left:475px;top:940px;width:320px;height:582px;">
+<div class="group-label" style="left:0;top:1046px;" data-i18n="group.main">Tabela principal &amp; auditoria</div>
+<div class="entity main" id="e_PVC" style="left:475px;top:1072px;width:320px;height:604px;">
   <div class="entity-head"><div class="entity-icon">KZ</div><div class="entity-title">KZN_PEDRAVISAOCONSOLIDADA</div></div>
   <div class="entity-body">
     <div class="field"><span class="field-name pk">ID_KAIZEN</span><span class="field-type">INT</span></div>
@@ -350,14 +399,14 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
     <div class="field"><span class="field-name">VL_RESULTADO_FINANCEIRO</span><span class="field-type">DECIMAL(18,2)</span></div>
     <div class="field"><span class="field-name fk">ID_MOEDA</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name">DS_RESULTADO_ESPERADO</span><span class="field-type">VARCHAR(100)</span></div>
+    <div class="field"><span class="field-name">DT_CRIACAO</span><span class="field-type">DATETIME2</span></div>
     <div class="field"><span class="field-name">DT_CONCLUSAO</span><span class="field-type">DATE</span></div>
     <div class="field"><span class="field-name fk">ID_MOTIVO</span><span class="field-type">INT</span></div>
-    <div class="field"><span class="field-name">DT_CRIACAO</span><span class="field-type">DATETIME2</span></div>
     <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
     <div class="field"><span class="field-name fk">ID_USUARIO_ATUALIZACAO</span><span class="field-type">INT</span></div>
   </div>
 </div>
-<div class="entity log" id="e_LOG" style="left:885px;top:940px;width:300px;height:164px;">
+<div class="entity log" id="e_LOG" style="left:885px;top:1072px;width:300px;height:164px;">
   <div class="entity-head"><div class="entity-icon">LG</div><div class="entity-title">KZN_LOG_PEDRAVISAOCONSOLIDADA</div></div>
   <div class="entity-body">
     <div class="field"><span class="field-name pk">ID_LOG</span><span class="field-type">INT</span></div>
@@ -368,8 +417,8 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
   </div>
 </div>
 
-<div class="group-label" style="left:0;top:1606px;" data-i18n="group.aux">Auxiliares / junção</div>
-<div class="entity aux" id="e_MEMBROS" style="left:350px;top:1632px;width:260px;height:120px;">
+<div class="group-label" style="left:0;top:1738px;" data-i18n="group.aux">Auxiliares / junção</div>
+<div class="entity aux" id="e_MEMBROS" style="left:350px;top:1764px;width:260px;height:120px;">
   <div class="entity-head"><div class="entity-icon">ME</div><div class="entity-title">KZN_MEMBROS_EQUIPE</div></div>
   <div class="entity-body">
     <div class="field"><span class="field-name pk fk">ID_KAIZEN</span><span class="field-type">INT</span></div>
@@ -377,7 +426,7 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
     <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
   </div>
 </div>
-<div class="entity aux" id="e_RESULTADO_KAIZEN" style="left:700px;top:1632px;width:260px;height:142px;">
+<div class="entity aux" id="e_RESULTADO_KAIZEN" style="left:700px;top:1764px;width:260px;height:142px;">
   <div class="entity-head"><div class="entity-icon">RK</div><div class="entity-title">KZN_RESULTADO_KAIZEN</div></div>
   <div class="entity-body">
     <div class="field"><span class="field-name pk fk">ID_KAIZEN</span><span class="field-type">INT</span></div>
@@ -386,7 +435,7 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
     <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
   </div>
 </div>
-<div class="entity aux" id="e_KAIZEN_HIERARQUIA" style="left:1050px;top:1632px;width:260px;height:142px;">
+<div class="entity aux" id="e_KAIZEN_HIERARQUIA" style="left:1050px;top:1764px;width:260px;height:142px;">
   <div class="entity-head"><div class="entity-icon">KH</div><div class="entity-title">KZN_KAIZEN_HIERARQUIA</div></div>
   <div class="entity-body">
     <div class="field"><span class="field-name pk">ID_KAIZEN_HIERARQUIA</span><span class="field-type">INT</span></div>
@@ -508,7 +557,8 @@ function updateLine(line, allEntities){
   if(!fromEl || !toEl) return;
   const rFrom = rectOf(fromEl), rTo = rectOf(toEl);
   const fkRow = parseInt(line.dataset.fkRow||0, 10);
-  const {p1,p2} = rowAnchors(rFrom, fkRow, rTo, 0);
+  const pkRow = parseInt(line.dataset.pkRow||0, 10);
+  const {p1,p2} = rowAnchors(rFrom, fkRow, rTo, pkRow);
   const others = allEntities.filter(x=>x.el!==fromEl && x.el!==toEl).map(x=>x.r);
   const xMid = findSafeXMid(p1, p2, others);
   line.setAttribute('d', elbowPath(p1, p2, xMid));
@@ -520,7 +570,7 @@ function updateAllLines(){
 
 // ── arrastar pelo cabeçalho ─────────────────────────────────────
 let dragEl = null, startX = 0, startY = 0, origLeft = 0, origTop = 0, dragMoved = false;
-const CW = 2200, CH = 2300; // deve bater com #canvas no CSS
+const CW = 2200, CH = 2432; // deve bater com #canvas no CSS
 const CLICK_THRESHOLD = 4; // px — abaixo disso, pointerdown+up conta como clique (seleção), não arraste
 
 document.querySelectorAll('.entity').forEach(card=>{
@@ -620,7 +670,7 @@ document.getElementById('btnReset').addEventListener('click', ()=>{
 
   const I18N = {
     'pt-BR': {
-      'der.subtitle': 'Schema <b>CI</b> · SQL Server 2016+ · 15 tabelas · gerado a partir do CI_KZN_DDL_v2.sql',
+      'der.subtitle': 'Schema <b>CI</b> · SQL Server 2016+ · 17 tabelas · gerado a partir do CI_KZN_DDL_v2.sql',
       'legend.master': 'Mestre / domínio',
       'legend.role': 'Papel (KZN_APROVADOR)',
       'legend.main': 'Tabela principal',
@@ -645,7 +695,7 @@ document.getElementById('btnReset').addEventListener('click', ()=>{
       'settings.languageInfo': 'Idioma da interface (rótulos e legendas — nomes de tabela/campo não traduzem)',
     },
     'en': {
-      'der.subtitle': 'Schema <b>CI</b> · SQL Server 2016+ · 15 tables · generated from CI_KZN_DDL_v2.sql',
+      'der.subtitle': 'Schema <b>CI</b> · SQL Server 2016+ · 17 tables · generated from CI_KZN_DDL_v2.sql',
       'legend.master': 'Master / domain',
       'legend.role': 'Role (KZN_APROVADOR)',
       'legend.main': 'Main table',

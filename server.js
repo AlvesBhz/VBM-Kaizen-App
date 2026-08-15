@@ -217,7 +217,7 @@ async function buscarMdmPorEmail(email) {
   if (!email) return null;
   try {
     const result = await runQuery(
-      `SELECT TOP (1) ID_USUARIO, CD_MATRICULA, NM_USUARIO FROM ${FULL_MDM_TABLE} WHERE LOWER(DS_EMAIL) = LOWER(@email)`,
+      `SELECT TOP (1) ID_USUARIO, CD_MATRICULA, NM_USUARIO FROM ${FULL_MDM_TABLE} WHERE LOWER(CD_EMAIL) = LOWER(@email)`,
       [["email", sql.NVarChar(255), email]]
     );
     return result.recordset[0] || null;
@@ -242,7 +242,7 @@ async function buscarMdmPorEmail(email) {
 // falha na consulta. Loga o MOTIVO de cada null (visível nos logs do
 // Databricks App) — sem isso, "gravou NULL" e "gravou o ID certo" são
 // indistinguíveis de fora, e não dá pra saber se falta cabeçalho ou se
-// o e-mail do proxy não bate com DS_EMAIL no MDM.
+// o e-mail do proxy não bate com CD_EMAIL no MDM.
 async function idUsuarioLogado(req) {
   const email = req.get("X-Forwarded-Email");
   if (!email) {
@@ -251,7 +251,7 @@ async function idUsuarioLogado(req) {
   }
   const mdm = await buscarMdmPorEmail(email);
   if (!mdm) {
-    console.warn(`[usuario-logado] e-mail "${email}" (do proxy) sem correspondência em ${FULL_MDM_TABLE}.DS_EMAIL`);
+    console.warn(`[usuario-logado] e-mail "${email}" (do proxy) sem correspondência em ${FULL_MDM_TABLE}.CD_EMAIL`);
     return null;
   }
   console.log(`[usuario-logado] "${email}" -> ID_USUARIO ${mdm.ID_USUARIO}`);
@@ -344,10 +344,14 @@ apiRouter.get("/aprovadores", async (req, res) => {
     // LEFT JOIN de propósito: um aprovador cujo usuário saiu do MDM
     // continua listado (com os campos vazios) em vez de sumir da tela
     // sem explicação.
+    // CD_EMAIL é o nome real da coluna no MDM (o DER antigo mostrava
+    // DS_EMAIL — divergência só descoberta em produção, via "Invalid
+    // column name"). Alias AS DS_EMAIL preserva o contrato do JSON
+    // abaixo e o que o front-end já espera, sem tocar em mais nada.
     const result = await runQuery(
       `SELECT TOP (@limite)
               a.ID_USUARIO, a.SG_ATIVO, a.DT_ATUALIZACAO,
-              m.CD_MATRICULA, m.NM_USUARIO, m.DS_EMAIL
+              m.CD_MATRICULA, m.NM_USUARIO, m.CD_EMAIL AS DS_EMAIL
        FROM ${FULL_TABLE_NAME} a
        LEFT JOIN ${FULL_MDM_TABLE} m ON m.ID_USUARIO = a.ID_USUARIO
        ORDER BY m.NM_USUARIO, a.ID_USUARIO`,
@@ -378,7 +382,7 @@ apiRouter.get("/aprovadores/mdm/:id", async (req, res) => {
     if (!Number.isInteger(id)) return res.status(400).json({ error: "ID_USUARIO inválido." });
 
     const result = await runQuery(
-      `SELECT TOP (1) ID_USUARIO, CD_MATRICULA, NM_USUARIO, DS_EMAIL
+      `SELECT TOP (1) ID_USUARIO, CD_MATRICULA, NM_USUARIO, CD_EMAIL AS DS_EMAIL
        FROM ${FULL_MDM_TABLE} WHERE ID_USUARIO = @id`,
       [["id", sql.Int, id]]
     );
@@ -458,22 +462,22 @@ apiRouter.put("/aprovadores/:id/status", async (req, res) => {
 // ------------------------------------------------------------------
 // API — kzn_mdm_hierarquia (aba "Usuários")
 // ------------------------------------------------------------------
-// SOMENTE LEITURA, de propósito. Pelo DER esta tabela tem apenas
-// ID_USUARIO, CD_MATRICULA, NM_USUARIO, DS_EMAIL, NM_HIERARQUIA_N1..N8
-// e DT_ATUALIZACAO: não existe coluna de status (SG_ATIVO), papel,
-// empresa nem unidade — e o próprio modal da tela diz que os dados são
-// sincronizados do MDM corporativo. Por isso não há POST/PUT aqui:
-// criar/editar/inativar usuário exigiria colunas (ou uma tabela de
-// vínculo) que o modelo atual não tem.
+// SOMENTE LEITURA, de propósito — e o próprio modal da tela diz que os
+// dados são sincronizados do MDM corporativo. Por isso não há POST/PUT
+// aqui: criar/editar/inativar usuário exigiria colunas (ou uma tabela
+// de vínculo) que esta rota não usa hoje.
 // O papel exibido é DERIVADO: quem está em kzn_aprovador aparece como
 // "Aprovador"; os demais, como "Operador". É a única fonte de papel
 // disponível hoje no modelo.
+// CD_EMAIL é o nome real da coluna de e-mail no MDM (não DS_EMAIL —
+// ver nota em buscarMdmPorEmail acima); alias AS DS_EMAIL preserva o
+// contrato do JSON abaixo.
 apiRouter.get("/usuarios", async (req, res) => {
   try {
     const limite = Math.min(parseInt(req.query.limit, 10) || 500, 5000);
     const result = await runQuery(
       `SELECT TOP (@limite)
-              m.ID_USUARIO, m.CD_MATRICULA, m.NM_USUARIO, m.DS_EMAIL,
+              m.ID_USUARIO, m.CD_MATRICULA, m.NM_USUARIO, m.CD_EMAIL AS DS_EMAIL,
               CASE WHEN a.ID_USUARIO IS NULL THEN 0 ELSE 1 END AS EH_APROVADOR,
               a.SG_ATIVO AS SG_ATIVO_APROVADOR
        FROM ${FULL_MDM_TABLE} m
