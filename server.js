@@ -239,12 +239,23 @@ async function buscarMdmPorEmail(email) {
 //
 // null em qualquer cenário sem quebrar quem chamou: sem cabeçalho
 // (fora do Databricks Apps), e-mail sem correspondência no MDM, ou
-// falha na consulta.
+// falha na consulta. Loga o MOTIVO de cada null (visível nos logs do
+// Databricks App) — sem isso, "gravou NULL" e "gravou o ID certo" são
+// indistinguíveis de fora, e não dá pra saber se falta cabeçalho ou se
+// o e-mail do proxy não bate com DS_EMAIL no MDM.
 async function idUsuarioLogado(req) {
   const email = req.get("X-Forwarded-Email");
-  if (!email) return null;
+  if (!email) {
+    console.warn("[usuario-logado] sem X-Forwarded-Email nesta requisição — fora do Databricks Apps?");
+    return null;
+  }
   const mdm = await buscarMdmPorEmail(email);
-  return (mdm && mdm.ID_USUARIO) || null;
+  if (!mdm) {
+    console.warn(`[usuario-logado] e-mail "${email}" (do proxy) sem correspondência em ${FULL_MDM_TABLE}.DS_EMAIL`);
+    return null;
+  }
+  console.log(`[usuario-logado] "${email}" -> ID_USUARIO ${mdm.ID_USUARIO}`);
+  return mdm.ID_USUARIO || null;
 }
 
 // Identidade do usuário logado, na visão do Databricks Apps + MDM.
