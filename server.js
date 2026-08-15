@@ -945,12 +945,10 @@ registrarCadastroBilingue({
   capturarUsuarioResponsavel: true,
 });
 
-// kzn_motivo_reprovacao (DER): ID_MOTIVO, ID_IDIOMA, NM_MOTIVO
-// VARCHAR(30), DS_MOTIVO VARCHAR(100), DT_ATUALIZACAO — mesmos limites
-// de nome/descrição das outras tabelas bilíngues, mas SEM URL_ICONE.
-// SG_ATIVO ainda não existe na tabela real (mesma situação de
-// kzn_tipo_resultado) — ativar/desativar implementado a pedido, para
-// quando a coluna for adicionada.
+// kzn_motivo_reprovacao (DER atualizado): ID_MOTIVO, ID_IDIOMA,
+// NM_MOTIVO VARCHAR(30), DS_MOTIVO VARCHAR(100), SG_ATIVO, ID_USUARIO,
+// DT_ATUALIZACAO — mesmos limites de nome/descrição das outras tabelas
+// bilíngues, mas SEM URL_ICONE.
 registrarCadastroBilingue({
   rota: "motivosreprovacao",
   tabela: tabelaCadastro("AZURE_SQL_MOTIVO_REPROVACAO_TABLE", "kzn_motivo_reprovacao"),
@@ -961,6 +959,9 @@ registrarCadastroBilingue({
   maxDescricao: CADASTRO_LIMITES_DER.descricao,
   temIcone: false,
   rotuloSing: "motivo de reprovação",
+  // ID_USUARIO: mesmo padrão das demais abas — grava automaticamente
+  // quem criou/editou.
+  capturarUsuarioResponsavel: true,
 });
 
 app.use("/api", apiRouter);
