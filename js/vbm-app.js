@@ -707,11 +707,28 @@
   var PAGINAS_RESTRITAS = { 'admin.html': 'admin', 'aprovacao.html': 'aprovador' };
   var promessaMe = null;
 
-  function esconderLinksRestritos(me) {
+  function linksPara(pagina) {
+    return document.querySelectorAll('a[href="' + pagina + '"]');
+  }
+
+  function alternarLinks(pagina, visivel) {
+    Array.prototype.forEach.call(linksPara(pagina), function (a) { a.hidden = !visivel; });
+  }
+
+  // Os links das páginas restritas nascem ESCONDIDOS e só aparecem se
+  // /api/me confirmar o papel. Se ficassem visíveis até a resposta
+  // chegar, apareceriam por um instante em toda navegação para quem não
+  // tem permissão. Sem resposta (front fora do Databricks) eles seguem
+  // escondidos — mesma regra do servidor: na dúvida, não mostra.
+  function esconderLinksRestritos() {
     Object.keys(PAGINAS_RESTRITAS).forEach(function (pagina) {
-      if (me && me[PAGINAS_RESTRITAS[pagina]]) return; // tem o papel: nada a fazer
-      var links = document.querySelectorAll('a[href="' + pagina + '"]');
-      Array.prototype.forEach.call(links, function (a) { a.hidden = true; });
+      alternarLinks(pagina, false);
+    });
+  }
+
+  function revelarLinksPermitidos(me) {
+    Object.keys(PAGINAS_RESTRITAS).forEach(function (pagina) {
+      if (me && me[PAGINAS_RESTRITAS[pagina]]) alternarLinks(pagina, true);
     });
   }
 
@@ -727,10 +744,9 @@
     },
   };
 
-  // Sem /api/me (front servido fora do Databricks) nada é escondido: a
-  // navegação continua como sempre e o servidor segue sendo quem nega.
   function aplicarRestricoesDeNavegacao() {
-    window.VBMAcesso.me().then(esconderLinksRestritos);
+    esconderLinksRestritos();
+    window.VBMAcesso.me().then(revelarLinksPermitidos);
   }
 
   if (document.readyState === 'loading') {
