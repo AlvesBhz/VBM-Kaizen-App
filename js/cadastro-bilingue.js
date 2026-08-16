@@ -125,14 +125,25 @@ window.criarCadastroBilingue = function (cfg) {
   // Preenche um <select> com as opções vindas de /api/<comboExtra.rota>
   // (mesmo endpoint que a aba de origem já usa para listar) — sem
   // valorForcado, mantém o que já estava selecionado nele.
-  function popularCombo(sel, registros, valorForcado) {
+  // incompletos: IDs que existem só em português. A FK no banco é
+  // composta (id + ID_IDIOMA), então escolher um deles faz a metade em
+  // inglês do salvamento falhar — a opção aparece, sinalizada e
+  // desabilitada, em vez de virar erro de SQL só depois de salvar.
+  function popularCombo(sel, registros, incompletos, valorForcado) {
     if (!sel) return;
     var manter = valorForcado !== undefined ? valorForcado : sel.value;
     sel.innerHTML = '<option value="">Selecione...</option>' +
       registros.map(function (r) {
-        return '<option value="' + r.ID + '">' + escapeHtml(r.NM) + "</option>";
+        var falta = incompletos[r.ID];
+        return '<option value="' + r.ID + '"' + (falta ? " disabled" : "") + ">" +
+          escapeHtml(r.NM) + (falta ? " (sem tradução)" : "") + "</option>";
       }).join("");
     sel.value = manter != null ? String(manter) : "";
+  }
+
+  function buscarLista(idioma) {
+    return fetch("/api/" + comboExtra.rota + "?idioma=" + encodeURIComponent(idioma))
+      .then(function (res) { return res.ok ? res.json() : []; });
   }
 
   // valorEdicao: força a seleção do combo de EDITAR (ex.: valor já
@@ -140,11 +151,18 @@ window.criarCadastroBilingue = function (cfg) {
   // forçado aqui — mantém o que o usuário já tiver escolhido.
   function carregarOpcoesCombo(valorEdicao) {
     if (!comboExtra) return;
-    fetch("/api/" + comboExtra.rota + "?idioma=" + encodeURIComponent(idiomaEmUso()))
-      .then(function (res) { return res.ok ? res.json() : []; })
-      .then(function (registros) {
-        popularCombo(addComboEl, registros);
-        popularCombo(editComboEl, registros, valorEdicao);
+    var idioma = idiomaEmUso();
+    var emIngles = /^en/i.test(idioma);
+    var pedidos = emIngles ? [buscarLista(idioma)] : [buscarLista(idioma), buscarLista("en-US")];
+    Promise.all(pedidos)
+      .then(function (respostas) {
+        var registros = respostas[0];
+        var incompletos = {};
+        (emIngles ? registros : respostas[1]).forEach(function (r) {
+          if (r.SEM_TRADUCAO) incompletos[r.ID] = true;
+        });
+        popularCombo(addComboEl, registros, incompletos);
+        popularCombo(editComboEl, registros, incompletos, valorEdicao);
       })
       .catch(function (err) {
         console.error("[" + cfg.rota + "] falha ao carregar opções de " + comboExtra.rota + ":", err);

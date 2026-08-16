@@ -594,11 +594,19 @@ function tabelaCadastro(envVar, padrao) {
 // ("Violation of UNIQUE KEY constraint 'UQ_KZN_RESULTADOS_NM'...").
 // Compartilhada por todas as 6 tabelas bilíngues: qualquer uma delas
 // pode ter a mesma constraint de nome único.
-function mensagemErroSql(err, rotuloSing) {
+function mensagemErroSql(err, rotuloSing, rotuloExtra) {
   const numero = err && err.number;
   const texto = (err && err.message) || "";
   if (numero === 2627 || numero === 2601 || /violation of unique key constraint|cannot insert duplicate key/i.test(texto)) {
     return `Já existe um(a) ${rotuloSing} cadastrado(a) com esse nome neste idioma.`;
+  }
+  // A FK dessas tabelas é COMPOSTA (id + ID_IDIOMA), porque a tabela
+  // referenciada tem PK composta. Então a linha em INGLÊS do registro só
+  // grava se o item escolhido também tiver a linha em inglês: item
+  // cadastrado só em português derruba exatamente essa metade do save
+  // (FK_KZN_RESULTADOS_TIPO, observado em produção).
+  if (numero === 547 || /conflicted with the foreign key constraint/i.test(texto)) {
+    return `O ${rotuloExtra || "item vinculado"} selecionado não está cadastrado nos dois idiomas (Português e Inglês). Cadastre a tradução dele antes de usá-lo aqui.`;
   }
   return null; // sem tradução conhecida: quem chamou usa a mensagem crua do err
 }
@@ -861,7 +869,7 @@ function registrarCadastroBilingue(cfg) {
       res.json({ ok: true });
     } catch (err) {
       console.error(`${log} erro ao atualizar:`, err.message);
-      const amigavel = mensagemErroSql(err, rotuloSing);
+      const amigavel = mensagemErroSql(err, rotuloSing, extraEditavel && (extraEditavel.rotulo || extraEditavel.col));
       res.status(amigavel ? 409 : 500).json({ error: amigavel || `Erro ao atualizar ${rotuloSing}: ` + err.message });
     }
   });
@@ -892,7 +900,7 @@ function registrarCadastroBilingue(cfg) {
       res.status(201).json({ ok: true, ID: id });
     } catch (err) {
       console.error(`${log} erro ao criar:`, err.message);
-      const amigavel = mensagemErroSql(err, rotuloSing);
+      const amigavel = mensagemErroSql(err, rotuloSing, extraEditavel && (extraEditavel.rotulo || extraEditavel.col));
       res.status(amigavel ? 409 : 500).json({ error: amigavel || `Erro ao criar ${rotuloSing}: ` + err.message });
     }
   });
