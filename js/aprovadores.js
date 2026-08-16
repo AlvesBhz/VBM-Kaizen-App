@@ -145,6 +145,12 @@
       });
   }
 
+  // Avisa as outras abas que kzn_aprovador mudou: a coluna "Função" da
+  // aba Usuários é derivada daqui (ver window.VBMDados em vbm-app.js).
+  function avisarMudanca() {
+    if (window.VBMDados) window.VBMDados.mudou("aprovadores");
+  }
+
   function saveAdd() {
     var id = addIdInput ? addIdInput.value.trim() : "";
     if (!id) {
@@ -168,6 +174,7 @@
         if (window.closeModal) closeModal("modalAddAprovador");
         if (window.showToast) showToast("success", "Aprovador adicionado", "Aprovador cadastrado com sucesso!");
         loadAprovadores();
+        avisarMudanca();
       })
       .catch(function (err) {
         if (window.showToast) showToast("error", "Erro ao inserir", err.message);
@@ -202,6 +209,7 @@
       .then(function () {
         row.ATIVO = ativar;
         item.replaceWith(renderItem(row));
+        avisarMudanca();
         if (window.showToast) {
           showToast("success", ativar ? "Reativado" : "Desativado",
             '"' + nome + '" ' + (ativar ? "reativado" : "desativado") + " com sucesso.");

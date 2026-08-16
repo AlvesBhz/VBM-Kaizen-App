@@ -620,4 +620,69 @@
     },
   };
 
+  /* ──────────────────────────────────────────────────────────────
+     DADOS COMPARTILHADOS ENTRE ABAS (window.VBMDados)
+     ──────────────────────────────────────────────────────────────
+     Cada aba do admin carrega sua lista UMA vez (sob demanda, na
+     primeira abertura) e nunca mais. Isso quebrava as abas que
+     mostram dados de OUTRA tabela: cadastrar um item em "Tipo
+     Resultados" não fazia o combo de "Resultados" enxergá-lo, nem
+     tornar alguém aprovador atualizava a coluna Função em "Usuários"
+     — só recarregando a página inteira (F5).
+
+     Dependências reais entre abas do admin hoje:
+       tiporesultados -> resultados (combo "Tipo de Resultado")
+       aprovadores    -> usuarios   (badge Função, vem de kzn_aprovador)
+
+     Quem GRAVA avisa qual rota mudou (mudou); quem MOSTRA aquela rota
+     se inscreve (aoMudar). Não é cache nem estado paralelo: só marca o
+     assinante como desatualizado e reusa o MESMO carregador que a aba
+     já tinha.
+
+     A recarga fica pendente enquanto a aba estiver fechada ou a página
+     oculta, e é aplicada quando ela abre — assim gravar numa aba não
+     dispara consultas nas outras, que ninguém está olhando.
+     ────────────────────────────────────────────────────────────── */
+  window.VBMDados = {
+    /**
+     * Avisa que uma rota da API mudou no banco (criar/editar/status).
+     * @param {string} rota a mesma usada no fetch (ex.: 'resultados').
+     */
+    mudou: function (rota) {
+      window.dispatchEvent(new CustomEvent('vbm:dados', { detail: { rota: rota } }));
+    },
+
+    /**
+     * Registra um recarregador que depende de rotas de OUTRAS abas.
+     * @param {string[]} rotas rotas observadas.
+     * @param {function()} recarregar o carregador que a aba já usa.
+     * @param {function(): boolean} [pronto] false adia a recarga (ex.:
+     *        aba fechada); sem ele, recarrega na hora.
+     * @returns {function()} chame quando o assinante ficar pronto de
+     *        novo (ex.: a aba foi reaberta) para aplicar o pendente.
+     */
+    aoMudar: function (rotas, recarregar, pronto) {
+      var pendente = false;
+
+      function aplicar() {
+        if (!pendente || document.hidden) return;
+        if (pronto && !pronto()) return;
+        pendente = false;
+        try { recarregar(); }
+        catch (e) { console.error('[dados] falha ao recarregar:', e); }
+      }
+
+      window.addEventListener('vbm:dados', function (e) {
+        var rota = e.detail && e.detail.rota;
+        if (rotas.indexOf(rota) === -1) return;
+        pendente = true;
+        aplicar();
+      });
+      document.addEventListener('visibilitychange', aplicar);
+      window.addEventListener('focus', aplicar);
+
+      return aplicar;
+    },
+  };
+
 })();

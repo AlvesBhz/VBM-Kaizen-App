@@ -75,7 +75,10 @@
     }).join("");
   }
 
+  var jaCarregou = false;
+
   function carregar() {
+    jaCarregou = true;
     tbody.innerHTML = linhaAviso("Carregando usuários…", false);
     fetch("/api/usuarios")
       .then(function (res) {
@@ -92,16 +95,35 @@
   // Carrega sob demanda: esta aba nasce escondida, mas antes já
   // consultava o MDM no load da página. Agora só na primeira vez que
   // for realmente aberta.
+  //
+  // A coluna "Função" (Aprovador/Operador) é derivada de kzn_aprovador,
+  // ou seja, de OUTRA aba: cadastrar ou desativar um aprovador deixa
+  // esta lista desatualizada. VBMDados marca isso e a recarga acontece
+  // na próxima abertura desta aba — não a cada troca de aba, e nunca
+  // com a aba fechada (ver js/vbm-app.js).
   var painel = tbody.closest(".admin-panel");
-  if (!painel || painel.classList.contains("active") || typeof MutationObserver === "undefined") {
-    carregar();
+
+  function abaAberta() {
+    return !painel || painel.classList.contains("active");
+  }
+
+  var revalidar = window.VBMDados
+    ? window.VBMDados.aoMudar(["aprovadores"], carregar, abaAberta)
+    : null;
+
+  function aoAbrirAba() {
+    if (!jaCarregou) {
+      carregar();
+      return;
+    }
+    if (revalidar) revalidar(); // no-op se nenhum aprovador mudou
+  }
+
+  if (abaAberta() || typeof MutationObserver === "undefined") {
+    aoAbrirAba();
   } else {
-    var observador = new MutationObserver(function () {
-      if (painel.classList.contains("active")) {
-        observador.disconnect();
-        carregar();
-      }
-    });
-    observador.observe(painel, { attributes: true, attributeFilter: ["class"] });
+    new MutationObserver(function () {
+      if (painel.classList.contains("active")) aoAbrirAba();
+    }).observe(painel, { attributes: true, attributeFilter: ["class"] });
   }
 })();

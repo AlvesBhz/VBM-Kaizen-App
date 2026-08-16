@@ -141,6 +141,13 @@ window.criarCadastroBilingue = function (cfg) {
     sel.value = manter != null ? String(manter) : "";
   }
 
+  // Avisa as outras abas que esta tabela mudou. Quem mostra dados dela
+  // (ex.: o combo de Resultados mostra Tipo Resultados) recarrega ao
+  // ser aberta, sem F5 — ver window.VBMDados em js/vbm-app.js.
+  function avisarMudanca() {
+    if (window.VBMDados) window.VBMDados.mudou(cfg.rota);
+  }
+
   function buscarLista(idioma) {
     return fetch("/api/" + comboExtra.rota + "?idioma=" + encodeURIComponent(idioma))
       .then(function (res) { return res.ok ? res.json() : []; });
@@ -315,6 +322,7 @@ window.criarCadastroBilingue = function (cfg) {
         if (window.closeModal) closeModal(cfg.modalEditId);
         if (window.showToast) showToast("success", "Salvo", cfg.rotuloSingular + " atualizado com sucesso!");
         carregarLista();
+        avisarMudanca();
       })
       .catch(function (err) {
         console.error("[" + cfg.rota + "] falha ao salvar:", err);
@@ -362,6 +370,7 @@ window.criarCadastroBilingue = function (cfg) {
         if (window.closeModal) closeModal(cfg.modalAddId);
         if (window.showToast) showToast("success", "Criado", cfg.rotuloSingular + " adicionado com sucesso!");
         carregarLista();
+        avisarMudanca();
       })
       .catch(function (err) {
         console.error("[" + cfg.rota + "] falha ao criar:", err);
@@ -396,6 +405,7 @@ window.criarCadastroBilingue = function (cfg) {
       .then(function () {
         reg.ATIVO = ativar;
         item.replaceWith(renderItem(reg));
+        avisarMudanca();
         if (window.showToast) {
           showToast("success", ativar ? "Reativado" : "Desativado",
             '"' + reg.NM + '" ' + (ativar ? "reativado" : "desativado") + " com sucesso.");
@@ -417,19 +427,39 @@ window.criarCadastroBilingue = function (cfg) {
   // mas só uma está visível. Antes, cada aba disparava sua consulta no
   // load da página — 6 idas ao Azure SQL para mostrar 1 lista. Agora a
   // aba visível carrega na hora e as demais só na primeira vez que são
-  // abertas (uma vez só; depois disso o comportamento é o de sempre).
+  // abertas.
+  //
+  // Depois da primeira carga a aba NÃO reconsulta a cada reabertura (a
+  // lista dela só muda por ação dela mesma, que já recarrega na hora).
+  // A exceção é o combo, que mostra dados de OUTRA aba: se aquela aba
+  // gravou algo nesse meio tempo, VBMDados marca o combo como
+  // desatualizado e ele recarrega aqui, na reabertura — só então, e só
+  // ele.
   var painel = list.closest(".admin-panel");
-  if (!painel || painel.classList.contains("active") || typeof MutationObserver === "undefined") {
-    carregarLista();
-    carregarOpcoesCombo();
+
+  function abaAberta() {
+    return !painel || painel.classList.contains("active");
+  }
+
+  var revalidarCombo =
+    comboExtra && window.VBMDados
+      ? window.VBMDados.aoMudar([comboExtra.rota], carregarOpcoesCombo, abaAberta)
+      : null;
+
+  function aoAbrirAba() {
+    if (!jaCarregouAlgumaVez) {
+      carregarLista();
+      carregarOpcoesCombo();
+      return;
+    }
+    if (revalidarCombo) revalidarCombo(); // no-op se nada mudou
+  }
+
+  if (abaAberta() || typeof MutationObserver === "undefined") {
+    aoAbrirAba();
   } else {
-    var observador = new MutationObserver(function () {
-      if (painel.classList.contains("active")) {
-        observador.disconnect();
-        carregarLista();
-        carregarOpcoesCombo();
-      }
-    });
-    observador.observe(painel, { attributes: true, attributeFilter: ["class"] });
+    new MutationObserver(function () {
+      if (painel.classList.contains("active")) aoAbrirAba();
+    }).observe(painel, { attributes: true, attributeFilter: ["class"] });
   }
 };

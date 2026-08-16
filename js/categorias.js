@@ -250,6 +250,7 @@
         if (window.closeModal) closeModal("modalEditCategoria");
         if (window.showToast) showToast("success", "Salvo", ROTULO_SINGULAR + " atualizada com sucesso!");
         carregarLista();
+        avisarMudanca();
       })
       .catch(function (err) {
         console.error("[categorias] falha ao salvar:", err);
@@ -258,6 +259,12 @@
       .finally(function () {
         if (editSaveBtn) editSaveBtn.disabled = false;
       });
+  }
+
+  // Avisa as outras abas que esta tabela mudou — mesmo contrato do
+  // motor compartilhado (ver window.VBMDados em js/vbm-app.js).
+  function avisarMudanca() {
+    if (window.VBMDados) window.VBMDados.mudou(ROTA);
   }
 
   // ── Criar ──
@@ -296,6 +303,7 @@
         if (window.closeModal) closeModal("modalAddCategoria");
         if (window.showToast) showToast("success", "Categoria criada", "Nova categoria adicionada com sucesso!");
         carregarLista();
+        avisarMudanca();
       })
       .catch(function (err) {
         console.error("[categorias] falha ao criar:", err);
@@ -330,6 +338,7 @@
       .then(function () {
         reg.ATIVO = ativar;
         item.replaceWith(renderItem(reg));
+        avisarMudanca();
         if (window.showToast) {
           showToast(
             "success",
