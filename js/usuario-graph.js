@@ -272,9 +272,13 @@
   async function carregarDoDatabricks() {
     if (perfil) return null; // Graph já respondeu: ele manda
     try {
-      var res = await fetch("/api/me", { headers: { Accept: "application/json" } });
-      if (!res.ok) return null;
-      var dados = await res.json();
+      // Mesma resposta que window.VBMAcesso já pede para esconder os
+      // links das páginas restritas — reusa a promessa em vez de fazer
+      // um segundo GET /api/me na mesma página.
+      var dados = window.VBMAcesso
+        ? await window.VBMAcesso.me()
+        : await fetch("/api/me", { headers: { Accept: "application/json" } })
+            .then(function (res) { return res.ok ? res.json() : null; });
       if (!dados || !dados.autenticado) return null;
 
       // Só os campos que o proxy realmente conhece. O resto continua

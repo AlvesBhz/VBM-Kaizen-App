@@ -76,6 +76,12 @@ const FULL_PENDENCIA_TABLE = `[${DB_SCHEMA}].[${DB_PENDENCIA_TABLE}]`;
 const DB_MDM_TABLE = safeIdentifier(process.env.AZURE_SQL_MDM_TABLE, "kzn_mdm_hierarquia");
 const FULL_MDM_TABLE = `[${DB_SCHEMA}].[${DB_MDM_TABLE}]`;
 
+// Quem pode ABRIR o admin. Mesmo desenho de kzn_aprovador no DER
+// (ID_ADMIN, ID_USUARIO, SG_ATIVO, DT_ATUALIZACAO) — o vínculo é por
+// ID_USUARIO do MDM, e SG_ATIVO='S' é o que vale.
+const DB_ADMIN_TABLE = safeIdentifier(process.env.AZURE_SQL_ADMIN_TABLE, "kzn_admin");
+const FULL_ADMIN_TABLE = `[${DB_SCHEMA}].[${DB_ADMIN_TABLE}]`;
+
 // kzn_categoria guarda 1 LINHA POR IDIOMA para a mesma categoria (mesmo
 // ID_CATEGORIA, ID_IDIOMA diferente) — confirmado no DER
 // (database/DER_VBM_Kaizen_CI.html) e pelo time: ID_IDIOMA=1 é Português,
@@ -179,6 +185,118 @@ async function runQuery(query, params = []) {
 const UM_ANO_EM_SEGUNDOS = 60 * 60 * 24 * 365;
 const ARQUIVO_COM_HASH_NO_NOME = /(?:^|[\\/])[0-9a-f]{8,}_[^\\/]+$/i;
 
+// ------------------------------------------------------------------
+// Controle de acesso (kzn_admin / kzn_aprovador)
+// ------------------------------------------------------------------
+// Duas páginas são restritas e o critério é o CADASTRO no banco, pelo
+// ID_USUARIO do MDM:
+//
+//   admin.html     -> kzn_admin      (SG_ATIVO='S')
+//   aprovacao.html -> kzn_aprovador  (SG_ATIVO='S')
+//
+// A identidade vem do MESMO lugar que já grava o ID_USUARIO nos
+// cadastros: o cabeçalho X-Forwarded-Email do proxy do Databricks Apps
+// (ver idUsuarioLogado()/buscarMdmPorEmail() abaixo). Não é forjável
+// por quem acessa a URL publicada, ao contrário de qualquer coisa que
+// o navegador mande — por isso a decisão é SEMPRE do servidor, e o
+// front-end só esconde os links (reforço visual, nunca a trava).
+//
+// DENY BY DEFAULT: sem cabeçalho, e-mail sem correspondência no MDM,
+// tabela inacessível ou erro de consulta => acesso NEGADO. Nenhum
+// desses cenários "abre" a página.
+const PAGINAS_RESTRITAS = {
+  "/admin.html": "admin",
+  "/aprovacao.html": "aprovador",
+};
+
+// Perfil do usuário da requisição, em UMA consulta (MDM + os dois
+// vínculos de papel). Memorizado no próprio req: o gate da API e o
+// GET /api/me da mesma requisição reusam o resultado em vez de
+// consultar de novo.
+async function perfilDeAcesso(req) {
+  if (req._perfilAcesso) return req._perfilAcesso;
+
+  const negar = (motivo) => {
+    if (motivo) console.warn(`[acesso] negado: ${motivo}`);
+    req._perfilAcesso = { idUsuario: null, admin: false, aprovador: false };
+    return req._perfilAcesso;
+  };
+
+  const email = req.get("X-Forwarded-Email");
+  if (!email) return negar("requisição sem X-Forwarded-Email (fora do Databricks Apps?)");
+
+  try {
+    const result = await runQuery(
+      `SELECT TOP (1) m.ID_USUARIO,
+              CASE WHEN EXISTS (SELECT 1 FROM ${FULL_ADMIN_TABLE} ad
+                                 WHERE ad.ID_USUARIO = m.ID_USUARIO AND ad.SG_ATIVO = 'S')
+                   THEN 1 ELSE 0 END AS EH_ADMIN,
+              CASE WHEN EXISTS (SELECT 1 FROM ${FULL_TABLE_NAME} ap
+                                 WHERE ap.ID_USUARIO = m.ID_USUARIO AND ap.SG_ATIVO = 'S')
+                   THEN 1 ELSE 0 END AS EH_APROVADOR
+       FROM ${FULL_MDM_TABLE} m
+       WHERE LOWER(m.CD_EMAIL) = LOWER(@email)`,
+      [["email", sql.NVarChar(255), email]]
+    );
+    const linha = result.recordset[0];
+    if (!linha) return negar(`e-mail "${email}" sem correspondência em ${FULL_MDM_TABLE}.CD_EMAIL`);
+
+    req._perfilAcesso = {
+      idUsuario: linha.ID_USUARIO || null,
+      admin: linha.EH_ADMIN === 1,
+      aprovador: linha.EH_APROVADOR === 1,
+    };
+    return req._perfilAcesso;
+  } catch (err) {
+    // Falha de consulta NUNCA libera: erro é tratado como sem permissão.
+    return negar(`falha ao verificar permissões de "${email}": ${err.message}`);
+  }
+}
+
+// Página de bloqueio: autossuficiente de propósito (só a folha de
+// estilo pública do app), para não carregar nenhum script, dado ou
+// componente da página restrita — o usuário sem permissão não recebe
+// nada além desta mensagem.
+function paginaAcessoNegado(papel) {
+  const tabela = papel === "admin" ? "KZN_ADMIN" : "KZN_APROVADOR";
+  return `<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Acesso não autorizado — VBM Kaizen</title>
+<link rel="stylesheet" href="css/vbm-app.css">
+<style>
+  .acesso-negado { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:1.5rem; }
+  .acesso-negado .caixa { max-width:460px; text-align:center; background:var(--vbm-white);
+    border:1px solid var(--vbm-border); border-radius:12px; padding:2.5rem 2rem; }
+  .acesso-negado .marca { width:52px; height:52px; margin:0 auto 1.25rem; border-radius:50%;
+    background:var(--vbm-blue-pale); color:var(--vbm-blue-dark); font-size:1.5rem; font-weight:700;
+    display:flex; align-items:center; justify-content:center; }
+  .acesso-negado h1 { font-size:1.15rem; color:var(--vbm-dark); margin:0 0 .5rem; }
+  .acesso-negado p { font-size:.85rem; color:var(--vbm-mid); margin:0 0 .35rem; line-height:1.5; }
+  .acesso-negado a { display:inline-block; margin-top:1.5rem; }
+</style></head>
+<body><div class="acesso-negado"><div class="caixa">
+  <div class="marca" aria-hidden="true">!</div>
+  <h1>Acesso não autorizado</h1>
+  <p>Seu usuário não está cadastrado em <strong>${tabela}</strong>. Procure um administrador do VBM Kaizen para solicitar acesso.</p>
+  <p><em>You are not authorized to view this page.</em></p>
+  <a class="btn btn-primary" href="index.html">Voltar ao início</a>
+</div></div></body></html>`;
+}
+
+// Gate das PÁGINAS — antes do express.static, senão o HTML restrito
+// seria entregue pelo servidor de estáticos sem passar por aqui.
+app.use(async (req, res, next) => {
+  const papel = PAGINAS_RESTRITAS[req.path.toLowerCase()];
+  if (!papel) return next();
+
+  const perfil = await perfilDeAcesso(req);
+  if (perfil[papel]) return next();
+
+  console.warn(`[acesso] ${req.path} bloqueado (papel exigido: ${papel})`);
+  res.status(403).set("Cache-Control", "no-store").type("html").send(paginaAcessoNegado(papel));
+});
+
 app.use(
   express.static(__dirname, {
     etag: true,
@@ -198,9 +316,26 @@ app.use(
 // API — kzn_aprovador
 // ------------------------------------------------------------------
 const apiRouter = express.Router();
-apiRouter.use((req, res, next) => {
+
+// Rotas abertas a qualquer usuário autenticado pelo proxy. Só GET /me,
+// que devolve exclusivamente a identidade de QUEM chamou (e é o que
+// permite ao front-end esconder os links das páginas restritas).
+const ROTAS_API_PUBLICAS = new Set(["/me"]);
+
+// Gate da API — o reforço server-side do bloqueio das páginas. Todo o
+// resto da API existe para servir o admin.html, então exige kzn_admin:
+// esconder o botão no front não basta, a chamada direta ao endpoint
+// (curl, DevTools, URL colada) tem que ser recusada aqui. Lista de
+// EXCEÇÕES, não de rotas protegidas — rota nova nasce fechada.
+apiRouter.use(async (req, res, next) => {
   res.set("Cache-Control", "no-store");
-  next();
+  if (ROTAS_API_PUBLICAS.has(req.path.toLowerCase())) return next();
+
+  const perfil = await perfilDeAcesso(req);
+  if (perfil.admin) return next();
+
+  console.warn(`[acesso] API ${req.method} ${req.path} bloqueada (exige kzn_admin)`);
+  res.status(403).json({ error: "Acesso não autorizado." });
 });
 
 // Busca ID_USUARIO + CD_MATRICULA + NM_USUARIO no MDM (kzn_mdm_hierarquia)
@@ -300,10 +435,22 @@ apiRouter.get("/me", async (req, res) => {
 
   const mdm = await buscarMdmPorEmail(emailParaMdm);
 
+  // Papéis SEMPRE pelo cabeçalho do proxy — nunca por ?email=, que o
+  // navegador escolhe. Senão bastaria pedir /api/me?email=<um admin>
+  // para o front-end reexibir os links restritos. (Reexibir o link não
+  // abriria nada: o gate acima recusa a página de qualquer jeito. Ainda
+  // assim, a resposta não pode afirmar um papel que o chamador não tem.)
+  const perfil = await perfilDeAcesso(req);
+
   res.json({
     autenticado: !!(email || usuario),
     nome: (mdm && mdm.NM_USUARIO) || nomeDerivado,
     email: email,
+    // Papéis do usuário logado — o front-end usa só para esconder os
+    // links de navegação das páginas restritas (ver window.VBMAcesso em
+    // js/vbm-app.js). O bloqueio real é o gate de páginas/API.
+    admin: perfil.admin,
+    aprovador: perfil.aprovador,
     usuario: usuario,
     idUsuario: h("X-Forwarded-User"),
     matricula: (mdm && mdm.CD_MATRICULA) || null,

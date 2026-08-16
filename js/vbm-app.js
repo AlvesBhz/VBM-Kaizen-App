@@ -685,4 +685,58 @@
     },
   };
 
+  /* ──────────────────────────────────────────────────────────────
+     PÁGINAS RESTRITAS (window.VBMAcesso)
+     ──────────────────────────────────────────────────────────────
+     Duas páginas dependem de cadastro no banco:
+
+       admin.html     -> kzn_admin
+       aprovacao.html -> kzn_aprovador
+
+     Quem decide é o SERVIDOR: ele recusa a página e a API para quem
+     não tem o papel (ver PAGINAS_RESTRITAS e o gate da API em
+     server.js), inclusive quando a URL é digitada direto. O que este
+     bloco faz é só REFORÇO VISUAL — esconder da barra de navegação os
+     links que levariam a um bloqueio. Mexer nisso pelo DevTools não
+     abre nada: reexibir o link só leva à tela de acesso negado.
+
+     Os papéis vêm de GET /api/me, que o cabeçalho já consulta — a
+     promessa é memorizada aqui e reusada por js/usuario-graph.js, para
+     a página não pedir /api/me duas vezes.
+     ────────────────────────────────────────────────────────────── */
+  var PAGINAS_RESTRITAS = { 'admin.html': 'admin', 'aprovacao.html': 'aprovador' };
+  var promessaMe = null;
+
+  function esconderLinksRestritos(me) {
+    Object.keys(PAGINAS_RESTRITAS).forEach(function (pagina) {
+      if (me && me[PAGINAS_RESTRITAS[pagina]]) return; // tem o papel: nada a fazer
+      var links = document.querySelectorAll('a[href="' + pagina + '"]');
+      Array.prototype.forEach.call(links, function (a) { a.hidden = true; });
+    });
+  }
+
+  window.VBMAcesso = {
+    /** GET /api/me memorizado — null se a rota não existir/responder. */
+    me: function () {
+      if (!promessaMe) {
+        promessaMe = fetch('/api/me', { headers: { Accept: 'application/json' } })
+          .then(function (res) { return res.ok ? res.json() : null; })
+          .catch(function () { return null; });
+      }
+      return promessaMe;
+    },
+  };
+
+  // Sem /api/me (front servido fora do Databricks) nada é escondido: a
+  // navegação continua como sempre e o servidor segue sendo quem nega.
+  function aplicarRestricoesDeNavegacao() {
+    window.VBMAcesso.me().then(esconderLinksRestritos);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', aplicarRestricoesDeNavegacao);
+  } else {
+    aplicarRestricoesDeNavegacao();
+  }
+
 })();
