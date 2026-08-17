@@ -12,11 +12,11 @@
  *   2. Guarda o resultado em sessionStorage, para as demais telas
  *      (admin, biblioteca, aprovação, kaizen-novo) mostrarem o mesmo
  *      usuário sem repetir a chamada ao Graph nem embutir MSAL nelas.
- *   3. Renderiza no canto superior direito nome + matrícula + foto
+ *   3. Renderiza no canto superior direito nome + cargo + foto
  *      (bolinha), reaproveitando a estrutura .topnav-user que já
- *      existe nas 5 páginas — sem markup ou CSS novos. A matrícula não
- *      vem do Graph nem do proxy: é buscada no MDM (mesma tabela das
- *      abas Aprovadores/Usuários) pelo e-mail, via GET /api/me.
+ *      existe nas 5 páginas — sem markup ou CSS novos. O cargo não vem
+ *      do Graph nem do proxy: é o NM_POSICAO do MDM (mesma tabela das
+ *      abas Aprovadores/Usuários), buscado pelo e-mail via GET /api/me.
  *   4. Deixa o restante dos campos (e-mail, cargo, empresa, departamento,
  *      localização, telefones, idioma, Object ID, gestor) disponível
  *      para o resto da aplicação via window.VBMUsuario.dados().
@@ -34,7 +34,10 @@
 (function () {
   "use strict";
 
-  var CHAVE = "vbm-usuario";
+  // Sufixo de versão: perfis gravados antes de o cargo existir não têm
+  // o campo, e reaproveitá-los deixaria a 2ª linha do cabeçalho vazia
+  // até a sessão acabar. Trocar a chave descarta o cache antigo uma vez.
+  var CHAVE = "vbm-usuario-v2";
   var GRAPH = "https://graph.microsoft.com/v1.0";
   // Exatamente os campos pedidos no /me — nada além disso (menor
   // privilégio: o escopo continua sendo só User.Read).
@@ -69,18 +72,19 @@
   }
 
   /**
-   * Aplica nome + matrícula + foto no bloco .topnav-user (canto
-   * superior direito). Usa as classes que já existem nas 5 páginas,
-   * então não depende de id novo nem de alteração de markup.
+   * Aplica nome + cargo + foto no bloco .topnav-user (canto superior
+   * direito). Usa as classes que já existem nas 5 páginas, então não
+   * depende de id novo nem de alteração de markup.
    *
-   * Campo vazio nunca apaga o que está na tela: sem matrícula ainda
-   * carregada, a segunda linha só é tocada quando o valor chegar.
+   * A 2ª linha mostra o CARGO (NM_POSICAO do MDM), não a matrícula.
+   * Campo vazio nunca apaga o que está na tela: sem cargo ainda
+   * carregado, a linha só é tocada quando o valor chegar.
    */
   function aplicarNoTopo(dados) {
     if (!dados) return;
     try {
       var nomeEl = document.querySelector(".topnav-user-name");
-      var matriculaEl = document.querySelector(".topnav-user-role");
+      var cargoEl = document.querySelector(".topnav-user-role");
       var avatarEl = document.querySelector(".topnav-user-avatar");
 
       var nome = dados.displayName
@@ -88,7 +92,7 @@
         || dados.mail || dados.userPrincipalName;
 
       if (nomeEl && nome) nomeEl.textContent = nome;
-      if (matriculaEl && dados.matricula) matriculaEl.textContent = "Matrícula " + dados.matricula;
+      if (cargoEl && dados.cargo) cargoEl.textContent = dados.cargo;
 
       if (avatarEl) {
         if (dados.fotoBase64) {
@@ -134,10 +138,10 @@
   }
 
   /**
-   * Matrícula + nome do MDM pelo e-mail, via GET /api/me?email=... (o
-   * mesmo endpoint do piso Databricks, aqui só para a consulta ao MDM —
-   * o Graph não tem esse campo). Falha em silêncio: sem matrícula, a
-   * 2ª linha do cabeçalho simplesmente não é preenchida.
+   * Cargo + matrícula + nome do MDM pelo e-mail, via GET /api/me?email=...
+   * (o mesmo endpoint do piso Databricks, aqui só para a consulta ao
+   * MDM — o Graph não tem esses campos). Falha em silêncio: sem cargo,
+   * a 2ª linha do cabeçalho simplesmente não é preenchida.
    */
   async function buscarMatriculaLocal(email) {
     if (!email) return null;
@@ -246,6 +250,9 @@
             : null,
           fotoBase64: foto,
           matricula: (mdm && mdm.matricula) || null,
+          // Cargo vem do MDM, não do jobTitle do Graph: é o dado que o
+          // resto da tela usa (ver a aba Aprovadores).
+          cargo: (mdm && mdm.cargo) || null,
         };
 
         gravarCache(dados);
@@ -295,6 +302,7 @@
         gestor: null,
         fotoBase64: null,
         matricula: dados.matricula || null,
+        cargo: dados.cargo || null,
         // Marca a procedência: quem consumir dados() sabe que este
         // perfil é o parcial do proxy, não o completo do Graph.
         origem: "databricks",

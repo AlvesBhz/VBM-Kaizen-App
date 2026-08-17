@@ -352,7 +352,7 @@ async function buscarMdmPorEmail(email) {
   if (!email) return null;
   try {
     const result = await runQuery(
-      `SELECT TOP (1) ID_USUARIO, CD_MATRICULA, NM_USUARIO FROM ${FULL_MDM_TABLE} WHERE LOWER(CD_EMAIL) = LOWER(@email)`,
+      `SELECT TOP (1) ID_USUARIO, CD_MATRICULA, NM_USUARIO, NM_POSICAO FROM ${FULL_MDM_TABLE} WHERE LOWER(CD_EMAIL) = LOWER(@email)`,
       [["email", sql.NVarChar(255), email]]
     );
     return result.recordset[0] || null;
@@ -454,6 +454,11 @@ apiRouter.get("/me", async (req, res) => {
     usuario: usuario,
     idUsuario: h("X-Forwarded-User"),
     matricula: (mdm && mdm.CD_MATRICULA) || null,
+    // Cargo do MDM (NM_POSICAO) — é o que o cabeçalho mostra na 2ª
+    // linha, no lugar da matrícula. Vem do mesmo SELECT, sem consulta
+    // extra. O Graph tem um jobTitle próprio, mas a fonte aqui é o
+    // banco, como o resto da tela.
+    cargo: (mdm && mdm.NM_POSICAO) || null,
     // Diagnóstico: mostra QUAIS cabeçalhos o Databricks está mandando,
     // sem expor o valor do token.
     _diagnostico: {

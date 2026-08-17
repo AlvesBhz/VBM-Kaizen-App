@@ -66,7 +66,7 @@
       '<div class="admin-item-body">' +
         '<div class="admin-item-name">' + escapeHtml(nome) + "</div>" +
         '<div class="admin-item-sub">' + escapeHtml(row.DS_EMAIL || "—") + "</div>" +
-        '<div class="admin-item-sub">Cargo ' + escapeHtml(row.NM_POSICAO || "—") + " · ID " + escapeHtml(row.ID_USUARIO) + "</div>" +
+        '<div class="admin-item-sub">' + escapeHtml(row.NM_POSICAO || "—") + "</div>" +
       "</div>" +
       '<div class="admin-item-actions">' +
         '<button type="button" class="btn-icon btn-icon-blue btn-icon-sm" data-action="editar" title="Editar" data-i18n-title="common.editar"><i class="fa-solid fa-pen"></i></button>' +
