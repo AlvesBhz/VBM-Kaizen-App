@@ -588,9 +588,29 @@ apiRouter.get("/aprovadores/mdm/:id", async (req, res) => {
   }
 });
 
-// Adicionar — só o ID_USUARIO é gravado; ele precisa existir no MDM
-// (a FK garante isso no banco, mas checamos antes para devolver uma
-// mensagem clara em vez de um erro cru de constraint).
+// CD_MATRICULA da pessoa, buscada no MDM pelo ID_USUARIO. Pelo DER,
+// kzn_aprovador tem PK (ID_APROVADOR, CD_MATRICULA) e ID_USUARIO como
+// FK — ou seja, a matrícula é NOT NULL e precisa ser gravada junto.
+//
+// Vem sempre do MDM, nunca do corpo da requisição: quem chama escolhe a
+// pessoa (ID_USUARIO) e a matrícula é um dado derivado dela; aceitar do
+// cliente permitiria gravar um par ID/matrícula que não existe no MDM.
+//
+// Devolve null quando o ID_USUARIO não existe lá — o que também serve
+// de validação, poupando uma consulta só para conferir a existência.
+async function matriculaDoMdm(idUsuario) {
+  const r = await runQuery(
+    `SELECT TOP (1) CD_MATRICULA FROM ${FULL_MDM_TABLE} WHERE ID_USUARIO = @id`,
+    [["id", sql.Int, idUsuario]]
+  );
+  const linha = r.recordset[0];
+  return linha && linha.CD_MATRICULA != null ? linha.CD_MATRICULA : null;
+}
+
+// Adicionar — grava o vínculo (ID_USUARIO + CD_MATRICULA, ambos do
+// MDM); o usuário precisa existir lá (a FK garante isso no banco, mas
+// checamos antes para devolver uma mensagem clara em vez de um erro cru
+// de constraint).
 apiRouter.post("/aprovadores", async (req, res) => {
   try {
     const idUsuario = parseInt(req.body?.ID_USUARIO, 10);
@@ -598,11 +618,8 @@ apiRouter.post("/aprovadores", async (req, res) => {
       return res.status(400).json({ error: "ID_USUARIO é obrigatório e deve ser um número inteiro." });
     }
 
-    const noMdm = await runQuery(
-      `SELECT TOP (1) 1 AS X FROM ${FULL_MDM_TABLE} WHERE ID_USUARIO = @id`,
-      [["id", sql.Int, idUsuario]]
-    );
-    if (!noMdm.recordset.length) {
+    const matricula = await matriculaDoMdm(idUsuario);
+    if (matricula == null) {
       return res.status(400).json({ error: "Usuário não encontrado no MDM — verifique o ID_USUARIO." });
     }
 
@@ -625,10 +642,11 @@ apiRouter.post("/aprovadores", async (req, res) => {
     const idAprovador = proximo.recordset[0].PROXIMO;
 
     await runQuery(
-      `INSERT INTO ${FULL_TABLE_NAME} (ID_APROVADOR, ID_USUARIO, SG_ATIVO, DT_ATUALIZACAO)
-       VALUES (@idAprovador, @id, 'S', GETDATE())`,
+      `INSERT INTO ${FULL_TABLE_NAME} (ID_APROVADOR, CD_MATRICULA, ID_USUARIO, SG_ATIVO, DT_ATUALIZACAO)
+       VALUES (@idAprovador, @matricula, @id, 'S', GETDATE())`,
       [
         ["idAprovador", sql.Int, idAprovador],
+        ["matricula", sql.NVarChar(30), matricula],
         ["id", sql.Int, idUsuario],
       ]
     );
@@ -656,11 +674,8 @@ apiRouter.put("/aprovadores/:id", async (req, res) => {
       return res.status(400).json({ error: "ID_USUARIO é obrigatório e deve ser um número inteiro." });
     }
 
-    const noMdm = await runQuery(
-      `SELECT TOP (1) 1 AS X FROM ${FULL_MDM_TABLE} WHERE ID_USUARIO = @id`,
-      [["id", sql.Int, idNovo]]
-    );
-    if (!noMdm.recordset.length) {
+    const matricula = await matriculaDoMdm(idNovo);
+    if (matricula == null) {
       return res.status(400).json({ error: "Usuário não encontrado no MDM — verifique o ID_USUARIO." });
     }
 
@@ -674,11 +689,16 @@ apiRouter.put("/aprovadores/:id", async (req, res) => {
       }
     }
 
+    // CD_MATRICULA acompanha o ID_USUARIO: as duas colunas descrevem a
+    // MESMA pessoa, então apontar o registro para outra sem atualizar a
+    // matrícula deixaria a linha com um par que não existe no MDM.
     const alterado = await runQuery(
-      `UPDATE ${FULL_TABLE_NAME} SET ID_USUARIO = @idNovo, DT_ATUALIZACAO = GETDATE()
-       WHERE ID_USUARIO = @idAtual`,
+      `UPDATE ${FULL_TABLE_NAME}
+          SET ID_USUARIO = @idNovo, CD_MATRICULA = @matricula, DT_ATUALIZACAO = GETDATE()
+        WHERE ID_USUARIO = @idAtual`,
       [
         ["idNovo", sql.Int, idNovo],
+        ["matricula", sql.NVarChar(30), matricula],
         ["idAtual", sql.Int, idAtual],
       ]
     );
