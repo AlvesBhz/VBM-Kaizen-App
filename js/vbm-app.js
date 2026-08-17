@@ -711,8 +711,18 @@
     return document.querySelectorAll('a[href="' + pagina + '"]');
   }
 
+  // O atributo hidden SOZINHO não basta aqui: .topnav-link declara
+  // display:flex, que vence a regra [hidden]{display:none} do navegador
+  // (especificidade de classe > seletor de atributo do UA stylesheet) —
+  // o link ficava marcado como escondido e continuava aparecendo na
+  // barra. O display inline garante o resultado sem depender de nova
+  // regra de CSS em cada página; voltar para "" devolve o valor da
+  // folha de estilo.
   function alternarLinks(pagina, visivel) {
-    Array.prototype.forEach.call(linksPara(pagina), function (a) { a.hidden = !visivel; });
+    Array.prototype.forEach.call(linksPara(pagina), function (a) {
+      a.hidden = !visivel;
+      a.style.display = visivel ? "" : "none";
+    });
   }
 
   // Os links das páginas restritas nascem ESCONDIDOS e só aparecem se
