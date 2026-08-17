@@ -498,7 +498,7 @@ apiRouter.get("/aprovadores", async (req, res) => {
     const result = await runQuery(
       `SELECT TOP (@limite)
               a.ID_USUARIO, a.SG_ATIVO, a.DT_ATUALIZACAO,
-              m.CD_MATRICULA, m.NM_USUARIO, m.CD_EMAIL AS DS_EMAIL
+              m.CD_MATRICULA, m.NM_USUARIO, m.CD_EMAIL AS DS_EMAIL, m.NM_POSICAO
        FROM ${FULL_TABLE_NAME} a
        LEFT JOIN ${FULL_MDM_TABLE} m ON m.ID_USUARIO = a.ID_USUARIO
        ORDER BY m.NM_USUARIO, a.ID_USUARIO`,
@@ -510,6 +510,9 @@ apiRouter.get("/aprovadores", async (req, res) => {
         CD_MATRICULA: r.CD_MATRICULA,
         NM_USUARIO: r.NM_USUARIO,
         DS_EMAIL: r.DS_EMAIL,
+        // Cargo — vem do MESMO join que já traz nome/matrícula/e-mail,
+        // sem consulta extra (kzn_mdm_hierarquia.NM_POSICAO no DER).
+        NM_POSICAO: r.NM_POSICAO,
         ATIVO: r.SG_ATIVO === "S",
         DT_ATUALIZACAO: r.DT_ATUALIZACAO,
       }))
@@ -529,7 +532,7 @@ apiRouter.get("/aprovadores/mdm/:id", async (req, res) => {
     if (!Number.isInteger(id)) return res.status(400).json({ error: "ID_USUARIO inválido." });
 
     const result = await runQuery(
-      `SELECT TOP (1) ID_USUARIO, CD_MATRICULA, NM_USUARIO, CD_EMAIL AS DS_EMAIL
+      `SELECT TOP (1) ID_USUARIO, CD_MATRICULA, NM_USUARIO, CD_EMAIL AS DS_EMAIL, NM_POSICAO
        FROM ${FULL_MDM_TABLE} WHERE ID_USUARIO = @id`,
       [["id", sql.Int, id]]
     );
@@ -578,6 +581,59 @@ apiRouter.post("/aprovadores", async (req, res) => {
   } catch (err) {
     console.error("[aprovadores] erro ao inserir:", err.message);
     res.status(500).json({ error: "Erro ao inserir aprovador: " + err.message });
+  }
+});
+
+// Editar — kzn_aprovador só tem ID_USUARIO e SG_ATIVO (ver DER), e
+// SG_ATIVO é o ativar/desativar logo abaixo. Então "editar" aqui é
+// APONTAR o registro para outra pessoa: troca o ID_USUARIO, mantendo o
+// mesmo vínculo (e o SG_ATIVO atual). Nome, cargo, matrícula e e-mail
+// continuam vindo do MDM — nada disso é editável por aqui.
+//
+// Mesmas validações do POST, pela mesma razão: ID inteiro, usuário
+// existente no MDM e sem duplicar um aprovador já cadastrado.
+apiRouter.put("/aprovadores/:id", async (req, res) => {
+  try {
+    const idAtual = parseInt(req.params.id, 10);
+    const idNovo = parseInt(req.body?.ID_USUARIO, 10);
+    if (!Number.isInteger(idAtual)) return res.status(400).json({ error: "ID_USUARIO inválido." });
+    if (!Number.isInteger(idNovo)) {
+      return res.status(400).json({ error: "ID_USUARIO é obrigatório e deve ser um número inteiro." });
+    }
+
+    const noMdm = await runQuery(
+      `SELECT TOP (1) 1 AS X FROM ${FULL_MDM_TABLE} WHERE ID_USUARIO = @id`,
+      [["id", sql.Int, idNovo]]
+    );
+    if (!noMdm.recordset.length) {
+      return res.status(400).json({ error: "Usuário não encontrado no MDM — verifique o ID_USUARIO." });
+    }
+
+    if (idNovo !== idAtual) {
+      const jaExiste = await runQuery(
+        `SELECT TOP (1) 1 AS X FROM ${FULL_TABLE_NAME} WHERE ID_USUARIO = @id`,
+        [["id", sql.Int, idNovo]]
+      );
+      if (jaExiste.recordset.length) {
+        return res.status(409).json({ error: "Este usuário já está cadastrado como aprovador." });
+      }
+    }
+
+    const alterado = await runQuery(
+      `UPDATE ${FULL_TABLE_NAME} SET ID_USUARIO = @idNovo, DT_ATUALIZACAO = GETDATE()
+       WHERE ID_USUARIO = @idAtual`,
+      [
+        ["idNovo", sql.Int, idNovo],
+        ["idAtual", sql.Int, idAtual],
+      ]
+    );
+    if (!alterado.rowsAffected[0]) {
+      return res.status(404).json({ error: "Aprovador não encontrado." });
+    }
+    res.json({ ok: true, ID_USUARIO: idNovo });
+  } catch (err) {
+    console.error("[aprovadores] erro ao editar:", err.message);
+    res.status(500).json({ error: "Erro ao editar aprovador: " + err.message });
   }
 });
 

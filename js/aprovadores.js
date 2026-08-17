@@ -2,17 +2,18 @@
  * VBM Kaizen — aba "Aprovadores" (admin.html).
  *
  * kzn_aprovador é uma tabela de PAPEL: pelo DER guarda só ID_USUARIO
- * (FK do MDM), SG_ATIVO e DT_ATUALIZACAO. Nome, matrícula e e-mail vêm
- * de kzn_mdm_hierarquia por join, feito no servidor.
+ * (FK do MDM), SG_ATIVO e DT_ATUALIZACAO. Nome, cargo, matrícula e
+ * e-mail vêm de kzn_mdm_hierarquia por join, feito no servidor.
  *
- * Por isso a aba tem listar / adicionar / ativar-desativar, mas NÃO
- * tem editar: não há campo próprio editável — dados pessoais mudam no
- * MDM, e o único atributo da tabela (SG_ATIVO) é justamente o
- * ativar/desativar.
+ * Editar aqui é APONTAR o registro para outra pessoa (trocar o
+ * ID_USUARIO): é o único campo editável da tabela, já que o SG_ATIVO é
+ * o próprio botão de ativar/desativar. Os dados pessoais mudam no MDM,
+ * nunca por esta tela.
  *
  *   GET  /api/aprovadores            lista (join com o MDM)
  *   GET  /api/aprovadores/mdm/:id    confere de quem é um ID_USUARIO
  *   POST /api/aprovadores            adiciona (só ID_USUARIO)
+ *   PUT  /api/aprovadores/:id        troca o ID_USUARIO do registro
  *   PUT  /api/aprovadores/:id/status ativa/desativa (SG_ATIVO)
  *
  * Depende de funções globais de vbm-app.js: closeModal / showToast.
@@ -23,14 +24,17 @@
 
   var stateEl = document.getElementById("aprovadoresState");
   var countEl = document.getElementById("aprovadoresCount");
-  var connStatusEl = document.getElementById("aprovadoresConnStatus");
-  var reloadBtn = document.getElementById("btnReloadAprovadores");
-
   var addIdInput = document.getElementById("addAprovadorIdUsuario");
   var addMatriculaInput = document.getElementById("addAprovadorMatricula");
   var addNomeInput = document.getElementById("addAprovadorNome");
   var btnSaveAdd = document.getElementById("btnSaveAddAprovador");
   var addTrigger = document.querySelector('[data-modal-open="modalAddAprovador"]');
+
+  var editIdInput = document.getElementById("editAprovadorIdUsuario");
+  var editMatriculaInput = document.getElementById("editAprovadorMatricula");
+  var editNomeInput = document.getElementById("editAprovadorNome");
+  var btnSaveEdit = document.getElementById("btnSaveEditAprovador");
+  var idEmEdicao = null;
 
   function escapeHtml(str) {
     var div = document.createElement("div");
@@ -67,12 +71,16 @@
       '<div class="admin-item-body">' +
         '<div class="admin-item-name">' + escapeHtml(nome) + "</div>" +
         '<div class="admin-item-sub">' + escapeHtml(row.DS_EMAIL || "—") + "</div>" +
-        '<div class="admin-item-sub">Matrícula ' + escapeHtml(row.CD_MATRICULA || "—") + " · ID " + escapeHtml(row.ID_USUARIO) + "</div>" +
+        '<div class="admin-item-sub">Cargo ' + escapeHtml(row.NM_POSICAO || "—") + " · ID " + escapeHtml(row.ID_USUARIO) + "</div>" +
       "</div>" +
       '<div class="admin-item-actions">' +
+        '<button type="button" class="btn-icon btn-icon-blue btn-icon-sm" data-action="editar" title="Editar" data-i18n-title="common.editar"><i class="fa-solid fa-pen"></i></button>' +
         '<button type="button" class="btn-icon ' + (row.ATIVO ? "btn-icon-red" : "btn-icon-blue") + ' btn-icon-sm" data-action="status" title="' + (row.ATIVO ? "Desativar" : "Reativar") + '"><i class="fa-solid ' + (row.ATIVO ? "fa-ban" : "fa-rotate-right") + '"></i></button>' +
       "</div>";
 
+    item.querySelector('[data-action="editar"]').addEventListener("click", function () {
+      abrirEdicao(row);
+    });
     item.querySelector('[data-action="status"]').addEventListener("click", function () {
       alternarStatus(row, item);
     });
@@ -93,20 +101,15 @@
 
   function loadAprovadores() {
     setState("Carregando aprovadores...", false);
-    if (connStatusEl) connStatusEl.textContent = "";
     return fetch("/api/aprovadores")
       .then(function (res) {
         if (!res.ok) return res.json().then(function (e) { throw new Error(e.error || res.statusText); });
         return res.json();
       })
-      .then(function (rows) {
-        renderList(rows);
-        if (connStatusEl) connStatusEl.textContent = "Conectado ✓";
-      })
+      .then(renderList)
       .catch(function (err) {
         console.error("[aprovadores] erro ao carregar:", err);
         setState("Erro ao carregar aprovadores: " + err.message, true);
-        if (connStatusEl) connStatusEl.textContent = "Falha na conexão";
       });
   }
 
@@ -120,14 +123,17 @@
     if (addNomeInput) addNomeInput.value = "";
   }
 
-  function consultarMdm() {
-    var id = addIdInput ? addIdInput.value.trim() : "";
-    if (!id) {
-      if (addMatriculaInput) addMatriculaInput.value = "";
-      if (addNomeInput) addNomeInput.value = "";
-      return;
-    }
-    fetch("/api/aprovadores/mdm/" + encodeURIComponent(id))
+  // Mesma consulta nos dois formulários (adicionar e editar): só mudam
+  // os campos de destino, passados por parâmetro.
+  function consultarMdm(idInput, matriculaInput, nomeInput, avisarNaoEncontrado) {
+    var id = idInput ? idInput.value.trim() : "";
+    var limpar = function () {
+      if (matriculaInput) matriculaInput.value = "";
+      if (nomeInput) nomeInput.value = "";
+    };
+    if (!id) return limpar();
+
+    return fetch("/api/aprovadores/mdm/" + encodeURIComponent(id))
       .then(function (res) {
         return res.json().then(function (data) {
           if (!res.ok) throw new Error(data.error || res.statusText);
@@ -135,13 +141,14 @@
         });
       })
       .then(function (u) {
-        if (addMatriculaInput) addMatriculaInput.value = u.CD_MATRICULA || "";
-        if (addNomeInput) addNomeInput.value = u.NM_USUARIO || "";
+        if (matriculaInput) matriculaInput.value = u.CD_MATRICULA || "";
+        if (nomeInput) nomeInput.value = u.NM_USUARIO || "";
       })
       .catch(function (err) {
-        if (addMatriculaInput) addMatriculaInput.value = "";
-        if (addNomeInput) addNomeInput.value = "";
-        if (window.showToast) showToast("warning", "Usuário não encontrado", err.message);
+        limpar();
+        if (avisarNaoEncontrado !== false && window.showToast) {
+          showToast("warning", "Usuário não encontrado", err.message);
+        }
       });
   }
 
@@ -184,6 +191,51 @@
       });
   }
 
+  // ── Editar ──
+  // Único campo editável: o ID_USUARIO (ver cabeçalho). Abre o modal já
+  // preenchido com o ID atual e os dados do MDM correspondentes, no
+  // mesmo formato do formulário de adicionar.
+  function abrirEdicao(row) {
+    idEmEdicao = row.ID_USUARIO;
+    if (editIdInput) editIdInput.value = row.ID_USUARIO;
+    if (editMatriculaInput) editMatriculaInput.value = row.CD_MATRICULA || "";
+    if (editNomeInput) editNomeInput.value = row.NM_USUARIO || "";
+    if (window.openModal) openModal("modalEditAprovador");
+  }
+
+  function saveEdit() {
+    var id = editIdInput ? editIdInput.value.trim() : "";
+    if (!id) {
+      if (window.showToast) showToast("warning", "Campo obrigatório", "Informe o ID_USUARIO do aprovador.");
+      return;
+    }
+    if (btnSaveEdit) btnSaveEdit.disabled = true;
+    fetch("/api/aprovadores/" + encodeURIComponent(idEmEdicao), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ID_USUARIO: id }),
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          if (!res.ok) throw new Error(data.error || res.statusText);
+          return data;
+        });
+      })
+      .then(function () {
+        if (window.closeModal) closeModal("modalEditAprovador");
+        if (window.showToast) showToast("success", "Salvo", "Aprovador atualizado com sucesso!");
+        loadAprovadores();
+        avisarMudanca();
+      })
+      .catch(function (err) {
+        console.error("[aprovadores] falha ao salvar:", err);
+        if (window.showToast) showToast("error", "Erro ao salvar", err.message);
+      })
+      .finally(function () {
+        if (btnSaveEdit) btnSaveEdit.disabled = false;
+      });
+  }
+
   // ── Ativar/Desativar — grava SG_ATIVO no banco, nunca só visual ──
   async function alternarStatus(row, item) {
     var ativar = !row.ATIVO;
@@ -222,9 +274,18 @@
   }
 
   if (btnSaveAdd) btnSaveAdd.addEventListener("click", saveAdd);
-  if (reloadBtn) reloadBtn.addEventListener("click", loadAprovadores);
+  if (btnSaveEdit) btnSaveEdit.addEventListener("click", saveEdit);
   if (addTrigger) addTrigger.addEventListener("click", limparFormulario);
-  if (addIdInput) addIdInput.addEventListener("change", consultarMdm);
+  if (addIdInput) {
+    addIdInput.addEventListener("change", function () {
+      consultarMdm(addIdInput, addMatriculaInput, addNomeInput);
+    });
+  }
+  if (editIdInput) {
+    editIdInput.addEventListener("change", function () {
+      consultarMdm(editIdInput, editMatriculaInput, editNomeInput);
+    });
+  }
 
   // CONSULTA DUPLICADA (corrigida): este arquivo é carregado no fim do
   // <body>, então document.readyState já era "interactive" quando ele

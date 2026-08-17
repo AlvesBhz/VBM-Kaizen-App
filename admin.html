@@ -610,8 +610,6 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <span class="admin-item-badge" id="aprovadoresCount" style="margin-left:.5rem;">…</span>
         </div>
         <div style="display:flex;gap:.5rem;align-items:center;">
-          <span id="aprovadoresConnStatus" style="font-size:.7rem;color:var(--vbm-mid);"></span>
-          <button class="btn btn-ghost btn-sm" type="button" id="btnReloadAprovadores" title="Recarregar"><i class="fa-solid fa-rotate"></i></button>
           <button class="btn btn-outline btn-sm admin-add-btn" data-modal-open="modalAddAprovador"><i class="fa-solid fa-plus"></i> <span data-i18n="adm.newApprover">Novo Aprovador</span></button>
         </div>
       </div>
@@ -773,6 +771,32 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
     <div class="modal-foot">
       <button class="btn btn-ghost" data-modal-close data-i18n="common.cancelar">Cancelar</button>
       <button class="btn btn-primary" id="btnSaveAddAprovador"><span data-i18n="adm.saveApprover">Salvar Aprovador</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- Editar Aprovador — mesma estrutura do modal de adicionar, porque o
+     campo editável é o mesmo: kzn_aprovador só guarda ID_USUARIO (o
+     SG_ATIVO é o botão de ativar/desativar da lista). Trocar o ID
+     aponta o registro para outra pessoa; matrícula e nome seguem vindo
+     do MDM, apenas para conferência. -->
+<div class="modal-backdrop" id="modalEditAprovador">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-icon" style="--hue:60,181,229;background:#e8f3fb;border-color:rgba(60,181,229,.28);"><i class="fa-solid fa-user-pen" style="color:var(--vbm-blue);"></i></div>
+      <div class="modal-title" data-i18n="adm.editApprover">Editar Aprovador</div>
+      <button class="modal-close" data-modal-close><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid form-grid-2">
+        <div class="form-group"><label class="form-label" data-i18n="adm.idUsuario">ID_USUARIO <span class="req">*</span></label><input type="number" step="1" class="form-control" id="editAprovadorIdUsuario" placeholder="Ex.: 10234"/></div>
+        <div class="form-group"><label class="form-label" data-i18n="adm.mdmRegistration">CD_MATRICULA</label><input type="text" class="form-control" id="editAprovadorMatricula" placeholder="preenchido pelo MDM" readonly/></div>
+        <div class="form-group" style="grid-column:1/-1;"><label class="form-label" data-i18n="adm.fullName">Nome completo</label><input type="text" class="form-control" id="editAprovadorNome" placeholder="preenchido pelo MDM" readonly/></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" data-modal-close data-i18n="common.cancelar">Cancelar</button>
+      <button class="btn btn-primary" id="btnSaveEditAprovador"><span data-i18n="common.salvar">Salvar</span></button>
     </div>
   </div>
 </div>
@@ -1486,7 +1510,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 <!-- Dados do usuário logado (Microsoft Graph) — reaproveita o token do
      login já existente; sem MSAL próprio, sem alterar o fluxo de auth. -->
 <script src="js/usuario-graph.js?v=20260816-1"></script>
-<script src="js/aprovadores.js?v=20260816-1"></script>
+<script src="js/aprovadores.js?v=20260817-1"></script>
 <script src="js/usuarios.js?v=20260816-1"></script>
 <!-- cadastro-bilingue.js define o motor compartilhado (window.criarCadastroBilingue);
      os 6 arquivos seguintes só configuram sua própria aba com ele. -->
