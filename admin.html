@@ -410,6 +410,30 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 [data-bg="dark"] .form-control[readonly]{background:rgba(255,255,255,.04);color:rgba(255,255,255,.5);border-color:rgba(255,255,255,.1);}
 [data-bg="dark"] .form-control[readonly]:focus{border-color:rgba(255,255,255,.1);box-shadow:none;}
 
+/* Critério de busca (Nome/E-mail) e lista de sugestões do MDM no modal
+   de aprovador. Sem componente novo: os rótulos usam a mesma tipografia
+   do .form-label e a lista repete a borda/raio do .form-control. */
+.form-radios{display:flex;gap:1.25rem;align-items:center;}
+.form-radios label{display:flex;align-items:center;gap:.35rem;font-size:.72rem;font-weight:400;cursor:pointer;}
+.form-radios input[type="radio"]{accent-color:var(--vbm-blue);cursor:pointer;margin:0;}
+.form-suggest-wrap{position:relative;}
+.form-suggest{
+  position:absolute;left:0;right:0;top:100%;z-index:20;margin-top:.2rem;
+  max-height:210px;overflow-y:auto;background:var(--vbm-white);
+  border:1px solid var(--vbm-border);border-radius:.45rem;
+  box-shadow:0 6px 18px rgba(0,0,0,.12);
+}
+.form-suggest-item{padding:.5rem .65rem;font-size:.7rem;cursor:pointer;border-bottom:1px solid rgba(0,0,0,.05);}
+.form-suggest-item:last-child{border-bottom:none;}
+.form-suggest-item:hover,.form-suggest-item.is-ativo{background:var(--vbm-blue-pale);}
+.form-suggest-item strong{display:block;font-weight:500;}
+.form-suggest-item span{color:var(--vbm-mid);}
+.form-suggest-vazio{padding:.6rem .65rem;font-size:.7rem;color:var(--vbm-mid);}
+[data-bg="dark"] .form-suggest{background:#122232;border-color:rgba(255,255,255,.12);}
+[data-bg="dark"] .form-suggest-item{border-bottom-color:rgba(255,255,255,.06);}
+[data-bg="dark"] .form-suggest-item:hover,[data-bg="dark"] .form-suggest-item.is-ativo{background:rgba(60,181,229,.14);}
+[data-bg="dark"] .form-suggest-item span,[data-bg="dark"] .form-suggest-vazio{color:rgba(255,255,255,.5);}
+
 /* Textareas bilíngues dos formulários — crescem sozinhas conforme o texto
    (sem barra de rolagem interna, que cortava a última linha). */
 .lang-slot-textarea .lang-slot-input{overflow:hidden;resize:none;}
@@ -757,15 +781,30 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       <button class="modal-close" data-modal-close><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
-      <!-- kzn_aprovador guarda só ID_USUARIO + SG_ATIVO (ver DER): é o
-           ÚNICO campo digitado aqui. Matrícula e nome pertencem ao MDM
-           (kzn_mdm_hierarquia) e são preenchidos automaticamente ao
-           informar o ID, apenas para conferência — não são gravados.
-           DT_ATUALIZACAO é gerada pelo servidor (GETDATE()). -->
+      <!-- kzn_aprovador guarda só ID_USUARIO + SG_ATIVO (ver DER). O ID
+           não é digitado: vem da pessoa escolhida na busca ao MDM
+           (kzn_mdm_hierarquia) e fica guardado só no JavaScript. Todos
+           os campos abaixo da busca são do MDM — leitura apenas, não
+           são gravados. DT_ATUALIZACAO é gerada pelo servidor. -->
+      <div class="form-group">
+        <label class="form-label" data-i18n="adm.searchBy">Buscar por</label>
+        <div class="form-radios">
+          <label><input type="radio" name="addAprovadorCriterio" value="nome" checked/> <span data-i18n="adm.byName">Nome</span></label>
+          <label><input type="radio" name="addAprovadorCriterio" value="email"/> <span data-i18n="adm.byEmail">E-mail</span></label>
+        </div>
+      </div>
+      <div class="form-group form-suggest-wrap">
+        <label class="form-label" data-i18n="adm.searchUser">Usuário <span class="req">*</span></label>
+        <input type="text" class="form-control" id="addAprovadorBusca" autocomplete="off" placeholder="Digite ao menos 2 caracteres..." data-i18n-placeholder="adm.searchUserHint"/>
+        <div class="form-suggest" id="addAprovadorSugestoes" hidden></div>
+      </div>
       <div class="form-grid form-grid-2">
-        <div class="form-group"><label class="form-label" data-i18n="adm.idUsuario">ID_USUARIO <span class="req">*</span></label><input type="number" step="1" class="form-control" id="addAprovadorIdUsuario" placeholder="Ex.: 10234"/></div>
-        <div class="form-group"><label class="form-label" data-i18n="adm.mdmRegistration">CD_MATRICULA</label><input type="text" class="form-control" id="addAprovadorMatricula" placeholder="preenchido pelo MDM" readonly/></div>
-        <div class="form-group" style="grid-column:1/-1;"><label class="form-label" data-i18n="adm.fullName">Nome completo</label><input type="text" class="form-control" id="addAprovadorNome" placeholder="preenchido pelo MDM" readonly/></div>
+        <div class="form-group" style="grid-column:1/-1;"><label class="form-label" data-i18n="adm.fullName">Nome Completo</label><input type="text" class="form-control" id="addAprovadorNome" readonly/></div>
+        <div class="form-group"><label class="form-label" data-i18n="adm.registration">Matrícula</label><input type="text" class="form-control" id="addAprovadorMatricula" readonly/></div>
+        <div class="form-group"><label class="form-label" data-i18n="adm.email">E-mail</label><input type="text" class="form-control" id="addAprovadorEmail" readonly/></div>
+        <div class="form-group"><label class="form-label" data-i18n="adm.position">Cargo</label><input type="text" class="form-control" id="addAprovadorCargo" readonly/></div>
+        <div class="form-group"><label class="form-label" data-i18n="adm.state">Estado</label><input type="text" class="form-control" id="addAprovadorEstado" readonly/></div>
+        <div class="form-group"><label class="form-label" data-i18n="adm.city">Cidade</label><input type="text" class="form-control" id="addAprovadorCidade" readonly/></div>
       </div>
     </div>
     <div class="modal-foot">
@@ -1510,7 +1549,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 <!-- Dados do usuário logado (Microsoft Graph) — reaproveita o token do
      login já existente; sem MSAL próprio, sem alterar o fluxo de auth. -->
 <script src="js/usuario-graph.js?v=20260816-1"></script>
-<script src="js/aprovadores.js?v=20260817-1"></script>
+<script src="js/aprovadores.js?v=20260817-2"></script>
 <script src="js/usuarios.js?v=20260816-1"></script>
 <!-- cadastro-bilingue.js define o motor compartilhado (window.criarCadastroBilingue);
      os 6 arquivos seguintes só configuram sua própria aba com ele. -->
@@ -1789,6 +1828,16 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       'adm.newUser': 'Novo Usuário',
       'adm.searchUserPlaceholder': 'Buscar usuário por nome, e-mail ou MDM...',
       'adm.addApprover': 'Adicionar Aprovador',
+      'adm.searchBy': 'Buscar por',
+      'adm.byName': 'Nome',
+      'adm.byEmail': 'E-mail',
+      'adm.searchUser': 'Usuário',
+      'adm.searchUserHint': 'Digite ao menos 2 caracteres...',
+      'adm.registration': 'Matrícula',
+      'adm.position': 'Cargo',
+      'adm.state': 'Estado',
+      'adm.city': 'Cidade',
+      'adm.noResults': 'Nenhum usuário encontrado.',
       'adm.editApprover': 'Editar Aprovador',
       'adm.editCategory': 'Editar Categoria',
       'adm.editUser': 'Editar Usuário'
@@ -1903,6 +1952,16 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       'adm.newUser': 'New User',
       'adm.searchUserPlaceholder': 'Search user by name, email or MDM...',
       'adm.addApprover': 'Add Approver',
+      'adm.searchBy': 'Search by',
+      'adm.byName': 'Name',
+      'adm.byEmail': 'Email',
+      'adm.searchUser': 'User',
+      'adm.searchUserHint': 'Type at least 2 characters...',
+      'adm.registration': 'Employee ID',
+      'adm.position': 'Position',
+      'adm.state': 'State',
+      'adm.city': 'City',
+      'adm.noResults': 'No user found.',
       'adm.editApprover': 'Edit Approver',
       'adm.editCategory': 'Edit Category',
       'adm.editUser': 'Edit User'

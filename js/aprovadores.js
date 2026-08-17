@@ -24,11 +24,24 @@
 
   var stateEl = document.getElementById("aprovadoresState");
   var countEl = document.getElementById("aprovadoresCount");
-  var addIdInput = document.getElementById("addAprovadorIdUsuario");
-  var addMatriculaInput = document.getElementById("addAprovadorMatricula");
-  var addNomeInput = document.getElementById("addAprovadorNome");
   var btnSaveAdd = document.getElementById("btnSaveAddAprovador");
   var addTrigger = document.querySelector('[data-modal-open="modalAddAprovador"]');
+
+  // Busca de pessoa no MDM (modal "Novo Aprovador"): o ID_USUARIO não é
+  // mais digitado — vem de quem o usuário escolher na lista. Os campos
+  // abaixo só EXIBEM os dados do MDM (readonly no HTML).
+  var addBuscaInput = document.getElementById("addAprovadorBusca");
+  var addSugestoesEl = document.getElementById("addAprovadorSugestoes");
+  var addCampos = {
+    NM_USUARIO: document.getElementById("addAprovadorNome"),
+    CD_MATRICULA: document.getElementById("addAprovadorMatricula"),
+    CD_EMAIL: document.getElementById("addAprovadorEmail"),
+    NM_POSICAO: document.getElementById("addAprovadorCargo"),
+    NM_ESTADO: document.getElementById("addAprovadorEstado"),
+    NM_CIDADE: document.getElementById("addAprovadorCidade"),
+  };
+  // Vínculo interno com o registro escolhido: é o que vai no POST.
+  var idSelecionado = null;
 
   var editIdInput = document.getElementById("editAprovadorIdUsuario");
   var editMatriculaInput = document.getElementById("editAprovadorMatricula");
@@ -114,13 +127,95 @@
   }
 
   // ── Adicionar ──
-  // Nome/matrícula não são digitados: pertencem ao MDM. Ao informar o
-  // ID_USUARIO, buscamos lá para o usuário confirmar de quem é aquele
-  // ID antes de salvar; o POST envia só o ID.
+  // Escolhe-se a PESSOA, não o ID: o rádio define o critério (nome ou
+  // e-mail), a busca sugere até 10 registros do MDM e a seleção
+  // preenche os campos de leitura. O POST continua enviando só o
+  // ID_USUARIO, agora guardado em idSelecionado.
+  function criterioAdd() {
+    var marcado = document.querySelector('input[name="addAprovadorCriterio"]:checked');
+    return marcado && marcado.value === "email" ? "email" : "nome";
+  }
+
+  // Salvar só habilita com alguém realmente escolhido na lista —
+  // digitar um nome parecido não basta.
+  function definirSelecionado(u) {
+    idSelecionado = u ? u.ID_USUARIO : null;
+    Object.keys(addCampos).forEach(function (col) {
+      if (addCampos[col]) addCampos[col].value = (u && u[col]) || "";
+    });
+    if (btnSaveAdd) btnSaveAdd.disabled = !idSelecionado;
+  }
+
+  function fecharSugestoes() {
+    if (!addSugestoesEl) return;
+    addSugestoesEl.innerHTML = "";
+    addSugestoesEl.hidden = true;
+  }
+
+  function mostrarSugestoes(lista) {
+    if (!addSugestoesEl) return;
+    if (!lista.length) {
+      addSugestoesEl.innerHTML =
+        '<div class="form-suggest-vazio" data-i18n="adm.noResults">Nenhum usuário encontrado.</div>';
+      addSugestoesEl.hidden = false;
+      return;
+    }
+    addSugestoesEl.innerHTML = lista
+      .map(function (u, i) {
+        return '<div class="form-suggest-item" data-indice="' + i + '">' +
+          "<strong>" + escapeHtml(u.NM_USUARIO || "—") + "</strong>" +
+          "<span>" + escapeHtml(u.CD_EMAIL || "—") + "</span>" +
+        "</div>";
+      })
+      .join("");
+    addSugestoesEl.hidden = false;
+
+    Array.prototype.forEach.call(addSugestoesEl.querySelectorAll(".form-suggest-item"), function (el) {
+      el.addEventListener("click", function () {
+        var u = lista[parseInt(el.dataset.indice, 10)];
+        if (!u) return;
+        if (addBuscaInput) {
+          addBuscaInput.value = (criterioAdd() === "email" ? u.CD_EMAIL : u.NM_USUARIO) || "";
+        }
+        definirSelecionado(u);
+        fecharSugestoes();
+      });
+    });
+  }
+
+  function buscarNoMdm() {
+    var termo = addBuscaInput ? addBuscaInput.value.trim() : "";
+    // Editar o texto invalida a escolha anterior: senão daria para
+    // selecionar uma pessoa, trocar o texto e salvar outra coisa.
+    definirSelecionado(null);
+    if (termo.length < 2) return fecharSugestoes();
+
+    fetch("/api/aprovadores/mdm?campo=" + encodeURIComponent(criterioAdd()) + "&q=" + encodeURIComponent(termo))
+      .then(function (res) {
+        return res.json().then(function (data) {
+          if (!res.ok) throw new Error(data.error || res.statusText);
+          return data;
+        });
+      })
+      .then(mostrarSugestoes)
+      .catch(function (err) {
+        console.error("[aprovadores] falha ao buscar no MDM:", err);
+        fecharSugestoes();
+      });
+  }
+
+  // Debounce: uma consulta depois que a digitação para, não uma por
+  // tecla.
+  var timerBusca = null;
+  function agendarBusca() {
+    clearTimeout(timerBusca);
+    timerBusca = setTimeout(buscarNoMdm, 300);
+  }
+
   function limparFormulario() {
-    if (addIdInput) addIdInput.value = "";
-    if (addMatriculaInput) addMatriculaInput.value = "";
-    if (addNomeInput) addNomeInput.value = "";
+    if (addBuscaInput) addBuscaInput.value = "";
+    definirSelecionado(null);
+    fecharSugestoes();
   }
 
   // Mesma consulta nos dois formulários (adicionar e editar): só mudam
@@ -159,16 +254,15 @@
   }
 
   function saveAdd() {
-    var id = addIdInput ? addIdInput.value.trim() : "";
-    if (!id) {
-      if (window.showToast) showToast("warning", "Campo obrigatório", "Informe o ID_USUARIO do aprovador.");
+    if (!idSelecionado) {
+      if (window.showToast) showToast("warning", "Campo obrigatório", "Busque e selecione o usuário na lista.");
       return;
     }
     if (btnSaveAdd) btnSaveAdd.disabled = true;
     fetch("/api/aprovadores", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ID_USUARIO: id }),
+      body: JSON.stringify({ ID_USUARIO: idSelecionado }),
     })
       .then(function (res) {
         return res.json().then(function (data) {
@@ -187,7 +281,10 @@
         if (window.showToast) showToast("error", "Erro ao inserir", err.message);
       })
       .finally(function () {
-        if (btnSaveAdd) btnSaveAdd.disabled = false;
+        // Reabilita só se ainda houver alguém selecionado: depois de um
+        // salvamento bem-sucedido o formulário é limpo e o botão tem de
+        // continuar desabilitado.
+        if (btnSaveAdd) btnSaveAdd.disabled = !idSelecionado;
       });
   }
 
@@ -276,11 +373,32 @@
   if (btnSaveAdd) btnSaveAdd.addEventListener("click", saveAdd);
   if (btnSaveEdit) btnSaveEdit.addEventListener("click", saveEdit);
   if (addTrigger) addTrigger.addEventListener("click", limparFormulario);
-  if (addIdInput) {
-    addIdInput.addEventListener("change", function () {
-      consultarMdm(addIdInput, addMatriculaInput, addNomeInput);
+  // Estado inicial: sem ninguém escolhido, Salvar nasce desabilitado.
+  definirSelecionado(null);
+  if (addBuscaInput) {
+    addBuscaInput.addEventListener("input", agendarBusca);
+    // Reabre a lista ao voltar ao campo sem ter escolhido ninguém.
+    addBuscaInput.addEventListener("focus", function () {
+      if (!idSelecionado && addBuscaInput.value.trim().length >= 2) buscarNoMdm();
     });
   }
+  // Trocar o critério recomeça a busca: o termo digitado quase nunca
+  // serve para os dois campos.
+  Array.prototype.forEach.call(
+    document.querySelectorAll('input[name="addAprovadorCriterio"]'),
+    function (radio) {
+      radio.addEventListener("change", function () {
+        limparFormulario();
+        if (addBuscaInput) addBuscaInput.focus();
+      });
+    }
+  );
+  // Clique fora fecha a lista sem alterar o que já estava escolhido.
+  document.addEventListener("click", function (ev) {
+    if (!addSugestoesEl || addSugestoesEl.hidden) return;
+    if (ev.target === addBuscaInput || addSugestoesEl.contains(ev.target)) return;
+    fecharSugestoes();
+  });
   if (editIdInput) {
     editIdInput.addEventListener("change", function () {
       consultarMdm(editIdInput, editMatriculaInput, editNomeInput);

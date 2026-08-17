@@ -523,6 +523,43 @@ apiRouter.get("/aprovadores", async (req, res) => {
   }
 });
 
+// Busca de pessoas no MDM para o autocomplete de "Novo Aprovador":
+// ?campo=nome|email (o que o rádio do modal escolheu) e ?q=<termo>.
+//
+// A coluna vem de uma LISTA FIXA, nunca do parâmetro: `campo` só
+// escolhe entre duas opções conhecidas, então não há como injetar
+// nome de coluna pela URL. O termo continua parametrizado (@termo).
+//
+// TOP (10) e mínimo de 2 caracteres seguram o custo: sem isso, um
+// LIKE '%%' varreria o MDM inteiro a cada tecla digitada.
+const MDM_BUSCA_MIN = 2;
+const MDM_BUSCA_TOP = 10;
+
+apiRouter.get("/aprovadores/mdm", async (req, res) => {
+  try {
+    const termo = String(req.query.q || "").trim();
+    if (termo.length < MDM_BUSCA_MIN) return res.json([]);
+
+    const coluna = String(req.query.campo || "").toLowerCase() === "email" ? "CD_EMAIL" : "NM_USUARIO";
+    // LIKE trata %, _ e [ como curinga: escapamos para que o termo
+    // digitado seja buscado literalmente.
+    const termoLike = "%" + termo.replace(/[[%_]/g, (c) => "[" + c + "]") + "%";
+
+    const result = await runQuery(
+      `SELECT TOP (${MDM_BUSCA_TOP})
+              ID_USUARIO, NM_USUARIO, CD_MATRICULA, CD_EMAIL, NM_POSICAO, NM_ESTADO, NM_CIDADE
+       FROM ${FULL_MDM_TABLE}
+       WHERE ${coluna} LIKE @termo
+       ORDER BY NM_USUARIO`,
+      [["termo", sql.NVarChar(255), termoLike]]
+    );
+    res.json(result.recordset);
+  } catch (err) {
+    console.error("[aprovadores] erro ao buscar no MDM:", err.message);
+    res.status(500).json({ error: "Erro ao buscar no MDM: " + err.message });
+  }
+});
+
 // Consulta um usuário no MDM pelo ID — usada pelo formulário de
 // "Novo Aprovador" para mostrar de quem é aquele ID antes de salvar
 // (nome/matrícula/e-mail não são digitados: pertencem ao MDM).
