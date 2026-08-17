@@ -609,12 +609,25 @@ apiRouter.post("/aprovadores", async (req, res) => {
       return res.status(409).json({ error: "Este usuário já está cadastrado como aprovador." });
     }
 
-    await runQuery(
-      `INSERT INTO ${FULL_TABLE_NAME} (ID_USUARIO, SG_ATIVO, DT_ATUALIZACAO)
-       VALUES (@id, 'S', GETDATE())`,
-      [["id", sql.Int, idUsuario]]
+    // ID_APROVADOR é NOT NULL e NÃO é identity: o banco não gera valor
+    // sozinho, então o INSERT precisa trazer o próximo — mesma regra das
+    // tabelas de cadastro (ver ISNULL(MAX(pk),0)+1 em
+    // registrarCadastroBilingue). Sem isso o insert falha com "Cannot
+    // insert the value NULL into column 'ID_APROVADOR'".
+    const proximo = await runQuery(
+      `SELECT ISNULL(MAX(ID_APROVADOR), 0) + 1 AS PROXIMO FROM ${FULL_TABLE_NAME}`
     );
-    res.status(201).json({ ok: true, ID_USUARIO: idUsuario });
+    const idAprovador = proximo.recordset[0].PROXIMO;
+
+    await runQuery(
+      `INSERT INTO ${FULL_TABLE_NAME} (ID_APROVADOR, ID_USUARIO, SG_ATIVO, DT_ATUALIZACAO)
+       VALUES (@idAprovador, @id, 'S', GETDATE())`,
+      [
+        ["idAprovador", sql.Int, idAprovador],
+        ["id", sql.Int, idUsuario],
+      ]
+    );
+    res.status(201).json({ ok: true, ID_APROVADOR: idAprovador, ID_USUARIO: idUsuario });
   } catch (err) {
     console.error("[aprovadores] erro ao inserir:", err.message);
     res.status(500).json({ error: "Erro ao inserir aprovador: " + err.message });
