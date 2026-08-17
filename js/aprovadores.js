@@ -192,15 +192,32 @@
 
     fetch("/api/aprovadores/mdm?campo=" + encodeURIComponent(criterioAdd()) + "&q=" + encodeURIComponent(termo))
       .then(function (res) {
-        return res.json().then(function (data) {
-          if (!res.ok) throw new Error(data.error || res.statusText);
-          return data;
+        // Lê como texto antes de interpretar: quando a rota não existe no
+        // servidor publicado, a resposta é o HTML de 404 e um res.json()
+        // direto estouraria com "Unexpected token <" — mensagem que não
+        // ajuda ninguém a descobrir que faltou subir o server.js.
+        return res.text().then(function (txt) {
+          var dados = null;
+          try { dados = JSON.parse(txt); } catch (e) { /* resposta não-JSON */ }
+          if (!res.ok) {
+            throw new Error((dados && dados.error) || "HTTP " + res.status + " em /api/aprovadores/mdm");
+          }
+          if (!Array.isArray(dados)) {
+            throw new Error("Resposta inesperada de /api/aprovadores/mdm (HTTP " + res.status + ")");
+          }
+          return dados;
         });
       })
       .then(mostrarSugestoes)
       .catch(function (err) {
+        // Falha NUNCA fica muda: fechar a lista em silêncio faz a busca
+        // parecer "não achou nada" quando na verdade a consulta quebrou.
         console.error("[aprovadores] falha ao buscar no MDM:", err);
-        fecharSugestoes();
+        if (addSugestoesEl) {
+          addSugestoesEl.innerHTML =
+            '<div class="form-suggest-vazio">Erro ao buscar no MDM: ' + escapeHtml(err.message) + "</div>";
+          addSugestoesEl.hidden = false;
+        }
       });
   }
 
