@@ -498,7 +498,8 @@ apiRouter.get("/aprovadores", async (req, res) => {
     const result = await runQuery(
       `SELECT TOP (@limite)
               a.ID_USUARIO, a.SG_ATIVO, a.DT_ATUALIZACAO,
-              m.CD_MATRICULA, m.NM_USUARIO, m.CD_EMAIL AS DS_EMAIL, m.NM_POSICAO
+              m.CD_MATRICULA, m.NM_USUARIO, m.CD_EMAIL AS DS_EMAIL,
+              m.NM_POSICAO, m.NM_ESTADO, m.NM_CIDADE
        FROM ${FULL_TABLE_NAME} a
        LEFT JOIN ${FULL_MDM_TABLE} m ON m.ID_USUARIO = a.ID_USUARIO
        ORDER BY m.NM_USUARIO, a.ID_USUARIO`,
@@ -510,9 +511,13 @@ apiRouter.get("/aprovadores", async (req, res) => {
         CD_MATRICULA: r.CD_MATRICULA,
         NM_USUARIO: r.NM_USUARIO,
         DS_EMAIL: r.DS_EMAIL,
-        // Cargo — vem do MESMO join que já traz nome/matrícula/e-mail,
-        // sem consulta extra (kzn_mdm_hierarquia.NM_POSICAO no DER).
+        // Cargo/estado/cidade vêm do MESMO join que já traz
+        // nome/matrícula/e-mail, sem consulta extra. O cargo aparece no
+        // card; os três juntos abrem o modal de edição já preenchido,
+        // sem precisar consultar o MDM de novo.
         NM_POSICAO: r.NM_POSICAO,
+        NM_ESTADO: r.NM_ESTADO,
+        NM_CIDADE: r.NM_CIDADE,
         ATIVO: r.SG_ATIVO === "S",
         DT_ATUALIZACAO: r.DT_ATUALIZACAO,
       }))

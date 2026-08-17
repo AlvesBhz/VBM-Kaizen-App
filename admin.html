@@ -814,11 +814,10 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
   </div>
 </div>
 
-<!-- Editar Aprovador — mesma estrutura do modal de adicionar, porque o
-     campo editável é o mesmo: kzn_aprovador só guarda ID_USUARIO (o
-     SG_ATIVO é o botão de ativar/desativar da lista). Trocar o ID
-     aponta o registro para outra pessoa; matrícula e nome seguem vindo
-     do MDM, apenas para conferência. -->
+<!-- Editar Aprovador — estrutura IDÊNTICA à de adicionar, porque o dado
+     editável é o mesmo: kzn_aprovador só guarda ID_USUARIO (o SG_ATIVO
+     é o botão de ativar/desativar da lista). Escolher outra pessoa na
+     busca aponta o registro para ela; os campos do MDM são leitura. -->
 <div class="modal-backdrop" id="modalEditAprovador">
   <div class="modal">
     <div class="modal-head">
@@ -827,10 +826,25 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       <button class="modal-close" data-modal-close><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" data-i18n="adm.searchBy">Buscar por</label>
+        <div class="form-radios">
+          <label><input type="radio" name="editAprovadorCriterio" value="nome" checked/> <span data-i18n="adm.byName">Nome</span></label>
+          <label><input type="radio" name="editAprovadorCriterio" value="email"/> <span data-i18n="adm.byEmail">E-mail</span></label>
+        </div>
+      </div>
+      <div class="form-group form-suggest-wrap">
+        <label class="form-label" data-i18n="adm.searchUser">Usuário <span class="req">*</span></label>
+        <input type="text" class="form-control" id="editAprovadorBusca" autocomplete="off" placeholder="Digite ao menos 2 caracteres..." data-i18n-placeholder="adm.searchUserHint"/>
+        <div class="form-suggest" id="editAprovadorSugestoes" hidden></div>
+      </div>
       <div class="form-grid form-grid-2">
-        <div class="form-group"><label class="form-label" data-i18n="adm.idUsuario">ID_USUARIO <span class="req">*</span></label><input type="number" step="1" class="form-control" id="editAprovadorIdUsuario" placeholder="Ex.: 10234"/></div>
-        <div class="form-group"><label class="form-label" data-i18n="adm.mdmRegistration">CD_MATRICULA</label><input type="text" class="form-control" id="editAprovadorMatricula" placeholder="preenchido pelo MDM" readonly/></div>
-        <div class="form-group" style="grid-column:1/-1;"><label class="form-label" data-i18n="adm.fullName">Nome completo</label><input type="text" class="form-control" id="editAprovadorNome" placeholder="preenchido pelo MDM" readonly/></div>
+        <div class="form-group" style="grid-column:1/-1;"><label class="form-label" data-i18n="adm.fullName">Nome Completo</label><input type="text" class="form-control" id="editAprovadorNome" readonly/></div>
+        <div class="form-group"><label class="form-label" data-i18n="adm.registration">Matrícula</label><input type="text" class="form-control" id="editAprovadorMatricula" readonly/></div>
+        <div class="form-group"><label class="form-label" data-i18n="adm.email">E-mail</label><input type="text" class="form-control" id="editAprovadorEmail" readonly/></div>
+        <div class="form-group"><label class="form-label" data-i18n="adm.position">Cargo</label><input type="text" class="form-control" id="editAprovadorCargo" readonly/></div>
+        <div class="form-group"><label class="form-label" data-i18n="adm.state">Estado</label><input type="text" class="form-control" id="editAprovadorEstado" readonly/></div>
+        <div class="form-group"><label class="form-label" data-i18n="adm.city">Cidade</label><input type="text" class="form-control" id="editAprovadorCidade" readonly/></div>
       </div>
     </div>
     <div class="modal-foot">
@@ -1549,7 +1563,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 <!-- Dados do usuário logado (Microsoft Graph) — reaproveita o token do
      login já existente; sem MSAL próprio, sem alterar o fluxo de auth. -->
 <script src="js/usuario-graph.js?v=20260816-1"></script>
-<script src="js/aprovadores.js?v=20260817-3"></script>
+<script src="js/aprovadores.js?v=20260817-4"></script>
 <script src="js/usuarios.js?v=20260816-1"></script>
 <!-- cadastro-bilingue.js define o motor compartilhado (window.criarCadastroBilingue);
      os 6 arquivos seguintes só configuram sua própria aba com ele. -->
