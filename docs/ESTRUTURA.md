@@ -31,7 +31,8 @@ que fala direto com o Azure SQL.
 │   └── fonts/              webfonts (Font Awesome solid)
 │
 ├── database/
-│   └── DER_VBM_Kaizen_CI.html   modelo de dados (tabelas, colunas, limites)
+│   ├── DER_VBM_Kaizen_CI.html   modelo de dados (tabelas, colunas, limites)
+│   └── CI_KZN_DDL_v2.sql        script DDL idempotente (schema CI/KZN_*)
 │
 ├── docs/
 │   └── ESTRUTURA.md        este arquivo
@@ -61,6 +62,12 @@ responde `304` sem corpo quando nada mudou.
   para que Categorias não dependa de um segundo arquivo estático.
 - As abas do admin carregam **sob demanda**: só a visível consulta o
   banco no load; as demais na primeira vez que são abertas.
-- `database/DER_VBM_Kaizen_CI.html` não é carregado em runtime — é a
-  referência de schema (nomes de tabelas/colunas e tamanhos de campo)
-  usada ao escrever as queries do `server.js`.
+- `database/DER_VBM_Kaizen_CI.html` e `database/CI_KZN_DDL_v2.sql` não
+  são carregados em runtime — são a referência de schema (nomes de
+  tabelas/colunas e tamanhos de campo) usada ao escrever as queries do
+  `server.js`. ATENÇÃO: o DDL já modela `kzn_aprovador`/`kzn_admin` com
+  PK composta (ID_APROVADOR/ID_ADMIN + CD_MATRICULA), mas o `server.js` e
+  o `js/aprovadores.js` atuais ainda tratam `kzn_aprovador` como se a
+  única chave fosse ID_USUARIO (sem ID_APROVADOR, sem CD_MATRICULA
+  gravada) — o DDL está à frente do código da aplicação nesse ponto;
+  ajustar API + tela é trabalho pendente, não incluído nesta atualização.

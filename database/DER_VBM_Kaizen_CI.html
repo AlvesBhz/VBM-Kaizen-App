@@ -193,8 +193,8 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
 <path class="rel" d="M525,807 L610,807 Q612.5,807 612.5,804.5 L612.5,63.5 Q612.5,61 615,61 L610,61" marker-end="url(#arrow-key)" data-from="e_RESULTADOS" data-to="e_IDIOMA" data-fk-row="1"/>
 <path class="rel" d="M785,851 L1082.5,851 Q1092.5,851 1092.5,841 L1092.5,499 Q1092.5,489 1102.5,489 L1400,489" marker-end="url(#arrow-key)" data-from="e_RESULTADOS" data-to="e_TIPO_RESULTADO" data-fk-row="3"/>
 <path class="rel" d="M875,807 L752.5,807 Q742.5,807 742.5,797 L742.5,71 Q742.5,61 732.5,61 L610,61" marker-end="url(#arrow-key)" data-from="e_MOTIVO" data-to="e_IDIOMA" data-fk-row="1"/>
-<path class="rel" d="M1050,83 L1015,83 Q1005,83 1005,73 L1005,71 Q1005,61 995,61 L960,61" marker-end="url(#arrow-key)" data-from="e_APROVADOR" data-to="e_MDM" data-fk-row="1"/>
-<path class="rel" d="M1400,83 L1190,83 Q1180,83 1180,73 L1180,71 Q1180,61 1170,61 L960,61" marker-end="url(#arrow-key)" data-from="e_ADMIN" data-to="e_MDM" data-fk-row="1"/>
+<path class="rel" d="M1050,127 L1015,127 Q1005,127 1005,117 L1005,71 Q1005,61 995,61 L960,61" marker-end="url(#arrow-key)" data-from="e_APROVADOR" data-to="e_MDM" data-fk-row="3"/>
+<path class="rel" d="M1400,127 L1190,127 Q1180,127 1180,117 L1180,71 Q1180,61 1170,61 L960,61" marker-end="url(#arrow-key)" data-from="e_ADMIN" data-to="e_MDM" data-fk-row="3"/>
 <path class="rel" d="M1750,105 L1365,105 Q1355,105 1355,95 L1355,71 Q1355,61 1345,61 L960,61" marker-end="url(#arrow-key)" data-from="e_TIPO_USUARIO" data-to="e_MDM" data-fk-row="2"/>
 <path class="rel" d="M960,105 L1345,105 Q1355,105 1355,95 L1355,71 Q1355,61 1365,61 L1750,61" marker-end="url(#arrow-key)" data-from="e_MDM" data-to="e_TIPO_USUARIO" data-fk-row="2"/>
 <path class="rel" d="M610,193 L645,193 Q655,193 655,183 L655,71 Q655,61 665,61 L700,61" marker-end="url(#arrow-key)" data-from="e_IDIOMA" data-to="e_MDM" data-fk-row="6"/>
@@ -256,21 +256,23 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
     <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
   </div>
 </div>
-<div class="entity role" id="e_APROVADOR" style="left:1050px;top:0;width:260px;height:142px;">
+<div class="entity role" id="e_APROVADOR" style="left:1050px;top:0;width:260px;height:164px;">
   <div class="entity-head"><div class="entity-icon">AP</div><div class="entity-title">KZN_APROVADOR</div></div>
   <div class="entity-body">
     <div class="field"><span class="field-name pk">ID_APROVADOR</span><span class="field-type">INT</span></div>
-    <div class="field"><span class="field-name pk fk">ID_USUARIO</span><span class="field-type">INT</span></div>
+    <div class="field"><span class="field-name pk">CD_MATRICULA</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name">SG_ATIVO</span><span class="field-type">VARCHAR(1)</span></div>
+    <div class="field"><span class="field-name fk">ID_USUARIO</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
   </div>
 </div>
-<div class="entity role" id="e_ADMIN" style="left:1400px;top:0;width:260px;height:142px;">
+<div class="entity role" id="e_ADMIN" style="left:1400px;top:0;width:260px;height:164px;">
   <div class="entity-head"><div class="entity-icon">AD</div><div class="entity-title">KZN_ADMIN</div></div>
   <div class="entity-body">
     <div class="field"><span class="field-name pk">ID_ADMIN</span><span class="field-type">INT</span></div>
-    <div class="field"><span class="field-name pk fk">ID_USUARIO</span><span class="field-type">INT</span></div>
+    <div class="field"><span class="field-name pk">CD_MATRICULA</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name">SG_ATIVO</span><span class="field-type">VARCHAR(1)</span></div>
+    <div class="field"><span class="field-name fk">ID_USUARIO</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
   </div>
 </div>
