@@ -210,6 +210,28 @@
        não relacionado), então o item "ajustar rotinas/telas dependentes" do
        pedido não se aplica aqui — sinalizar se houver outro repositório com
        esse código.
+     - KZN_MDM_HIERARQUIA — PK composta de 3 colunas (pedido do time, nesta
+       rodada): a PK passou de (ID_USUARIO, CD_MATRICULA) pra (ID_USUARIO,
+       CD_MATRICULA, ID_TIPO_USUARIO). Como toda coluna de PK é
+       obrigatoriamente NOT NULL no SQL Server, ID_TIPO_USUARIO deixou de
+       ser opcional (era NULL desde que foi criado). A migração (seção
+       17.2) agora começa com uma checagem de pré-voo que aborta o script
+       (RAISERROR + RETURN, sem alterar nada) se a coluna ainda não existir
+       ou se houver qualquer registro com ID_TIPO_USUARIO nulo — não há
+       valor-padrão de negócio razoável pra preencher automaticamente; o
+       time precisa garantir que todo usuário já tenha um tipo definido
+       antes de reexecutar. ASSUNÇÃO/ALERTA sobre a própria PK: como
+       ID_USUARIO e CD_MATRICULA já têm UNIQUE dedicada cada um
+       (UQ_KZN_MDM_HIERARQUIA_USUARIO e UQ_KZN_MDM_HIERARQUIA_MATR, mantidas
+       pelas ~15 FKs do resto do schema), qualquer linha da tabela já é
+       identificada de forma única só por ID_USUARIO (ou só por
+       CD_MATRICULA) — a PK de 3 colunas não habilita múltiplas linhas por
+       usuário nem por matrícula; ID_TIPO_USUARIO entra na chave "de
+       carona", sem mudar a cardinalidade real da tabela. Se a intenção for
+       permitir mais de um ID_TIPO_USUARIO por usuário (histórico de
+       tipos, por período), as duas UNIQUE atuais precisam ser revistas —
+       do jeito que está hoje, elas continuam restringindo a 1 linha por
+       usuário/matrícula independente da PK.
    ============================================================================== */
 
 SET NOCOUNT ON;
@@ -251,15 +273,18 @@ GO
 
 /* ==============================================================================
    2. TABELA: CI.KZN_MDM_HIERARQUIA  (mestre — referência RH/MDM, sem FK)
-   PK composta (ID_USUARIO, CD_MATRICULA); UQ_KZN_MDM_HIERARQUIA_USUARIO
-   (UNIQUE em ID_USUARIO) mantida à parte pra sustentar as ~15 FKs do resto
-   do schema que referenciam só ID_USUARIO (ver seção 17.2 pra detalhes).
-   ID_TIPO_USUARIO é FK pra CI.KZN_TIPO_USUARIO, mas a constraint não é
-   declarada aqui: as duas tabelas se referenciam uma à outra (referência
-   circular — KZN_TIPO_USUARIO também tem FK pra esta tabela via
-   ID_USUARIO), então nenhuma pode ter a FK cruzada no próprio CREATE TABLE
-   sem que a outra já exista. A FK_KZN_MDM_TIPO_USUARIO é adicionada à
-   parte na seção 17.2b, depois que ambas já existem.
+   PK composta (ID_USUARIO, CD_MATRICULA, ID_TIPO_USUARIO) — pedido do time,
+   nesta rodada: ID_TIPO_USUARIO passou a integrar a chave, o que exigiu
+   torná-lo NOT NULL (toda coluna de PK é obrigatoriamente NOT NULL no SQL
+   Server). UQ_KZN_MDM_HIERARQUIA_USUARIO (UNIQUE em ID_USUARIO) mantida à
+   parte pra sustentar as ~15 FKs do resto do schema que referenciam só
+   ID_USUARIO (ver seção 17.2 pra detalhes). ID_TIPO_USUARIO é FK pra
+   CI.KZN_TIPO_USUARIO, mas a constraint não é declarada aqui: as duas
+   tabelas se referenciam uma à outra (referência circular — KZN_TIPO_USUARIO
+   também tem FK pra esta tabela via ID_USUARIO), então nenhuma pode ter a FK
+   cruzada no próprio CREATE TABLE sem que a outra já exista. A
+   FK_KZN_MDM_TIPO_USUARIO é adicionada à parte na seção 17.2b, depois que
+   ambas já existem.
    ============================================================================== */
 IF OBJECT_ID('CI.KZN_MDM_HIERARQUIA', 'U') IS NULL
 BEGIN
@@ -267,7 +292,7 @@ BEGIN
     (
         ID_USUARIO          INT                             NOT NULL,
         CD_MATRICULA        VARCHAR(30)                     NOT NULL,
-        ID_TIPO_USUARIO     INT                                 NULL,   -- ASSUNÇÃO: opcional; FK pra CI.KZN_TIPO_USUARIO adicionada na seção 17.2b (ver comentário acima)
+        ID_TIPO_USUARIO     INT                             NOT NULL,   -- ASSUNÇÃO: passou a integrar a PK composta (pedido do time, nesta rodada); FK pra CI.KZN_TIPO_USUARIO adicionada na seção 17.2b (ver comentário acima)
         NM_USUARIO          VARCHAR(30)                     NOT NULL,
         CD_EMAIL            VARCHAR(100)                    NOT NULL,
         NM_SITUACAO         VARCHAR(30)                         NULL,   -- ASSUNÇÃO: situação do colaborador (ex.: Ativo, Afastado); opcional
@@ -289,7 +314,7 @@ BEGIN
         DT_ATUALIZACAO      DATETIME2(3)                    NOT NULL
             CONSTRAINT DF_KZN_MDM_HIERARQUIA_DT_ATUALIZACAO DEFAULT (SYSDATETIME()),
 
-        CONSTRAINT PK_KZN_MDM_HIERARQUIA         PRIMARY KEY CLUSTERED (ID_USUARIO, CD_MATRICULA),
+        CONSTRAINT PK_KZN_MDM_HIERARQUIA         PRIMARY KEY CLUSTERED (ID_USUARIO, CD_MATRICULA, ID_TIPO_USUARIO),
         CONSTRAINT UQ_KZN_MDM_HIERARQUIA_USUARIO UNIQUE (ID_USUARIO),
         CONSTRAINT UQ_KZN_MDM_HIERARQUIA_MATR    UNIQUE (CD_MATRICULA)
     );
@@ -837,39 +862,64 @@ GO
    anterior já em produção: renomeia DS_EMAIL/SG_ESTADO se ainda estiverem
    com o nome antigo, insere os campos de perfil (se ainda não existirem) e
    ID_TIPO_USUARIO logo após CD_MATRICULA, e garante a PK composta
-   (ID_USUARIO, CD_MATRICULA). SQL Server não reordena coluna via ALTER
-   TABLE — a única forma segura de mudar a ordem física sem perder dado é
-   recriar a tabela e migrar os dados. Como quase todo o schema tem FK pra
-   CI.KZN_MDM_HIERARQUIA (ID_USUARIO), e uma FK não pode referenciar parte
-   de uma PK composta sem uma UNIQUE dedicada, a nova PK vem acompanhada de
-   UQ_KZN_MDM_HIERARQUIA_USUARIO — sem isso, todas essas FKs deixariam de
-   poder ser recriadas.
+   (ID_USUARIO, CD_MATRICULA, ID_TIPO_USUARIO) — 3 colunas, pedido do time
+   nesta rodada (antes era só ID_USUARIO + CD_MATRICULA). SQL Server não
+   reordena coluna via ALTER TABLE — a única forma segura de mudar a ordem
+   física sem perder dado é recriar a tabela e migrar os dados. Como quase
+   todo o schema tem FK pra CI.KZN_MDM_HIERARQUIA (ID_USUARIO), e uma FK não
+   pode referenciar parte de uma PK composta sem uma UNIQUE dedicada, a nova
+   PK vem acompanhada de UQ_KZN_MDM_HIERARQUIA_USUARIO — sem isso, todas
+   essas FKs deixariam de poder ser recriadas.
+
+   ID_TIPO_USUARIO agora faz parte da PK, então precisa ser NOT NULL — mas
+   não há valor-padrão razoável pra inventar pra quem ainda não tem tipo de
+   usuário definido. Por isso, ANTES de tocar em qualquer dado, o passo (0)
+   abaixo verifica se a coluna existe e se está 100% preenchida; se não
+   estiver, a migração inteira é abortada (RAISERROR + RETURN) sem alterar
+   nada, com instrução pro time popular ID_TIPO_USUARIO antes de reexecutar.
 
    O passo de cópia de dados usa sp_executesql (SQL dinâmico) porque os
-   nomes de origem variam conforme o estado atual da tabela (CD_EMAIL pode
-   ainda não existir em bases muito antigas; SG_ESTADO pode já ter sido
-   renomeado pra NM_ESTADO em bases que rodaram uma versão anterior desta
-   mesma migração). Uma referência ESTÁTICA a uma coluna que não existe MAIS
-   falha a compilação do BATCH inteiro mesmo dentro de um IF que nunca
-   chega a executar — T-SQL só faz resolução de nomes adiada dentro de
-   stored procedure/function/trigger, não em batch avulso como este script;
-   por isso o SQL dinâmico é necessário aqui (as demais seções de migração
-   deste script não precisam disso porque seus nomes de coluna de origem
-   não mudam entre versões, só a ordem física).
+   nomes/colunas de origem variam conforme o estado atual da tabela
+   (CD_EMAIL pode ainda não existir em bases muito antigas; SG_ESTADO pode
+   já ter sido renomeado pra NM_ESTADO em bases que rodaram uma versão
+   anterior desta mesma migração; ID_TIPO_USUARIO pode não existir ainda —
+   ver passo 0). Uma referência ESTÁTICA a uma coluna que não existe MAIS
+   (ou ainda não existe) falha a compilação do BATCH inteiro mesmo dentro de
+   um IF que nunca chega a executar — T-SQL só faz resolução de nomes
+   adiada dentro de stored procedure/function/trigger, não em batch avulso
+   como este script; por isso o SQL dinâmico é necessário aqui (as demais
+   seções de migração deste script não precisam disso porque seus nomes de
+   coluna de origem não mudam entre versões, só a ordem física).
 
-   Só executa se a tabela já existir E (a PK ainda não for composta OU
-   faltar a coluna ID_TIPO_USUARIO) — senão, já está no formato final
+   Só executa se a tabela já existir E (a PK ainda não tiver as 3 colunas
+   OU faltar a coluna ID_TIPO_USUARIO) — senão, já está no formato final
    (bancos novos já nascem certos pelo CREATE TABLE da seção 2).
    ------------------------------------------------------------------------------ */
 IF OBJECT_ID('CI.KZN_MDM_HIERARQUIA', 'U') IS NOT NULL
    AND (
         (SELECT COUNT(*) FROM sys.index_columns ic
          JOIN sys.indexes ix ON ix.object_id = ic.object_id AND ix.index_id = ic.index_id
-         WHERE ix.object_id = OBJECT_ID('CI.KZN_MDM_HIERARQUIA') AND ix.is_primary_key = 1) < 2
+         WHERE ix.object_id = OBJECT_ID('CI.KZN_MDM_HIERARQUIA') AND ix.is_primary_key = 1) < 3
         OR NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('CI.KZN_MDM_HIERARQUIA') AND name = 'ID_TIPO_USUARIO')
    )
 BEGIN
     PRINT 'Migrando CI.KZN_MDM_HIERARQUIA pro formato final...';
+
+    -- 0) pré-voo: ID_TIPO_USUARIO vai virar NOT NULL (parte da PK) — aborta
+    -- sem alterar nada se a coluna não existir ainda ou se houver linha sem
+    -- valor preenchido (não há valor-padrão de negócio pra inventar aqui).
+    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('CI.KZN_MDM_HIERARQUIA') AND name = 'ID_TIPO_USUARIO')
+    BEGIN
+        RAISERROR('Migração de CI.KZN_MDM_HIERARQUIA abortada: a nova PK composta exige ID_TIPO_USUARIO (NOT NULL), mas a coluna ainda não existe nesta base. Rode uma versão anterior deste script pra criar a coluna, preencha ID_TIPO_USUARIO pra todos os usuários e só então reexecute esta migração.', 16, 1);
+        RETURN;
+    END
+    DECLARE @qtdTipoUsuarioNulo INT;
+    EXEC sp_executesql N'SELECT @qtd = COUNT(*) FROM CI.KZN_MDM_HIERARQUIA WHERE ID_TIPO_USUARIO IS NULL', N'@qtd INT OUTPUT', @qtd = @qtdTipoUsuarioNulo OUTPUT;
+    IF @qtdTipoUsuarioNulo > 0
+    BEGIN
+        RAISERROR('Migração de CI.KZN_MDM_HIERARQUIA abortada: há %d registro(s) com ID_TIPO_USUARIO nulo. A nova PK composta exige o campo preenchido (NOT NULL) pra todo usuário — popule ID_TIPO_USUARIO antes de reexecutar.', 16, 1, @qtdTipoUsuarioNulo);
+        RETURN;
+    END
 
     -- 1) remove todas as FKs de outras tabelas que apontam pra ID_USUARIO (recriadas ao final);
     -- também remove a FK diferida (seção 17.2b) se já tiver sido criada numa rodada anterior
@@ -913,7 +963,7 @@ BEGIN
     (
         ID_USUARIO          INT                             NOT NULL,
         CD_MATRICULA        VARCHAR(30)                     NOT NULL,
-        ID_TIPO_USUARIO     INT                                 NULL,
+        ID_TIPO_USUARIO     INT                             NOT NULL,
         NM_USUARIO          VARCHAR(30)                     NOT NULL,
         CD_EMAIL            VARCHAR(100)                    NOT NULL,
         NM_SITUACAO         VARCHAR(30)                         NULL,
@@ -938,8 +988,8 @@ BEGIN
 
     -- 3) copia os dados via SQL dinâmico (nomes de origem variam conforme a
     -- versão anterior da tabela — ver explicação no cabeçalho da seção).
-    -- ID_TIPO_USUARIO nunca tem origem (campo novo) — fica NULL em todas as
-    -- linhas migradas, igual às demais colunas novas sem dado prévio.
+    -- ID_TIPO_USUARIO já foi validado 100% preenchido no passo 0 — copiado
+    -- normalmente, igual às demais colunas com dado prévio.
     DECLARE @emailSrc   sysname       = CASE WHEN EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('CI.KZN_MDM_HIERARQUIA') AND name = 'CD_EMAIL') THEN 'CD_EMAIL' ELSE 'DS_EMAIL' END;
     DECLARE @hasProfile BIT           = CASE WHEN EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('CI.KZN_MDM_HIERARQUIA') AND name = 'NM_SITUACAO') THEN 1 ELSE 0 END;
     DECLARE @estadoSrc  sysname       = CASE
@@ -949,10 +999,10 @@ BEGIN
     DECLARE @estadoExpr nvarchar(50)  = CASE WHEN @estadoSrc IS NULL THEN N'NULL' ELSE QUOTENAME(@estadoSrc) END;
     DECLARE @sql nvarchar(max) = N'
         INSERT INTO CI.KZN_MDM_HIERARQUIA_NEW
-        (ID_USUARIO, CD_MATRICULA, NM_USUARIO, CD_EMAIL, '
+        (ID_USUARIO, CD_MATRICULA, ID_TIPO_USUARIO, NM_USUARIO, CD_EMAIL, '
             + CASE WHEN @hasProfile = 1 THEN N'NM_SITUACAO, SG_ATIVO, NM_POSICAO, NM_PAIS, NM_ESTADO, NM_CIDADE, NM_SITE, ' ELSE N'SG_ATIVO, ' END
             + N'NM_HIERARQUIA_N1, NM_HIERARQUIA_N2, NM_HIERARQUIA_N3, NM_HIERARQUIA_N4, NM_HIERARQUIA_N5, NM_HIERARQUIA_N6, NM_HIERARQUIA_N7, NM_HIERARQUIA_N8, DT_ATUALIZACAO)
-        SELECT ID_USUARIO, CD_MATRICULA, NM_USUARIO, ' + QUOTENAME(@emailSrc) + N', '
+        SELECT ID_USUARIO, CD_MATRICULA, ID_TIPO_USUARIO, NM_USUARIO, ' + QUOTENAME(@emailSrc) + N', '
             + CASE WHEN @hasProfile = 1 THEN N'NM_SITUACAO, SG_ATIVO, NM_POSICAO, NM_PAIS, ' + @estadoExpr + N', NM_CIDADE, NM_SITE, ' ELSE N'''S'', ' END
             + N'NM_HIERARQUIA_N1, NM_HIERARQUIA_N2, NM_HIERARQUIA_N3, NM_HIERARQUIA_N4, NM_HIERARQUIA_N5, NM_HIERARQUIA_N6, NM_HIERARQUIA_N7, NM_HIERARQUIA_N8, DT_ATUALIZACAO
         FROM CI.KZN_MDM_HIERARQUIA;';
@@ -965,7 +1015,7 @@ BEGIN
     EXEC sp_rename 'CI.DF_KZN_MDM_HIERARQUIA_DT_ATUALIZACAO_NEW', 'DF_KZN_MDM_HIERARQUIA_DT_ATUALIZACAO', 'OBJECT';
 
     -- 5) recria PK composta, UNIQUEs e índice
-    ALTER TABLE CI.KZN_MDM_HIERARQUIA ADD CONSTRAINT PK_KZN_MDM_HIERARQUIA PRIMARY KEY CLUSTERED (ID_USUARIO, CD_MATRICULA);
+    ALTER TABLE CI.KZN_MDM_HIERARQUIA ADD CONSTRAINT PK_KZN_MDM_HIERARQUIA PRIMARY KEY CLUSTERED (ID_USUARIO, CD_MATRICULA, ID_TIPO_USUARIO);
     ALTER TABLE CI.KZN_MDM_HIERARQUIA ADD CONSTRAINT UQ_KZN_MDM_HIERARQUIA_USUARIO UNIQUE (ID_USUARIO);
     ALTER TABLE CI.KZN_MDM_HIERARQUIA ADD CONSTRAINT UQ_KZN_MDM_HIERARQUIA_MATR UNIQUE (CD_MATRICULA);
 
