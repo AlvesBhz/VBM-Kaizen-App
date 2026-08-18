@@ -732,13 +732,12 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       <div class="filter-bar" style="padding:.75rem 1.25rem;">
         <div class="filter-search">
           <i class="fa-solid fa-magnifying-glass"></i>
-          <input type="text" placeholder="Buscar usuário por nome, e-mail ou empresa..." data-i18n-placeholder="adm.searchUserPlaceholder"/>
+          <input type="text" id="usuariosBusca" autocomplete="off" placeholder="Buscar usuário por nome, e-mail ou empresa..." data-i18n-placeholder="adm.searchUserPlaceholder"/>
         </div>
-        <select class="filter-select">
-          <option data-i18n="adm.allRoles">Todos os papéis</option>
-          <option data-i18n="role.operador">Operador</option>
-          <option data-i18n="role.aprovador">Aprovador</option>
-          <option>ADM</option>
+        <!-- Empresas vêm de NM_EMPRESA (kzn_mdm_hierarquia), carregadas
+             em tempo de execução — ver js/usuarios.js. -->
+        <select class="filter-select" id="usuariosEmpresa">
+          <option value="" data-i18n="filter.allCompanies">Todas as empresas</option>
         </select>
         <select class="filter-select">
           <option data-i18n="filter.allUnits">Todas as unidades</option>
@@ -757,11 +756,10 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
               <th data-i18n="adm.funcao">Função</th>
               <th data-i18n="adm.empresa">Empresa</th>
               <th data-i18n="table.status">Status</th>
-              <th></th>
             </tr>
           </thead>
           <tbody id="usuariosTableBody">
-            <tr><td colspan="7" style="padding:1.25rem;color:var(--vbm-mid);font-size:.8rem;">Carregando usuários…</td></tr>
+            <tr><td colspan="6" style="padding:1.25rem;color:var(--vbm-mid);font-size:.8rem;">Carregando usuários…</td></tr>
           </tbody>
         </table>
       </div>
@@ -1559,12 +1557,12 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 </div>
 
 <div class="toast-container"></div>
-<script src="js/vbm-app.js?v=20260816-4"></script>
+<script src="js/vbm-app.js?v=20260817-1"></script>
 <!-- Dados do usuário logado (Microsoft Graph) — reaproveita o token do
      login já existente; sem MSAL próprio, sem alterar o fluxo de auth. -->
 <script src="js/usuario-graph.js?v=20260817-1"></script>
 <script src="js/aprovadores.js?v=20260817-5"></script>
-<script src="js/usuarios.js?v=20260816-1"></script>
+<script src="js/usuarios.js?v=20260817-1"></script>
 <!-- cadastro-bilingue.js define o motor compartilhado (window.criarCadastroBilingue);
      os 6 arquivos seguintes só configuram sua própria aba com ele. -->
 <script src="js/cadastro-bilingue.js?v=20260816-2"></script>
@@ -1743,6 +1741,8 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       'settings.languageInfo': 'Idioma da interface',
       'role.operador': 'Operador',
       'role.aprovador': 'Aprovador',
+      'status.ativo': 'Ativo',
+      'status.inativo': 'Inativo',
       'role.gerente': 'Gerente',
       'role.supervisor': 'Supervisor',
       'role.engenheiro': 'Engenheiro',
@@ -1843,6 +1843,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       'adm.searchUserPlaceholder': 'Buscar usuário por nome, e-mail ou MDM...',
       'adm.addApprover': 'Adicionar Aprovador',
       'adm.searchBy': 'Buscar por',
+      'filter.allCompanies': 'Todas as empresas',
       'adm.byName': 'Nome',
       'adm.byEmail': 'E-mail',
       'adm.searchUser': 'Usuário',
@@ -1867,6 +1868,8 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       'settings.languageInfo': 'Interface language',
       'role.operador': 'Operator',
       'role.aprovador': 'Approver',
+      'status.ativo': 'Active',
+      'status.inativo': 'Inactive',
       'role.gerente': 'Manager',
       'role.supervisor': 'Supervisor',
       'role.engenheiro': 'Engineer',
@@ -1967,6 +1970,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       'adm.searchUserPlaceholder': 'Search user by name, email or MDM...',
       'adm.addApprover': 'Add Approver',
       'adm.searchBy': 'Search by',
+      'filter.allCompanies': 'All companies',
       'adm.byName': 'Name',
       'adm.byEmail': 'Email',
       'adm.searchUser': 'User',

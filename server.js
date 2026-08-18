@@ -543,6 +543,17 @@ apiRouter.get("/aprovadores", async (req, res) => {
 // TOP (10) e mínimo de 2 caracteres seguram o custo: sem isso, um
 // LIKE '%%' varreria o MDM inteiro a cada tecla digitada.
 const MDM_BUSCA_MIN = 2;
+
+// Tipo de usuário "terceiro" no MDM (kzn_tipo_usuario). A aba Usuários
+// lista SÓ esses — constante do servidor, nunca parâmetro da URL, para
+// que o filtro não possa ser removido pelo cliente.
+const ID_TIPO_USUARIO_TERCEIRO = 2;
+
+// Monta o termo de um LIKE "contém", escapando os curingas do SQL Server
+// (%, _ e [) para que o texto digitado seja buscado literalmente.
+function termoContem(texto) {
+  return "%" + String(texto).replace(/[[%_]/g, (c) => "[" + c + "]") + "%";
+}
 const MDM_BUSCA_TOP = 10;
 
 apiRouter.get("/aprovadores/mdm", async (req, res) => {
@@ -551,9 +562,7 @@ apiRouter.get("/aprovadores/mdm", async (req, res) => {
     if (termo.length < MDM_BUSCA_MIN) return res.json([]);
 
     const coluna = String(req.query.campo || "").toLowerCase() === "email" ? "CD_EMAIL" : "NM_USUARIO";
-    // LIKE trata %, _ e [ como curinga: escapamos para que o termo
-    // digitado seja buscado literalmente.
-    const termoLike = "%" + termo.replace(/[[%_]/g, (c) => "[" + c + "]") + "%";
+    const termoLike = termoContem(termo);
 
     const result = await runQuery(
       `SELECT TOP (${MDM_BUSCA_TOP})
@@ -755,30 +764,79 @@ apiRouter.put("/aprovadores/:id/status", async (req, res) => {
 // CD_EMAIL é o nome real da coluna de e-mail no MDM (não DS_EMAIL —
 // ver nota em buscarMdmPorEmail acima); alias AS DS_EMAIL preserva o
 // contrato do JSON abaixo.
+// Empresas distintas dos terceiros — alimenta o filtro "Empresa" da
+// aba Usuários. Mesmo recorte fixo da listagem (ID_TIPO_USUARIO = 2),
+// para o combo não oferecer empresa que a lista nunca mostraria.
+//
+// Registrada ANTES de /usuarios para não ser capturada por uma futura
+// rota com parâmetro.
+apiRouter.get("/usuarios/empresas", async (req, res) => {
+  try {
+    const result = await runQuery(
+      `SELECT DISTINCT NM_EMPRESA
+       FROM ${FULL_MDM_TABLE}
+       WHERE ID_TIPO_USUARIO = @tipo AND NM_EMPRESA IS NOT NULL AND LTRIM(RTRIM(NM_EMPRESA)) <> ''
+       ORDER BY NM_EMPRESA`,
+      [["tipo", sql.Int, ID_TIPO_USUARIO_TERCEIRO]]
+    );
+    res.json(result.recordset.map((r) => r.NM_EMPRESA));
+  } catch (err) {
+    console.error("[usuarios] erro ao listar empresas:", err.message);
+    res.status(500).json({ error: "Erro ao consultar empresas: " + err.message });
+  }
+});
+
+// Lista os usuários TERCEIROS do MDM (ID_TIPO_USUARIO = 2).
+//
+// O recorte por tipo é constante do servidor e entra em toda consulta,
+// independentemente dos filtros da tela: busca, empresa e unidade só
+// estreitam o resultado, nunca ampliam.
+//
+// ?q=       nome, e-mail ou matrícula (mínimo 2 caracteres; abaixo
+//           disso é ignorado, como o autocomplete da tela espera)
+// ?empresa= NM_EMPRESA exata, vinda do próprio combo
 apiRouter.get("/usuarios", async (req, res) => {
   try {
     const limite = Math.min(parseInt(req.query.limit, 10) || 500, 5000);
+    const termo = String(req.query.q || "").trim();
+    const empresa = String(req.query.empresa || "").trim();
+
+    const filtros = ["m.ID_TIPO_USUARIO = @tipo"];
+    const params = [
+      ["limite", sql.Int, limite],
+      ["tipo", sql.Int, ID_TIPO_USUARIO_TERCEIRO],
+    ];
+
+    if (termo.length >= MDM_BUSCA_MIN) {
+      filtros.push("(m.NM_USUARIO LIKE @termo OR m.CD_EMAIL LIKE @termo OR m.CD_MATRICULA LIKE @termo)");
+      params.push(["termo", sql.NVarChar(255), termoContem(termo)]);
+    }
+    if (empresa) {
+      filtros.push("m.NM_EMPRESA = @empresa");
+      params.push(["empresa", sql.NVarChar(30), empresa]);
+    }
+
     const result = await runQuery(
       `SELECT TOP (@limite)
-              m.ID_USUARIO, m.CD_MATRICULA, m.NM_USUARIO, m.CD_EMAIL AS DS_EMAIL,
-              CASE WHEN a.ID_USUARIO IS NULL THEN 0 ELSE 1 END AS EH_APROVADOR,
-              a.SG_ATIVO AS SG_ATIVO_APROVADOR
+              m.ID_USUARIO, m.CD_MATRICULA, m.NM_USUARIO, m.CD_EMAIL,
+              m.NM_SITE, m.NM_POSICAO, m.NM_EMPRESA, m.SG_ATIVO
        FROM ${FULL_MDM_TABLE} m
-       LEFT JOIN ${FULL_TABLE_NAME} a ON a.ID_USUARIO = m.ID_USUARIO
+       WHERE ${filtros.join(" AND ")}
        ORDER BY m.NM_USUARIO`,
-      [["limite", sql.Int, limite]]
+      params
     );
     res.json(
       result.recordset.map((r) => ({
         ID_USUARIO: r.ID_USUARIO,
         CD_MATRICULA: r.CD_MATRICULA,
         NM_USUARIO: r.NM_USUARIO,
-        DS_EMAIL: r.DS_EMAIL,
-        // Booleano, não texto: "Aprovador"/"Operador" é rótulo de tela,
-        // não dado do banco (kzn_aprovador não tem coluna de idioma).
-        // Faixa fixa em PT aqui nunca acompanhava a troca de idioma —
-        // quem traduz é o front-end (ver js/usuarios.js).
-        EH_APROVADOR: !!r.EH_APROVADOR,
+        CD_EMAIL: r.CD_EMAIL,
+        NM_SITE: r.NM_SITE,
+        NM_POSICAO: r.NM_POSICAO,
+        NM_EMPRESA: r.NM_EMPRESA,
+        // Booleano, não a letra: "Ativo"/"Inativo" é rótulo de tela e
+        // acompanha a troca de idioma no front-end.
+        ATIVO: r.SG_ATIVO === "S",
       }))
     );
   } catch (err) {

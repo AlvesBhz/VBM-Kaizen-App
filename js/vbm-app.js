@@ -626,13 +626,15 @@
      Cada aba do admin carrega sua lista UMA vez (sob demanda, na
      primeira abertura) e nunca mais. Isso quebrava as abas que
      mostram dados de OUTRA tabela: cadastrar um item em "Tipo
-     Resultados" não fazia o combo de "Resultados" enxergá-lo, nem
-     tornar alguém aprovador atualizava a coluna Função em "Usuários"
-     — só recarregando a página inteira (F5).
+     Resultados" não fazia o combo de "Resultados" enxergá-lo — só
+     recarregando a página inteira (F5).
 
-     Dependências reais entre abas do admin hoje:
+     Dependência real entre abas do admin hoje:
        tiporesultados -> resultados (combo "Tipo de Resultado")
-       aprovadores    -> usuarios   (badge Função, vem de kzn_aprovador)
+
+     A aba Usuários já dependeu de Aprovadores (a coluna Função era
+     derivada de kzn_aprovador); hoje ela mostra NM_POSICAO do MDM e
+     não depende de mais ninguém.
 
      Quem GRAVA avisa qual rota mudou (mudou); quem MOSTRA aquela rota
      se inscreve (aoMudar). Não é cache nem estado paralelo: só marca o
