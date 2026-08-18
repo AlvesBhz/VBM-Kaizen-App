@@ -739,11 +739,10 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
         <select class="filter-select" id="usuariosEmpresa">
           <option value="" data-i18n="filter.allCompanies">Todas as empresas</option>
         </select>
-        <select class="filter-select">
-          <option data-i18n="filter.allUnits">Todas as unidades</option>
-          <option>Sudbury, CA</option>
-          <option>Thompson, CA</option>
-          <option>Salobo, BR</option>
+        <!-- Unidades vêm de NM_SITE (kzn_mdm_hierarquia), carregadas
+             em tempo de execução — ver js/usuarios.js. -->
+        <select class="filter-select" id="usuariosUnidade">
+          <option value="" data-i18n="filter.allUnits">Todas as unidades</option>
         </select>
       </div>
       <div class="data-table-wrap">
@@ -1562,7 +1561,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
      login já existente; sem MSAL próprio, sem alterar o fluxo de auth. -->
 <script src="js/usuario-graph.js?v=20260817-1"></script>
 <script src="js/aprovadores.js?v=20260817-5"></script>
-<script src="js/usuarios.js?v=20260817-1"></script>
+<script src="js/usuarios.js?v=20260817-2"></script>
 <!-- cadastro-bilingue.js define o motor compartilhado (window.criarCadastroBilingue);
      os 6 arquivos seguintes só configuram sua própria aba com ele. -->
 <script src="js/cadastro-bilingue.js?v=20260816-2"></script>

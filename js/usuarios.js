@@ -14,8 +14,9 @@
  * A aba não tem criar/editar/ativar como as demais: os dados vêm do
  * MDM corporativo e mudam lá, não por esta tela.
  *
- *   GET /api/usuarios?q=&empresa=  lista (recorte fixo de terceiros)
- *   GET /api/usuarios/empresas     opções do filtro Empresa
+ *   GET /api/usuarios?q=&empresa=&unidade=  lista (só terceiros)
+ *   GET /api/usuarios/empresas              filtro Empresa (NM_EMPRESA)
+ *   GET /api/usuarios/unidades              filtro Unidade (NM_SITE)
  */
 (function () {
   var tbody = document.getElementById("usuariosTableBody");
@@ -25,6 +26,7 @@
   var BUSCA_MIN = 2; // mesmo mínimo do servidor
   var buscaEl = document.getElementById("usuariosBusca");
   var empresaEl = document.getElementById("usuariosEmpresa");
+  var unidadeEl = document.getElementById("usuariosUnidade");
 
   function escapeHtml(str) {
     var div = document.createElement("div");
@@ -94,6 +96,7 @@
     var partes = [];
     if (termo.length >= BUSCA_MIN) partes.push("q=" + encodeURIComponent(termo));
     if (empresaEl && empresaEl.value) partes.push("empresa=" + encodeURIComponent(empresaEl.value));
+    if (unidadeEl && unidadeEl.value) partes.push("unidade=" + encodeURIComponent(unidadeEl.value));
     return partes.length ? "?" + partes.join("&") : "";
   }
 
@@ -112,28 +115,31 @@
       });
   }
 
-  // Opções do filtro Empresa (NM_EMPRESA distintos dos terceiros).
-  // Falha aqui não derruba a lista: o combo fica só com "Todas as
-  // empresas" e a tabela continua funcionando.
-  function carregarEmpresas() {
-    if (!empresaEl) return;
-    fetch("/api/usuarios/empresas")
+  // Opções dos filtros Empresa (NM_EMPRESA) e Unidade (NM_SITE), ambos
+  // com os valores distintos dos terceiros. A 1ª opção ("Todas as ...")
+  // é a do HTML e fica preservada.
+  //
+  // Falha aqui não derruba a lista: o combo fica só com a opção "Todas"
+  // e a tabela continua funcionando.
+  function carregarOpcoes(select, rota, rotulo) {
+    if (!select) return;
+    fetch("/api/usuarios/" + rota)
       .then(function (res) { return res.ok ? res.json() : []; })
-      .then(function (empresas) {
-        var selecionada = empresaEl.value;
-        var primeira = empresaEl.querySelector("option"); // "Todas as empresas"
-        empresaEl.innerHTML = "";
-        if (primeira) empresaEl.appendChild(primeira);
-        empresas.forEach(function (nome) {
+      .then(function (valores) {
+        var selecionado = select.value;
+        var primeira = select.querySelector("option");
+        select.innerHTML = "";
+        if (primeira) select.appendChild(primeira);
+        valores.forEach(function (nome) {
           var op = document.createElement("option");
           op.value = nome;
           op.textContent = nome;
-          empresaEl.appendChild(op);
+          select.appendChild(op);
         });
-        empresaEl.value = selecionada || "";
+        select.value = selecionado || "";
       })
       .catch(function (err) {
-        console.error("[usuarios] falha ao carregar empresas:", err);
+        console.error("[usuarios] falha ao carregar " + rotulo + ":", err);
       });
   }
 
@@ -146,6 +152,7 @@
     });
   }
   if (empresaEl) empresaEl.addEventListener("change", carregar);
+  if (unidadeEl) unidadeEl.addEventListener("change", carregar);
 
   // Carrega sob demanda: esta aba nasce escondida, mas antes já
   // consultava o MDM no load da página. Agora só na primeira vez que
@@ -158,7 +165,8 @@
 
   function aoAbrirAba() {
     if (jaCarregou) return;
-    carregarEmpresas();
+    carregarOpcoes(empresaEl, "empresas", "empresas");
+    carregarOpcoes(unidadeEl, "unidades", "unidades");
     carregar();
   }
 

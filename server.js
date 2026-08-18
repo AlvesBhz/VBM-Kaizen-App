@@ -770,19 +770,40 @@ apiRouter.put("/aprovadores/:id/status", async (req, res) => {
 //
 // Registrada ANTES de /usuarios para não ser capturada por uma futura
 // rota com parâmetro.
+// Valores distintos de uma coluna do MDM, para alimentar os filtros da
+// aba Usuários. A coluna vem SEMPRE de uma constante do código (ver as
+// duas rotas abaixo), nunca da URL — não há como pedir outra coluna.
+//
+// Mesmo recorte fixo da listagem (ID_TIPO_USUARIO = 2): o combo não
+// oferece opção que a lista nunca mostraria.
+async function opcoesDistintasDoMdm(coluna) {
+  const result = await runQuery(
+    `SELECT DISTINCT ${coluna} AS VALOR
+     FROM ${FULL_MDM_TABLE}
+     WHERE ID_TIPO_USUARIO = @tipo AND ${coluna} IS NOT NULL AND LTRIM(RTRIM(${coluna})) <> ''
+     ORDER BY ${coluna}`,
+    [["tipo", sql.Int, ID_TIPO_USUARIO_TERCEIRO]]
+  );
+  return result.recordset.map((r) => r.VALOR);
+}
+
+// Registradas ANTES de /usuarios para não serem capturadas por uma
+// futura rota com parâmetro.
 apiRouter.get("/usuarios/empresas", async (req, res) => {
   try {
-    const result = await runQuery(
-      `SELECT DISTINCT NM_EMPRESA
-       FROM ${FULL_MDM_TABLE}
-       WHERE ID_TIPO_USUARIO = @tipo AND NM_EMPRESA IS NOT NULL AND LTRIM(RTRIM(NM_EMPRESA)) <> ''
-       ORDER BY NM_EMPRESA`,
-      [["tipo", sql.Int, ID_TIPO_USUARIO_TERCEIRO]]
-    );
-    res.json(result.recordset.map((r) => r.NM_EMPRESA));
+    res.json(await opcoesDistintasDoMdm("NM_EMPRESA"));
   } catch (err) {
     console.error("[usuarios] erro ao listar empresas:", err.message);
     res.status(500).json({ error: "Erro ao consultar empresas: " + err.message });
+  }
+});
+
+apiRouter.get("/usuarios/unidades", async (req, res) => {
+  try {
+    res.json(await opcoesDistintasDoMdm("NM_SITE"));
+  } catch (err) {
+    console.error("[usuarios] erro ao listar unidades:", err.message);
+    res.status(500).json({ error: "Erro ao consultar unidades: " + err.message });
   }
 });
 
@@ -795,11 +816,13 @@ apiRouter.get("/usuarios/empresas", async (req, res) => {
 // ?q=       nome, e-mail ou matrícula (mínimo 2 caracteres; abaixo
 //           disso é ignorado, como o autocomplete da tela espera)
 // ?empresa= NM_EMPRESA exata, vinda do próprio combo
+// ?unidade= NM_SITE exata, vinda do próprio combo
 apiRouter.get("/usuarios", async (req, res) => {
   try {
     const limite = Math.min(parseInt(req.query.limit, 10) || 500, 5000);
     const termo = String(req.query.q || "").trim();
     const empresa = String(req.query.empresa || "").trim();
+    const unidade = String(req.query.unidade || "").trim();
 
     const filtros = ["m.ID_TIPO_USUARIO = @tipo"];
     const params = [
@@ -814,6 +837,10 @@ apiRouter.get("/usuarios", async (req, res) => {
     if (empresa) {
       filtros.push("m.NM_EMPRESA = @empresa");
       params.push(["empresa", sql.NVarChar(30), empresa]);
+    }
+    if (unidade) {
+      filtros.push("m.NM_SITE = @unidade");
+      params.push(["unidade", sql.NVarChar(30), unidade]);
     }
 
     const result = await runQuery(
