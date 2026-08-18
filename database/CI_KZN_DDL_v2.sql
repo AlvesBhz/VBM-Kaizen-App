@@ -232,6 +232,13 @@
        tipos, por período), as duas UNIQUE atuais precisam ser revistas —
        do jeito que está hoje, elas continuam restringindo a 1 linha por
        usuário/matrícula independente da PK.
+     - KZN_MDM_HIERARQUIA — novo campo NM_EMPRESA (pedido do time, nesta
+       rodada): inserido logo após NM_POSICAO. ASSUNÇÃO: VARCHAR(30) NULL,
+       mesmo padrão dos demais campos de perfil da tabela (NM_POSICAO,
+       NM_PAIS, NM_ESTADO, NM_CIDADE, NM_SITE) — opcional, sem valor prévio
+       pra migrar. A migração (seção 17.2) adiciona a coluna de forma
+       idempotente em bancos já existentes; como é NULL, não precisou de
+       checagem de pré-voo (diferente de ID_TIPO_USUARIO, que é NOT NULL).
    ============================================================================== */
 
 SET NOCOUNT ON;
@@ -299,6 +306,7 @@ BEGIN
         SG_ATIVO            VARCHAR(1)                      NOT NULL
             CONSTRAINT DF_KZN_MDM_HIERARQUIA_SG_ATIVO DEFAULT ('S'),      -- ASSUNÇÃO: 'S'/'N', ativo por padrão
         NM_POSICAO          VARCHAR(30)                         NULL,
+        NM_EMPRESA          VARCHAR(30)                         NULL,   -- ASSUNÇÃO: campo novo (pedido do time, nesta rodada); mesmo padrão VARCHAR(30) NULL dos demais campos de perfil (NM_POSICAO, NM_PAIS etc.)
         NM_PAIS             VARCHAR(30)                         NULL,
         NM_ESTADO           VARCHAR(30)                         NULL,   -- renomeado de SG_ESTADO
         NM_CIDADE           VARCHAR(30)                         NULL,
@@ -892,8 +900,9 @@ GO
    coluna de origem não mudam entre versões, só a ordem física).
 
    Só executa se a tabela já existir E (a PK ainda não tiver as 3 colunas
-   OU faltar a coluna ID_TIPO_USUARIO) — senão, já está no formato final
-   (bancos novos já nascem certos pelo CREATE TABLE da seção 2).
+   OU faltar a coluna ID_TIPO_USUARIO OU faltar a coluna NM_EMPRESA) —
+   senão, já está no formato final (bancos novos já nascem certos pelo
+   CREATE TABLE da seção 2).
    ------------------------------------------------------------------------------ */
 IF OBJECT_ID('CI.KZN_MDM_HIERARQUIA', 'U') IS NOT NULL
    AND (
@@ -901,6 +910,7 @@ IF OBJECT_ID('CI.KZN_MDM_HIERARQUIA', 'U') IS NOT NULL
          JOIN sys.indexes ix ON ix.object_id = ic.object_id AND ix.index_id = ic.index_id
          WHERE ix.object_id = OBJECT_ID('CI.KZN_MDM_HIERARQUIA') AND ix.is_primary_key = 1) < 3
         OR NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('CI.KZN_MDM_HIERARQUIA') AND name = 'ID_TIPO_USUARIO')
+        OR NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('CI.KZN_MDM_HIERARQUIA') AND name = 'NM_EMPRESA')
    )
 BEGIN
     PRINT 'Migrando CI.KZN_MDM_HIERARQUIA pro formato final...';
@@ -970,6 +980,7 @@ BEGIN
         SG_ATIVO            VARCHAR(1)                      NOT NULL
             CONSTRAINT DF_KZN_MDM_HIERARQUIA_SG_ATIVO_NEW DEFAULT ('S'),
         NM_POSICAO          VARCHAR(30)                         NULL,
+        NM_EMPRESA          VARCHAR(30)                         NULL,
         NM_PAIS             VARCHAR(30)                         NULL,
         NM_ESTADO           VARCHAR(30)                         NULL,
         NM_CIDADE           VARCHAR(30)                         NULL,
@@ -989,9 +1000,14 @@ BEGIN
     -- 3) copia os dados via SQL dinâmico (nomes de origem variam conforme a
     -- versão anterior da tabela — ver explicação no cabeçalho da seção).
     -- ID_TIPO_USUARIO já foi validado 100% preenchido no passo 0 — copiado
-    -- normalmente, igual às demais colunas com dado prévio.
+    -- normalmente, igual às demais colunas com dado prévio. NM_EMPRESA é
+    -- opcional (NULL) e, igual às demais colunas de perfil, só entra no
+    -- INSERT se já existir na tabela de origem — senão fica NULL por
+    -- omissão (coluna não listada = NULL, não há dado prévio pra migrar).
     DECLARE @emailSrc   sysname       = CASE WHEN EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('CI.KZN_MDM_HIERARQUIA') AND name = 'CD_EMAIL') THEN 'CD_EMAIL' ELSE 'DS_EMAIL' END;
     DECLARE @hasProfile BIT           = CASE WHEN EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('CI.KZN_MDM_HIERARQUIA') AND name = 'NM_SITUACAO') THEN 1 ELSE 0 END;
+    DECLARE @hasEmpresa BIT           = CASE WHEN EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('CI.KZN_MDM_HIERARQUIA') AND name = 'NM_EMPRESA') THEN 1 ELSE 0 END;
+    DECLARE @empresaCols nvarchar(20) = CASE WHEN @hasEmpresa = 1 THEN N'NM_EMPRESA, ' ELSE N'' END;
     DECLARE @estadoSrc  sysname       = CASE
         WHEN EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('CI.KZN_MDM_HIERARQUIA') AND name = 'SG_ESTADO') THEN 'SG_ESTADO'
         WHEN EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('CI.KZN_MDM_HIERARQUIA') AND name = 'NM_ESTADO') THEN 'NM_ESTADO'
@@ -1000,10 +1016,10 @@ BEGIN
     DECLARE @sql nvarchar(max) = N'
         INSERT INTO CI.KZN_MDM_HIERARQUIA_NEW
         (ID_USUARIO, CD_MATRICULA, ID_TIPO_USUARIO, NM_USUARIO, CD_EMAIL, '
-            + CASE WHEN @hasProfile = 1 THEN N'NM_SITUACAO, SG_ATIVO, NM_POSICAO, NM_PAIS, NM_ESTADO, NM_CIDADE, NM_SITE, ' ELSE N'SG_ATIVO, ' END
+            + CASE WHEN @hasProfile = 1 THEN N'NM_SITUACAO, SG_ATIVO, NM_POSICAO, ' + @empresaCols + N'NM_PAIS, NM_ESTADO, NM_CIDADE, NM_SITE, ' ELSE N'SG_ATIVO, ' END
             + N'NM_HIERARQUIA_N1, NM_HIERARQUIA_N2, NM_HIERARQUIA_N3, NM_HIERARQUIA_N4, NM_HIERARQUIA_N5, NM_HIERARQUIA_N6, NM_HIERARQUIA_N7, NM_HIERARQUIA_N8, DT_ATUALIZACAO)
         SELECT ID_USUARIO, CD_MATRICULA, ID_TIPO_USUARIO, NM_USUARIO, ' + QUOTENAME(@emailSrc) + N', '
-            + CASE WHEN @hasProfile = 1 THEN N'NM_SITUACAO, SG_ATIVO, NM_POSICAO, NM_PAIS, ' + @estadoExpr + N', NM_CIDADE, NM_SITE, ' ELSE N'''S'', ' END
+            + CASE WHEN @hasProfile = 1 THEN N'NM_SITUACAO, SG_ATIVO, NM_POSICAO, ' + @empresaCols + N'NM_PAIS, ' + @estadoExpr + N', NM_CIDADE, NM_SITE, ' ELSE N'''S'', ' END
             + N'NM_HIERARQUIA_N1, NM_HIERARQUIA_N2, NM_HIERARQUIA_N3, NM_HIERARQUIA_N4, NM_HIERARQUIA_N5, NM_HIERARQUIA_N6, NM_HIERARQUIA_N7, NM_HIERARQUIA_N8, DT_ATUALIZACAO
         FROM CI.KZN_MDM_HIERARQUIA;';
     EXEC sp_executesql @sql;
