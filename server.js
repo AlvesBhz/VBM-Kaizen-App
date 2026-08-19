@@ -872,6 +872,199 @@ apiRouter.get("/usuarios", async (req, res) => {
   }
 });
 
+// ── Escrita em kzn_mdm_hierarquia (aba "Usuários") ──
+//
+// A CHAVE PRIMÁRIA É COMPOSTA: (ID_USUARIO, CD_MATRICULA,
+// ID_TIPO_USUARIO) — ver o DER. Duas consequências que valem para as
+// três rotas abaixo:
+//
+//   1. Toda condição de identificação usa as TRÊS colunas. Filtrar só
+//      por ID_USUARIO poderia atingir mais de uma linha, já que o mesmo
+//      ID pode aparecer com matrículas diferentes.
+//   2. ID_USUARIO e CD_MATRICULA não são editáveis: trocá-los é criar
+//      outro registro, não editar este. A tela mostra os dois campos
+//      travados na edição.
+//
+// ID_TIPO_USUARIO é constante do servidor (2 = terceiro) e nunca vem do
+// cliente: é o mesmo recorte da listagem, e é o que impede esta tela de
+// alcançar empregados próprios.
+const COLUNAS_MDM_TEXTO = [
+  ["NM_USUARIO", 30],
+  ["CD_EMAIL", 100],
+  ["NM_POSICAO", 30],
+  ["NM_EMPRESA", 30],
+  ["NM_PAIS", 30],
+  ["NM_ESTADO", 30],
+  ["NM_CIDADE", 30],
+  ["NM_SITE", 30],
+];
+for (let n = 1; n <= 8; n++) COLUNAS_MDM_TEXTO.push([`NM_HIERARQUIA_N${n}`, 80]);
+
+// Texto vazio vira NULL: a coluna aceita nulo e "" só ocuparia espaço
+// fingindo ser um valor. Corta espaços das pontas por higiene.
+function textoOuNulo(valor) {
+  if (valor == null) return null;
+  const limpo = String(valor).trim();
+  return limpo === "" ? null : limpo;
+}
+
+// Parâmetros das colunas de texto, na ordem de COLUNAS_MDM_TEXTO. O
+// tamanho declarado é o do DER: passar mais que isso é erro do banco
+// (traduzido por mensagemErroSql), não truncamento silencioso.
+function parametrosDeTexto(corpo) {
+  return COLUNAS_MDM_TEXTO.map(([coluna, tamanho]) => [
+    coluna,
+    sql.NVarChar(tamanho),
+    textoOuNulo(corpo?.[coluna]),
+  ]);
+}
+
+function chaveDoUsuario(req) {
+  const idUsuario = parseInt(req.params.id, 10);
+  const matricula = textoOuNulo(req.body?.CD_MATRICULA ?? req.query?.matricula);
+  if (!Number.isInteger(idUsuario)) return { erro: "ID_USUARIO inválido." };
+  if (!matricula) return { erro: "CD_MATRICULA é obrigatória: faz parte da chave do registro." };
+  return { idUsuario, matricula };
+}
+
+const FILTRO_CHAVE_MDM =
+  "ID_USUARIO = @id AND CD_MATRICULA = @matricula AND ID_TIPO_USUARIO = @tipo";
+
+// Um registro completo, para preencher o modal de edição.
+//
+// A listagem NÃO traz estas 11 colunas a mais (país, estado, cidade e
+// os 8 níveis de hierarquia): a grade mostra 6 e carregá-las para todas
+// as linhas seria peso morto. Aqui vêm só as do registro aberto.
+//
+// Registrada DEPOIS de /usuarios/empresas e /usuarios/unidades, senão
+// ":id" capturaria as duas.
+apiRouter.get("/usuarios/:id", async (req, res) => {
+  try {
+    const { idUsuario, matricula, erro } = chaveDoUsuario(req);
+    if (erro) return res.status(400).json({ error: erro });
+
+    const colunas = COLUNAS_MDM_TEXTO.map(([c]) => c).join(", ");
+    const result = await runQuery(
+      `SELECT TOP (1) ID_USUARIO, CD_MATRICULA, SG_ATIVO, ${colunas}
+       FROM ${FULL_MDM_TABLE} WHERE ${FILTRO_CHAVE_MDM}`,
+      [
+        ["id", sql.Int, idUsuario],
+        ["matricula", sql.NVarChar(30), matricula],
+        ["tipo", sql.Int, ID_TIPO_USUARIO_TERCEIRO],
+      ]
+    );
+    if (!result.recordset.length) return res.status(404).json({ error: "Usuário não encontrado." });
+
+    const linha = result.recordset[0];
+    res.json({ ...linha, ATIVO: linha.SG_ATIVO === "S" });
+  } catch (err) {
+    console.error("[usuarios] erro ao buscar:", err.message);
+    res.status(500).json({ error: "Erro ao consultar usuário: " + err.message });
+  }
+});
+
+apiRouter.post("/usuarios", async (req, res) => {
+  try {
+    const idUsuario = parseInt(req.body?.ID_USUARIO, 10);
+    const matricula = textoOuNulo(req.body?.CD_MATRICULA);
+    const nome = textoOuNulo(req.body?.NM_USUARIO);
+    if (!Number.isInteger(idUsuario)) {
+      return res.status(400).json({ error: "ID_USUARIO é obrigatório e deve ser um número inteiro." });
+    }
+    if (!matricula) return res.status(400).json({ error: "CD_MATRICULA é obrigatória." });
+    if (!nome) return res.status(400).json({ error: "NM_USUARIO é obrigatório." });
+
+    const chave = [
+      ["id", sql.Int, idUsuario],
+      ["matricula", sql.NVarChar(30), matricula],
+      ["tipo", sql.Int, ID_TIPO_USUARIO_TERCEIRO],
+    ];
+
+    const jaExiste = await runQuery(
+      `SELECT TOP (1) 1 AS X FROM ${FULL_MDM_TABLE} WHERE ${FILTRO_CHAVE_MDM}`,
+      chave
+    );
+    if (jaExiste.recordset.length) {
+      return res.status(409).json({ error: "Já existe um usuário com este ID e matrícula." });
+    }
+
+    const colunas = COLUNAS_MDM_TEXTO.map(([c]) => c);
+    await runQuery(
+      `INSERT INTO ${FULL_MDM_TABLE}
+         (ID_USUARIO, CD_MATRICULA, ID_TIPO_USUARIO, SG_ATIVO, ${colunas.join(", ")}, DT_ATUALIZACAO)
+       VALUES
+         (@id, @matricula, @tipo, @sgAtivo, ${colunas.map((c) => "@" + c).join(", ")}, GETDATE())`,
+      [
+        ...chave,
+        ["sgAtivo", sql.Char(1), req.body?.ATIVO === false ? "N" : "S"],
+        ...parametrosDeTexto(req.body),
+      ]
+    );
+    res.status(201).json({ ok: true, ID_USUARIO: idUsuario, CD_MATRICULA: matricula });
+  } catch (err) {
+    console.error("[usuarios] erro ao inserir:", err.message);
+    res.status(500).json({ error: mensagemErroSql(err, "usuário", "tipo de usuário") });
+  }
+});
+
+// Editar — muda só os campos descritivos. A chave identifica a linha e
+// não é alterada (ver nota acima).
+apiRouter.put("/usuarios/:id", async (req, res) => {
+  try {
+    const { idUsuario, matricula, erro } = chaveDoUsuario(req);
+    if (erro) return res.status(400).json({ error: erro });
+
+    const nome = textoOuNulo(req.body?.NM_USUARIO);
+    if (!nome) return res.status(400).json({ error: "NM_USUARIO é obrigatório." });
+
+    const atribuicoes = COLUNAS_MDM_TEXTO.map(([c]) => `${c} = @${c}`).join(", ");
+    const alterado = await runQuery(
+      `UPDATE ${FULL_MDM_TABLE}
+          SET ${atribuicoes}, DT_ATUALIZACAO = GETDATE()
+        WHERE ${FILTRO_CHAVE_MDM}`,
+      [
+        ["id", sql.Int, idUsuario],
+        ["matricula", sql.NVarChar(30), matricula],
+        ["tipo", sql.Int, ID_TIPO_USUARIO_TERCEIRO],
+        ...parametrosDeTexto(req.body),
+      ]
+    );
+    if (!alterado.rowsAffected[0]) return res.status(404).json({ error: "Usuário não encontrado." });
+    res.json({ ok: true, ID_USUARIO: idUsuario, CD_MATRICULA: matricula });
+  } catch (err) {
+    console.error("[usuarios] erro ao editar:", err.message);
+    res.status(500).json({ error: mensagemErroSql(err, "usuário", "tipo de usuário") });
+  }
+});
+
+// Ativar/desativar — grava SG_ATIVO. Mesmo contrato das outras abas: o
+// registro nunca é excluído, só deixa de contar como ativo.
+apiRouter.put("/usuarios/:id/status", async (req, res) => {
+  try {
+    const { idUsuario, matricula, erro } = chaveDoUsuario(req);
+    if (erro) return res.status(400).json({ error: erro });
+    if (typeof req.body?.ativo !== "boolean") {
+      return res.status(400).json({ error: "Campo 'ativo' (true/false) é obrigatório." });
+    }
+
+    const alterado = await runQuery(
+      `UPDATE ${FULL_MDM_TABLE} SET SG_ATIVO = @sgAtivo, DT_ATUALIZACAO = GETDATE()
+        WHERE ${FILTRO_CHAVE_MDM}`,
+      [
+        ["sgAtivo", sql.Char(1), req.body.ativo ? "S" : "N"],
+        ["id", sql.Int, idUsuario],
+        ["matricula", sql.NVarChar(30), matricula],
+        ["tipo", sql.Int, ID_TIPO_USUARIO_TERCEIRO],
+      ]
+    );
+    if (!alterado.rowsAffected[0]) return res.status(404).json({ error: "Usuário não encontrado." });
+    res.json({ ok: true, ativo: req.body.ativo });
+  } catch (err) {
+    console.error("[usuarios] erro ao atualizar status:", err.message);
+    res.status(500).json({ error: "Erro ao atualizar status do usuário: " + err.message });
+  }
+});
+
 // ------------------------------------------------------------------
 // API — cadastros bilíngues (kzn_categoria, kzn_replicacao,
 // kzn_desperdicio, kzn_resultados)

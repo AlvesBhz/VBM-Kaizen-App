@@ -759,10 +759,11 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
               <th data-i18n="adm.funcao">Função</th>
               <th data-i18n="adm.empresa">Empresa</th>
               <th data-i18n="table.status">Status</th>
+              <th data-i18n="table.acoes">Ações</th>
             </tr>
           </thead>
           <tbody id="usuariosTableBody">
-            <tr><td colspan="6" style="padding:1.25rem;color:var(--vbm-mid);font-size:.8rem;">Carregando usuários…</td></tr>
+            <tr><td colspan="7" style="padding:1.25rem;color:var(--vbm-mid);font-size:.8rem;">Carregando usuários…</td></tr>
           </tbody>
         </table>
       </div>
@@ -986,61 +987,61 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 </div>
 
 <div class="modal-backdrop" id="modalAddUser">
-  <div class="modal">
+  <div class="modal modal-lg">
     <div class="modal-head">
       <div class="modal-icon" style="--hue:26,26,26;background:#f2f2f2;border-color:rgba(26,26,26,.16);"><i class="fa-solid fa-user-plus" style="color:var(--vbm-dark);"></i></div>
       <div class="modal-title" data-i18n="adm.newUser">Novo Usuário</div>
       <button class="modal-close" data-modal-close><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
+      <!-- ID_TIPO_USUARIO não é campo: o servidor grava 2 (terceiro) em
+           toda linha desta tela — ver POST/PUT /api/usuarios. -->
       <div style="background:var(--vbm-blue-pale);border:1px solid #d1e3f7;border-radius:.5rem;padding:.75rem 1rem;margin-bottom:1.05rem;display:flex;gap:.5rem;align-items:center;">
         <i class="fa-solid fa-circle-info" style="color:var(--vbm-blue);font-size:.85rem;"></i>
-        <span style="font-size:.75rem;color:var(--vbm-blue-dark);" data-i18n="adm.mdmSyncNotice">Os dados são sincronizados automaticamente com o MDM. Informe o código MDM para pré-preencher.</span>
+        <span style="font-size:.75rem;color:var(--vbm-blue-dark);" data-i18n="adm.thirdPartyNotice">Registro de terceiro (ID_TIPO_USUARIO = 2) em [CI].[KZN_MDM_HIERARQUIA].</span>
       </div>
       <div class="form-grid form-grid-2">
-        <div class="form-group"><label class="form-label" data-i18n="adm.mdmRegistration">MDM / Matrícula</label><input type="text" class="form-control" placeholder="MDM00000"/></div>
-        <div class="form-group"><label class="form-label" data-i18n="adm.fullName">Nome completo</label><input type="text" class="form-control" placeholder="Preenche via MDM..." data-i18n-placeholder="adm.fillViaMdm"/></div>
-        <div class="form-group"><label class="form-label" data-i18n="adm.corporateEmail">E-mail corporativo</label><input type="email" class="form-control" placeholder="nome@valebasemetals.com"/></div>
-        <div class="form-group"><label class="form-label" data-i18n="adm.company">Empresa</label><input type="text" class="form-control" value="Vale Base Metals" readonly/></div>
-        <div class="form-group"><label class="form-label" data-i18n="adm.unit">Unidade</label>
-          <select class="form-control"><option data-i18n="f.select">Selecione...</option><option>Sudbury, CA</option><option>Thompson, CA</option><option>Salobo, BR</option></select>
-        </div>
-        <div class="form-group"><label class="form-label" data-i18n="adm.systemRole">Papel no sistema</label>
-          <select class="form-control"><option data-i18n="role.operador">Operador</option><option data-i18n="role.aprovador">Aprovador</option><option>ADM</option></select>
-        </div>
+        <div class="form-group"><label class="form-label" data-i18n="adm.userId">ID do usuário (MDM)</label><input type="number" class="form-control" data-campo="ID_USUARIO" maxlength="10" placeholder="Ex: 181222"/></div><div class="form-group"><label class="form-label" data-i18n="adm.registration">Matrícula</label><input type="text" class="form-control" data-campo="CD_MATRICULA" maxlength="30" placeholder="Ex: 000181222"/></div><div class="form-group"><label class="form-label" data-i18n="adm.fullName">Nome completo</label><input type="text" class="form-control" data-campo="NM_USUARIO" maxlength="30"/></div><div class="form-group"><label class="form-label" data-i18n="adm.corporateEmail">E-mail corporativo</label><input type="email" class="form-control" data-campo="CD_EMAIL" maxlength="100" placeholder="nome@empresa.com"/></div><div class="form-group"><label class="form-label" data-i18n="adm.position">Cargo</label><input type="text" class="form-control" data-campo="NM_POSICAO" maxlength="30"/></div><div class="form-group"><label class="form-label" data-i18n="adm.company">Empresa</label><input type="text" class="form-control" data-campo="NM_EMPRESA" maxlength="30"/></div><div class="form-group"><label class="form-label" data-i18n="adm.country">País</label><input type="text" class="form-control" data-campo="NM_PAIS" maxlength="30"/></div><div class="form-group"><label class="form-label" data-i18n="adm.state">Estado</label><input type="text" class="form-control" data-campo="NM_ESTADO" maxlength="30"/></div><div class="form-group"><label class="form-label" data-i18n="adm.city">Cidade</label><input type="text" class="form-control" data-campo="NM_CIDADE" maxlength="30"/></div><div class="form-group"><label class="form-label" data-i18n="adm.site">Site</label><input type="text" class="form-control" data-campo="NM_SITE" maxlength="30"/></div>
+        <div class="form-group"><label class="form-label" data-i18n="table.status">Status</label><select class="form-control" data-campo="SG_ATIVO"><option value="S" data-i18n="status.ativo">Ativo</option><option value="N" data-i18n="status.inativo">Inativo</option></select></div>
+      </div>
+      <div style="margin:1.35rem 0 .9rem;padding-top:1.1rem;border-top:1px solid #f0f0f0;font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--vbm-mid);font-weight:600;" data-i18n="adm.hierarchy">Hierarquia</div>
+      <div class="form-grid form-grid-2">
+        <div class="form-group"><label class="form-label" data-i18n="adm.hierarchyN1">Nível 1</label><input type="text" class="form-control" data-campo="NM_HIERARQUIA_N1" maxlength="80"/></div><div class="form-group"><label class="form-label" data-i18n="adm.hierarchyN2">Nível 2</label><input type="text" class="form-control" data-campo="NM_HIERARQUIA_N2" maxlength="80"/></div><div class="form-group"><label class="form-label" data-i18n="adm.hierarchyN3">Nível 3</label><input type="text" class="form-control" data-campo="NM_HIERARQUIA_N3" maxlength="80"/></div><div class="form-group"><label class="form-label" data-i18n="adm.hierarchyN4">Nível 4</label><input type="text" class="form-control" data-campo="NM_HIERARQUIA_N4" maxlength="80"/></div><div class="form-group"><label class="form-label" data-i18n="adm.hierarchyN5">Nível 5</label><input type="text" class="form-control" data-campo="NM_HIERARQUIA_N5" maxlength="80"/></div><div class="form-group"><label class="form-label" data-i18n="adm.hierarchyN6">Nível 6</label><input type="text" class="form-control" data-campo="NM_HIERARQUIA_N6" maxlength="80"/></div><div class="form-group"><label class="form-label" data-i18n="adm.hierarchyN7">Nível 7</label><input type="text" class="form-control" data-campo="NM_HIERARQUIA_N7" maxlength="80"/></div><div class="form-group"><label class="form-label" data-i18n="adm.hierarchyN8">Nível 8</label><input type="text" class="form-control" data-campo="NM_HIERARQUIA_N8" maxlength="80"/></div>
       </div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" data-modal-close data-i18n="common.cancelar">Cancelar</button>
-      <button class="btn btn-primary" onclick="closeModal('modalAddUser');showToast('success','Usuário criado','Acesso concedido com sucesso!')"><span data-i18n="adm.createAccess">Criar Acesso</span></button>
+      <button class="btn btn-primary" id="btnSaveAddUser" data-i18n="common.salvar">Salvar</button>
     </div>
   </div>
 </div>
 
 <div class="modal-backdrop" id="modalEditUser">
-  <div class="modal">
+  <div class="modal modal-lg">
     <div class="modal-head">
       <div class="modal-icon" style="--hue:26,26,26;background:#f2f2f2;border-color:rgba(26,26,26,.16);"><i class="fa-solid fa-user-pen" style="color:var(--vbm-dark);"></i></div>
       <div class="modal-title" data-i18n="adm.editUser">Editar Usuário</div>
       <button class="modal-close" data-modal-close><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
+      <!-- ID_TIPO_USUARIO não é campo: o servidor grava 2 (terceiro) em
+           toda linha desta tela — ver POST/PUT /api/usuarios. -->
+      <div style="background:var(--vbm-blue-pale);border:1px solid #d1e3f7;border-radius:.5rem;padding:.75rem 1rem;margin-bottom:1.05rem;display:flex;gap:.5rem;align-items:center;">
+        <i class="fa-solid fa-circle-info" style="color:var(--vbm-blue);font-size:.85rem;"></i>
+        <span style="font-size:.75rem;color:var(--vbm-blue-dark);" data-i18n="adm.thirdPartyNotice">Registro de terceiro (ID_TIPO_USUARIO = 2) em [CI].[KZN_MDM_HIERARQUIA].</span>
+      </div>
       <div class="form-grid form-grid-2">
-        <div class="form-group"><label class="form-label">MDM</label><input type="text" class="form-control" value="EXT"/></div>
-        <div class="form-group"><label class="form-label" data-i18n="adm.name">Nome</label><input type="text" class="form-control" value="João Silva"/></div>
-        <div class="form-group"><label class="form-label" data-i18n="adm.email">E-mail</label><input type="email" class="form-control" value="joao.silva@valebasemetals.com"/></div>
-        <div class="form-group"><label class="form-label" data-i18n="adm.company">Empresa</label><input type="text" class="form-control" value="Vale Base Metals" readonly/></div>
-        <div class="form-group"><label class="form-label" data-i18n="adm.unit">Unidade</label>
-          <select class="form-control"><option selected>Sudbury, CA</option><option>Thompson, CA</option></select>
-        </div>
-        <div class="form-group"><label class="form-label" data-i18n="adm.role">Papel</label>
-          <select class="form-control"><option selected data-i18n="role.operador">Operador</option><option data-i18n="role.aprovador">Aprovador</option><option>ADM</option></select>
-        </div>
+        <div class="form-group"><label class="form-label" data-i18n="adm.userId">ID do usuário (MDM)</label><input type="number" class="form-control" data-campo="ID_USUARIO" maxlength="10" readonly placeholder="Ex: 181222"/></div><div class="form-group"><label class="form-label" data-i18n="adm.registration">Matrícula</label><input type="text" class="form-control" data-campo="CD_MATRICULA" maxlength="30" readonly placeholder="Ex: 000181222"/></div><div class="form-group"><label class="form-label" data-i18n="adm.fullName">Nome completo</label><input type="text" class="form-control" data-campo="NM_USUARIO" maxlength="30"/></div><div class="form-group"><label class="form-label" data-i18n="adm.corporateEmail">E-mail corporativo</label><input type="email" class="form-control" data-campo="CD_EMAIL" maxlength="100" placeholder="nome@empresa.com"/></div><div class="form-group"><label class="form-label" data-i18n="adm.position">Cargo</label><input type="text" class="form-control" data-campo="NM_POSICAO" maxlength="30"/></div><div class="form-group"><label class="form-label" data-i18n="adm.company">Empresa</label><input type="text" class="form-control" data-campo="NM_EMPRESA" maxlength="30"/></div><div class="form-group"><label class="form-label" data-i18n="adm.country">País</label><input type="text" class="form-control" data-campo="NM_PAIS" maxlength="30"/></div><div class="form-group"><label class="form-label" data-i18n="adm.state">Estado</label><input type="text" class="form-control" data-campo="NM_ESTADO" maxlength="30"/></div><div class="form-group"><label class="form-label" data-i18n="adm.city">Cidade</label><input type="text" class="form-control" data-campo="NM_CIDADE" maxlength="30"/></div><div class="form-group"><label class="form-label" data-i18n="adm.site">Site</label><input type="text" class="form-control" data-campo="NM_SITE" maxlength="30"/></div>
+        <div class="form-group"><label class="form-label" data-i18n="table.status">Status</label><select class="form-control" data-campo="SG_ATIVO"><option value="S" data-i18n="status.ativo">Ativo</option><option value="N" data-i18n="status.inativo">Inativo</option></select></div>
+      </div>
+      <div style="margin:1.35rem 0 .9rem;padding-top:1.1rem;border-top:1px solid #f0f0f0;font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--vbm-mid);font-weight:600;" data-i18n="adm.hierarchy">Hierarquia</div>
+      <div class="form-grid form-grid-2">
+        <div class="form-group"><label class="form-label" data-i18n="adm.hierarchyN1">Nível 1</label><input type="text" class="form-control" data-campo="NM_HIERARQUIA_N1" maxlength="80"/></div><div class="form-group"><label class="form-label" data-i18n="adm.hierarchyN2">Nível 2</label><input type="text" class="form-control" data-campo="NM_HIERARQUIA_N2" maxlength="80"/></div><div class="form-group"><label class="form-label" data-i18n="adm.hierarchyN3">Nível 3</label><input type="text" class="form-control" data-campo="NM_HIERARQUIA_N3" maxlength="80"/></div><div class="form-group"><label class="form-label" data-i18n="adm.hierarchyN4">Nível 4</label><input type="text" class="form-control" data-campo="NM_HIERARQUIA_N4" maxlength="80"/></div><div class="form-group"><label class="form-label" data-i18n="adm.hierarchyN5">Nível 5</label><input type="text" class="form-control" data-campo="NM_HIERARQUIA_N5" maxlength="80"/></div><div class="form-group"><label class="form-label" data-i18n="adm.hierarchyN6">Nível 6</label><input type="text" class="form-control" data-campo="NM_HIERARQUIA_N6" maxlength="80"/></div><div class="form-group"><label class="form-label" data-i18n="adm.hierarchyN7">Nível 7</label><input type="text" class="form-control" data-campo="NM_HIERARQUIA_N7" maxlength="80"/></div><div class="form-group"><label class="form-label" data-i18n="adm.hierarchyN8">Nível 8</label><input type="text" class="form-control" data-campo="NM_HIERARQUIA_N8" maxlength="80"/></div>
       </div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" data-modal-close data-i18n="common.cancelar">Cancelar</button>
-      <button class="btn btn-primary" onclick="closeModal('modalEditUser');showToast('success','Salvo','Usuário atualizado!')"><span data-i18n="common.salvar">Salvar</span></button>
+      <button class="btn btn-primary" id="btnSaveEditUser" data-i18n="common.salvar">Salvar</button>
     </div>
   </div>
 </div>
@@ -1565,7 +1566,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
      login já existente; sem MSAL próprio, sem alterar o fluxo de auth. -->
 <script src="js/usuario-graph.js?v=20260817-1"></script>
 <script src="js/aprovadores.js?v=20260817-5"></script>
-<script src="js/usuarios.js?v=20260817-3"></script>
+<script src="js/usuarios.js?v=20260819-2"></script>
 <!-- cadastro-bilingue.js define o motor compartilhado (window.criarCadastroBilingue);
      os 6 arquivos seguintes só configuram sua própria aba com ele. -->
 <script src="js/cadastro-bilingue.js?v=20260816-2"></script>
@@ -1852,6 +1853,23 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       'adm.searchUser': 'Usuário',
       'adm.searchUserHint': 'Digite ao menos 2 caracteres...',
       'adm.registration': 'Matrícula',
+      'adm.userId': 'ID do usuário (MDM)',
+      'adm.fullName': 'Nome completo',
+      'adm.corporateEmail': 'E-mail corporativo',
+      'adm.company': 'Empresa',
+      'adm.country': 'País',
+      'adm.site': 'Site',
+      'adm.hierarchy': 'Hierarquia',
+      'adm.thirdPartyNotice': 'Registro de terceiro (ID_TIPO_USUARIO = 2) em [CI].[KZN_MDM_HIERARQUIA].',
+      'table.acoes': 'Ações',
+      'adm.hierarchyN1': 'Nível 1',
+      'adm.hierarchyN2': 'Nível 2',
+      'adm.hierarchyN3': 'Nível 3',
+      'adm.hierarchyN4': 'Nível 4',
+      'adm.hierarchyN5': 'Nível 5',
+      'adm.hierarchyN6': 'Nível 6',
+      'adm.hierarchyN7': 'Nível 7',
+      'adm.hierarchyN8': 'Nível 8',
       'adm.position': 'Cargo',
       'adm.state': 'Estado',
       'adm.city': 'Cidade',
@@ -1979,6 +1997,23 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       'adm.searchUser': 'User',
       'adm.searchUserHint': 'Type at least 2 characters...',
       'adm.registration': 'Employee ID',
+      'adm.userId': 'User ID (MDM)',
+      'adm.fullName': 'Full name',
+      'adm.corporateEmail': 'Corporate e-mail',
+      'adm.company': 'Company',
+      'adm.country': 'Country',
+      'adm.site': 'Site',
+      'adm.hierarchy': 'Hierarchy',
+      'adm.thirdPartyNotice': 'Third-party record (ID_TIPO_USUARIO = 2) in [CI].[KZN_MDM_HIERARQUIA].',
+      'table.acoes': 'Actions',
+      'adm.hierarchyN1': 'Level 1',
+      'adm.hierarchyN2': 'Level 2',
+      'adm.hierarchyN3': 'Level 3',
+      'adm.hierarchyN4': 'Level 4',
+      'adm.hierarchyN5': 'Level 5',
+      'adm.hierarchyN6': 'Level 6',
+      'adm.hierarchyN7': 'Level 7',
+      'adm.hierarchyN8': 'Level 8',
       'adm.position': 'Position',
       'adm.state': 'State',
       'adm.city': 'City',
