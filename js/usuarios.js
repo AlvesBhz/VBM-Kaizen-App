@@ -119,6 +119,10 @@
   // com os valores distintos dos terceiros. A 1ª opção ("Todas as ...")
   // é a do HTML e fica preservada.
   //
+  // Sem nenhum valor no banco (coluna vazia no MDM) o combo é
+  // desabilitado: um filtro que só tem "Todas as ..." não filtra nada, e
+  // deixá-lo clicável faz parecer que a tela perdeu as opções.
+  //
   // Falha aqui não derruba a lista: o combo fica só com a opção "Todas"
   // e a tabela continua funcionando.
   function carregarOpcoes(select, rota, rotulo) {
@@ -137,9 +141,11 @@
           select.appendChild(op);
         });
         select.value = selecionado || "";
+        select.disabled = valores.length === 0;
       })
       .catch(function (err) {
         console.error("[usuarios] falha ao carregar " + rotulo + ":", err);
+        select.disabled = true;
       });
   }
 

@@ -513,6 +513,10 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 .filter-search input { font-size:.7rem; font-weight:500; }
 .filter-search input::placeholder { color:#a8a8a8; }
 .filter-select { font-size:.74rem; }
+/* Combo cuja coluna de origem não tem nenhum valor no banco (ver
+   carregarOpcoes em js/usuarios.js): fica no lugar de sempre, apenas
+   sinalizado como indisponível, sem mexer no layout da barra. */
+.filter-select:disabled { opacity:.5; cursor:not-allowed; }
 
 /* Scrollbar discreto (webkit) para um acabamento mais premium */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -1561,7 +1565,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
      login já existente; sem MSAL próprio, sem alterar o fluxo de auth. -->
 <script src="js/usuario-graph.js?v=20260817-1"></script>
 <script src="js/aprovadores.js?v=20260817-5"></script>
-<script src="js/usuarios.js?v=20260817-2"></script>
+<script src="js/usuarios.js?v=20260817-3"></script>
 <!-- cadastro-bilingue.js define o motor compartilhado (window.criarCadastroBilingue);
      os 6 arquivos seguintes só configuram sua própria aba com ele. -->
 <script src="js/cadastro-bilingue.js?v=20260816-2"></script>
