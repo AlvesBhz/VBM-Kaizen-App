@@ -239,6 +239,35 @@
        pra migrar. A migração (seção 17.2) adiciona a coluna de forma
        idempotente em bancos já existentes; como é NULL, não precisou de
        checagem de pré-voo (diferente de ID_TIPO_USUARIO, que é NOT NULL).
+     - AUDITORIA DE CI.KZN_PEDRAVISAOCONSOLIDADA (pedido do time, nesta
+       rodada — implementação da proposta previamente aprovada, sem
+       resposta às 4 perguntas em aberto dela; decisões abaixo são
+       ASSUNÇÃO): nova tabela CI.KZN_LOG_PEDRAVISAOCONSOLIDADA_DETALHE
+       (seção 14b) grava 1 linha por campo alterado a cada UPDATE, com
+       NM_CAMPO + VL_ANTERIOR + VL_NOVO (texto, VARCHAR(200)); a criação
+       ('C') não gera detalhe. Campos monitorados: todas as colunas de
+       negócio de KZN_PEDRAVISAOCONSOLIDADA, exceto ID_KAIZEN,
+       DT_ATUALIZACAO e ID_USUARIO_ATUALIZACAO (já são o metadado do
+       cabeçalho do log). Sem política de retenção/expurgo. A tela (UI)
+       NÃO foi implementada nesta rodada — só o desenho de dados; ver
+       ASSUNÇÃO CRÍTICA abaixo sobre o motivo.
+     - CORREÇÃO CRÍTICA descoberta ao implementar a auditoria: ID_LOG em
+       CI.KZN_LOG_PEDRAVISAOCONSOLIDADA é NOT NULL sem IDENTITY nem
+       DEFAULT, e os únicos INSERTs nesta tabela (nos triggers
+       TR_KZN_PVC_INS/TR_KZN_PVC_UPD) nunca informavam essa coluna — ou
+       seja, TODO INSERT ou UPDATE em CI.KZN_PEDRAVISAOCONSOLIDADA já
+       vinha falhando com "Cannot insert the value NULL into column
+       'ID_LOG'" antes mesmo desta rodada. Corrigido com uma SEQUENCE
+       (CI.SEQ_KZN_LOG_PVC) — a exceção deliberada à regra "sem IDENTITY,
+       aplicação gera o valor" do resto do schema, porque aqui quem
+       insere é o próprio trigger, nunca a aplicação; SEQUENCE evita a
+       colisão que um MAX(ID_LOG)+1 manual teria sob updates concorrentes
+       em Kaizens diferentes. ASSUNÇÃO CRÍTICA: por isso a tela (UI) do
+       histórico não foi implementada nesta rodada — as 4 perguntas em
+       aberto da proposta (quais campos, tipagem, retenção, onde a tela
+       mora e quem pode ver) não foram respondidas, e essa última em
+       especial exige uma decisão do time sobre a aplicação real
+       (alvesbhz/VBM-Kaizen-App), não algo a assumir sozinho.
    ============================================================================== */
 
 SET NOCOUNT ON;
@@ -262,7 +291,10 @@ GO
 DROP TABLE IF EXISTS CI.KZN_KAIZEN_HIERARQUIA;
 DROP TABLE IF EXISTS CI.KZN_RESULTADO_KAIZEN;
 DROP TABLE IF EXISTS CI.KZN_MEMBROS_EQUIPE;
+DROP TABLE IF EXISTS CI.KZN_LOG_PEDRAVISAOCONSOLIDADA_DETALHE;
+DROP SEQUENCE IF EXISTS CI.SEQ_KZN_LOG_PVC_DETALHE;
 DROP TABLE IF EXISTS CI.KZN_LOG_PEDRAVISAOCONSOLIDADA;
+DROP SEQUENCE IF EXISTS CI.SEQ_KZN_LOG_PVC;
 DROP TABLE IF EXISTS CI.KZN_PEDRAVISAOCONSOLIDADA;
 DROP TABLE IF EXISTS CI.KZN_MOTIVO_REPROVACAO;
 DROP TABLE IF EXISTS CI.KZN_RESULTADOS;
@@ -684,6 +716,19 @@ GO
 /* ==============================================================================
    14. TABELA: CI.KZN_LOG_PEDRAVISAOCONSOLIDADA
    (histórico de auditoria: 1 linha por criação/atualização da tabela principal)
+
+   CORREÇÃO (constatada nesta rodada, não pedida, mas bloqueante): ID_LOG é
+   NOT NULL sem IDENTITY nem DEFAULT — mesmo padrão "sem IDENTITY" adotado
+   pra todas as PKs do schema, cuja premissa é a APLICAÇÃO gerar/enviar o
+   valor a cada INSERT. Só que ninguém grava nesta tabela por fora: as
+   únicas linhas vêm dos triggers TR_KZN_PVC_INS/TR_KZN_PVC_UPD (seção 19),
+   que nunca informavam ID_LOG — todo INSERT/UPDATE em
+   CI.KZN_PEDRAVISAOCONSOLIDADA estava, portanto, falhando com "Cannot
+   insert the value NULL into column 'ID_LOG'". Como aqui quem faz o papel
+   da "aplicação" é o próprio trigger, a solução é uma SEQUENCE
+   (CI.SEQ_KZN_LOG_PVC, logo abaixo) — thread-safe (NEXT VALUE FOR é
+   atômico), ao contrário de um MAX(ID_LOG)+1 manual, que colidiria sob
+   UPDATEs concorrentes em Kaizens diferentes.
    ============================================================================== */
 IF OBJECT_ID('CI.KZN_LOG_PEDRAVISAOCONSOLIDADA', 'U') IS NULL
 BEGIN
@@ -707,6 +752,69 @@ BEGIN
     CREATE NONCLUSTERED INDEX IX_KZN_LOG_PVC_KAIZEN
         ON CI.KZN_LOG_PEDRAVISAOCONSOLIDADA (ID_KAIZEN, DT_OPERACAO DESC);
 END
+GO
+
+-- SEQUENCE de ID_LOG (idempotente). Se a tabela já existir com linhas
+-- (banco que rodou uma versão anterior deste script, por algum caminho
+-- em que a inserção não tenha esbarrado no bug acima), a sequence nasce
+-- alinhada a partir do maior ID_LOG já usado, via SQL dinâmico (START
+-- WITH exige um literal, não aceita subquery direto no CREATE SEQUENCE).
+IF NOT EXISTS (SELECT 1 FROM sys.sequences WHERE schema_id = SCHEMA_ID('CI') AND name = 'SEQ_KZN_LOG_PVC')
+BEGIN
+    DECLARE @proximoIdLog INT = ISNULL((SELECT MAX(ID_LOG) FROM CI.KZN_LOG_PEDRAVISAOCONSOLIDADA), 0) + 1;
+    DECLARE @sqlSeq nvarchar(300) = N'CREATE SEQUENCE CI.SEQ_KZN_LOG_PVC AS INT START WITH ' + CAST(@proximoIdLog AS nvarchar(20)) + N' INCREMENT BY 1;';
+    EXEC sp_executesql @sqlSeq;
+END
+GO
+
+/* ------------------------------------------------------------------------------
+   14b. TABELA: CI.KZN_LOG_PEDRAVISAOCONSOLIDADA_DETALHE  (pedido do time,
+   nesta rodada — proposta de auditoria aprovada)
+   Detalhe campo a campo de cada linha de CI.KZN_LOG_PEDRAVISAOCONSOLIDADA
+   com TP_OPERACAO = 'A': 1 linha por coluna de negócio que mudou de valor
+   numa mesma atualização, com o valor anterior e o novo. A criação ('C')
+   não gera linhas aqui — não existe "valor anterior" pra uma linha que
+   acabou de nascer.
+
+   ASSUNÇÃO (não confirmada com o time — assumida na falta de resposta às
+   perguntas em aberto da proposta):
+     - Campos monitorados: todas as colunas "de negócio" de
+       CI.KZN_PEDRAVISAOCONSOLIDADA, exceto ID_KAIZEN (é o identificador,
+       não muda), DT_ATUALIZACAO e ID_USUARIO_ATUALIZACAO (já são o
+       próprio metadado do cabeçalho do log, não conteúdo auditado). Ver
+       gatilho TR_KZN_PVC_UPD (seção 19) pra lista exata.
+     - VL_ANTERIOR/VL_NOVO em VARCHAR(200): cobre qualquer tipo de origem
+       (INT, VARCHAR, DECIMAL, DATE, DATETIME2) sem precisar alterar esta
+       tabela a cada campo novo, mas perde a tipagem original — valores
+       numéricos/data viram texto. Se algum consumidor precisar do tipo
+       original, reavaliar.
+     - Sem política de retenção/expurgo — mesma postura do log atual
+       (KZN_LOG_PEDRAVISAOCONSOLIDADA nunca teve limpeza automática).
+   ------------------------------------------------------------------------------ */
+IF OBJECT_ID('CI.KZN_LOG_PEDRAVISAOCONSOLIDADA_DETALHE', 'U') IS NULL
+BEGIN
+    CREATE TABLE CI.KZN_LOG_PEDRAVISAOCONSOLIDADA_DETALHE
+    (
+        ID_LOG_DETALHE   INT                             NOT NULL,
+        ID_LOG           INT                             NOT NULL,
+        NM_CAMPO         VARCHAR(30)                     NOT NULL,   -- nome da coluna alterada, ex.: 'SG_STATUS'
+        VL_ANTERIOR      VARCHAR(200)                        NULL,   -- ASSUNÇÃO: texto — ver comentário acima
+        VL_NOVO          VARCHAR(200)                        NULL,
+
+        CONSTRAINT PK_KZN_LOG_PVC_DETALHE PRIMARY KEY CLUSTERED (ID_LOG_DETALHE),
+        CONSTRAINT FK_KZN_LOG_PVC_DETALHE_LOG FOREIGN KEY (ID_LOG)
+            REFERENCES CI.KZN_LOG_PEDRAVISAOCONSOLIDADA (ID_LOG)
+    );
+
+    CREATE NONCLUSTERED INDEX IX_KZN_LOG_PVC_DETALHE_LOG
+        ON CI.KZN_LOG_PEDRAVISAOCONSOLIDADA_DETALHE (ID_LOG, NM_CAMPO);
+END
+GO
+
+-- SEQUENCE de ID_LOG_DETALHE (idempotente) — tabela nova nesta rodada,
+-- sem dado legado pra realinhar, diferente da sequence da seção 14.
+IF NOT EXISTS (SELECT 1 FROM sys.sequences WHERE schema_id = SCHEMA_ID('CI') AND name = 'SEQ_KZN_LOG_PVC_DETALHE')
+    CREATE SEQUENCE CI.SEQ_KZN_LOG_PVC_DETALHE AS INT START WITH 1 INCREMENT BY 1;
 GO
 
 /* ==============================================================================
@@ -1472,14 +1580,17 @@ GO
 
 /* ==============================================================================
    19. TRIGGERS ESPECIAIS — CI.KZN_PEDRAVISAOCONSOLIDADA
-   (DT_ATUALIZACAO automática + gravação no log de auditoria)
+   (DT_ATUALIZACAO automática + gravação no log de auditoria, com diff
+   campo a campo em CI.KZN_LOG_PEDRAVISAOCONSOLIDADA_DETALHE nas
+   atualizações — ver seção 14b)
    ============================================================================== */
 CREATE OR ALTER TRIGGER CI.TR_KZN_PVC_INS ON CI.KZN_PEDRAVISAOCONSOLIDADA AFTER INSERT AS
 BEGIN
     SET NOCOUNT ON;
-    INSERT INTO CI.KZN_LOG_PEDRAVISAOCONSOLIDADA (ID_KAIZEN, TP_OPERACAO, DT_OPERACAO, ID_USUARIO_OPERACAO)
-    SELECT ID_KAIZEN, 'C', DT_CRIACAO, ID_USUARIO_CADASTRO
+    INSERT INTO CI.KZN_LOG_PEDRAVISAOCONSOLIDADA (ID_LOG, ID_KAIZEN, TP_OPERACAO, DT_OPERACAO, ID_USUARIO_OPERACAO)
+    SELECT NEXT VALUE FOR CI.SEQ_KZN_LOG_PVC, ID_KAIZEN, 'C', DT_CRIACAO, ID_USUARIO_CADASTRO
     FROM inserted;
+    -- Sem linha de detalhe aqui: criação não tem "valor anterior" a comparar.
 END
 GO
 
@@ -1491,12 +1602,117 @@ BEGIN
         UPDATE T SET DT_ATUALIZACAO = SYSDATETIME()
         FROM CI.KZN_PEDRAVISAOCONSOLIDADA T JOIN inserted i ON i.ID_KAIZEN = T.ID_KAIZEN;
 
+    -- Uma linha de cabeçalho de log por Kaizen afetado, capturando o
+    -- ID_LOG recém-gerado (OUTPUT) pra ligar as linhas de detalhe geradas
+    -- logo abaixo — necessário porque um único UPDATE pode afetar mais de
+    -- um Kaizen de uma vez, cada um com seu próprio ID_LOG.
+    DECLARE @logMap TABLE (ID_KAIZEN INT NOT NULL PRIMARY KEY, ID_LOG INT NOT NULL);
+
     -- Relê DT_ATUALIZACAO já corrigida acima, pra não gravar um SYSDATETIME()
     -- ligeiramente diferente do que efetivamente ficou salvo na linha.
-    INSERT INTO CI.KZN_LOG_PEDRAVISAOCONSOLIDADA (ID_KAIZEN, TP_OPERACAO, DT_OPERACAO, ID_USUARIO_OPERACAO)
-    SELECT i.ID_KAIZEN, 'A', T.DT_ATUALIZACAO, i.ID_USUARIO_ATUALIZACAO
+    INSERT INTO CI.KZN_LOG_PEDRAVISAOCONSOLIDADA (ID_LOG, ID_KAIZEN, TP_OPERACAO, DT_OPERACAO, ID_USUARIO_OPERACAO)
+    OUTPUT inserted.ID_KAIZEN, inserted.ID_LOG INTO @logMap (ID_KAIZEN, ID_LOG)
+    SELECT NEXT VALUE FOR CI.SEQ_KZN_LOG_PVC, i.ID_KAIZEN, 'A', T.DT_ATUALIZACAO, i.ID_USUARIO_ATUALIZACAO
     FROM inserted i
     JOIN CI.KZN_PEDRAVISAOCONSOLIDADA T ON T.ID_KAIZEN = i.ID_KAIZEN;
+
+    -- Diff campo a campo (seção 14b) — 1 linha por coluna de negócio cujo
+    -- valor mudou nesta atualização. Comparação NULL-segura: "NOT (d.COL =
+    -- i.COL OR (d.COL IS NULL AND i.COL IS NULL))" trata NULL=NULL como
+    -- "não mudou" e qualquer outra combinação (incluindo um lado NULL) como
+    -- mudança. DT_ATUALIZACAO e ID_USUARIO_ATUALIZACAO ficam de fora: já
+    -- são o metadado do cabeçalho gravado acima, não conteúdo auditado.
+    INSERT INTO CI.KZN_LOG_PEDRAVISAOCONSOLIDADA_DETALHE (ID_LOG_DETALHE, ID_LOG, NM_CAMPO, VL_ANTERIOR, VL_NOVO)
+    SELECT NEXT VALUE FOR CI.SEQ_KZN_LOG_PVC_DETALHE, x.ID_LOG, x.NM_CAMPO, x.VL_ANTERIOR, x.VL_NOVO
+    FROM (
+        SELECT lm.ID_LOG, 'ID_USUARIO_CADASTRO' AS NM_CAMPO, CONVERT(VARCHAR(200), d.ID_USUARIO_CADASTRO) AS VL_ANTERIOR, CONVERT(VARCHAR(200), i.ID_USUARIO_CADASTRO) AS VL_NOVO
+        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
+        WHERE NOT (d.ID_USUARIO_CADASTRO = i.ID_USUARIO_CADASTRO OR (d.ID_USUARIO_CADASTRO IS NULL AND i.ID_USUARIO_CADASTRO IS NULL))
+        UNION ALL
+        SELECT lm.ID_LOG, 'ID_USUARIO_LIDER', CONVERT(VARCHAR(200), d.ID_USUARIO_LIDER), CONVERT(VARCHAR(200), i.ID_USUARIO_LIDER)
+        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
+        WHERE NOT (d.ID_USUARIO_LIDER = i.ID_USUARIO_LIDER OR (d.ID_USUARIO_LIDER IS NULL AND i.ID_USUARIO_LIDER IS NULL))
+        UNION ALL
+        SELECT lm.ID_LOG, 'NM_KAIZEN', CONVERT(VARCHAR(200), d.NM_KAIZEN), CONVERT(VARCHAR(200), i.NM_KAIZEN)
+        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
+        WHERE NOT (d.NM_KAIZEN = i.NM_KAIZEN OR (d.NM_KAIZEN IS NULL AND i.NM_KAIZEN IS NULL))
+        UNION ALL
+        SELECT lm.ID_LOG, 'ID_CATEGORIA', CONVERT(VARCHAR(200), d.ID_CATEGORIA), CONVERT(VARCHAR(200), i.ID_CATEGORIA)
+        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
+        WHERE NOT (d.ID_CATEGORIA = i.ID_CATEGORIA OR (d.ID_CATEGORIA IS NULL AND i.ID_CATEGORIA IS NULL))
+        UNION ALL
+        SELECT lm.ID_LOG, 'ID_REPLICACAO', CONVERT(VARCHAR(200), d.ID_REPLICACAO), CONVERT(VARCHAR(200), i.ID_REPLICACAO)
+        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
+        WHERE NOT (d.ID_REPLICACAO = i.ID_REPLICACAO OR (d.ID_REPLICACAO IS NULL AND i.ID_REPLICACAO IS NULL))
+        UNION ALL
+        SELECT lm.ID_LOG, 'DS_PROBLEMA', CONVERT(VARCHAR(200), d.DS_PROBLEMA), CONVERT(VARCHAR(200), i.DS_PROBLEMA)
+        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
+        WHERE NOT (d.DS_PROBLEMA = i.DS_PROBLEMA OR (d.DS_PROBLEMA IS NULL AND i.DS_PROBLEMA IS NULL))
+        UNION ALL
+        SELECT lm.ID_LOG, 'DS_OBJETIVO', CONVERT(VARCHAR(200), d.DS_OBJETIVO), CONVERT(VARCHAR(200), i.DS_OBJETIVO)
+        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
+        WHERE NOT (d.DS_OBJETIVO = i.DS_OBJETIVO OR (d.DS_OBJETIVO IS NULL AND i.DS_OBJETIVO IS NULL))
+        UNION ALL
+        SELECT lm.ID_LOG, 'SG_STATUS', CONVERT(VARCHAR(200), d.SG_STATUS), CONVERT(VARCHAR(200), i.SG_STATUS)
+        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
+        WHERE NOT (d.SG_STATUS = i.SG_STATUS OR (d.SG_STATUS IS NULL AND i.SG_STATUS IS NULL))
+        UNION ALL
+        SELECT lm.ID_LOG, 'ID_APROVADOR', CONVERT(VARCHAR(200), d.ID_APROVADOR), CONVERT(VARCHAR(200), i.ID_APROVADOR)
+        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
+        WHERE NOT (d.ID_APROVADOR = i.ID_APROVADOR OR (d.ID_APROVADOR IS NULL AND i.ID_APROVADOR IS NULL))
+        UNION ALL
+        SELECT lm.ID_LOG, 'URL_IMG_ANTES', CONVERT(VARCHAR(200), d.URL_IMG_ANTES), CONVERT(VARCHAR(200), i.URL_IMG_ANTES)
+        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
+        WHERE NOT (d.URL_IMG_ANTES = i.URL_IMG_ANTES OR (d.URL_IMG_ANTES IS NULL AND i.URL_IMG_ANTES IS NULL))
+        UNION ALL
+        SELECT lm.ID_LOG, 'DS_ESTADO_ANTES', CONVERT(VARCHAR(200), d.DS_ESTADO_ANTES), CONVERT(VARCHAR(200), i.DS_ESTADO_ANTES)
+        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
+        WHERE NOT (d.DS_ESTADO_ANTES = i.DS_ESTADO_ANTES OR (d.DS_ESTADO_ANTES IS NULL AND i.DS_ESTADO_ANTES IS NULL))
+        UNION ALL
+        SELECT lm.ID_LOG, 'URL_IMG_DEPOIS', CONVERT(VARCHAR(200), d.URL_IMG_DEPOIS), CONVERT(VARCHAR(200), i.URL_IMG_DEPOIS)
+        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
+        WHERE NOT (d.URL_IMG_DEPOIS = i.URL_IMG_DEPOIS OR (d.URL_IMG_DEPOIS IS NULL AND i.URL_IMG_DEPOIS IS NULL))
+        UNION ALL
+        SELECT lm.ID_LOG, 'DS_ESTADO_DEPOIS', CONVERT(VARCHAR(200), d.DS_ESTADO_DEPOIS), CONVERT(VARCHAR(200), i.DS_ESTADO_DEPOIS)
+        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
+        WHERE NOT (d.DS_ESTADO_DEPOIS = i.DS_ESTADO_DEPOIS OR (d.DS_ESTADO_DEPOIS IS NULL AND i.DS_ESTADO_DEPOIS IS NULL))
+        UNION ALL
+        SELECT lm.ID_LOG, 'URL_REFERENCIA', CONVERT(VARCHAR(200), d.URL_REFERENCIA), CONVERT(VARCHAR(200), i.URL_REFERENCIA)
+        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
+        WHERE NOT (d.URL_REFERENCIA = i.URL_REFERENCIA OR (d.URL_REFERENCIA IS NULL AND i.URL_REFERENCIA IS NULL))
+        UNION ALL
+        SELECT lm.ID_LOG, 'ID_DESPERDICIO', CONVERT(VARCHAR(200), d.ID_DESPERDICIO), CONVERT(VARCHAR(200), i.ID_DESPERDICIO)
+        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
+        WHERE NOT (d.ID_DESPERDICIO = i.ID_DESPERDICIO OR (d.ID_DESPERDICIO IS NULL AND i.ID_DESPERDICIO IS NULL))
+        UNION ALL
+        SELECT lm.ID_LOG, 'DS_LICOES_APRENDIDAS', CONVERT(VARCHAR(200), d.DS_LICOES_APRENDIDAS), CONVERT(VARCHAR(200), i.DS_LICOES_APRENDIDAS)
+        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
+        WHERE NOT (d.DS_LICOES_APRENDIDAS = i.DS_LICOES_APRENDIDAS OR (d.DS_LICOES_APRENDIDAS IS NULL AND i.DS_LICOES_APRENDIDAS IS NULL))
+        UNION ALL
+        SELECT lm.ID_LOG, 'VL_RESULTADO_FINANCEIRO', CONVERT(VARCHAR(200), d.VL_RESULTADO_FINANCEIRO), CONVERT(VARCHAR(200), i.VL_RESULTADO_FINANCEIRO)
+        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
+        WHERE NOT (d.VL_RESULTADO_FINANCEIRO = i.VL_RESULTADO_FINANCEIRO OR (d.VL_RESULTADO_FINANCEIRO IS NULL AND i.VL_RESULTADO_FINANCEIRO IS NULL))
+        UNION ALL
+        SELECT lm.ID_LOG, 'ID_MOEDA', CONVERT(VARCHAR(200), d.ID_MOEDA), CONVERT(VARCHAR(200), i.ID_MOEDA)
+        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
+        WHERE NOT (d.ID_MOEDA = i.ID_MOEDA OR (d.ID_MOEDA IS NULL AND i.ID_MOEDA IS NULL))
+        UNION ALL
+        SELECT lm.ID_LOG, 'DS_RESULTADO_ESPERADO', CONVERT(VARCHAR(200), d.DS_RESULTADO_ESPERADO), CONVERT(VARCHAR(200), i.DS_RESULTADO_ESPERADO)
+        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
+        WHERE NOT (d.DS_RESULTADO_ESPERADO = i.DS_RESULTADO_ESPERADO OR (d.DS_RESULTADO_ESPERADO IS NULL AND i.DS_RESULTADO_ESPERADO IS NULL))
+        UNION ALL
+        SELECT lm.ID_LOG, 'DT_CRIACAO', CONVERT(VARCHAR(200), d.DT_CRIACAO, 120), CONVERT(VARCHAR(200), i.DT_CRIACAO, 120)
+        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
+        WHERE NOT (d.DT_CRIACAO = i.DT_CRIACAO OR (d.DT_CRIACAO IS NULL AND i.DT_CRIACAO IS NULL))
+        UNION ALL
+        SELECT lm.ID_LOG, 'DT_CONCLUSAO', CONVERT(VARCHAR(200), d.DT_CONCLUSAO, 23), CONVERT(VARCHAR(200), i.DT_CONCLUSAO, 23)
+        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
+        WHERE NOT (d.DT_CONCLUSAO = i.DT_CONCLUSAO OR (d.DT_CONCLUSAO IS NULL AND i.DT_CONCLUSAO IS NULL))
+        UNION ALL
+        SELECT lm.ID_LOG, 'ID_MOTIVO', CONVERT(VARCHAR(200), d.ID_MOTIVO), CONVERT(VARCHAR(200), i.ID_MOTIVO)
+        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
+        WHERE NOT (d.ID_MOTIVO = i.ID_MOTIVO OR (d.ID_MOTIVO IS NULL AND i.ID_MOTIVO IS NULL))
+    ) x;
 END
 GO
 
