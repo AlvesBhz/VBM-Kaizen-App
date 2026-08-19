@@ -210,12 +210,13 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
 <path class="rel" d="M795,1661 L757.5,1661 Q747.5,1661 747.5,1651 L747.5,71 Q747.5,61 737.5,61 L700,61" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_MDM" data-fk-row="24"/>
 <path class="rel soft" d="M475,1221 L357.5,1221 Q347.5,1221 347.5,1211 L347.5,499 Q347.5,489 337.5,489 L260,489" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_CATEGORIA" data-fk-row="4"/>
 <path class="rel soft" d="M475,1243 L512.5,1243 Q522.5,1243 522.5,1233 L522.5,499 Q522.5,489 532.5,489 L610,489" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_REPLICACAO" data-fk-row="5"/>
-<path class="rel" d="M795,1331 L1302.5,1331 Q1312.5,1331 1312.5,1321 L1312.5,71 Q1312.5,61 1322.5,61 L1050,61" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_APROVADOR" data-fk-row="9"/>
+<path class="rel" d="M795,1331 L912.5,1331 Q922.5,1331 922.5,1321 L922.5,71 Q922.5,61 932.5,61 L1050,61" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_APROVADOR" data-fk-row="9"/>
 <path class="rel soft" d="M795,1463 L795,1463 Q787.5,1463 787.5,1455.5 L787.5,496.5 Q787.5,489 780,489 L700,489" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_DESPERDICIO" data-fk-row="15"/>
 <path class="rel" d="M795,1529 L1177.5,1529 Q1187.5,1529 1187.5,1519 L1187.5,499 Q1187.5,489 1197.5,489 L1050,489" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_MOEDA" data-fk-row="18"/>
 <path class="rel soft" d="M795,1617 L825,1617 Q835,1617 835,1607 L835,795 Q835,785 845,785 L875,785" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_MOTIVO" data-fk-row="22"/>
 <path class="rel" d="M885,1155 L850,1155 Q840,1155 840,1145 L840,1143 Q840,1133 830,1133 L795,1133" marker-end="url(#arrow-key)" data-from="e_LOG" data-to="e_PVC" data-fk-row="1"/>
 <path class="rel" d="M885,1221 L912.5,1221 Q922.5,1221 922.5,1211 L922.5,71 Q922.5,61 932.5,61 L960,61" marker-end="url(#arrow-key)" data-from="e_LOG" data-to="e_MDM" data-fk-row="4"/>
+<path class="rel" d="M1235,1155 L1220,1155 Q1210,1155 1210,1145 L1210,1143 Q1210,1133 1200,1133 L1185,1133" marker-end="url(#arrow-key)" data-from="e_LOG_DETALHE" data-to="e_LOG" data-fk-row="1"/>
 <path class="rel" d="M610,1825 L552.5,1825 Q542.5,1825 542.5,1815 L542.5,1143 Q542.5,1133 532.5,1133 L475,1133" marker-end="url(#arrow-key)" data-from="e_MEMBROS" data-to="e_PVC" data-fk-row="0"/>
 <path class="rel" d="M610,1847 L645,1847 Q655,1847 655,1837 L655,71 Q655,61 665,61 L700,61" marker-end="url(#arrow-key)" data-from="e_MEMBROS" data-to="e_MDM" data-fk-row="1"/>
 <path class="rel" d="M700,1825 L737.5,1825 Q747.5,1825 747.5,1815 L747.5,1143 Q747.5,1133 757.5,1133 L795,1133" marker-end="url(#arrow-key)" data-from="e_RESULTADO_KAIZEN" data-to="e_PVC" data-fk-row="0"/>
@@ -417,6 +418,16 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
     <div class="field"><span class="field-name">TP_OPERACAO</span><span class="field-type">CHAR(1)</span></div>
     <div class="field"><span class="field-name">DT_OPERACAO</span><span class="field-type">DATETIME2</span></div>
     <div class="field"><span class="field-name fk">ID_USUARIO_OPERACAO</span><span class="field-type">INT</span></div>
+  </div>
+</div>
+<div class="entity log" id="e_LOG_DETALHE" style="left:1235px;top:1072px;width:300px;height:164px;">
+  <div class="entity-head"><div class="entity-icon">LD</div><div class="entity-title">KZN_LOG_PEDRAVISAOCONSOLIDADA_DETALHE</div></div>
+  <div class="entity-body">
+    <div class="field"><span class="field-name pk">ID_LOG_DETALHE</span><span class="field-type">INT</span></div>
+    <div class="field"><span class="field-name fk">ID_LOG</span><span class="field-type">INT</span></div>
+    <div class="field"><span class="field-name">NM_CAMPO</span><span class="field-type">VARCHAR(30)</span></div>
+    <div class="field"><span class="field-name">VL_ANTERIOR</span><span class="field-type">VARCHAR(200)</span></div>
+    <div class="field"><span class="field-name">VL_NOVO</span><span class="field-type">VARCHAR(200)</span></div>
   </div>
 </div>
 
