@@ -35,10 +35,10 @@
 -->
 <head>
 <meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>VBM Kaizen — Biblioteca</title>
 <link href="css/vendor/e5e202e3c8995079_all.min.css" rel="stylesheet"/>
-<link href="css/vbm-app.css?v=20260815-1" rel="stylesheet"/>
+<link href="css/vbm-app.css?v=20260819-1" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
 <link href="https://fonts.gstatic.com" rel="preconnect" crossorigin/>
 <!-- Poppins carregada SEM bloquear a renderização: como "print" o navegador
@@ -556,7 +556,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
       <!-- GRID VIEW -->
       <div data-view="biblioteca" data-view-mode="grid">
-      <div id="bibList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1.1rem;padding:1.25rem;">
+      <div id="bibList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));gap:1.1rem;padding:1.25rem;">
 
         <div class="kaizen-card reveal-scale" data-filter-item>
           <div class="kaizen-card-accent accent-green"></div>

@@ -37,10 +37,10 @@
 -->
 <head>
 <meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>VBM Kaizen — Dashboard</title>
 <link href="css/vendor/e5e202e3c8995079_all.min.css" rel="stylesheet"/>
-<link href="css/vbm-app.css?v=20260815-1" rel="stylesheet"/>
+<link href="css/vbm-app.css?v=20260819-1" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
 <link href="https://fonts.gstatic.com" rel="preconnect" crossorigin/>
 <!-- Poppins carregada SEM bloquear a renderização: como "print" o navegador
@@ -66,7 +66,13 @@
    (1.75rem) para cobrir 100% da largura e altura da viewport, subindo
    por trás do topnav (sticky, 64px) para que o vidro do menu mostre a
    própria imagem da hero em vez do fundo da página. */
-html, body { overflow: hidden; }
+/* Horizontal continua recortado (o zoom da arte estoura de propósito).
+   O vertical passa a ceder: com o celular deitado (390px de altura) o
+   conteúdo mede 454px e os últimos 64px ficavam inalcançáveis, porque
+   overflow:hidden travava a rolagem. Quando tudo cabe — o caso normal
+   em desktop — nada muda: não há o que rolar. */
+html, body { overflow-x: clip; overflow-y: auto; }
+@supports not (overflow-x: clip) { html, body { overflow-x: hidden; } }
 
 .dash-hero {
   width: calc(100% + 3.5rem);
@@ -103,7 +109,6 @@ html, body { overflow: hidden; }
   object-fit: cover;
   object-position: left bottom;
   animation: heroZoomIn 20s linear infinite alternate;
-  will-change: transform;
 }
 @keyframes heroZoomIn {
   from { transform: scale(1); }

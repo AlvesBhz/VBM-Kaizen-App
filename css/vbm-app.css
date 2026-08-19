@@ -1774,3 +1774,157 @@ textarea.lang-slot-input.form-control { min-height: 1.4rem; resize: vertical; }
 @media (min-width: 1921px) {
   .page-content { max-width: 1800px; margin-inline: auto; }
 }
+
+/* ═══════════════════════════════════════════════════
+   RESPONSIVIDADE — CAMADA 2
+   Correções apontadas por medição headless de 280px a
+   3840px nas 5 páginas. Cada bloco cita o defeito e a
+   largura em que ele aparece.
+
+   Regras aditivas: nenhuma cor, fonte, animação ou
+   posição de componente muda em desktop. Onde o seletor
+   precisa vencer o <style> da página (que carrega depois
+   deste arquivo), usa-se elemento+classe — mesma
+   convenção do bloco COMPLEMENTOS acima.
+═══════════════════════════════════════════════════ */
+
+/* ── 1. Recorte sem criar contêiner de rolagem.
+   overflow-x:hidden no body transforma a página num
+   contexto de rolagem e é o remendo clássico que
+   esconde vazamento em vez de corrigi-lo. clip recorta
+   sem esse efeito colateral. ── */
+html { overflow-x: clip; }
+body { overflow-x: clip; }
+@supports not (overflow-x: clip) {
+  html, body { overflow-x: hidden; }
+}
+
+/* ── 2. Altura real da janela em celular.
+   100vh ignora a barra de endereço do navegador móvel:
+   a coluna fica mais alta que a tela e o rodapé some.
+   svh é a altura garantida; dvh acompanha a barra. ── */
+div.app-layout, main.app-main { min-height: 100svh; }
+.app-sidebar { height: 100svh; }
+aside.settings-panel { height: 100svh; height: 100dvh; }
+@supports not (height: 100svh) {
+  div.app-layout, main.app-main { min-height: 100vh; }
+  .app-sidebar, aside.settings-panel { height: 100vh; }
+}
+
+/* ── 3. Áreas seguras (notch, ilha dinâmica, barra de
+   gestos). Sem viewport-fit=cover no <meta> o env()
+   devolve 0 — as duas metades andam juntas.
+   max() garante que, sem recorte de tela, o valor é
+   exatamente o de hoje: nada muda em desktop. ── */
+nav.topnav {
+  padding-left:  max(2rem, env(safe-area-inset-left));
+  padding-right: max(2rem, env(safe-area-inset-right));
+}
+div.topnav-drawer {
+  padding-left:  max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+  padding-bottom: max(.75rem, env(safe-area-inset-bottom));
+}
+.page-content {
+  padding-left:  max(1.75rem, env(safe-area-inset-left));
+  padding-right: max(1.75rem, env(safe-area-inset-right));
+}
+aside.settings-panel { padding-right: env(safe-area-inset-right); }
+.toast-container { bottom: max(1.5rem, env(safe-area-inset-bottom)); }
+@media (max-width: 768px) {
+  .page-content {
+    padding-left:  max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+}
+@media (max-width: 600px) {
+  nav.topnav {
+    padding-left:  max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+  .toast-container {
+    left:  max(1rem, env(safe-area-inset-left));
+    right: max(1rem, env(safe-area-inset-right));
+    bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+}
+
+/* ── 4. Grids que estouram abaixo do próprio mínimo.
+   minmax(300px, 1fr) não encolhe além de 300px: em
+   280–320px a coluna fica maior que o contêiner e o
+   card é recortado (medido: 320px de conteúdo em caixa
+   de 246px na Biblioteca). min(…, 100%) deixa a trilha
+   ceder quando não há espaço. ── */
+.kaizen-grid { grid-template-columns: repeat(auto-fill, minmax(min(290px, 100%), 1fr)); }
+.stats-grid  { grid-template-columns: repeat(auto-fit,  minmax(min(190px, 100%), 1fr)); }
+
+/* ── 5. Respiro lateral dos heros em telas estreitas.
+   O padding fixo de 2rem consome 64px dos 280px do
+   Galaxy Fold fechado, e o título "ADMINISTRAÇÃO" (piso
+   de 1.8rem no clamp) precisa de 245px numa caixa de
+   184px: 61px da palavra ficam fora do recorte.
+   O padding vira fluido e o piso do título desce; acima
+   de ~640px os valores são os mesmos de hoje. ── */
+/* Só o respiro LATERAL cede: as abas são ancoradas no rodapé do hero
+   por posicionamento absoluto, e encolher o padding de baixo faz a
+   descrição colidir com elas em telas estreitas. */
+div.admin-hero { padding: clamp(1.15rem, 5vw, 2rem) clamp(1.15rem, 5vw, 2rem) 3.5rem; }
+/* min() de duas curvas: a original — clamp(1.8rem,4vw,2.6rem) — e uma
+   que só morde abaixo de 411px. De 411px para cima as duas coincidem,
+   então o tamanho em tablet e desktop é exatamente o de hoje; abaixo
+   disso o título cede em vez de ser recortado. */
+div.admin-hero-title { font-size: min(clamp(1.8rem, 4vw, 2.6rem), max(1.35rem, 7vw)); }
+.admin-hero-title, .admin-hero-label, .admin-hero-sub, .admin-hero-desc {
+  overflow-wrap: anywhere;
+}
+
+/* ── 6. Tipografia dos campos em toque.
+   font-size abaixo de 16px faz o Safari do iPhone dar
+   zoom sozinho ao focar o campo — a página fica torta e
+   o usuário precisa pinçar de volta. Medido: 11,2px em
+   .form-control, 11,8px em .filter-select.
+   Só em ponteiro grosso: no mouse nada muda. ── */
+@media (pointer: coarse) {
+  input.form-control, select.form-control, textarea.form-control,
+  select.filter-select, div.filter-search input, input.admin-add-input,
+  select.settings-select,
+  /* .lang-slot-input.form-control (0,2,0) vence elemento+classe: os
+     campos bilíngues precisam de seletor de peso equivalente. */
+  input.lang-slot-input.form-control, textarea.lang-slot-input.form-control {
+    font-size: 16px;
+  }
+}
+
+/* ── 7. Alvos de toque de 44px (WCAG 2.5.5).
+   Medido a 390px: .btn-icon 34×34, .admin-tab 112×27,
+   .theme-toggle-btn 61×22, .settings-close 24×24.
+   O aumento é da área clicável, não do desenho: o ícone
+   e a fonte continuam do mesmo tamanho. ── */
+@media (pointer: coarse) {
+  button.btn-icon, button.btn-icon-sm, button.settings-close,
+  button.topnav-mobile-toggle, button.filter-view-btn, button.team-add-btn,
+  button.settings-btn {
+    min-width: 44px; min-height: 44px;
+  }
+  button.theme-toggle-btn, button.admin-tab, .btn,
+  select.filter-select, select.settings-select, select.form-control {
+    min-height: 44px;
+  }
+  .topnav-link, a.topnav-logo { min-height: 44px; }
+}
+
+/* ── 8. Preferência de movimento reduzido.
+   21 animações infinitas (orbes, brilho, zoom da hero)
+   rodavam mesmo para quem pediu ao sistema para parar —
+   é enjoo para quem tem sensibilidade vestibular e
+   bateria a menos em todo mundo.
+   !important aqui é intencional: precisa vencer regras
+   locais de página. ── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
