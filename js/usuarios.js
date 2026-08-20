@@ -20,7 +20,7 @@
  *   GET    /api/usuarios?q=&empresa=&unidade=   lista (só terceiros)
  *   GET    /api/usuarios/empresas               filtro Empresa
  *   GET    /api/usuarios/unidades               filtro Unidade
- *   GET    /api/usuarios/:id?matricula=         um registro (edição)
+ *   GET    /api/usuarios/formulario            próximo ID + sugestões
  *   POST   /api/usuarios                        inserir
  *   PUT    /api/usuarios/:id                    editar
  *   PUT    /api/usuarios/:id/status             ativar/desativar
@@ -207,6 +207,36 @@
     carregarOpcoes(unidadeEl, "unidades", "unidades");
   }
 
+  // ── Apoio do formulário: próximo ID e sugestões dos campos ──
+  //
+  // Uma requisição só traz as duas coisas. As sugestões vão para os
+  // <datalist> do HTML, compartilhados pelos dois modais: o campo
+  // continua livre para digitar, só ganha a lista do que já existe.
+  var proximoId = null;
+
+  function carregarFormulario() {
+    return fetch("/api/usuarios/formulario")
+      .then(comoJson)
+      .then(function (dados) {
+        proximoId = dados.proximoId;
+        Object.keys(dados.opcoes || {}).forEach(function (coluna) {
+          var lista = document.getElementById("opt-" + coluna);
+          if (!lista) return;
+          lista.innerHTML = "";
+          dados.opcoes[coluna].forEach(function (valor) {
+            var op = document.createElement("option");
+            op.value = valor;
+            lista.appendChild(op);
+          });
+        });
+      })
+      .catch(function (err) {
+        // Sem isso o cadastro continua funcionando: o ID passa a ser
+        // digitado e os campos ficam sem sugestão.
+        console.error("[usuarios] falha ao carregar apoio do formulário:", err);
+      });
+  }
+
   // ── Formulário (mesmos campos nos dois modais) ──
   //
   // Cada campo se identifica por data-campo="<COLUNA>", então ler e
@@ -269,7 +299,15 @@
   // ── Inserir ──
   var btnAdd = document.getElementById("btnSaveAddUser");
   var gatilhoAdd = document.querySelector('[data-modal-open="modalAddUser"]');
-  if (gatilhoAdd) gatilhoAdd.addEventListener("click", function () { limparFormulario("modalAddUser"); });
+  if (gatilhoAdd) {
+    gatilhoAdd.addEventListener("click", function () {
+      limparFormulario("modalAddUser");
+      // Sugere o próximo ID livre; o servidor recusa qualquer valor que
+      // não seja maior que o maior já cadastrado.
+      var campoId = campo("modalAddUser", "ID_USUARIO");
+      if (campoId && proximoId != null) campoId.value = proximoId;
+    });
+  }
 
   function salvarNovo() {
     var corpo = lerFormulario("modalAddUser");
@@ -285,8 +323,10 @@
         if (window.showToast) showToast("success", "Usuário criado", "Usuário cadastrado com sucesso!");
         limparFormulario("modalAddUser");
         carregar();
-        // Empresa e unidade novas passam a existir nos combos.
+        // Empresa e unidade novas passam a existir nos combos; o
+        // próximo ID e as sugestões dos campos também mudaram.
         recarregarFiltros();
+        carregarFormulario();
       })
       .catch(function (err) {
         console.error("[usuarios] falha ao inserir:", err);
@@ -297,34 +337,17 @@
 
   // ── Editar ──
   //
-  // A grade não carrega país, cidade nem os 8 níveis de hierarquia (são
-  // 11 colunas que ninguém vê na tabela), então o modal busca o
-  // registro completo ao abrir. A chave vai na URL + query.
+  // Abrir a edição NÃO consulta nada: a listagem já devolve o registro
+  // inteiro, inclusive país, cidade e os 8 níveis de hierarquia, que a
+  // grade não mostra. O modal só copia o que está em mãos.
   var btnEdit = document.getElementById("btnSaveEditUser");
   var chaveEmEdicao = null;
-
-  function urlDoRegistro(id, matricula) {
-    return "/api/usuarios/" + encodeURIComponent(id) +
-      "?matricula=" + encodeURIComponent(matricula);
-  }
 
   function abrirEdicao(u) {
     chaveEmEdicao = { id: u.ID_USUARIO, matricula: u.CD_MATRICULA };
     limparFormulario("modalEditUser");
-    // Mostra de imediato o que a grade já tem; o resto chega da busca.
     preencherFormulario("modalEditUser", u);
     if (window.openModal) openModal("modalEditUser");
-
-    fetch(urlDoRegistro(u.ID_USUARIO, u.CD_MATRICULA))
-      .then(comoJson)
-      .then(function (dados) {
-        if (!chaveEmEdicao || chaveEmEdicao.id !== u.ID_USUARIO) return; // trocou de registro
-        preencherFormulario("modalEditUser", dados);
-      })
-      .catch(function (err) {
-        console.error("[usuarios] falha ao carregar registro:", err);
-        if (window.showToast) showToast("error", "Erro ao abrir", err.message);
-      });
   }
 
   function salvarEdicao() {
@@ -345,6 +368,7 @@
         if (window.showToast) showToast("success", "Salvo", "Usuário atualizado com sucesso!");
         carregar();
         recarregarFiltros();
+        carregarFormulario();
       })
       .catch(function (err) {
         console.error("[usuarios] falha ao salvar:", err);
@@ -411,6 +435,7 @@
   function aoAbrirAba() {
     if (jaCarregou) return;
     recarregarFiltros();
+    carregarFormulario();
     carregar();
   }
 

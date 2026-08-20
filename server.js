@@ -843,10 +843,14 @@ apiRouter.get("/usuarios", async (req, res) => {
       params.push(["unidade", sql.NVarChar(30), unidade]);
     }
 
+    // A grade mostra 6 colunas, mas a listagem traz o registro inteiro:
+    // é o que o modal de edição precisa, e assim abrir a edição não faz
+    // requisição nenhuma. São 11 colunas a mais num resultado que já é
+    // limitado a 500 linhas.
+    const colunas = COLUNAS_MDM_TEXTO.map(([c]) => "m." + c).join(", ");
     const result = await runQuery(
       `SELECT TOP (@limite)
-              m.ID_USUARIO, m.CD_MATRICULA, m.NM_USUARIO, m.CD_EMAIL,
-              m.NM_SITE, m.NM_POSICAO, m.NM_EMPRESA, m.SG_ATIVO
+              m.ID_USUARIO, m.CD_MATRICULA, m.SG_ATIVO, ${colunas}
        FROM ${FULL_MDM_TABLE} m
        WHERE ${filtros.join(" AND ")}
        ORDER BY m.NM_USUARIO`,
@@ -854,13 +858,7 @@ apiRouter.get("/usuarios", async (req, res) => {
     );
     res.json(
       result.recordset.map((r) => ({
-        ID_USUARIO: r.ID_USUARIO,
-        CD_MATRICULA: r.CD_MATRICULA,
-        NM_USUARIO: r.NM_USUARIO,
-        CD_EMAIL: r.CD_EMAIL,
-        NM_SITE: r.NM_SITE,
-        NM_POSICAO: r.NM_POSICAO,
-        NM_EMPRESA: r.NM_EMPRESA,
+        ...r,
         // Booleano, não a letra: "Ativo"/"Inativo" é rótulo de tela e
         // acompanha a troca de idioma no front-end.
         ATIVO: r.SG_ATIVO === "S",
@@ -930,36 +928,42 @@ function chaveDoUsuario(req) {
 const FILTRO_CHAVE_MDM =
   "ID_USUARIO = @id AND CD_MATRICULA = @matricula AND ID_TIPO_USUARIO = @tipo";
 
-// Um registro completo, para preencher o modal de edição.
+// Apoio do formulário: o próximo ID livre e os valores já cadastrados
+// em cada campo de texto, para o usuário escolher em vez de digitar.
 //
-// A listagem NÃO traz estas 11 colunas a mais (país, estado, cidade e
-// os 8 níveis de hierarquia): a grade mostra 6 e carregá-las para todas
-// as linhas seria peso morto. Aqui vêm só as do registro aberto.
+// Uma requisição só, com duas consultas: 14 chamadas separadas de
+// DISTINCT (uma por coluna) custariam 14 idas ao banco para montar um
+// modal. O UNION devolve tudo de uma vez, já sem repetições.
 //
-// Registrada DEPOIS de /usuarios/empresas e /usuarios/unidades, senão
-// ":id" capturaria as duas.
-apiRouter.get("/usuarios/:id", async (req, res) => {
+// NM_USUARIO e CD_EMAIL ficam de fora de propósito: são de cada pessoa,
+// sugerir o de outra só atrapalharia.
+const COLUNAS_COM_SUGESTAO = COLUNAS_MDM_TEXTO
+  .map(([c]) => c)
+  .filter((c) => c !== "NM_USUARIO" && c !== "CD_EMAIL");
+
+apiRouter.get("/usuarios/formulario", async (req, res) => {
   try {
-    const { idUsuario, matricula, erro } = chaveDoUsuario(req);
-    if (erro) return res.status(400).json({ error: erro });
-
-    const colunas = COLUNAS_MDM_TEXTO.map(([c]) => c).join(", ");
-    const result = await runQuery(
-      `SELECT TOP (1) ID_USUARIO, CD_MATRICULA, SG_ATIVO, ${colunas}
-       FROM ${FULL_MDM_TABLE} WHERE ${FILTRO_CHAVE_MDM}`,
-      [
-        ["id", sql.Int, idUsuario],
-        ["matricula", sql.NVarChar(30), matricula],
-        ["tipo", sql.Int, ID_TIPO_USUARIO_TERCEIRO],
-      ]
+    const proximo = await runQuery(
+      `SELECT ISNULL(MAX(ID_USUARIO), 0) + 1 AS PROXIMO FROM ${FULL_MDM_TABLE}`
     );
-    if (!result.recordset.length) return res.status(404).json({ error: "Usuário não encontrado." });
 
-    const linha = result.recordset[0];
-    res.json({ ...linha, ATIVO: linha.SG_ATIVO === "S" });
+    const uniao = COLUNAS_COM_SUGESTAO.map(
+      (c) => `SELECT '${c}' AS COLUNA, ${c} AS VALOR FROM ${FULL_MDM_TABLE}
+              WHERE ID_TIPO_USUARIO = @tipo AND ${c} IS NOT NULL AND LTRIM(RTRIM(${c})) <> ''`
+    ).join(" UNION ");
+
+    const valores = await runQuery(`${uniao} ORDER BY COLUNA, VALOR`, [
+      ["tipo", sql.Int, ID_TIPO_USUARIO_TERCEIRO],
+    ]);
+
+    const opcoes = {};
+    COLUNAS_COM_SUGESTAO.forEach((c) => { opcoes[c] = []; });
+    valores.recordset.forEach((r) => { opcoes[r.COLUNA].push(r.VALOR); });
+
+    res.json({ proximoId: proximo.recordset[0].PROXIMO, opcoes });
   } catch (err) {
-    console.error("[usuarios] erro ao buscar:", err.message);
-    res.status(500).json({ error: "Erro ao consultar usuário: " + err.message });
+    console.error("[usuarios] erro ao montar formulário:", err.message);
+    res.status(500).json({ error: "Erro ao consultar opções: " + err.message });
   }
 });
 
@@ -973,6 +977,20 @@ apiRouter.post("/usuarios", async (req, res) => {
     }
     if (!matricula) return res.status(400).json({ error: "CD_MATRICULA é obrigatória." });
     if (!nome) return res.status(400).json({ error: "NM_USUARIO é obrigatório." });
+
+    // ID novo tem de ser maior que todos os já existentes. A tela já
+    // sugere o próximo (ver GET /usuarios/formulario), mas a regra vive
+    // aqui: o campo é editável e a sugestão pode envelhecer entre abrir
+    // o modal e salvar.
+    const maior = await runQuery(
+      `SELECT ISNULL(MAX(ID_USUARIO), 0) AS MAIOR FROM ${FULL_MDM_TABLE}`
+    );
+    const maiorAtual = maior.recordset[0].MAIOR;
+    if (idUsuario <= maiorAtual) {
+      return res.status(400).json({
+        error: `O ID do usuário deve ser maior que ${maiorAtual}, o maior já cadastrado. Sugerido: ${maiorAtual + 1}.`,
+      });
+    }
 
     const chave = [
       ["id", sql.Int, idUsuario],
