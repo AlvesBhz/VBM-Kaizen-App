@@ -1,0 +1,1796 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<!--
+  ═══════════════════════════════════════════════════════════════════
+  VBM KAIZEN · Novo Kaizen (formulário em 4 etapas)
+  ═══════════════════════════════════════════════════════════════════
+  PAPEL DA PÁGINA
+    Cadastro de iniciativa de melhoria. Wizard de 4 etapas controlado
+    por data-wizard-next / -prev / -submit (lógica em vbm-app.js).
+
+  DEPENDÊNCIAS (carregadas no <head> / fim do <body>)
+    • Font Awesome 6  — ícones (fa-solid ...)
+    • css/vbm-app.css — Design System VBM: tokens (--vbm-*), reset,
+      componentes compartilhados (.btn, .form-control, .modal, .badge...)
+    • js/vbm-app.js  — comportamento compartilhado: modais, abas,
+      wizard, filtros, toasts, toggles. Auto-inicializa no DOMContentLoaded.
+    NÃO usa jQuery, Bootstrap nem AOS — foram removidos por não terem
+    uso real (economia de ~446 KB por página).
+
+  ORGANIZAÇÃO DESTE ARQUIVO
+    1. <style> local .... overrides desta tela apenas. O que for
+                          reutilizável deve ir para vbm-app.css.
+    2. <body> .......... topnav → painel de configurações → conteúdo
+    3. <script> ........ blocos IIFE independentes, um por recurso
+
+  TEMA CLARO/ESCURO
+    Alternado por body[data-bg="dark"] (persistido em localStorage
+    'vdt-theme'). Toda regra de cor precisa do par claro + escuro.
+
+  INTERNACIONALIZAÇÃO (i18n)
+    Marque o elemento com data-i18n / -title / -aria / -placeholder e
+    cadastre a chave nos DOIS dicionários (pt-BR e en) no fim do arquivo.
+    Idioma persistido em localStorage 'vdt-lang'.
+  ═══════════════════════════════════════════════════════════════════
+-->
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>VBM Kaizen — Novo Kaizen</title>
+<link href="css/vendor/e5e202e3c8995079_all.min.css" rel="stylesheet"/>
+<link href="css/vbm-app.css?v=20260819-1" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link href="https://fonts.gstatic.com" rel="preconnect" crossorigin/>
+<!-- Poppins carregada SEM bloquear a renderização: como "print" o navegador
+     baixa a folha mas não espera por ela para pintar a tela; o onload a
+     promove para "all" e a fonte entra assim que chega. Antes, esta linha
+     era render-blocking — num ambiente sem saída para a internet a página
+     ficava em branco até o timeout do fonts.googleapis.com. O <noscript>
+     mantém o comportamento original quando não há JS. -->
+<link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet" media="print" onload="this.media='all';this.onload=null;"/>
+<noscript><link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet"/></noscript>
+<link href="assets/icons/a1922a98664cc516_favicon-32x32-1.png" rel="icon"/>
+<style>
+.app-layout{display:block;min-height:100vh}.app-main{margin-left:0}
+
+.topnav{position:sticky;top:0;z-index:100;height:64px;background:linear-gradient(145deg,#082d4f 0%,#1b6898 100%);display:flex;align-items:center;padding:0 2rem;gap:0;border-bottom:1px solid rgba(255,255,255,.08);box-shadow:0 2px 20px rgba(8,45,79,.18)}
+@supports (backdrop-filter: blur(1px)) { .topnav { backdrop-filter: blur(4px) saturate(120%); -webkit-backdrop-filter: blur(4px) saturate(120%); } }
+
+.topnav-logo{display:flex;align-items:center;text-decoration:none;flex-shrink:0;margin-right:1.5rem;position:relative;z-index:1}
+.topnav-logo img{height:26px;width:auto}
+
+.topnav-links{display:flex;align-items:center;justify-content:center;gap:.15rem;flex:1;position:relative;z-index:1}
+.topnav-link{display:flex;align-items:center;gap:.4rem;padding:.5rem .85rem;border-radius:.45rem;font-family:'Poppins',sans-serif;font-weight:400;font-size:.72rem;letter-spacing:.04em;color:rgba(255,255,255,.75);text-decoration:none;white-space:nowrap;transition:color .18s;position:relative}
+.topnav-link i{font-size:.72rem}
+.topnav-link:hover{color:#fff}
+.topnav-link.active{color:#fff}
+.topnav-link::after{content:'';position:absolute;bottom:-1px;left:50%;width:0;height:1.5px;background:linear-gradient(90deg,transparent,#fff 25%,#fff 75%,transparent);border-radius:10px;box-shadow:0 0 8px rgba(255,255,255,.65);opacity:0;transform:translateX(-50%);transition:width .3s var(--ease-out),opacity .3s var(--ease-out)}
+.topnav-link.active::after{width:60%;opacity:1}
+.topnav-link:not(.active):hover::after{width:30%;opacity:.4}
+
+.topnav-badge{font-size:.55rem;padding:.1rem .35rem;border-radius:10rem;background:#c2770e;color:#fff;font-family:'Poppins',sans-serif;font-weight:700;line-height:1.4}
+.topnav-sep{width:1px;height:20px;background:rgba(255,255,255,.25);flex-shrink:0;margin:0 .1rem}
+.topnav-actions{display:flex;align-items:center;gap:.5rem;flex-shrink:0;margin-left:auto;position:relative;z-index:1}
+
+.topnav-user{display:flex;align-items:center;gap:10px;padding-left:10px;border-left:1px solid rgba(255,255,255,.22);flex-shrink:0}
+.topnav-user-text{display:flex;flex-direction:column;align-items:flex-end;line-height:1.3}
+.topnav-user-avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(145deg,var(--vbm-blue-light),var(--vbm-blue-dark));border:1.5px solid rgba(255,255,255,.5);display:flex;align-items:center;justify-content:center;font-family:'Poppins',sans-serif;font-weight:700;font-size:11px;color:#fff;flex-shrink:0}
+.topnav-user-name{font-family:'Poppins',sans-serif;font-weight:600;font-size:11.5px;color:#fff;white-space:nowrap}
+.topnav-user-role{font-family:'Poppins',sans-serif;font-weight:600;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.6);white-space:nowrap}
+
+.topnav-mobile-toggle{display:none;width:34px;height:34px;border-radius:.4rem;border:none;background:rgba(255,255,255,.06);color:rgba(255,255,255,.7);align-items:center;justify-content:center;font-size:.85rem;cursor:pointer;flex-shrink:0}
+.topnav-drawer{display:none;position:fixed;top:64px;left:0;right:0;background:#020e1c;border-bottom:1px solid rgba(60,181,229,.15);z-index:299;padding:.75rem 1rem;flex-direction:column;gap:.25rem;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.topnav-drawer.open{display:flex}
+.topnav-drawer .topnav-link{font-size:.8rem;padding:.65rem .9rem}
+
+@media(max-width:960px){.topnav-links{display:none}.topnav-mobile-toggle{display:flex}.topnav-user-role{display:none}}
+@media(max-width:540px){.topnav-user-name{display:none}}
+
+/* ═══════════════════════════════════════════════════
+   SETTINGS (engrenagem) — replicado 1:1 de
+   Referencias/Value Drive Tree/style.css
+═══════════════════════════════════════════════════ */
+.settings-btn{display:flex;align-items:center;justify-content:center;width:36px;height:36px;padding:0;border:none;border-radius:100px;background:transparent;color:#fff;cursor:pointer;flex-shrink:0;transition:background .25s,transform .35s var(--ease-spring)}
+.settings-btn:hover{background:rgba(255,255,255,.12)}
+.settings-btn[aria-expanded="true"]{background:rgba(255,255,255,.18);transform:rotate(50deg)}
+
+.settings-backdrop{position:fixed;inset:0;background:rgba(9,20,34,.4);opacity:0;pointer-events:none;z-index:399;transition:opacity .3s var(--ease-out)}
+@supports (backdrop-filter: blur(1px)) { .settings-backdrop { backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); } }
+.settings-backdrop.open{opacity:1;pointer-events:auto}
+
+.settings-panel{position:fixed;top:0;right:0;width:300px;max-width:90vw;height:100vh;background:#fff;box-shadow:-16px 0 48px rgba(9,20,34,.22);z-index:400;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .38s var(--ease-out)}
+.settings-panel.open{transform:translateX(0)}
+.settings-panel-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #eef1f6}
+.settings-panel-head h2{font-family:'Poppins',sans-serif;font-weight:700;font-size:.92rem;letter-spacing:-.01em;color:var(--vbm-dark)}
+.settings-close{display:flex;align-items:center;justify-content:center;width:24px;height:24px;border:none;border-radius:100px;background:#fafcfe;color:var(--vbm-mid);cursor:pointer;transition:background .2s,color .2s}
+.settings-close svg{width:11px;height:11px}
+.settings-close:hover{background:var(--vbm-blue);color:#fff}
+.settings-panel-body{padding:20px;display:flex;flex-direction:column;overflow-y:auto}
+.settings-section{display:flex;flex-direction:column;gap:9px}
+.settings-section-title{display:flex;align-items:center;gap:5px;font-family:'Poppins',sans-serif;font-weight:600;font-size:11px;color:var(--vbm-dark)}
+.settings-info{display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;border-radius:50%;border:1px solid #e8e8e8;color:var(--vbm-mid);font-size:8px;font-style:italic;font-family:Georgia,serif;cursor:help}
+.settings-divider{height:1px;background:#eef1f6;margin:18px 0}
+.theme-toggle{display:flex;align-items:center;background:#fafcfe;border:1px solid #e8e8e8;border-radius:100px;padding:.16rem;gap:.1rem;width:fit-content}
+.theme-toggle-btn{padding:.38rem 1.05rem;border-radius:100px;font-size:.64rem;letter-spacing:.02em;color:var(--vbm-mid);border:none;background:transparent;cursor:pointer;font-family:'Poppins',sans-serif;font-weight:600;transition:background .2s,color .2s;white-space:nowrap;line-height:1}
+.theme-toggle-btn.active{background:var(--vbm-blue);color:#fff;box-shadow:0 4px 14px rgba(60,181,229,.35)}
+.settings-select-wrap{position:relative}
+.settings-select{width:100%;appearance:none;-webkit-appearance:none;background:#fff;border:1.5px solid #e8e8e8;border-radius:9px;padding:.5rem 1.9rem .5rem .75rem;font-family:'Poppins',sans-serif;font-size:11.5px;font-weight:300;color:var(--vbm-dark);cursor:pointer;transition:border-color .2s,box-shadow .2s}
+.settings-select:hover{border-color:var(--vbm-blue-light)}
+.settings-select:focus{outline:none;border-color:var(--vbm-blue);box-shadow:0 0 0 3px rgba(60,181,229,.15)}
+.settings-select-caret{width:9px;height:9px;position:absolute;right:.75rem;top:50%;transform:translateY(-50%);color:var(--vbm-mid);pointer-events:none}
+
+.settings-panel,.settings-panel-head,.settings-panel-head h2,.settings-close,.settings-section-title,.settings-info,.settings-divider,.theme-toggle,.theme-toggle-btn,.settings-select,.settings-select-caret,.settings-backdrop{transition-property:background,background-color,border-color,color,box-shadow,opacity,transform;transition-duration:.25s,.25s,.25s,.25s,.25s,.3s,.38s;transition-timing-function:var(--ease-out)}
+
+[data-bg="dark"] .settings-backdrop{background:rgba(0,0,0,.55)}
+[data-bg="dark"] .settings-panel{background:var(--vbm-blue-deep);box-shadow:-16px 0 48px rgba(0,0,0,.45)}
+[data-bg="dark"] .settings-panel-head{border-bottom-color:rgba(255,255,255,.1)}
+[data-bg="dark"] .settings-panel-head h2{color:#fff}
+[data-bg="dark"] .settings-close{background:rgba(255,255,255,.08);color:rgba(255,255,255,.6)}
+[data-bg="dark"] .settings-close:hover{background:var(--vbm-blue);color:#fff}
+[data-bg="dark"] .settings-section-title{color:#fff}
+[data-bg="dark"] .settings-info{border-color:rgba(255,255,255,.25);color:rgba(255,255,255,.5)}
+[data-bg="dark"] .settings-divider{background:rgba(255,255,255,.1)}
+[data-bg="dark"] .theme-toggle{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.14)}
+[data-bg="dark"] .theme-toggle-btn{color:rgba(255,255,255,.55)}
+[data-bg="dark"] .theme-toggle-btn.active{color:#fff}
+[data-bg="dark"] .settings-select{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.16);color:#fff}
+[data-bg="dark"] .settings-select option{background:var(--vbm-blue-deep);color:#fff}
+[data-bg="dark"] .settings-select-caret{color:rgba(255,255,255,.5)}
+
+/* ════════════════════════════════════════════════════════════
+   TEMA ESCURO — aplicado à página inteira
+   ════════════════════════════════════════════════════════════ */
+body,.topnav,.topnav-link,.settings-btn{transition:background .3s var(--ease-out),background-color .3s var(--ease-out),border-color .3s var(--ease-out),color .3s var(--ease-out),box-shadow .3s var(--ease-out)}
+body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-text:rgba(244,247,251,.82);background:radial-gradient(ellipse 80% 50% at 72% 6%,rgba(60,181,229,.10) 0%,transparent 55%),linear-gradient(160deg,#10131a 0%,var(--vbm-blue-deep) 100%);background-attachment:fixed}
+[data-bg="dark"] .topnav{background:transparent;border-bottom-color:rgba(255,255,255,.05)}
+[data-bg="dark"] .topnav-link{color:rgba(255,255,255,.65)}
+[data-bg="dark"] .topnav-link:hover{color:#fff}
+[data-bg="dark"] .topnav-sep{background:rgba(255,255,255,.14)}
+[data-bg="dark"] .topnav-user{border-left-color:rgba(255,255,255,.16)}
+[data-bg="dark"] .stat-card,[data-bg="dark"] .section-card{background:rgba(255,255,255,.06) !important;border-color:rgba(255,255,255,.12) !important;box-shadow:0 4px 24px rgba(0,0,0,.3) !important}
+[data-bg="dark"] .stat-label,[data-bg="dark"] .section-card-title{color:rgba(255,255,255,.9)}
+[data-bg="dark"] .section-card-icon{background:rgba(255,255,255,.08);color:#fff}
+[data-bg="dark"] .data-table thead th{color:rgba(255,255,255,.5);border-color:rgba(255,255,255,.1)}
+[data-bg="dark"] .data-table tbody tr{border-color:rgba(255,255,255,.08)}
+[data-bg="dark"] .kaizen-card,[data-bg="dark"] .approval-item{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1)}
+
+/* ── Formulário / Wizard — vidro leve, replicado 1:1 de
+   .ds-input / .content-box (Referencias/VBM - Design System/Design_System_VBM.html) ── */
+
+/* Cabeçalho em ênfase — mais vívido e com brilho na borda inferior,
+   para se destacar claramente do painel do formulário (mais neutro/recuado) */
+[data-bg="dark"] .wizard-header{
+  background: linear-gradient(135deg,#052642 0%,#0c3f72 55%,#1a8bbf 130%) !important;
+  box-shadow: 0 18px 44px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.06);
+}
+
+[data-bg="dark"] .wizard-body{background:rgba(255,255,255,.03) !important;border-color:rgba(255,255,255,.07) !important;box-shadow:inset 0 1px 0 rgba(255,255,255,.02)}
+@supports (backdrop-filter: blur(1px)) { [data-bg="dark"] .wizard-body{backdrop-filter:blur(12px) saturate(140%);-webkit-backdrop-filter:blur(12px) saturate(140%)} }
+[data-bg="dark"] .wizard-divider{background:rgba(255,255,255,.08)}
+[data-bg="dark"] .wizard-footer{border-top-color:rgba(255,255,255,.08)}
+
+[data-bg="dark"] .form-control{background-color:rgba(255,255,255,.06);border-color:rgba(255,255,255,.14);color:var(--vbm-white)}
+@supports (backdrop-filter: blur(1px)) { [data-bg="dark"] .form-control{backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)} }
+[data-bg="dark"] .form-control::placeholder{color:rgba(255,255,255,.28)}
+[data-bg="dark"] .form-control:focus{border-color:var(--vbm-blue);box-shadow:0 0 0 3px rgba(60,181,229,.18);background-color:rgba(255,255,255,.09)}
+[data-bg="dark"] select.form-control{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237dd3f0' fill='none' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E")}
+[data-bg="dark"] select.form-control option{background:var(--vbm-blue-deep);color:#fff}
+[data-bg="dark"] .input-icon{color:rgba(255,255,255,.3)}
+[data-bg="dark"] .input-with-icon:focus-within .input-icon{color:var(--vbm-blue-light)}
+
+[data-bg="dark"] .photo-upload-zone{background:rgba(255,255,255,.03);border-color:rgba(255,255,255,.18)}
+[data-bg="dark"] .photo-upload-zone:hover{background:rgba(60,181,229,.08);border-color:var(--vbm-blue)}
+[data-bg="dark"] .photo-upload-icon{color:rgba(255,255,255,.25)}
+
+[data-bg="dark"] .wizard-body [style*="background:var(--vbm-off-white)"],
+[data-bg="dark"] .wizard-body [style*="background: var(--vbm-off-white)"]{background:rgba(255,255,255,.07) !important;border-color:rgba(255,255,255,.14) !important}
+[data-bg="dark"] .wizard-body [style*="border:2px solid #eaeaea"],
+[data-bg="dark"] .wizard-body [style*="border: 2px solid #eaeaea"]{border-color:rgba(255,255,255,.16) !important}
+[data-bg="dark"] .toggle:not(.on){background:rgba(255,255,255,.16)}
+
+/* ── Wizard: linha do conector não pode aparecer por dentro do círculo ── */
+.wizard-step-circle { background: rgba(4,21,35,.92); }
+.wizard-step-lbl { white-space: normal; overflow: visible; text-overflow: clip; max-width: 96px; text-align: center; line-height: 1.25; }
+
+/* Botões do cabeçalho do wizard (Cancelar / Salvar rascunho) */
+.wizard-header-btn.btn.btn-sm { padding: .38rem .85rem; font-size: .68rem; gap: .35rem; border-radius: 100px; }
+.wizard-header-btn.btn-white-outline { background: rgba(255,255,255,.05); color: #fff; border-color: rgba(255,255,255,.32); }
+.wizard-header-btn.btn-white-outline:hover { background: rgba(255,255,255,.14); border-color: rgba(255,255,255,.5); transform: translateY(-1px); }
+
+/* Botões "Próximo"/"Anterior" do rodapé — mesmo tamanho compacto do
+   "Salvar rascunho" do cabeçalho (.wizard-header-btn), com efeito/cores
+   do botão "Anterior" (.btn-ghost): fundo transparente, borda cinza,
+   texto escuro, virando azul no hover. */
+.wizard-next-btn.btn.btn-primary,
+[data-wizard-prev].btn {
+  padding: .38rem .85rem; font-size: .68rem; gap: .35rem; border-radius: 100px;
+}
+.wizard-next-btn.btn.btn-primary {
+  background: transparent; color: var(--vbm-dark);
+  border-color: #d0d0d0;
+}
+.wizard-next-btn.btn-primary:hover {
+  background: transparent; border-color: var(--vbm-blue); color: var(--vbm-blue);
+  transform: none; box-shadow: none;
+}
+[data-bg="dark"] .wizard-next-btn.btn.btn-primary { color: rgba(255,255,255,.85); border-color: rgba(255,255,255,.3); }
+[data-bg="dark"] .wizard-next-btn.btn-primary:hover { border-color: var(--vbm-blue-light); color: var(--vbm-blue-light); }
+.wizard-next-btn i, [data-wizard-prev] i { font-size: .68rem; }
+
+/* Botão "Enviar para Aprovação" — mesmo tamanho compacto/pill dos
+   demais botões do rodapé, em verde claro elegante. */
+[data-wizard-submit].btn.btn-success {
+  padding: .38rem .85rem; font-size: .68rem; gap: .35rem; border-radius: 100px;
+  background: #4ade80; border-color: #4ade80; color: #063a1e;
+}
+[data-wizard-submit].btn-success:hover {
+  background: #86efac; border-color: #86efac; color: #063a1e;
+  transform: translateY(-1px); box-shadow: none;
+}
+[data-wizard-submit] i { font-size: .68rem; }
+
+/* ── Sub-cabeçalho de agrupamento dentro de uma etapa (ex.: "Equipe & Aprovação") ──
+   Mantido no mesmo tamanho de .wizard-panel-title ("A Iniciativa"), abaixo. */
+.wizard-subhead {
+  display:flex; align-items:center; gap:.5rem;
+  font-family:'Poppins', sans-serif; font-weight:600; font-size:.98rem; color:var(--vbm-dark);
+  margin: 1.5rem 0 1rem;
+}
+.wizard-subhead i { color: var(--vbm-blue); font-size:.92rem; }
+[data-bg="dark"] .wizard-subhead { color: #fff; }
+
+/* ══════════════════════════════════════════════════════════════
+   PADRONIZAÇÃO TIPOGRÁFICA DO FORMULÁRIO (todas as 4 etapas)
+   Escala mais leve/harmoniosa: menos peso (Regular/Medium/Semibold
+   em vez de Bold), tamanhos ligeiramente reduzidos, hierarquia por
+   tamanho+peso+cor. Escopo restrito a este formulário — não altera
+   css/vbm-app.css (usado por outras páginas).
+   ══════════════════════════════════════════════════════════════ */
+.wizard-panel-title {
+  font-weight: 600; font-size: .98rem; letter-spacing: -.01em;
+  margin-bottom: .3rem; line-height: 1.3;
+}
+.wizard-panel-sub { font-size: .78rem; line-height: 1.6; margin-bottom: 1.35rem; }
+.form-group { margin-bottom: 1.05rem; }
+.form-label {
+  font-weight: 500; font-size: .72rem; letter-spacing: .01em; margin-bottom: .35rem;
+}
+/* Conteúdo digitado/selecionado não deve ficar maior que o label do campo
+   (era .84rem, quase 20% maior que o label — desproporcional). */
+.form-control { font-size: .7rem; font-weight: 300; }
+.form-control::placeholder { color: #a8a8a8; font-weight: 300; }
+[data-bg="dark"] .form-control::placeholder { color: rgba(255,255,255,.3); }
+.form-helper { font-size: .68rem; line-height: 1.5; }
+.field-tag-optional { font-weight: 400; }
+/* Textos dentro de componentes/"objetos" (toggle, checkbox de confirmação,
+   zona de upload) estavam maiores que o restante da hierarquia — alinhados
+   à mesma escala do conteúdo digitado acima. */
+.toggle-label { font-size: .76rem; }
+.checkbox-label { font-size: .76rem; line-height: 1.5; }
+.photo-upload-text { font-size: .76rem; }
+
+/* ── Chip de membro da equipe (lista unificada Vale) ── */
+.team-chip-list { margin-top:.6rem; display:flex; flex-direction:column; gap:.4rem; }
+.team-chip {
+  display:flex; align-items:center; gap:.5rem;
+  padding:.4rem .75rem; background:var(--vbm-off-white);
+  border-radius:.4rem; border:1px solid #e8e8e8;
+}
+.team-chip-avatar {
+  width:26px; height:26px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:.65rem; color:#fff; font-family:'Poppins', sans-serif; font-weight:700; flex-shrink:0;
+  background: var(--vbm-blue);
+}
+.team-chip-name { font-size:.78rem; flex:1; color: var(--vbm-dark); }
+.team-chip-remove { background:none; border:none; cursor:pointer; color:#ccc; font-size:.85rem; padding:0; }
+.team-chip-remove:hover { color:#dc2626; }
+[data-bg="dark"] .team-chip { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.14); }
+[data-bg="dark"] .team-chip-name { color: #fff; }
+
+/* ── Seletor de membros com limite fixo de vagas (Membros da Equipe Vale) ──
+   Duas vagas lado a lado — o próprio layout já comunica o limite de 2,
+   sem precisar de texto extra. Vaga vazia = call-to-action para buscar;
+   vaga preenchida = chip com nome + remover. Busca desabilita sozinha
+   quando as 2 vagas já estão ocupadas (comportamento real, via JS). */
+.team-slots { display:grid; grid-template-columns:1fr 1fr; gap:.5rem; margin-bottom:.6rem; }
+.team-slots-1 { grid-template-columns: 1fr; }
+.team-slot {
+  display:flex; align-items:center; gap:.5rem;
+  min-height:44px; padding:.4rem .65rem; border-radius:.5rem;
+  border:1px solid #e8e8e8; background:var(--vbm-off-white);
+  transition: all .2s var(--ease-out);
+}
+.team-slot:not(.filled) {
+  justify-content:center; border:1.5px dashed #d5d5d5; background:transparent;
+  color:var(--vbm-mid); font-size:.76rem; font-weight:600; cursor:pointer;
+}
+.team-slot:not(.filled):hover { border-color:var(--vbm-blue); color:var(--vbm-blue); background:var(--vbm-blue-pale); }
+.team-slot-name { font-size:.74rem; line-height:1.3; color:var(--vbm-dark); flex:1; min-width:0; }
+.team-slot-name small { display:block; color:var(--vbm-mid); font-size:.66rem; }
+.team-slot-remove { background:none; border:none; cursor:pointer; color:#ccc; font-size:.8rem; padding:0; flex-shrink:0; }
+.team-slot-remove:hover { color:#dc2626; }
+.input-with-icon.is-disabled { opacity:.5; pointer-events:none; }
+#teamSearchWrap, #externoSearchWrap { margin-bottom:.5rem; }
+.team-search-group { position:relative; }
+.team-search-group .form-control { padding-right:2.5rem; }
+
+/* ── Sugestões de busca no MDM (Líder do Projeto / Membros da Equipe) ── */
+.mdm-suggest-list { position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:50; background:#fff; border:1px solid #e0e4ea; border-radius:.6rem; box-shadow:0 12px 28px rgba(9,20,34,.14); max-height:220px; overflow-y:auto; padding:.3rem; }
+.mdm-suggest-item { display:flex; flex-direction:column; align-items:flex-start; gap:.1rem; width:100%; text-align:left; background:none; border:none; border-radius:.4rem; padding:.5rem .6rem; cursor:pointer; font-family:'Poppins',sans-serif; }
+.mdm-suggest-item:hover { background:var(--vbm-blue-pale); }
+.mdm-suggest-item strong { font-size:.78rem; font-weight:600; color:var(--vbm-dark); }
+.mdm-suggest-item small { font-size:.68rem; color:var(--vbm-mid); }
+[data-bg="dark"] .mdm-suggest-list { background:var(--vbm-blue-deep); border-color:rgba(255,255,255,.14); }
+[data-bg="dark"] .mdm-suggest-item strong { color:#fff; }
+[data-bg="dark"] .mdm-suggest-item:hover { background:rgba(60,181,229,.14); }
+.team-add-btn {
+  position:absolute; right:.4rem; top:50%; transform:translateY(-50%);
+  width:1.8rem; height:1.8rem; border-radius:.4rem; border:none; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  background:var(--vbm-blue-pale); color:var(--vbm-blue); font-size:.72rem;
+  transition: all .15s var(--ease-out);
+}
+.team-search-group:hover .team-add-btn,
+.team-add-btn:hover { background:var(--vbm-blue); color:#fff; }
+.team-search-group.is-disabled .team-add-btn { cursor:default; }
+[data-bg="dark"] .team-add-btn { background: rgba(60,181,229,.16); color: var(--vbm-blue-light); }
+[data-bg="dark"] .team-add-btn:hover { background: var(--vbm-blue); color:#fff; }
+[data-bg="dark"] .team-slot { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.14); }
+[data-bg="dark"] .team-slot:not(.filled) { background: rgba(255,255,255,.02); border-color: rgba(255,255,255,.18); color: rgba(255,255,255,.4); }
+[data-bg="dark"] .team-slot:not(.filled):hover { border-color: var(--vbm-blue); color: var(--vbm-blue-light); background: rgba(60,181,229,.1); }
+[data-bg="dark"] .team-slot-name { color: #fff; }
+@media (max-width: 540px) { .team-slots { grid-template-columns: 1fr; } }
+
+/* ── Campo de texto curto (ex.: Título) — não deve ocupar a largura
+   inteira do formulário; a largura reduzida já comunica "resposta curta",
+   no padrão de produtos como Stripe/Notion/Linear. Mesmo .form-control
+   do Design System, só com um teto de largura responsivo. ── */
+.form-control-narrow { max-width: 60%; }
+@media (max-width: 960px) { .form-control-narrow { max-width: 80%; } }
+@media (max-width: 768px) { .form-control-narrow { max-width: 100%; } }
+
+/* ── Tags de seleção múltipla (Redução de Desperdícios) — 100% CSS, sem JS ──
+   Sem "botão"/pill ao redor e sem ícone temático: apenas checkbox + texto,
+   em grade limpa, com feedback sutil no hover/seleção. */
+.waste-tags-grid { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:.15rem .5rem; margin-top:.5rem; }
+@media (max-width: 960px) { .waste-tags-grid { grid-template-columns:repeat(2, minmax(0,1fr)); } }
+@media (max-width: 640px) { .waste-tags-grid { grid-template-columns:1fr; } }
+.waste-tag { display:flex; cursor:pointer; }
+.waste-tag input[type="checkbox"] { position:absolute; opacity:0; width:1px; height:1px; }
+.waste-tag-visual {
+  display:flex; align-items:center; gap:.6rem;
+  padding:.5rem .4rem; border-radius:.5rem;
+  font-size:.76rem; color:var(--vbm-dark); font-family:'Poppins', sans-serif; font-weight:500;
+  transition: color .2s var(--ease-out), background .2s var(--ease-out);
+  user-select:none;
+}
+.waste-tag:hover .waste-tag-visual { background: rgba(60,181,229,.06); }
+/* Checkbox customizado — único elemento visual, sem ícone extra */
+.waste-tag-check {
+  width:17px; height:17px; border-radius:.35rem; flex-shrink:0;
+  border:1.5px solid #cfd8e3; display:flex; align-items:center; justify-content:center;
+  transition: all .2s var(--ease-spring);
+}
+.waste-tag-check i { font-size:.52rem; color:#fff; opacity:0; transform:scale(.4); transition: all .2s var(--ease-spring); }
+.waste-tag input:checked + .waste-tag-visual .waste-tag-check { background:var(--vbm-blue); border-color:var(--vbm-blue); }
+.waste-tag input:checked + .waste-tag-visual .waste-tag-check i { opacity:1; transform:scale(1); }
+.waste-tag input:checked + .waste-tag-visual { color: var(--vbm-blue-dark); font-weight:600; }
+.waste-tag input:focus-visible + .waste-tag-visual { outline:2px solid var(--vbm-blue); outline-offset:2px; border-radius:.5rem; }
+[data-bg="dark"] .waste-tag-visual { color: rgba(255,255,255,.8); }
+[data-bg="dark"] .waste-tag-check { border-color: rgba(255,255,255,.3); }
+[data-bg="dark"] .waste-tag:hover .waste-tag-visual { background: rgba(60,181,229,.1); }
+[data-bg="dark"] .waste-tag input:checked + .waste-tag-visual { color: #fff; }
+
+/* Badge "seleção múltipla" — mais visível, em formato de pill com ícone */
+.field-tag-multi {
+  display:inline-flex; align-items:center; gap:.3rem;
+  font-size:.62rem; font-weight:600; letter-spacing:.02em;
+  color:var(--vbm-blue-dark); background:var(--vbm-blue-pale);
+  border:1px solid rgba(60,181,229,.25); border-radius:1rem;
+  padding:.12rem .55rem .12rem .45rem; margin-left:.4rem; vertical-align:middle;
+}
+.field-tag-multi i { font-size:.58rem; }
+[data-bg="dark"] .field-tag-multi { color:#bfe8ff; background:rgba(60,181,229,.16); border-color:rgba(60,181,229,.3); }
+
+/* ── Campo condicional (Tipo de Resultado Financeiro / Outros) ── */
+.conditional-field { animation: fadeUp .35s var(--ease-out) both; }
+
+/* ── Escolha "Este Kaizen gerou resultado?" (Resultado Financeiro / Outros
+   resultados — blocos independentes, cada um com seu próprio toggle switch
+   de ativação; o combo abaixo só é liberado quando o bloco é ativado) ── */
+.result-block { display:flex; flex-direction:column; }
+
+/* Combo/título condicional — desativado até o toggle do bloco ser ativado */
+.conditional-sub { margin-top:.75rem; transition: opacity .2s var(--ease-out); }
+.result-block:not(.is-active) .conditional-sub { opacity:.45; }
+.result-block:not(.is-active) .conditional-sub .form-control { cursor:not-allowed; }
+.result-block.is-active .conditional-sub { opacity:1; }
+
+/* ── Badge de obrigatoriedade / condicional ── */
+.field-tag-optional { font-size:.62rem; color:var(--vbm-mid); font-weight:500; margin-left:.35rem; }
+.field-tag-conditional { font-size:.6rem; color:#c2770e; font-weight:700; text-transform:uppercase; letter-spacing:.05em; margin-left:.4rem; background:#fff4e5; border:1px solid rgba(194,119,14,.25); border-radius:1rem; padding:.05rem .5rem; }
+[data-bg="dark"] .field-tag-conditional { background: rgba(194,119,14,.18); color:#fbbf24; border-color: rgba(194,119,14,.35); }
+
+/* Scrollbar discreto (webkit) para um acabamento mais premium */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,.14); border-radius: 100px; border: 2px solid transparent; background-clip: content-box; }
+[data-bg="dark"] ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.14); background-clip: content-box; }
+</style>
+</head>
+<body>
+
+<nav class="topnav" id="topnav">
+  <a href="index.html" class="topnav-logo">
+    <img src="assets/images/vale-logo-color.svg" alt="Vale"/>
+  </a>
+  <div class="topnav-links">
+    <a href="index.html" class="topnav-link"><i class="fa-solid fa-house"></i> <span data-i18n="nav.menu">Menu</span></a>
+    <div class="topnav-sep"></div>
+    <a href="kaizen-novo.html" class="topnav-link active"><i class="fa-solid fa-plus-circle"></i> <span data-i18n="nav.novoKaizen">Novo Kaizen</span></a>
+    <div class="topnav-sep"></div>
+    <a href="biblioteca.html" class="topnav-link"><i class="fa-solid fa-book"></i> <span data-i18n="nav.biblioteca">Biblioteca</span></a>
+    <a href="aprovacao.html" class="topnav-link"><i class="fa-solid fa-clipboard-check"></i> <span data-i18n="nav.aprovacao">Aprovação</span><span class="topnav-badge">3</span></a>
+    <div class="topnav-sep"></div>
+    <a href="admin.html" class="topnav-link"><i class="fa-solid fa-shield-halved"></i> <span data-i18n="nav.administracao">Administração</span></a>
+  </div>
+  <div class="topnav-actions">
+    <button class="settings-btn" id="settingsBtn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="settingsPanel" title="Configurações" data-i18n-title="settings.btnTitle">
+      <svg width="17" height="17" viewBox="0 0 20 20" fill="none">
+        <path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" stroke="currentColor" stroke-width="1.5" />
+        <path d="M16.2 12.3a1.4 1.4 0 0 0 .28 1.54l.05.05a1.7 1.7 0 1 1-2.4 2.4l-.05-.05a1.4 1.4 0 0 0-1.54-.28 1.4 1.4 0 0 0-.85 1.28V17.4a1.7 1.7 0 0 1-3.4 0v-.08a1.4 1.4 0 0 0-.91-1.28 1.4 1.4 0 0 0-1.54.28l-.05.05a1.7 1.7 0 1 1-2.4-2.4l.05-.05a1.4 1.4 0 0 0 .28-1.54 1.4 1.4 0 0 0-1.28-.85H2.6a1.7 1.7 0 0 1 0-3.4h.08a1.4 1.4 0 0 0 1.28-.91 1.4 1.4 0 0 0-.28-1.54l-.05-.05a1.7 1.7 0 1 1 2.4-2.4l.05.05a1.4 1.4 0 0 0 1.54.28h.06a1.4 1.4 0 0 0 .85-1.28V2.6a1.7 1.7 0 0 1 3.4 0v.08a1.4 1.4 0 0 0 .85 1.28h.06a1.4 1.4 0 0 0 1.54-.28l.05-.05a1.7 1.7 0 1 1 2.4 2.4l-.05.05a1.4 1.4 0 0 0-.28 1.54v.06a1.4 1.4 0 0 0 1.28.85h.08a1.7 1.7 0 0 1 0 3.4h-.08a1.4 1.4 0 0 0-1.28.85Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+      </svg>
+    </button>
+    <div class="topnav-user">
+      <div class="topnav-user-text">
+        <span class="topnav-user-name"></span>
+        <span class="topnav-user-role"></span>
+      </div>
+      <div class="topnav-user-avatar"></div>
+    </div>
+    <button class="topnav-mobile-toggle" id="mobileToggle"><i class="fa-solid fa-bars"></i></button>
+  </div>
+</nav>
+
+<div class="topnav-drawer" id="topnavDrawer">
+  <a href="index.html" class="topnav-link"><i class="fa-solid fa-house"></i> <span data-i18n="nav.menu">Menu</span></a>
+  <a href="kaizen-novo.html" class="topnav-link active"><i class="fa-solid fa-plus-circle"></i> <span data-i18n="nav.novoKaizen">Novo Kaizen</span></a>
+  <a href="biblioteca.html" class="topnav-link"><i class="fa-solid fa-book"></i> <span data-i18n="nav.biblioteca">Biblioteca</span></a>
+  <a href="aprovacao.html" class="topnav-link"><i class="fa-solid fa-clipboard-check"></i> <span data-i18n="nav.aprovacao">Aprovação</span> <span class="topnav-badge">3</span></a>
+  <a href="admin.html" class="topnav-link"><i class="fa-solid fa-shield-halved"></i> <span data-i18n="nav.administracao">Administração</span></a>
+</div>
+
+<!-- ═══ PAINEL LATERAL DE CONFIGURAÇÕES (Theme + Language) ═══ -->
+<div class="settings-backdrop" id="settingsBackdrop"></div>
+<aside class="settings-panel" id="settingsPanel" role="dialog" aria-modal="true" aria-label="Configurações" aria-hidden="true">
+  <div class="settings-panel-head">
+    <h2 data-i18n="settings.title">Configurações</h2>
+    <button class="settings-close" id="settingsClose" type="button" aria-label="Fechar" data-i18n-aria="settings.close">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
+    </button>
+  </div>
+  <div class="settings-panel-body">
+    <section class="settings-section">
+      <span class="settings-section-title" data-i18n="settings.theme">Tema</span>
+      <div class="theme-toggle" role="group" aria-label="Alternar tema">
+        <button class="theme-toggle-btn active" id="btnWhite" data-i18n="theme.white">Claro</button>
+        <button class="theme-toggle-btn" id="btnBusiness" data-i18n="theme.dark">Escuro</button>
+      </div>
+    </section>
+    <div class="settings-divider"></div>
+    <section class="settings-section">
+      <span class="settings-section-title">
+        <span data-i18n="settings.language">Idioma</span>
+        <span class="settings-info" title="Idioma da interface" data-i18n-title="settings.languageInfo">i</span>
+      </span>
+      <div class="settings-select-wrap">
+        <select id="langSelect" class="settings-select">
+          <option value="pt-BR">Português (Brasil)</option>
+          <option value="en">English</option>
+        </select>
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none" class="settings-select-caret"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
+      </div>
+    </section>
+  </div>
+</aside>
+
+<div class="app-layout">
+<main class="app-main">
+
+  <div class="page-content">
+    <div data-wizard data-wizard-custom-submit>
+
+      <div class="wizard-header">
+        <div class="wizard-header-bg"></div>
+        <div class="wizard-header-orb" style="width:200px;height:200px;top:-60px;right:-40px;background:radial-gradient(circle,rgba(60,181,229,.18) 0%,transparent 65%);animation:orb1 18s ease-in-out infinite;filter:blur(30px);"></div>
+        <div class="wizard-header-orb" style="width:150px;height:150px;bottom:-30px;left:20%;background:radial-gradient(circle,rgba(60,181,229,.1) 0%,transparent 65%);animation:orb2 22s ease-in-out infinite;filter:blur(25px);"></div>
+
+        <div style="position:relative;z-index:1;display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
+          <div>
+            <div class="wizard-header-title" data-i18n="wiz.title">Novo Kaizen</div>
+            <div class="wizard-header-sub" data-i18n="wiz.subtitle">Registre sua iniciativa de melhoria contínua em 4 etapas</div>
+          </div>
+          <div style="display:flex;gap:.6rem;flex-wrap:wrap;">
+            <button class="btn btn-white-outline btn-sm wizard-header-btn" onclick="if(confirm('Descartar rascunho?'))window.location.href='index.html'">
+              <i class="fa-solid fa-xmark"></i> <span data-i18n="common.cancelar">Cancelar</span>
+            </button>
+            <button class="btn btn-white-outline btn-sm wizard-header-btn" onclick="showToast('info','Salvo','Rascunho salvo com sucesso.',3000)">
+              <i class="fa-solid fa-floppy-disk"></i> <span data-i18n="wiz.saveDraft">Salvar rascunho</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="wizard-steps" style="margin-top:1.75rem;margin-bottom:1.75rem;">
+          <div class="wizard-step-item active"><div class="wizard-step-circle">1</div><div class="wizard-step-lbl" data-i18n-html="wiz.step1">Iniciativa</div></div>
+          <div class="wizard-step-item"><div class="wizard-step-circle">2</div><div class="wizard-step-lbl" data-i18n-html="wiz.step2">Situação<br>Atual</div></div>
+          <div class="wizard-step-item"><div class="wizard-step-circle">3</div><div class="wizard-step-lbl" data-i18n-html="wiz.step3">Solução<br>Implementada</div></div>
+          <div class="wizard-step-item"><div class="wizard-step-circle">4</div><div class="wizard-step-lbl" data-i18n-html="wiz.step4">Resultados</div></div>
+        </div>
+      </div>
+
+      <div class="wizard-body">
+
+        <!-- ═══════════════════════════════════════════════
+             ETAPA 1 — A INICIATIVA
+             (funde Identificação + Classificação + Equipe do
+             fluxo antigo; corresponde à "Fase 1 · Classificação"
+             da planilha de campos)
+        ═══════════════════════════════════════════════ -->
+        <div class="wizard-panel active">
+          <div class="wizard-panel-title"><i class="fa-solid fa-lightbulb" style="color:var(--vbm-blue);margin-right:.5rem;"></i><span data-i18n="wiz.panel1Title">A Iniciativa</span></div>
+          <div class="wizard-panel-sub" data-i18n="wiz.panel1Sub">Conte o que é essa melhoria, qual problema resolve e quem está envolvido.</div>
+
+          <div class="form-grid form-grid-2">
+            <div class="form-group">
+              <label class="form-label" data-i18n="f.projectLeader">Líder do Projeto <span class="req">*</span></label>
+              <div class="input-with-icon" id="liderSearchWrap" style="position:relative;">
+                <i class="fa-solid fa-magnifying-glass input-icon"></i>
+                <input type="text" class="form-control" id="id_lider_projeto" name="id_lider_projeto" autocomplete="off" placeholder="Digite o nome..." data-i18n-placeholder="f.namePlaceholder" required/>
+              </div>
+              <div class="form-helper" data-i18n="f.leaderHelper">Preenchido automaticamente com o usuário logado. Pesquise para alterar.</div>
+              <!-- ID_USUARIO do MDM (kzn_mdm_hierarquia) da pessoa escolhida na busca. Vazio =
+                   o servidor usa quem está logado (ver POST /api/kaizens em server.js). -->
+              <input type="hidden" id="id_usuario_lider" name="id_usuario_lider" value=""/>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" data-i18n="f.kaizenTitle">Título do Kaizen <span class="req">*</span></label>
+              <input type="text" class="form-control" id="titulo_kaizen" name="titulo_kaizen" maxlength="30" placeholder="Ex.: Redução do tempo de setup" data-i18n-placeholder="f.kaizenTitlePlaceholder" required/>
+              <div class="form-helper" data-i18n="f.kaizenTitleHelper">Seja claro e objetivo. Máximo de 30 caracteres.</div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" data-i18n="f.category">Categoria <span class="req">*</span></label>
+              <select class="form-control" id="id_categoria" name="id_categoria" required>
+                <option value="" data-i18n="f.selectCategory">Selecione a categoria...</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" data-i18n="f.replicationPotential">Replicação em Potencial <span class="field-tag-optional" data-i18n="f.optional">opcional</span></label>
+              <select class="form-control" id="id_replicacao_potencial" name="id_replicacao_potencial">
+                <option value="" data-i18n="f.select">Selecione...</option>
+              </select>
+            </div>
+
+            <div class="form-group" style="grid-column:1/-1;">
+              <label class="form-label" data-i18n="f.problemDescription">Descrição do Problema <span class="req">*</span></label>
+              <textarea class="form-control" id="declaracao_problema" name="declaracao_problema" rows="3" placeholder="Descreva claramente o problema ou a oportunidade identificada..." data-i18n-placeholder="f.problemPlaceholder" required></textarea>
+              <div class="form-helper" data-i18n="f.problemHelper">Seja específico. Um bom problema bem descrito facilita a solução.</div>
+            </div>
+            <div class="form-group" style="grid-column:1/-1;">
+              <label class="form-label" data-i18n="f.goalObjective">Meta / Objetivo <span class="req">*</span></label>
+              <textarea class="form-control" id="meta_objetivo" name="meta_objetivo" rows="3" placeholder="Qual o resultado esperado com este Kaizen?" data-i18n-placeholder="f.goalPlaceholder" required></textarea>
+            </div>
+          </div>
+
+          <div class="wizard-subhead"><i class="fa-solid fa-users"></i> <span data-i18n="wiz.teamApproval">Equipe &amp; Aprovação</span></div>
+
+          <div class="form-grid form-grid-2">
+            <div class="form-group">
+              <label class="form-label" data-i18n="f.approver">Aprovador <span class="req">*</span></label>
+              <select class="form-control" id="id_aprovador" name="id_aprovador" required>
+                <option value="" data-i18n="f.selectApprover">Selecione o aprovador...</option>
+              </select>
+              <div class="form-helper" data-i18n="f.approverHelper">Lista de aprovadores ativos (kzn_aprovador).</div>
+            </div>
+
+            <div class="form-group" style="grid-column:1/2;">
+              <label class="form-label" data-i18n="f.valeTeamMembers">Membros da Equipe Vale <span class="field-tag-optional" data-i18n="f.optionalMax2">opcional · máx. 2</span></label>
+              <div class="input-with-icon team-search-group" id="teamSearchWrap">
+                <i class="fa-solid fa-magnifying-glass input-icon"></i>
+                <input type="text" class="form-control" id="buscaMembroVale" autocomplete="off" placeholder="Buscar colaborador (MDM)... (Enter para adicionar)" data-i18n-placeholder="f.searchCollaborator"/>
+                <button type="button" class="team-add-btn" id="btnAddMembroVale" aria-label="Adicionar membro" data-i18n-aria="f.addMember"><i class="fa-solid fa-plus"></i></button>
+              </div>
+              <div class="team-slots" id="teamSlotsVale">
+                <div class="team-slot" data-slot="1" data-nome="" data-cor="var(--vbm-blue)"></div>
+                <div class="team-slot" data-slot="2" data-nome="" data-cor="var(--vbm-blue-dark)"></div>
+              </div>
+              <div class="form-helper" id="teamSearchHelper" data-i18n="f.valeTeamHelperDefault">Adicione até 2 membros internos da equipe Vale.</div>
+              <!-- Guardam o ID_USUARIO (kzn_mdm_hierarquia) da pessoa escolhida na busca — não texto livre. -->
+              <input type="hidden" id="id_membros_vale_1" name="id_membros_vale_1" value=""/>
+              <input type="hidden" id="id_membros_vale_2" name="id_membros_vale_2" value=""/>
+            </div>
+
+            <div class="form-group" style="grid-column:2/3;">
+              <label class="form-label" data-i18n="f.externalMembers">Membros Externos (Terceiros) <span class="field-tag-optional" data-i18n="f.optionalMax1">opcional · máx. 1</span></label>
+              <div class="input-with-icon team-search-group" id="externoSearchWrap">
+                <i class="fa-solid fa-user-plus input-icon"></i>
+                <input type="text" class="form-control" id="buscaMembroExterno" autocomplete="off" placeholder="Nome do membro externo... (Enter para adicionar)" data-i18n-placeholder="f.externalNamePlaceholder"/>
+                <button type="button" class="team-add-btn" id="btnAddMembroExterno" aria-label="Adicionar membro" data-i18n-aria="f.addMember"><i class="fa-solid fa-plus"></i></button>
+              </div>
+              <div class="team-slots team-slots-1" id="teamSlotsExterno">
+                <div class="team-slot" data-slot="1" data-nome="" data-cor="var(--vbm-mid)"></div>
+              </div>
+              <div class="form-helper" id="externoSearchHelper"><i class="fa-solid fa-triangle-exclamation" style="color:#c2770e;"></i> <span data-i18n="f.externalTeamHelperDefault">Membros externos não têm acesso ao sistema. Adicione até 1.</span></div>
+              <input type="hidden" id="membros_externos" name="membros_externos" value=""/>
+            </div>
+          </div>
+
+          <div class="wizard-footer">
+            <span style="font-size:.75rem;color:var(--vbm-mid);" data-i18n="wiz.stepOf1">Etapa 1 de 4</span>
+            <div class="wizard-footer-right"><button class="btn btn-primary wizard-next-btn" data-wizard-next><span data-i18n="common.proximo">Próximo</span> <i class="fa-solid fa-arrow-right"></i></button></div>
+          </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════
+             ETAPA 2 — SITUAÇÃO ATUAL (ANTES)
+             (corresponde à "Fase 2 · Execução do método")
+        ═══════════════════════════════════════════════ -->
+        <div class="wizard-panel">
+          <div class="wizard-panel-title"><i class="fa-solid fa-clock-rotate-left" style="color:var(--vbm-blue);margin-right:.5rem;"></i><span data-i18n="wiz.panel2Title">Situação Atual (Antes)</span></div>
+          <div class="wizard-panel-sub" data-i18n="wiz.panel2Sub">Documente como era a situação antes da melhoria — com evidência visual, se possível.</div>
+
+          <div class="form-group">
+            <label class="form-label" data-i18n="f.imageBefore">Imagem do Antes <span class="field-tag-optional" data-i18n="f.optional">opcional</span></label>
+            <div class="photo-upload-zone">
+              <input type="file" accept="image/*" id="imagem_antes" name="imagem_antes"/>
+              <i class="fa-solid fa-camera photo-upload-icon"></i>
+              <div class="photo-upload-text"><strong data-i18n="f.clickAddPhoto">Clique para adicionar foto</strong><br><span data-i18n="f.photoFormats">PNG, JPG, WEBP até 10MB</span></div>
+            </div>
+            <img class="photo-preview-img" src="" alt="Foto do antes"/>
+            <!-- Preenchido pelo upload (POST /api/kaizens/imagem?tipo=antes) assim que o
+                 arquivo é escolhido — ver script "Upload de imagens" no fim da página. -->
+            <input type="hidden" id="url_imagem_antes" name="url_imagem_antes" value=""/>
+            <div class="form-helper" id="uploadAntesStatus" style="display:none;"></div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" data-i18n="f.descriptionBefore">Descrição do Antes <span class="req">*</span></label>
+            <textarea class="form-control" id="descricao_antes" name="descricao_antes" rows="4" placeholder="Descreva a situação e os problemas anteriores à melhoria..." data-i18n-placeholder="f.descriptionBeforePlaceholder" required></textarea>
+            <div class="form-helper" data-i18n="f.descriptionBeforeHelper">Inclua dados quantitativos, se disponíveis — facilita medir o ganho depois.</div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" data-i18n="f.wasteReduction">Redução de Desperdícios</label> <span class="field-tag-optional" data-i18n="f.optional">opcional</span><span class="field-tag-multi"><i class="fa-solid fa-square-check"></i> <span data-i18n="f.multiSelect">seleção múltipla</span></span>
+            <div class="waste-tags-grid" id="wasteTagsGrid"><!-- populado via /api/desperdicios --></div>
+          </div>
+
+          <div class="wizard-footer">
+            <button class="btn btn-ghost" data-wizard-prev><i class="fa-solid fa-arrow-left"></i> <span data-i18n="common.anterior">Anterior</span></button>
+            <div class="wizard-footer-right">
+              <span style="font-size:.75rem;color:var(--vbm-mid);" data-i18n="wiz.stepOf2">Etapa 2 de 4</span>
+              <button class="btn btn-primary wizard-next-btn" data-wizard-next><span data-i18n="common.proximo">Próximo</span> <i class="fa-solid fa-arrow-right"></i></button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════
+             ETAPA 3 — SOLUÇÃO IMPLEMENTADA (DEPOIS)
+             (corresponde à "Fase 3 · Implementação")
+        ═══════════════════════════════════════════════ -->
+        <div class="wizard-panel">
+          <div class="wizard-panel-title"><i class="fa-solid fa-wand-magic-sparkles" style="color:var(--vbm-blue);margin-right:.5rem;"></i><span data-i18n="wiz.panel3Title">Solução Implementada (Depois)</span></div>
+          <div class="wizard-panel-sub" data-i18n="wiz.panel3Sub">Mostre a solução aplicada e onde encontrar mais detalhes, se necessário.</div>
+
+          <div class="form-group">
+            <label class="form-label" data-i18n="f.imageAfter">Imagem do Depois <span class="field-tag-optional" data-i18n="f.optional">opcional</span></label>
+            <div class="photo-upload-zone">
+              <input type="file" accept="image/*" id="imagem_depois" name="imagem_depois"/>
+              <i class="fa-solid fa-camera photo-upload-icon"></i>
+              <div class="photo-upload-text"><strong data-i18n="f.clickAddPhoto">Clique para adicionar foto</strong><br><span data-i18n="f.photoFormats">PNG, JPG, WEBP até 10MB</span></div>
+            </div>
+            <img class="photo-preview-img" src="" alt="Foto do depois"/>
+            <input type="hidden" id="url_imagem_depois" name="url_imagem_depois" value=""/>
+            <div class="form-helper" id="uploadDepoisStatus" style="display:none;"></div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" data-i18n="f.descriptionAfter">Descrição do Depois <span class="req">*</span></label>
+            <textarea class="form-control" id="descricao_depois" name="descricao_depois" rows="4" placeholder="Descreva a solução, melhorias, padronização e impactos positivos..." data-i18n-placeholder="f.descriptionAfterPlaceholder" required></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" data-i18n="f.extraLinks">Links / Documentos Extras <span class="field-tag-optional" data-i18n="f.optional">opcional</span></label>
+            <div class="input-with-icon">
+              <i class="fa-solid fa-link input-icon"></i>
+              <input type="url" class="form-control" id="links_documentos" name="links_documentos" placeholder="https://... (SharePoint, evidências, anexos)" data-i18n-placeholder="f.extraLinksPlaceholder"/>
+            </div>
+            <div class="form-helper" data-i18n="f.extraLinksHelper">Link para documentos, evidências ou anexos complementares.</div>
+          </div>
+
+          <div class="wizard-footer">
+            <button class="btn btn-ghost" data-wizard-prev><i class="fa-solid fa-arrow-left"></i> <span data-i18n="common.anterior">Anterior</span></button>
+            <div class="wizard-footer-right">
+              <span style="font-size:.75rem;color:var(--vbm-mid);" data-i18n="wiz.stepOf3">Etapa 3 de 4</span>
+              <button class="btn btn-primary wizard-next-btn" data-wizard-next><span data-i18n="common.proximo">Próximo</span> <i class="fa-solid fa-arrow-right"></i></button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════
+             ETAPA 4 — RESULTADOS & APRENDIZADOS
+             (corresponde à "Fase 4 · Resultados")
+        ═══════════════════════════════════════════════ -->
+        <div class="wizard-panel">
+          <div class="wizard-panel-title"><i class="fa-solid fa-chart-line" style="color:var(--vbm-blue);margin-right:.5rem;"></i><span data-i18n="wiz.panel4Title">Resultados &amp; Aprendizados</span></div>
+          <div class="wizard-panel-sub" data-i18n="wiz.panel4Sub">Compartilhe o que foi aprendido e o valor gerado com esta melhoria.</div>
+
+          <div class="form-group">
+            <label class="form-label" data-i18n="f.lessonsLearned">Lições Aprendidas <span class="field-tag-optional" data-i18n="f.optional">opcional</span></label>
+            <textarea class="form-control" id="licoes_aprendidas" name="licoes_aprendidas" rows="3" placeholder="O que foi aprendido durante este Kaizen? O que faria diferente?" data-i18n-placeholder="f.lessonsPlaceholder"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" style="margin-bottom:.6rem;" data-i18n="f.financialResultQuestion">Este Kaizen gerou resultado? <span class="field-tag-optional" data-i18n="f.optional">opcional</span></label>
+
+            <div style="display:flex;flex-direction:column;gap:1.1rem;">
+              <div class="result-block" id="blocoResultadoFinanceiro">
+                <div class="toggle-wrap">
+                  <div class="toggle" id="tipoResultadoFinanceiro" role="switch" aria-checked="false" tabindex="0"></div>
+                  <span class="toggle-label" data-i18n="f.resultTypeFinancial">Resultado Financeiro</span>
+                </div>
+                <div class="form-group conditional-sub">
+                  <div class="form-grid form-grid-3">
+                    <div class="form-group" style="margin-bottom:0;">
+                      <label class="form-label" id="lblTipoResultadoFinanceiro" data-i18n="f.financialResultType">Tipo de Resultado Financeiro <span class="field-tag-conditional" data-i18n="f.conditional">Condicional</span></label>
+                      <select class="form-control" id="id_resultado_financeiro" name="id_resultado_financeiro" disabled>
+                        <option value="" data-i18n="f.select">Selecione...</option>
+                        <option data-i18n="f.financial.saving">Saving</option>
+                        <option data-i18n="f.financial.costAvoided">Cost Avoided</option>
+                      </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                      <label class="form-label" data-i18n="f.resultCurrency">Moeda</label>
+                      <select class="form-control" id="moeda_resultado_financeiro" name="moeda_resultado_financeiro" disabled>
+                        <option value="" data-i18n="f.select">Selecione...</option>
+                      </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                      <label class="form-label" data-i18n="f.resultValue">Valor Alcançado/Esperado</label>
+                      <input type="number" step="0.01" min="0" class="form-control" id="valor_resultado_financeiro" name="valor_resultado_financeiro" placeholder="0,00" disabled/>
+                    </div>
+                  </div>
+                  <div class="form-helper" style="margin-top:.5rem;" data-i18n="f.financialResultHelper">Visível apenas quando "Resultado Financeiro" está marcado.</div>
+                </div>
+              </div>
+
+              <div class="result-block" id="blocoResultadoOutros">
+                <div class="toggle-wrap">
+                  <div class="toggle" id="tipoResultadoOutros" role="switch" aria-checked="false" tabindex="0"></div>
+                  <span class="toggle-label" data-i18n="f.resultTypeOthers">Outros resultados</span>
+                </div>
+                <div class="form-group conditional-sub">
+                  <div class="form-grid form-grid-2">
+                    <div class="form-group" style="margin-bottom:0;">
+                      <label class="form-label" id="lblTipoResultadoOutros" data-i18n="f.otherResultType">Tipo de Resultado <span class="field-tag-conditional" data-i18n="f.conditional">Condicional</span></label>
+                      <select class="form-control" id="id_resultado_outros" name="id_resultado_outros" disabled>
+                        <option value="" data-i18n="f.select">Selecione...</option>
+                      </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                      <label class="form-label" data-i18n="f.otherResultDescription">Descrição dos Resultados Alcançados</label>
+                      <textarea class="form-control" id="descricao_resultado_outros" name="descricao_resultado_outros" rows="1" placeholder="Descreva os resultados alcançados..." data-i18n-placeholder="f.otherResultDescriptionPlaceholder" disabled></textarea>
+                    </div>
+                  </div>
+                  <div class="form-helper" style="margin-top:.5rem;" data-i18n="f.otherResultHelper">Visível apenas quando "Outros resultados" está marcado.</div>
+                </div>
+              </div>
+              <input type="hidden" id="fl_resultado_outros" name="fl_resultado_outros" value="false"/>
+            </div>
+
+            <input type="hidden" id="fl_resultado_financeiro" name="fl_resultado_financeiro" value="false"/>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" data-i18n="f.comparisonWithGoal">Comparação com a Meta Inicial / Declaração do Problema <span class="field-tag-optional" data-i18n="f.optional">opcional</span></label>
+            <textarea class="form-control" id="comparacao_meta_inicial" name="comparacao_meta_inicial" rows="3" placeholder="Compare o resultado obtido com a meta ou o problema originalmente declarado..." data-i18n-placeholder="f.comparisonWithGoalPlaceholder"></textarea>
+          </div>
+
+          <div style="background:var(--vbm-off-white);border-radius:.65rem;padding:1.1rem;margin-top:1.25rem;border:1px solid #e8e8e8;">
+            <label class="checkbox-wrap" style="gap:.75rem;">
+              <input type="checkbox" id="confirmacaoEnvio" required/>
+              <span class="checkbox-label" data-i18n="wiz.confirmSubmit">Confirmo que as informações são precisas e que estou ciente que este Kaizen será enviado para aprovação pelo aprovador responsável da minha unidade.</span>
+            </label>
+          </div>
+
+          <div class="wizard-footer">
+            <button class="btn btn-ghost" data-wizard-prev><i class="fa-solid fa-arrow-left"></i> <span data-i18n="common.anterior">Anterior</span></button>
+            <div class="wizard-footer-right">
+              <span style="font-size:.75rem;color:var(--vbm-mid);" data-i18n="wiz.stepOf4">Etapa 4 de 4</span>
+              <button class="btn btn-success" data-wizard-submit style="display:none;"><i class="fa-solid fa-paper-plane"></i> <span data-i18n="wiz.submitForApproval">Enviar para Aprovação</span></button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</main>
+</div>
+
+<div class="toast-container"></div>
+<script src="js/vbm-app.js?v=20260817-1"></script>
+<!-- Dados do usuário logado (Microsoft Graph) — reaproveita o token do
+     login já existente; sem MSAL próprio, sem alterar o fluxo de auth. -->
+<script src="js/usuario-graph.js?v=20260817-1"></script>
+<script>
+// Garante que a página sempre abra rolada para o topo, exibindo o
+// cabeçalho do wizard por completo (evita restauração de scroll do navegador).
+if ('scrollRestoration' in history) { history.scrollRestoration = 'manual'; }
+window.scrollTo(0, 0);
+window.addEventListener('load', function () { window.scrollTo(0, 0); });
+</script>
+<script>
+(function(){
+  var topnav=document.getElementById('topnav');
+  /* topbar com cor fixa — sem alternância por scroll */
+})();
+(function(){
+  var btn=document.getElementById('mobileToggle'),drawer=document.getElementById('topnavDrawer');
+  if(btn&&drawer){btn.addEventListener('click',function(){var o=drawer.classList.toggle('open');btn.querySelector('i').className=o?'fa-solid fa-xmark':'fa-solid fa-bars';});document.addEventListener('click',function(e){if(!btn.contains(e.target)&&!drawer.contains(e.target)){drawer.classList.remove('open');btn.querySelector('i').className='fa-solid fa-bars';}});}
+})();
+</script>
+<script>
+// ─── Nome a partir do e-mail (nome.sobrenome@vale.com -> "Nome Sobrenome") ───
+// NM_USUARIO no MDM vem inconsistente (mesma raiz do bug "matrícula
+// duas vezes"); e-mail é o dado mais confiável, então o nome exibido em
+// Líder/Membros/Aprovador é sempre DERIVADO do e-mail, não lido de
+// NM_USUARIO. Usado por várias telas deste mesmo <script> (compartilhado
+// no escopo do módulo, não dentro de nenhuma IIFE).
+function nomeDoEmail(email) {
+  if (!email) return '';
+  var local = String(email).split('@')[0];
+  return local.split(/[._-]+/).filter(Boolean)
+    .map(function (p) { return p.charAt(0).toUpperCase() + p.slice(1).toLowerCase(); })
+    .join(' ');
+}
+// Rótulo padrão "Nome — e-mail · matrícula · cargo" usado nas sugestões
+// de busca e nos combos (Aprovador). Falta de um campo simplesmente some
+// da lista, nunca aparece "undefined".
+function rotuloPessoa(p) {
+  var nome = nomeDoEmail(p.CD_EMAIL || p.DS_EMAIL) || p.NM_USUARIO || '(sem nome)';
+  var extra = [p.CD_EMAIL || p.DS_EMAIL, p.CD_MATRICULA, p.NM_POSICAO].filter(Boolean).join(' · ');
+  return { nome: nome, extra: extra };
+}
+
+// ─── Painel de Configurações (engrenagem) — replicado de Value Driver Tree ───
+(function () {
+  var btn = document.getElementById('settingsBtn');
+  var panel = document.getElementById('settingsPanel');
+  var backdrop = document.getElementById('settingsBackdrop');
+  var closeBtn = document.getElementById('settingsClose');
+  if (!btn || !panel || !backdrop) return;
+
+  function openPanel() {
+    panel.classList.add('open');
+    backdrop.classList.add('open');
+    btn.setAttribute('aria-expanded', 'true');
+    panel.setAttribute('aria-hidden', 'false');
+  }
+  function closePanel() {
+    panel.classList.remove('open');
+    backdrop.classList.remove('open');
+    btn.setAttribute('aria-expanded', 'false');
+    panel.setAttribute('aria-hidden', 'true');
+  }
+
+  btn.addEventListener('click', function () {
+    panel.classList.contains('open') ? closePanel() : openPanel();
+  });
+  closeBtn && closeBtn.addEventListener('click', closePanel);
+  backdrop.addEventListener('click', closePanel);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closePanel();
+  });
+})();
+
+// ─── Tema (Claro/Escuro) do painel de Configurações ───
+(function () {
+  var THEME_KEY = 'vdt-theme';
+  var btnWhite = document.getElementById('btnWhite');
+  var btnBusiness = document.getElementById('btnBusiness');
+  if (!btnWhite && !btnBusiness) return;
+
+  function applyTheme(theme) {
+    var isDark = theme === 'dark';
+    document.body.dataset.bg = isDark ? 'dark' : '';
+    if (btnWhite) btnWhite.classList.toggle('active', !isDark);
+    if (btnBusiness) btnBusiness.classList.toggle('active', isDark);
+  }
+
+  var saved = 'light';
+  try { saved = localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light'; } catch (e) {}
+  applyTheme(saved);
+
+  btnWhite && btnWhite.addEventListener('click', function () {
+    applyTheme('light');
+    try { localStorage.setItem(THEME_KEY, 'light'); } catch (e) {}
+  });
+  btnBusiness && btnBusiness.addEventListener('click', function () {
+    applyTheme('dark');
+    try { localStorage.setItem(THEME_KEY, 'dark'); } catch (e) {}
+  });
+})();
+
+// ─── Idioma (PT-BR/EN) do painel de Configurações ───
+(function () {
+  var I18N = {
+    'pt-BR': {
+      'settings.btnTitle': 'Configurações',
+      'settings.title': 'Configurações',
+      'settings.close': 'Fechar',
+      'settings.theme': 'Tema',
+      'theme.white': 'Claro',
+      'theme.dark': 'Escuro',
+      'settings.language': 'Idioma',
+      'settings.languageInfo': 'Idioma da interface',
+      'nav.menu': 'Menu',
+      'nav.novoKaizen': 'Novo Kaizen',
+      'nav.biblioteca': 'Biblioteca',
+      'nav.aprovacao': 'Aprovação',
+      'nav.administracao': 'Administração',
+      'role.operador': 'Operador',
+      'common.cancelar': 'Cancelar',
+      'common.proximo': 'Próximo',
+      'common.anterior': 'Anterior',
+      'common.remover': 'Remover',
+      'common.adicionar': 'Adicionar',
+      'f.projectLeader': 'Líder do Projeto',
+      'f.namePlaceholder': 'Digite nome ou matrícula...',
+      'f.leaderHelper': 'Preenchido automaticamente com o usuário logado. Pesquise para alterar.',
+      'f.kaizenTitle': 'Título do Kaizen',
+      'f.kaizenTitlePlaceholder': 'Ex.: Redução do tempo de setup',
+      'f.kaizenTitleHelper': 'Seja claro e objetivo. Máximo de 100 caracteres.',
+      'f.category': 'Categoria',
+      'f.selectCategory': 'Selecione a categoria...',
+      'cat.geral': 'Geral',
+      'cat.saudeSeguranca': 'Saúde e Segurança',
+      'cat.energia': 'Energia',
+      'cat.sustentabilidade': 'Sustentabilidade',
+      'cat.manutencao': 'Manutenção',
+      'cat.qualidade': 'Qualidade',
+      'f.replicationPotential': 'Replicação em Potencial',
+      'f.optional': 'opcional',
+      'f.select': 'Selecione...',
+      'repl.smelting': 'Smelting / Fundição',
+      'repl.thisAreaOnly': 'Somente esta área',
+      'repl.sameUnit': 'Mesma unidade (múltiplas áreas)',
+      'repl.otherUnitsCountry': 'Outras unidades no país',
+      'repl.allUnitsGlobal': 'Todas as unidades VBM globais',
+      'f.problemDescription': 'Descrição do Problema',
+      'f.problemPlaceholder': 'Descreva claramente o problema ou a oportunidade identificada...',
+      'f.problemHelper': 'Seja específico. Um bom problema bem descrito facilita a solução.',
+      'f.goalObjective': 'Meta / Objetivo',
+      'f.goalPlaceholder': 'Qual o resultado esperado com este Kaizen?',
+      'f.approver': 'Aprovador',
+      'f.selectApprover': 'Selecione o aprovador...',
+      'f.approverHelper': 'Lista filtrada automaticamente pelo grupo de aprovadores vinculado à unidade do líder do projeto (Sudbury, CA).',
+      'f.valeTeamMembers': 'Membros da Equipe Vale',
+      'f.optionalMax2': 'opcional · máx. 2',
+      'f.searchCollaborator': 'Buscar colaborador (MDM)... (Enter para adicionar)',
+      'f.addMember': 'Adicionar membro',
+      'f.valeTeamHelperDefault': 'Adicione até 2 membros internos da equipe Vale.',
+      'f.externalMembers': 'Membros Externos (Terceiros)',
+      'f.optionalMax1': 'opcional · máx. 1',
+      'f.externalNamePlaceholder': 'Nome do membro externo... (Enter para adicionar)',
+      'f.externalTeamHelperDefault': 'Membros externos não têm acesso ao sistema. Adicione até 1.',
+      'f.imageBefore': 'Imagem do Antes',
+      'f.clickAddPhoto': 'Clique para adicionar foto',
+      'f.photoFormats': 'PNG, JPG, WEBP até 10MB',
+      'f.descriptionBefore': 'Descrição do Antes',
+      'f.descriptionBeforePlaceholder': 'Descreva a situação e os problemas anteriores à melhoria...',
+      'f.descriptionBeforeHelper': 'Inclua dados quantitativos, se disponíveis — facilita medir o ganho depois.',
+      'f.wasteReduction': 'Redução de Desperdícios',
+      'f.optional': 'opcional',
+      'f.multiSelect': 'seleção múltipla',
+      'f.waste.transport': 'Transporte',
+      'f.waste.inventory': 'Estoque',
+      'f.waste.motion': 'Movimento',
+      'f.waste.waiting': 'Espera',
+      'f.waste.overproduction': 'Superprodução',
+      'f.waste.overprocessing': 'Superprocessamento',
+      'f.waste.defects': 'Defeitos e retrabalho',
+      'f.waste.skills': 'Talento não utilizado',
+      'f.imageAfter': 'Imagem do Depois',
+      'f.descriptionAfter': 'Descrição do Depois',
+      'f.descriptionAfterPlaceholder': 'Descreva a solução, melhorias, padronização e impactos positivos...',
+      'f.extraLinks': 'Links / Documentos Extras',
+      'f.extraLinksPlaceholder': 'https://... (SharePoint, evidências, anexos)',
+      'f.extraLinksHelper': 'Link para documentos, evidências ou anexos complementares.',
+      'f.lessonsLearned': 'Lições Aprendidas',
+      'f.lessonsPlaceholder': 'O que foi aprendido durante este Kaizen? O que faria diferente?',
+      'f.financialResultQuestion': 'Este Kaizen gerou resultado?',
+      'f.resultTypeFinancial': 'Financeiro',
+      'f.resultTypeOthers': 'Outros',
+      'f.financialResultType': 'Tipo de Resultado Financeiro',
+      'f.conditional': 'Condicional',
+      'f.financial.saving': 'Saving',
+      'f.financial.costAvoided': 'Cost Avoided',
+      'f.financialResultHelper': 'Visível apenas quando "Financeiro" está selecionado.',
+      'f.otherResultType': 'Tipo de Resultado',
+      'f.other.productivity': 'Produtividade',
+      'f.other.safety': 'Saúde e Segurança',
+      'f.other.production': 'Produção',
+      'f.other.time': 'Tempo',
+      'f.other.consumption': 'Consumo',
+      'f.other.environment': 'Meio Ambiente',
+      'f.otherResultHelper': 'Visível apenas quando "Outros" está selecionado.',
+      'f.resultCurrency': 'Moeda',
+      'f.resultValue': 'Valor Alcançado/Esperado',
+      'f.otherResultDescription': 'Descrição dos Resultados Alcançados',
+      'f.otherResultDescriptionPlaceholder': 'Descreva os resultados alcançados...',
+      'f.comparisonWithGoal': 'Comparação com a Meta Inicial / Declaração do Problema',
+      'f.comparisonWithGoalPlaceholder': 'Compare o resultado obtido com a meta ou o problema originalmente declarado...',
+      'wiz.title': 'Novo Kaizen',
+      'wiz.subtitle': 'Registre sua iniciativa de melhoria contínua em 4 etapas',
+      'wiz.step1': 'Iniciativa',
+      'wiz.step2': 'Situação<br>Atual',
+      'wiz.step3': 'Solução<br>Implementada',
+      'wiz.step4': 'Resultados',
+      'wiz.panel1Title': 'A Iniciativa',
+      'wiz.panel1Sub': 'Conte o que é essa melhoria, qual problema resolve e quem está envolvido.',
+      'wiz.teamApproval': 'Equipe & Aprovação',
+      'wiz.panel2Title': 'Situação Atual (Antes)',
+      'wiz.panel2Sub': 'Documente como era a situação antes da melhoria — com evidência visual, se possível.',
+      'wiz.panel3Title': 'Solução Implementada (Depois)',
+      'wiz.panel3Sub': 'Mostre a solução aplicada e onde encontrar mais detalhes, se necessário.',
+      'wiz.panel4Title': 'Resultados & Aprendizados',
+      'wiz.panel4Sub': 'Compartilhe o que foi aprendido e o valor gerado com esta melhoria.',
+      'wiz.saveDraft': 'Salvar rascunho',
+      'wiz.stepOf1': 'Etapa 1 de 4',
+      'wiz.stepOf2': 'Etapa 2 de 4',
+      'wiz.stepOf3': 'Etapa 3 de 4',
+      'wiz.stepOf4': 'Etapa 4 de 4',
+      'wiz.submitForApproval': 'Enviar para Aprovação',
+      'wiz.confirmSubmit': 'Confirmo que as informações são precisas e que estou ciente que este Kaizen será enviado para aprovação pelo aprovador responsável da minha unidade.'
+    },
+    'en': {
+      'settings.btnTitle': 'Settings',
+      'settings.title': 'Settings',
+      'settings.close': 'Close',
+      'settings.theme': 'Theme',
+      'theme.white': 'Light',
+      'theme.dark': 'Dark',
+      'settings.language': 'Language',
+      'settings.languageInfo': 'Interface language',
+      'nav.menu': 'Menu',
+      'nav.novoKaizen': 'New Kaizen',
+      'nav.biblioteca': 'Library',
+      'nav.aprovacao': 'Approval',
+      'nav.administracao': 'Administration',
+      'role.operador': 'Operator',
+      'common.cancelar': 'Cancel',
+      'common.proximo': 'Next',
+      'common.anterior': 'Previous',
+      'common.remover': 'Remove',
+      'common.adicionar': 'Add',
+      'f.projectLeader': 'Project Leader',
+      'f.namePlaceholder': 'Enter name or employee ID...',
+      'f.leaderHelper': 'Automatically filled with the logged-in user. Search to change.',
+      'f.kaizenTitle': 'Kaizen Title',
+      'f.kaizenTitlePlaceholder': 'E.g.: Setup time reduction',
+      'f.kaizenTitleHelper': 'Be clear and objective. Maximum 100 characters.',
+      'f.category': 'Category',
+      'f.selectCategory': 'Select category...',
+      'cat.geral': 'General',
+      'cat.saudeSeguranca': 'Health and Safety',
+      'cat.energia': 'Energy',
+      'cat.sustentabilidade': 'Sustainability',
+      'cat.manutencao': 'Maintenance',
+      'cat.qualidade': 'Quality',
+      'f.replicationPotential': 'Replication Potential',
+      'f.optional': 'optional',
+      'f.select': 'Select...',
+      'repl.smelting': 'Smelting',
+      'repl.thisAreaOnly': 'This area only',
+      'repl.sameUnit': 'Same unit (multiple areas)',
+      'repl.otherUnitsCountry': 'Other units in the country',
+      'repl.allUnitsGlobal': 'All global VBM units',
+      'f.problemDescription': 'Problem Description',
+      'f.problemPlaceholder': 'Clearly describe the problem or opportunity identified...',
+      'f.problemHelper': 'Be specific. A well-described problem makes the solution easier.',
+      'f.goalObjective': 'Goal / Objective',
+      'f.goalPlaceholder': 'What result is expected from this Kaizen?',
+      'f.approver': 'Approver',
+      'f.selectApprover': 'Select approver...',
+      'f.approverHelper': 'List automatically filtered by the approver group linked to the project leader\'s unit (Sudbury, CA).',
+      'f.valeTeamMembers': 'Vale Team Members',
+      'f.optionalMax2': 'optional · max. 2',
+      'f.searchCollaborator': 'Search employee (MDM)... (Enter to add)',
+      'f.addMember': 'Add member',
+      'f.valeTeamHelperDefault': 'Add up to 2 internal Vale team members.',
+      'f.externalMembers': 'External Members (Third-parties)',
+      'f.optionalMax1': 'optional · max. 1',
+      'f.externalNamePlaceholder': 'External member name... (Enter to add)',
+      'f.externalTeamHelperDefault': 'External members don\'t have system access. Add up to 1.',
+      'f.imageBefore': 'Before Image',
+      'f.clickAddPhoto': 'Click to add photo',
+      'f.photoFormats': 'PNG, JPG, WEBP up to 10MB',
+      'f.descriptionBefore': 'Description of Before',
+      'f.descriptionBeforePlaceholder': 'Describe the situation and problems prior to the improvement...',
+      'f.descriptionBeforeHelper': 'Include quantitative data, if available — makes it easier to measure the gain later.',
+      'f.wasteReduction': 'Waste Reduction',
+      'f.optional': 'optional',
+      'f.multiSelect': 'multiple selection',
+      'f.waste.transport': 'Transportation',
+      'f.waste.inventory': 'Inventory',
+      'f.waste.motion': 'Motion',
+      'f.waste.waiting': 'Waiting',
+      'f.waste.overproduction': 'Overproduction',
+      'f.waste.overprocessing': 'Overprocessing',
+      'f.waste.defects': 'Defects',
+      'f.waste.skills': 'Skills',
+      'f.imageAfter': 'After Image',
+      'f.descriptionAfter': 'Description of After',
+      'f.descriptionAfterPlaceholder': 'Describe the solution, improvements, standardization and positive impacts...',
+      'f.extraLinks': 'Extra Links / Documents',
+      'f.extraLinksPlaceholder': 'https://... (SharePoint, evidence, attachments)',
+      'f.extraLinksHelper': 'Link to supporting documents, evidence or attachments.',
+      'f.lessonsLearned': 'Lessons Learned',
+      'f.lessonsPlaceholder': 'What was learned during this Kaizen? What would you do differently?',
+      'f.financialResultQuestion': 'Did this Kaizen generate a result?',
+      'f.resultTypeFinancial': 'Financial',
+      'f.resultTypeOthers': 'Others',
+      'f.financialResultType': 'Financial Result Type',
+      'f.conditional': 'Conditional',
+      'f.financial.saving': 'Saving',
+      'f.financial.costAvoided': 'Cost Avoided',
+      'f.financialResultHelper': 'Only visible when "Financial" is selected.',
+      'f.otherResultType': 'Result Type',
+      'f.other.productivity': 'Productivity',
+      'f.other.safety': 'Health and Safety',
+      'f.other.production': 'Production',
+      'f.other.time': 'Time',
+      'f.other.consumption': 'Consumption',
+      'f.other.environment': 'Environment',
+      'f.otherResultHelper': 'Only visible when "Others" is selected.',
+      'f.resultCurrency': 'Currency',
+      'f.resultValue': 'Value Achieved/Expected',
+      'f.otherResultDescription': 'Description of Results Achieved',
+      'f.otherResultDescriptionPlaceholder': 'Describe the results achieved...',
+      'f.comparisonWithGoal': 'Comparison with Initial Goal / Problem Statement',
+      'f.comparisonWithGoalPlaceholder': 'Compare the result obtained with the originally stated goal or problem...',
+      'wiz.title': 'New Kaizen',
+      'wiz.subtitle': 'Register your continuous improvement initiative in 4 steps',
+      'wiz.step1': 'Initiative',
+      'wiz.step2': 'Current<br>Situation',
+      'wiz.step3': 'Implemented<br>Solution',
+      'wiz.step4': 'Results',
+      'wiz.panel1Title': 'The Initiative',
+      'wiz.panel1Sub': 'Tell us what this improvement is, what problem it solves and who is involved.',
+      'wiz.teamApproval': 'Team & Approval',
+      'wiz.panel2Title': 'Current Situation (Before)',
+      'wiz.panel2Sub': 'Document what the situation was like before the improvement — with visual evidence, if possible.',
+      'wiz.panel3Title': 'Implemented Solution (After)',
+      'wiz.panel3Sub': 'Show the applied solution and where to find more details, if needed.',
+      'wiz.panel4Title': 'Results & Learnings',
+      'wiz.panel4Sub': 'Share what was learned and the value generated by this improvement.',
+      'wiz.saveDraft': 'Save draft',
+      'wiz.stepOf1': 'Step 1 of 4',
+      'wiz.stepOf2': 'Step 2 of 4',
+      'wiz.stepOf3': 'Step 3 of 4',
+      'wiz.stepOf4': 'Step 4 of 4',
+      'wiz.submitForApproval': 'Submit for Approval',
+      'wiz.confirmSubmit': "I confirm the information is accurate and I understand this Kaizen will be sent for approval to my unit's responsible approver."
+    }
+  };
+
+  var select = document.getElementById('langSelect');
+  var panel = document.getElementById('settingsPanel');
+  var settingsBtn = document.getElementById('settingsBtn');
+  if (!select || !panel) return;
+
+  function translatePanel(lang) {
+    var dict = I18N[lang] || I18N['pt-BR'];
+    window.__i18n = dict;
+    window.__i18nLang = lang;
+    var scope = [document.body];
+    scope.forEach(function (root) {
+      root.querySelectorAll('[data-i18n]').forEach(function (el) {
+        var key = el.dataset.i18n;
+        if (dict[key] != null) el.textContent = dict[key];
+      });
+      root.querySelectorAll('[data-i18n-html]').forEach(function (el) {
+        var key = el.dataset.i18nHtml;
+        if (dict[key] != null) el.innerHTML = dict[key];
+      });
+      root.querySelectorAll('[data-i18n-title]').forEach(function (el) {
+        var key = el.dataset.i18nTitle;
+        if (dict[key] != null) el.setAttribute('title', dict[key]);
+      });
+      root.querySelectorAll('[data-i18n-aria]').forEach(function (el) {
+        var key = el.dataset.i18nAria;
+        if (dict[key] != null) el.setAttribute('aria-label', dict[key]);
+      });
+      root.querySelectorAll('[data-i18n-placeholder]').forEach(function (el) {
+        var key = el.dataset.i18nPlaceholder;
+        if (dict[key] != null) el.setAttribute('placeholder', dict[key]);
+      });
+      if (root.dataset && root.dataset.i18nTitle && dict[root.dataset.i18nTitle] != null) {
+        root.setAttribute('title', dict[root.dataset.i18nTitle]);
+      }
+    });
+    document.dispatchEvent(new CustomEvent('i18nchange', { detail: { lang: lang, dict: dict } }));
+  }
+
+  function applyLang(lang) {
+    if (!I18N[lang]) lang = 'pt-BR';
+    select.value = lang;
+    translatePanel(lang);
+    try { localStorage.setItem('vdt-lang', lang); } catch (e) {}
+    // Avisa quem mostra dados do banco (listas bilíngues) para
+    // reconsultar no novo idioma — ver window.VBMIdioma em vbm-app.js.
+    try { window.dispatchEvent(new Event('vbm:idioma')); } catch (e) {}
+  }
+
+  select.addEventListener('change', function () { applyLang(select.value); });
+
+  var savedLang = 'pt-BR';
+  try { savedLang = localStorage.getItem('vdt-lang') || 'pt-BR'; } catch (e) {}
+  applyLang(savedLang);
+})();
+
+// ─── Campo condicional: Tipo de Resultado (Resultado Financeiro / Outros resultados) ───
+// Cada bloco é independente — o Kaizen pode ter os dois tipos de resultado
+// ao mesmo tempo. O combo de cada bloco fica desativado (visível, porém
+// bloqueado) até o toggle do próprio bloco ser ativado.
+// (o clique no .toggle já é tratado genericamente por initToggles() em
+// vbm-app.js, que alterna a classe "on"; aqui apenas reagimos ao resultado
+// já aplicado, por isso o setTimeout(0) — garante que rodamos depois dele)
+(function () {
+  // controlIds: todos os campos que só fazem sentido com o bloco ativo
+  // (o combo original + os que a Etapa 4 acrescentou — Moeda/Valor no
+  // financeiro, Descrição nos outros). Todos entram/saem de disabled
+  // juntos, mesmo padrão "visível porém bloqueado" já usado aqui.
+  function wireBlock(toggleId, controlIds, hiddenSetter) {
+    var toggle = document.getElementById(toggleId);
+    var block = toggle ? toggle.closest('.result-block') : null;
+    var controls = controlIds.map(function (id) { return document.getElementById(id); }).filter(Boolean);
+    if (!toggle || !block || !controls.length) return;
+
+    function sync() {
+      var active = toggle.classList.contains('on');
+      toggle.setAttribute('aria-checked', active ? 'true' : 'false');
+      block.classList.toggle('is-active', active);
+      controls.forEach(function (el) {
+        el.disabled = !active;
+        if (!active) el.value = '';
+      });
+      if (hiddenSetter) hiddenSetter(active);
+    }
+
+    toggle.addEventListener('click', function () { setTimeout(sync, 0); });
+    toggle.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle.click(); }
+    });
+    sync();
+  }
+
+  var hidden = document.getElementById('fl_resultado_financeiro');
+  wireBlock('tipoResultadoFinanceiro', ['id_resultado_financeiro', 'moeda_resultado_financeiro', 'valor_resultado_financeiro'], function (active) {
+    if (hidden) hidden.value = active ? 'true' : 'false';
+  });
+  var hiddenOutros = document.getElementById('fl_resultado_outros');
+  wireBlock('tipoResultadoOutros', ['id_resultado_outros', 'descricao_resultado_outros'], function (active) {
+    if (hiddenOutros) hiddenOutros.value = active ? 'true' : 'false';
+  });
+})();
+
+// ─── Seletor de membros com vagas fixas (Membros da Equipe Vale / Externos) ───
+// Cada vaga mapeia 1:1 para um campo técnico oculto — agora guardando o
+// ID_USUARIO (kzn_mdm_hierarquia) da pessoa escolhida na busca real ao MDM,
+// não mais texto livre. A busca/adição desabilita sozinha quando o limite de
+// vagas é atingido, e reabilita ao remover alguém.
+//
+// opts.mdmSearch: { url, campo? } — endpoint de busca (debounced, mínimo 2
+// caracteres, mesmo limite do servidor — ver MDM_BUSCA_MIN em server.js):
+//   Membros Vale (internos):  GET /api/aprovadores/mdm?campo=nome&q=...
+//                              (busca em TODO o MDM, sem recorte de tipo —
+//                              mesma rota já usada pelo autocomplete de
+//                              Aprovador em admin.html)
+//   Membros Externos:         GET /api/usuarios?q=...
+//                              (já filtra ID_TIPO_USUARIO=2 "terceiro" no
+//                              servidor — ver server.js)
+function createTeamPicker(opts) {
+  var wrap = document.getElementById(opts.wrapId);
+  var searchWrap = document.getElementById(opts.searchWrapId);
+  var searchInput = document.getElementById(opts.searchInputId);
+  var addBtn = document.getElementById(opts.addBtnId);
+  var helper = document.getElementById(opts.helperId);
+  var hiddenInputs = opts.hiddenIds.map(function (id) { return document.getElementById(id); });
+  if (!wrap || !searchInput || !helper) return;
+
+  function iniciais(nome) {
+    return nome.split(' ').filter(Boolean).slice(0, 2).map(function (p) { return p[0]; }).join('').toUpperCase();
+  }
+
+  function renderSlot(slot) {
+    var nome = slot.dataset.nome;
+    var mat = slot.dataset.matricula;
+    var cor = slot.dataset.cor || 'var(--vbm-blue)';
+    var dict = (window.__i18n) || {};
+    if (nome) {
+      slot.classList.add('filled');
+      slot.innerHTML =
+        '<div class="team-chip-avatar" style="background:' + cor + ';">' + iniciais(nome) + '</div>' +
+        '<span class="team-slot-name">' + nome + (mat ? '<small>' + mat + '</small>' : '') + '</span>' +
+        '<button type="button" class="team-slot-remove" aria-label="' + (dict['common.remover'] || 'Remover') + '"><i class="fa-solid fa-xmark"></i></button>';
+    } else {
+      slot.classList.remove('filled');
+      slot.innerHTML = '<i class="fa-solid fa-plus"></i>&nbsp;' + (dict['common.adicionar'] || 'Adicionar');
+    }
+  }
+
+  function sync() {
+    var slots = wrap.querySelectorAll('.team-slot');
+    var filledCount = wrap.querySelectorAll('.team-slot.filled').length;
+    var atLimit = filledCount >= opts.max;
+    var dict = (window.__i18n) || {};
+
+    searchInput.disabled = atLimit;
+    searchWrap.classList.toggle('is-disabled', atLimit);
+    if (addBtn) addBtn.disabled = atLimit;
+    helper.textContent = atLimit
+      ? (dict[opts.msgLimitKey] || opts.msgLimit)
+      : (dict[opts.msgDefaultKey] || opts.msgDefault);
+
+    // Guarda o ID_USUARIO (não nome/matrícula): é o que POST /api/kaizens
+    // espera dentro do array "membros" (ver script "Envio do Kaizen" abaixo).
+    hiddenInputs.forEach(function (input, i) {
+      if (input) input.value = slots[i] ? (slots[i].dataset.idUsuario || '') : '';
+    });
+  }
+
+  document.addEventListener('i18nchange', function () {
+    wrap.querySelectorAll('.team-slot').forEach(renderSlot);
+    sync();
+  });
+
+  function preencherVaga(pessoa) {
+    var emptySlot = wrap.querySelector('.team-slot:not(.filled)');
+    if (!emptySlot) return;
+    var r = rotuloPessoa(pessoa);
+    emptySlot.dataset.nome = r.nome;
+    emptySlot.dataset.matricula = r.extra;
+    emptySlot.dataset.idUsuario = pessoa.ID_USUARIO;
+    renderSlot(emptySlot);
+    searchInput.value = '';
+    fecharSugestoes();
+    sync();
+  }
+
+  wrap.querySelectorAll('.team-slot').forEach(renderSlot);
+  sync();
+
+  wrap.addEventListener('click', function (e) {
+    var removeBtn = e.target.closest('.team-slot-remove');
+    if (removeBtn) {
+      var slot = removeBtn.closest('.team-slot');
+      delete slot.dataset.nome;
+      delete slot.dataset.matricula;
+      delete slot.dataset.idUsuario;
+      renderSlot(slot);
+      sync();
+      return;
+    }
+    var emptySlot = e.target.closest('.team-slot:not(.filled)');
+    if (emptySlot && !searchInput.disabled) {
+      searchInput.focus();
+    }
+  });
+
+  // ── Sugestões do MDM (autocomplete) ──
+  var lista = null;
+  function fecharSugestoes() {
+    if (lista) { lista.remove(); lista = null; }
+  }
+  function abrirSugestoes(pessoas) {
+    fecharSugestoes();
+    if (!pessoas.length) return;
+    lista = document.createElement('div');
+    lista.className = 'mdm-suggest-list';
+    pessoas.forEach(function (p) {
+      var item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'mdm-suggest-item';
+      var r = rotuloPessoa(p);
+      item.innerHTML = '<strong>' + r.nome + '</strong><small>' + r.extra + '</small>';
+      item.addEventListener('mousedown', function (e) {
+        e.preventDefault();
+        preencherVaga(p);
+      });
+      lista.appendChild(item);
+    });
+    searchWrap.appendChild(lista);
+  }
+
+  var buscaTimer = null;
+  if (opts.mdmSearch) {
+    searchInput.addEventListener('input', function () {
+      var termo = searchInput.value.trim();
+      clearTimeout(buscaTimer);
+      if (termo.length < 2) { fecharSugestoes(); return; }
+      buscaTimer = setTimeout(function () {
+        var url = opts.mdmSearch.url + '?q=' + encodeURIComponent(termo) +
+          (opts.mdmSearch.campo ? '&campo=' + opts.mdmSearch.campo : '');
+        fetch(url, { headers: { Accept: 'application/json' } })
+          .then(function (r) { return r.ok ? r.json() : []; })
+          .then(function (pessoas) { abrirSugestoes(Array.isArray(pessoas) ? pessoas : []); })
+          .catch(function () { fecharSugestoes(); });
+      }, 250);
+    });
+    searchInput.addEventListener('blur', function () {
+      // Delay pra permitir que o mousedown do item registre antes de fechar.
+      setTimeout(fecharSugestoes, 150);
+    });
+  }
+
+  searchInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') fecharSugestoes();
+  });
+  if (addBtn) {
+    addBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      searchInput.focus();
+    });
+  }
+}
+
+createTeamPicker({
+  wrapId: 'teamSlotsVale',
+  searchWrapId: 'teamSearchWrap',
+  searchInputId: 'buscaMembroVale',
+  addBtnId: 'btnAddMembroVale',
+  helperId: 'teamSearchHelper',
+  hiddenIds: ['id_membros_vale_1', 'id_membros_vale_2'],
+  max: 2,
+  msgDefault: 'Adicione até 2 membros internos da equipe Vale.',
+  msgLimit: 'Limite de 2 membros atingido. Remova um para adicionar outro.',
+  msgDefaultKey: 'f.valeTeamHelperDefault',
+  msgLimitKey: 'f.valeTeamHelperLimit',
+  mdmSearch: { url: '/api/aprovadores/mdm', campo: 'nome' }
+});
+
+createTeamPicker({
+  wrapId: 'teamSlotsExterno',
+  searchWrapId: 'externoSearchWrap',
+  searchInputId: 'buscaMembroExterno',
+  addBtnId: 'btnAddMembroExterno',
+  helperId: 'externoSearchHelper',
+  hiddenIds: ['membros_externos'],
+  max: 1,
+  msgDefault: 'Membros externos não têm acesso ao sistema. Adicione até 1.',
+  msgLimit: 'Limite de 1 membro externo atingido. Remova para adicionar outro.',
+  msgDefaultKey: 'f.externalTeamHelperDefault',
+  msgLimitKey: 'f.externalTeamHelperLimit',
+  mdmSearch: { url: '/api/usuarios' }
+});
+
+// ─── Busca do Líder do Projeto (mesmo MDM da Equipe Vale, 1 pessoa só) ───
+// Sem seleção: o campo mostra o usuário logado (preenchido assim que
+// VBMUsuario carregar) e o hidden id_usuario_lider fica vazio — o servidor
+// então usa quem está logado (ver POST /api/kaizens em server.js). Só quando
+// a pessoa efetivamente busca e escolhe outro nome é que o hidden é setado.
+(function () {
+  var input = document.getElementById('id_lider_projeto');
+  var wrap = document.getElementById('liderSearchWrap');
+  var hidden = document.getElementById('id_usuario_lider');
+  if (!input || !wrap || !hidden) return;
+
+  var lista = null, timer = null;
+  function fechar() { if (lista) { lista.remove(); lista = null; } }
+
+  input.addEventListener('input', function () {
+    hidden.value = ''; // digitou de novo: a escolha anterior não vale mais
+    var termo = input.value.trim();
+    clearTimeout(timer);
+    if (termo.length < 2) { fechar(); return; }
+    timer = setTimeout(function () {
+      fetch('/api/aprovadores/mdm?campo=nome&q=' + encodeURIComponent(termo), { headers: { Accept: 'application/json' } })
+        .then(function (r) { return r.ok ? r.json() : []; })
+        .then(function (pessoas) {
+          fechar();
+          if (!Array.isArray(pessoas) || !pessoas.length) return;
+          lista = document.createElement('div');
+          lista.className = 'mdm-suggest-list';
+          pessoas.forEach(function (p) {
+            var item = document.createElement('button');
+            item.type = 'button';
+            item.className = 'mdm-suggest-item';
+            var r = rotuloPessoa(p);
+            item.innerHTML = '<strong>' + r.nome + '</strong><small>' + r.extra + '</small>';
+            item.addEventListener('mousedown', function (e) {
+              e.preventDefault();
+              input.value = r.nome + (p.CD_EMAIL ? ' — ' + p.CD_EMAIL : '') + (p.CD_MATRICULA ? ' — ' + p.CD_MATRICULA : '');
+              hidden.value = p.ID_USUARIO;
+              fechar();
+            });
+            lista.appendChild(item);
+          });
+          wrap.appendChild(lista);
+        })
+        .catch(fechar);
+    }, 250);
+  });
+  input.addEventListener('blur', function () { setTimeout(fechar, 150); });
+  input.addEventListener('keydown', function (e) { if (e.key === 'Escape') fechar(); });
+
+  // Prefill com o usuário logado, assim que usuario-graph.js resolver o perfil.
+  if (window.VBMUsuario) {
+    window.VBMUsuario.aoCarregar(function (dados) {
+      if (!dados || hidden.value) return; // já tem alguém escolhido na busca: não sobrescreve
+      var email = dados.mail;
+      if (email && !input.value) {
+        input.value = nomeDoEmail(email) + ' — ' + email + (dados.matricula ? ' — ' + dados.matricula : '');
+      }
+    });
+  }
+})();
+
+// ─── Combos alimentados pelo banco (Categoria, Replicação, Aprovador,
+// Desperdício, Moeda, Tipo de Resultado "Outros") ───
+// Todos seguem o mesmo padrão: busca no idioma atual (as 4 primeiras são
+// bilíngues — reconsultam ao trocar de idioma, igual às listas do admin, ver
+// window.VBMIdioma/'vbm:idioma' em vbm-app.js), preservam a opção
+// "Selecione..." já existente no HTML e mostram só os itens ATIVOS.
+(function () {
+  function preencherSelect(select, itens, montarLabel, valorAtual) {
+    if (!select) return;
+    var manterPrimeira = select.options.length && select.options[0].value === '';
+    var primeira = manterPrimeira ? select.options[0].outerHTML : '';
+    select.innerHTML = primeira;
+    itens.forEach(function (item) {
+      var opt = document.createElement('option');
+      opt.value = item.ID;
+      opt.textContent = montarLabel(item);
+      select.appendChild(opt);
+    });
+    if (valorAtual != null) select.value = valorAtual;
+  }
+
+  function carregarBilingue(url, select, montarLabel) {
+    if (!select) return;
+    var valorAtual = select.value;
+    var idioma = (window.__i18nLang === 'en') ? 'en' : 'pt-BR';
+    fetch(url + '?idioma=' + encodeURIComponent(idioma), { headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (itens) {
+        preencherSelect(select, (itens || []).filter(function (i) { return i.ATIVO; }), montarLabel, valorAtual);
+      })
+      .catch(function () { /* combo fica só com "Selecione...": falha visível ao tentar salvar */ });
+  }
+
+  function carregarSimples(url, select, montarLabel) {
+    if (!select) return;
+    var valorAtual = select.value;
+    fetch(url, { headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (itens) {
+        preencherSelect(select, (itens || []).filter(function (i) { return i.ATIVO; }), montarLabel, valorAtual);
+      })
+      .catch(function () {});
+  }
+
+  // Desperdícios: seleção múltipla (checkboxes), não select — mantém o
+  // que a pessoa já marcou ao trocar de idioma/recarregar a lista.
+  function carregarDesperdicios() {
+    var grid = document.getElementById('wasteTagsGrid');
+    if (!grid) return;
+    var marcados = new Set(Array.prototype.map.call(grid.querySelectorAll('input:checked'), function (el) { return el.value; }));
+    var idioma = (window.__i18nLang === 'en') ? 'en' : 'pt-BR';
+    fetch('/api/desperdicios?idioma=' + encodeURIComponent(idioma), { headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (itens) {
+        grid.innerHTML = '';
+        (itens || []).filter(function (i) { return i.ATIVO; }).forEach(function (item) {
+          var label = document.createElement('label');
+          label.className = 'waste-tag';
+          label.innerHTML =
+            '<input type="checkbox" name="ids_reducao_desperdicios" value="' + item.ID + '"' + (marcados.has(String(item.ID)) ? ' checked' : '') + '/>' +
+            '<span class="waste-tag-visual"><span class="waste-tag-check"><i class="fa-solid fa-check"></i></span><span>' + item.NM + '</span></span>';
+          grid.appendChild(label);
+        });
+      })
+      .catch(function () {});
+  }
+
+  function carregarTodos() {
+    carregarBilingue('/api/categorias', document.getElementById('id_categoria'), function (i) { return i.NM; });
+    carregarBilingue('/api/replicacoes', document.getElementById('id_replicacao_potencial'), function (i) { return i.NM; });
+    carregarDesperdicios();
+    // kzn_tipo_resultado não tem descrição nem ícone — só nome (ver server.js, temIcone:false).
+    carregarBilingue('/api/tiporesultados', document.getElementById('id_resultado_outros'), function (i) { return i.NM; });
+
+    // Aprovador: não é bilíngue nem tem ?idioma= — vem do join com o MDM
+    // (mesmo endpoint que alimenta a aba Aprovadores do admin).
+    var selAprovador = document.getElementById('id_aprovador');
+    if (selAprovador) {
+      var valorAtual = selAprovador.value;
+      fetch('/api/aprovadores', { headers: { Accept: 'application/json' } })
+        .then(function (r) { return r.ok ? r.json() : []; })
+        .then(function (itens) {
+          // preencherSelect() lê item.ID — /api/aprovadores devolve ID_USUARIO
+          // (é a FK que POST /api/kaizens espera em id_usuario_aprovador).
+          var normalizados = (itens || [])
+            .filter(function (i) { return i.ATIVO; })
+            .map(function (i) { return { ID: i.ID_USUARIO, DS_EMAIL: i.DS_EMAIL, CD_MATRICULA: i.CD_MATRICULA, NM_POSICAO: i.NM_POSICAO }; });
+          preencherSelect(selAprovador, normalizados, function (i) {
+            var r = rotuloPessoa({ CD_EMAIL: i.DS_EMAIL, CD_MATRICULA: i.CD_MATRICULA, NM_POSICAO: i.NM_POSICAO });
+            return r.nome + (r.extra ? ' — ' + r.extra : '');
+          }, valorAtual);
+        })
+        .catch(function () {});
+    }
+
+    // Moeda: não é bilíngue (sem ID_IDIOMA no DER).
+    carregarSimples('/api/moedas', document.getElementById('moeda_resultado_financeiro'), function (i) {
+      return i.SG + ' — ' + i.NM;
+    });
+  }
+
+  carregarTodos();
+  // Listas bilíngues mudam de idioma junto com o resto da tela (mesmo
+  // evento que o admin já usa — ver 'vbm:idioma' disparado em applyLang()).
+  window.addEventListener('vbm:idioma', carregarTodos);
+})();
+
+// ─── Upload de imagens (Antes/Depois) para o Volume do Databricks ───
+// Só acontece no envio final ("Enviar para Aprovação" — ver função
+// enviarKaizen mais abaixo), não mais ao escolher o arquivo: assim
+// nenhuma imagem cai no volume se a pessoa desistir no meio do
+// formulário. A pré-visualização local continua funcionando sozinha
+// (initPhotoUpload, em vbm-app.js, lê o arquivo com FileReader — não
+// depende deste upload).
+function uploadImagemSeSelecionada(inputId, hiddenId, tipo) {
+  var input = document.getElementById(inputId);
+  var hidden = document.getElementById(hiddenId);
+  var arquivo = input && input.files[0];
+  if (!arquivo) return Promise.resolve();
+
+  var dados = new FormData();
+  dados.append('imagem', arquivo);
+  return fetch('/api/kaizens/imagem?tipo=' + tipo, { method: 'POST', body: dados })
+    .then(function (r) { return r.json().then(function (corpo) { return { ok: r.ok, corpo: corpo }; }); })
+    .then(function (resultado) {
+      if (!resultado.ok) throw new Error((resultado.corpo && resultado.corpo.error) || ('Falha ao enviar a imagem (' + tipo + ').'));
+      hidden.value = resultado.corpo.url;
+    });
+}
+
+// ─── Envio do Kaizen (Etapa 4 → "Enviar para Aprovação") ───
+// Substitui o mock genérico de vbm-app.js (ver data-wizard-custom-submit na
+// div[data-wizard], no topo da página): valida os campos obrigatórios de
+// TODAS as etapas (o wizard não valida entre etapas, então um campo
+// obrigatório da Etapa 1 vazio só seria percebido aqui sem essa checagem
+// extra) e só então faz o POST de verdade para POST /api/kaizens.
+(function () {
+  var wizard = document.querySelector('[data-wizard]');
+  var submitBtn = wizard ? wizard.querySelector('[data-wizard-submit]') : null;
+  if (!submitBtn) return;
+
+  function valor(id) {
+    var el = document.getElementById(id);
+    return el ? el.value.trim() : '';
+  }
+
+  function irParaEtapa(indice) {
+    var steps = wizard.querySelectorAll('.wizard-step-item');
+    if (steps[indice]) steps[indice].click();
+  }
+
+  submitBtn.addEventListener('click', function (e) {
+    e.preventDefault();
+
+    var confirmacao = document.getElementById('confirmacaoEnvio');
+    var camposObrigatorios = [
+      { id: 'titulo_kaizen', etapa: 0, rotulo: 'Título do Kaizen' },
+      { id: 'id_categoria', etapa: 0, rotulo: 'Categoria' },
+      { id: 'declaracao_problema', etapa: 0, rotulo: 'Descrição do Problema' },
+      { id: 'meta_objetivo', etapa: 0, rotulo: 'Meta / Objetivo' },
+      { id: 'id_aprovador', etapa: 0, rotulo: 'Aprovador' },
+      { id: 'descricao_antes', etapa: 1, rotulo: 'Descrição do Antes' },
+      { id: 'descricao_depois', etapa: 2, rotulo: 'Descrição do Depois' },
+    ];
+    for (var i = 0; i < camposObrigatorios.length; i++) {
+      var campo = camposObrigatorios[i];
+      if (!valor(campo.id)) {
+        showToast('warning', 'Campo obrigatório', campo.rotulo + ' precisa ser preenchido.');
+        irParaEtapa(campo.etapa);
+        var el = document.getElementById(campo.id);
+        if (el) el.focus();
+        return;
+      }
+    }
+    if (confirmacao && !confirmacao.checked) {
+      showToast('warning', 'Confirmação necessária', 'Marque a confirmação antes de enviar para aprovação.');
+      return;
+    }
+
+    var membros = [valor('id_membros_vale_1'), valor('id_membros_vale_2'), valor('membros_externos')]
+      .filter(Boolean)
+      .map(function (v) { return parseInt(v, 10); });
+
+    var idsDesperdicio = Array.prototype.map.call(
+      document.querySelectorAll('#wasteTagsGrid input:checked'),
+      function (el) { return parseInt(el.value, 10); }
+    );
+
+    var flResultadoFinanceiro = valor('fl_resultado_financeiro') === 'true';
+    var flResultadoOutros = valor('fl_resultado_outros') === 'true';
+
+    var payload = {
+      titulo: valor('titulo_kaizen'),
+      id_categoria: valor('id_categoria'),
+      id_replicacao: valor('id_replicacao_potencial'),
+      declaracao_problema: valor('declaracao_problema'),
+      meta_objetivo: valor('meta_objetivo'),
+      id_usuario_aprovador: valor('id_aprovador'),
+      id_usuario_lider: valor('id_usuario_lider'), // vazio = servidor usa o usuário logado
+      membros: membros,
+
+      descricao_antes: valor('descricao_antes'),
+      url_imagem_antes: '', // preenchido logo abaixo, depois do upload
+      ids_desperdicio: idsDesperdicio,
+
+      descricao_depois: valor('descricao_depois'),
+      url_imagem_depois: '', // idem
+      links_documentos: valor('links_documentos'),
+
+      licoes_aprendidas: valor('licoes_aprendidas'),
+      comparacao_meta_inicial: valor('comparacao_meta_inicial'),
+      fl_resultado_financeiro: flResultadoFinanceiro,
+      valor_resultado_financeiro: flResultadoFinanceiro ? valor('valor_resultado_financeiro') : '',
+      id_moeda: flResultadoFinanceiro ? valor('moeda_resultado_financeiro') : '',
+      fl_resultado_outros: flResultadoOutros,
+      id_tipo_resultado_outros: flResultadoOutros ? valor('id_resultado_outros') : '',
+      descricao_resultado_outros: flResultadoOutros ? valor('descricao_resultado_outros') : '',
+    };
+
+    submitBtn.disabled = true;
+    var textoOriginal = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Enviando imagens...</span>';
+
+    // Upload das imagens só agora (não mais ao escolher o arquivo — ver
+    // uploadImagemSeSelecionada acima): evita lixo no volume se a
+    // pessoa desistir no meio do formulário.
+    Promise.all([
+      uploadImagemSeSelecionada('imagem_antes', 'url_imagem_antes', 'antes'),
+      uploadImagemSeSelecionada('imagem_depois', 'url_imagem_depois', 'depois'),
+    ])
+      .then(function () {
+        payload.url_imagem_antes = valor('url_imagem_antes');
+        payload.url_imagem_depois = valor('url_imagem_depois');
+        submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Enviando...</span>';
+        return fetch('/api/kaizens', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      })
+      .then(function (r) { return r.json().then(function (corpo) { return { ok: r.ok, corpo: corpo }; }); })
+      .then(function (resultado) {
+        if (!resultado.ok) throw new Error((resultado.corpo && resultado.corpo.error) || 'Falha ao enviar o Kaizen.');
+        showToast('success', 'Kaizen enviado!', 'Kaizen #' + resultado.corpo.ID_KAIZEN + ' enviado para aprovação.');
+        setTimeout(function () { window.location.href = 'index.html'; }, 1800);
+      })
+      .catch(function (err) {
+        showToast('error', 'Erro ao enviar', err.message || 'Não foi possível enviar o Kaizen.');
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = textoOriginal;
+      });
+  });
+})();
+</script>
+</body>
+</html>

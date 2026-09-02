@@ -1,0 +1,64 @@
+# Databricks App — VBM Kaizen (front-end + API Aprovadores)
+# Conexão DIRETA ao Azure SQL Database (sem passar pelo Databricks SQL
+# Warehouse), no mesmo modelo do protótipo de teste (app.py / pymssql):
+# credenciais fixas via env vars, lidas pelo server.js com `mssql`.
+command:
+  - npm
+  - start
+
+env:
+  # Configs não sensíveis: pode deixar hardcoded aqui
+
+  - name: 'DATABRICKS_HOST'
+    value: 'https://adb-7405608945147182.2.azuredatabricks.net'
+  - name: 'AZURE_SQL_SERVER'
+    value: 'rdb-ibp-bmsa-prd.database.windows.net'
+  - name: 'AZURE_SQL_DATABASE'
+    value: 'BDIBPBMSA_PRD'
+  - name: 'AZURE_SQL_PORT'
+    value: '1433'
+  - name: 'AZURE_SQL_SCHEMA'
+    value: 'ci'
+  - name: 'AZURE_SQL_TABLE'
+    value: 'kzn_aprovador'
+
+  # Usuário e senha: NUNCA em texto puro em produção.
+  # Devem vir de um Secret Scope do Databricks, adicionado como
+  # "resource" do app (App resources > + Add resource > Secret) e
+  # referenciado aqui via "valueFrom" (nome do resource, não o valor
+  # do secret). Exemplo, assumindo um resource chamado "azure-sql":
+  #
+  #   - name: 'AZURE_SQL_USER'
+  #     valueFrom: 'azure-sql-user'
+  #   - name: 'AZURE_SQL_PASSWORD'
+  #     valueFrom: 'azure-sql-password'
+  #
+  # Os valores abaixo replicam exatamente o app.yaml de teste fornecido
+  # (texto puro) só para manter o mesmo comportamento por enquanto —
+  # troque pelo valueFrom acima antes de ir para produção.
+  - name: 'AZURE_SQL_USER'
+    value: 'KZNDEV'
+  - name: 'AZURE_SQL_PASSWORD'
+    value: 'DEVKZN@!13'
+
+  # ── Upload de imagens (Novo Kaizen) para Volumes do Databricks ──
+  # NADA a configurar aqui: DATABRICKS_HOST, DATABRICKS_CLIENT_ID e
+  # DATABRICKS_CLIENT_SECRET são injetados automaticamente pelo runtime
+  # do Databricks Apps (credenciais do service principal do PRÓPRIO
+  # app) — ver databricks-fs.js para como são usadas.
+  #
+  # O que PRECISA ser feito manualmente, uma vez, fora deste arquivo:
+  #   Catalog Explorer > franquia_bmsa_insight > ci > kaizen > Permissions
+  #   > Grant "WRITE VOLUME" para o service principal deste app (o nome
+  #   aparece em App > Authorization). Sem essa permissão o upload das
+  #   fotos de Antes/Depois falha com 403, mesmo com o token OK.
+
+
+
+  - name: 'AZURE_STORAGE_ACCOUNT'
+    value: 'https://ibpdatalake.blob.core.windows.net/vbmdatalake'
+  - name: 'AZURE_STORAGE_CONTAINER'
+    value: '05 - Kaizen'
+  - name: 'AZURE_STORAGE_SAS_TOKEN'
+    value: 'sp=racw&st=2026-09-02T13:37:52Z&se=2030-01-18T21:52:52Z&spr=https&sv=2026-02-06&sr=c&sig=8gEPo1jtLiz1wbdSW7EVlOl0su8Tj5%2FqJDYe7I%2B%2BOHI%3D'
+
