@@ -192,6 +192,10 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 .wizard-step-circle { background: rgba(4,21,35,.92); }
 .wizard-step-lbl { white-space: normal; overflow: visible; text-overflow: clip; max-width: 96px; text-align: center; line-height: 1.25; }
 
+/* Toggle bloqueado para o usuário (Resultado Financeiro): mantém o
+   desenho, só sinaliza que não é acionável. */
+.toggle.is-bloqueado { opacity: .5; cursor: not-allowed; pointer-events: none; }
+
 /* Campo pendente na validação de etapa: contorno de atenção sem mexer
    no layout (só borda e sombra, nenhuma mudança de caixa). Removido
    assim que o usuário preenche — ver a validação de etapa no fim. */
@@ -730,7 +734,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="wizard-panel-sub" data-i18n="wiz.panel4Sub">Compartilhe o que foi aprendido e o valor gerado com esta melhoria.</div>
 
           <div class="form-group">
-            <label class="form-label" data-i18n="f.lessonsLearned">Lições Aprendidas <span class="field-tag-optional" data-i18n="f.optional">opcional</span></label>
+            <label class="form-label" data-i18n="f.lessonsLearned">Lições Aprendidas</label> <span class="req">*</span>
             <textarea class="form-control" id="licoes_aprendidas" name="licoes_aprendidas" rows="3" placeholder="O que foi aprendido durante este Kaizen? O que faria diferente?" data-i18n-placeholder="f.lessonsPlaceholder"></textarea>
           </div>
 
@@ -740,7 +744,11 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
             <div style="display:flex;flex-direction:column;gap:1.1rem;">
               <div class="result-block" id="blocoResultadoFinanceiro">
                 <div class="toggle-wrap">
-                  <div class="toggle" id="tipoResultadoFinanceiro" role="switch" aria-checked="false" tabindex="0"></div>
+                  <!-- Bloqueado para o usuário por ora (AÇÃO 2): aria-disabled
+                       + tabindex="-1" e o clique interceptado no script. A
+                       regra de obrigatoriedade já está implementada e passa
+                       a valer sozinha no dia em que o campo for liberado. -->
+                  <div class="toggle is-bloqueado" id="tipoResultadoFinanceiro" role="switch" aria-checked="false" aria-disabled="true" tabindex="-1"></div>
                   <span class="toggle-label" data-i18n="f.resultTypeFinancial">Resultado Financeiro</span>
                 </div>
                 <div class="form-group conditional-sub">
@@ -796,7 +804,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           </div>
 
           <div class="form-group">
-            <label class="form-label" data-i18n="f.comparisonWithGoal">Comparação com a Meta Inicial / Declaração do Problema <span class="field-tag-optional" data-i18n="f.optional">opcional</span></label>
+            <label class="form-label" data-i18n="f.comparisonWithGoal">Comparação com a Meta Inicial / Declaração do Problema</label> <span class="req">*</span>
             <textarea class="form-control" id="comparacao_meta_inicial" name="comparacao_meta_inicial" rows="3" placeholder="Compare o resultado obtido com a meta ou o problema originalmente declarado..." data-i18n-placeholder="f.comparisonWithGoalPlaceholder"></textarea>
           </div>
 
@@ -824,20 +832,21 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 
 <div class="toast-container"></div>
 
-<!-- Modal de validação da Etapa 3 (ver "Validação da Etapa 3" nos
-     scripts). Fica na camada .confirm-backdrop, e NÃO em
+<!-- Modal de validação do wizard, usado pelas Etapas 3 e 4 (ver
+     window.validacaoWizard nos scripts). Fica na camada
+     .confirm-backdrop, e NÃO em
      .modal-backdrop, de propósito: os listeners genéricos de
      initModals() (Escape e clique-fora) só alcançam .modal-backdrop, e
      este modal precisa fechar exclusivamente pelo "X". -->
-<div class="confirm-backdrop" id="modalValidacaoEtapa3" role="alertdialog" aria-modal="true" aria-labelledby="tituloValidacaoEtapa3">
+<div class="confirm-backdrop" id="modalValidacao" role="alertdialog" aria-modal="true" aria-labelledby="tituloValidacao">
   <div class="modal">
     <div class="modal-head">
       <div class="modal-icon" style="--hue:194,119,14;background:#fff4e5;border-color:rgba(194,119,14,.28);"><i class="fa-solid fa-triangle-exclamation" style="color:#c2770e;"></i></div>
-      <div class="modal-title" id="tituloValidacaoEtapa3" data-i18n="wiz.pendingField">Campo obrigatório</div>
+      <div class="modal-title" id="tituloValidacao" data-i18n="wiz.pendingField">Campo obrigatório</div>
       <button class="modal-close" type="button" data-fechar-validacao aria-label="Fechar" data-i18n-aria="settings.close"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
-      <p class="confirm-msg" id="mensagemValidacaoEtapa3"></p>
+      <p class="confirm-msg" id="mensagemValidacao"></p>
     </div>
     <div class="modal-foot">
       <button class="btn btn-primary" type="button" data-fechar-validacao data-i18n="common.entendi">Entendi</button>
@@ -1310,6 +1319,22 @@ function rotuloPessoa(p) {
   wireBlock('tipoResultadoFinanceiro', ['id_resultado_financeiro', 'moeda_resultado_financeiro', 'valor_resultado_financeiro'], function (active) {
     if (hidden) hidden.value = active ? 'true' : 'false';
   });
+
+  // AÇÃO 2 — "Resultado Financeiro" fica bloqueado para o usuário. O
+  // pointer-events do CSS já barra o mouse; isto fecha o caminho do
+  // teclado e de qualquer clique sintético, na captura, antes do
+  // handler do próprio toggle. A regra de obrigatoriedade continua
+  // implementada (ver primeiraPendenciaEtapa4) e volta a valer sozinha
+  // se um dia o bloqueio for retirado.
+  var toggleFinanceiro = document.getElementById('tipoResultadoFinanceiro');
+  if (toggleFinanceiro) {
+    ['click', 'keydown', 'mousedown'].forEach(function (evento) {
+      toggleFinanceiro.addEventListener(evento, function (e) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      }, true);
+    });
+  }
   var hiddenOutros = document.getElementById('fl_resultado_outros');
   wireBlock('tipoResultadoOutros', ['id_resultado_outros', 'descricao_resultado_outros'], function (active) {
     if (hiddenOutros) hiddenOutros.value = active ? 'true' : 'false';
@@ -1904,6 +1929,51 @@ function uploadImagemSeSelecionada(inputId, hiddenId, tipo) {
   painel2.addEventListener('input', limparPendencias);
 })();
 
+// ─── Modal de validação (Etapas 3 e 4) ───
+// AÇÃO 5 — padrão único: centralizado, fixo, sem fechar sozinho, sem
+// fechar no clique fora e sem fechar no ESC. Só o "X" (ou o "Entendi",
+// que é o mesmo gatilho) fecha. Fica na camada .confirm-backdrop
+// justamente para não cair nos listeners genéricos de .modal-backdrop
+// (Escape/clique-fora) registrados em initModals(), no vbm-app.js.
+window.validacaoWizard = (function () {
+  var backdrop = document.getElementById('modalValidacao');
+  var texto = document.getElementById('mensagemValidacao');
+  var aoFechar = null;
+
+  function fechar() {
+    if (!backdrop) return;
+    backdrop.classList.remove('open');
+    document.body.style.overflow = '';
+    var cb = aoFechar;
+    aoFechar = null;
+    if (cb) cb(); // foco vai para o campo só depois de ler a mensagem
+  }
+
+  if (backdrop) {
+    backdrop.querySelectorAll('[data-fechar-validacao]').forEach(function (b) {
+      b.addEventListener('click', fechar);
+    });
+  }
+
+  return {
+    abrir: function (mensagem, depois) {
+      if (!backdrop || !texto) {
+        // Sem o modal no HTML a mensagem ainda aparece — nunca em silêncio.
+        showToast('warning', 'Campo obrigatório', mensagem);
+        if (depois) depois();
+        return;
+      }
+      aoFechar = depois || null;
+      texto.textContent = mensagem;
+      backdrop.classList.add('open');
+      document.body.style.overflow = 'hidden';
+      var x = backdrop.querySelector('[data-fechar-validacao]');
+      if (x && x.focus) x.focus();
+    },
+    fechar: fechar,
+  };
+})();
+
 // ─── Validação da Etapa 3 antes de avançar ───
 // Mesma técnica das etapas 1 e 2: escuta na FASE DE CAPTURA do
 // container e interrompe o clique antes de ele chegar ao botão, sem
@@ -1921,46 +1991,18 @@ function uploadImagemSeSelecionada(inputId, hiddenId, tipo) {
   var painel3 = wizard.querySelectorAll('.wizard-panel')[2];
   if (!painel3) return;
 
-  // AÇÃO 4 — toda mensagem desta etapa vira modal central. Não fecha
-  // sozinho, não fecha no clique fora e não fecha no ESC: só no "X"
-  // (ou no "Entendi", que é o mesmo gatilho). O foco vai para o campo
-  // pendente só depois de fechado, para o usuário ler a mensagem antes.
-  var modalValidacao = document.getElementById('modalValidacaoEtapa3');
-  var textoValidacao = document.getElementById('mensagemValidacaoEtapa3');
-  var campoPendente = null;
-
-  function fecharValidacao() {
-    if (!modalValidacao) return;
-    modalValidacao.classList.remove('open');
-    document.body.style.overflow = '';
-    if (campoPendente && campoPendente.focus) campoPendente.focus();
-    campoPendente = null;
-  }
-
-  if (modalValidacao) {
-    modalValidacao.querySelectorAll('[data-fechar-validacao]').forEach(function (b) {
-      b.addEventListener('click', fecharValidacao);
-    });
-  }
-
+  // Mensagem no modal padrão (ver window.validacaoWizard acima). O foco
+  // vai para o campo pendente só depois de fechado, para o usuário ler
+  // a mensagem antes.
   function pendencia(el, mensagem, grupo) {
-    campoPendente = el;
     var alvo = grupo || (el && el.closest('.form-group'));
     if (alvo) {
       alvo.classList.add('campo-pendente');
       alvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-    if (modalValidacao && textoValidacao) {
-      textoValidacao.textContent = mensagem;
-      modalValidacao.classList.add('open');
-      document.body.style.overflow = 'hidden';
-      var x = modalValidacao.querySelector('[data-fechar-validacao]');
-      if (x && x.focus) x.focus();
-      return;
-    }
-    // Sem o modal no HTML, a mensagem ainda aparece — nunca em silêncio.
-    showToast('warning', 'Campo obrigatório', mensagem);
-    if (el && el.focus) el.focus();
+    validacaoWizard.abrir(mensagem, function () {
+      if (el && el.focus) el.focus();
+    });
   }
 
   function limparPendencias() {
@@ -2031,6 +2073,74 @@ function uploadImagemSeSelecionada(inputId, hiddenId, tipo) {
     if (steps[indice]) steps[indice].click();
   }
 
+  // AÇÃO 1 — Lições Aprendidas. Só espaços não conta como conteúdo.
+  // A ordem das regras segue a ordem dos campos na tela; a primeira
+  // pendência interrompe.
+  function primeiraPendenciaEtapa4() {
+    if (!valor('licoes_aprendidas')) {
+      return { id: 'licoes_aprendidas', mensagem: 'Informe as Lições Aprendidas.' };
+    }
+
+    // AÇÃO 2 — condicional do "Resultado Financeiro". Hoje o toggle está
+    // bloqueado, então este ramo não roda; ele existe pronto para o dia
+    // em que o campo for liberado, sem depender de nova alteração aqui.
+    if (valor('fl_resultado_financeiro') === 'true') {
+      if (!valor('id_resultado_financeiro')) {
+        return { id: 'id_resultado_financeiro', mensagem: 'Informe o Tipo de Resultado Financeiro.' };
+      }
+      if (!valor('moeda_resultado_financeiro')) {
+        return { id: 'moeda_resultado_financeiro', mensagem: 'Selecione a Moeda.' };
+      }
+      if (!valor('valor_resultado_financeiro')) {
+        return { id: 'valor_resultado_financeiro', mensagem: 'Informe o Valor Alcançado/Esperado.' };
+      }
+    }
+
+    // AÇÃO 3 — condicional do "Outros resultados": só cobra quando o
+    // bloco está ativo. Desligado, os dois campos seguem opcionais.
+    if (valor('fl_resultado_outros') === 'true') {
+      if (!valor('id_resultado_outros')) {
+        return { id: 'id_resultado_outros', mensagem: 'Informe o Tipo de Resultado.' };
+      }
+      if (!valor('descricao_resultado_outros')) {
+        return { id: 'descricao_resultado_outros', mensagem: 'Informe a Descrição dos Resultados Alcançados.' };
+      }
+    }
+
+    // AÇÃO 4 — Comparação com a Meta Inicial / Declaração do Problema.
+    if (!valor('comparacao_meta_inicial')) {
+      return {
+        id: 'comparacao_meta_inicial',
+        mensagem: 'Informe a comparação com a Meta Inicial / Declaração do Problema.',
+      };
+    }
+
+    return null;
+  }
+
+  // Mesma apresentação da Etapa 3: o modal padrão (AÇÃO 5).
+  function avisarEtapa4(id, mensagem) {
+    irParaEtapa(3);
+    var el = document.getElementById(id);
+    var grupo = el && el.closest('.form-group');
+    if (grupo) grupo.classList.add('campo-pendente');
+    validacaoWizard.abrir(mensagem, function () {
+      if (el && el.focus) el.focus();
+    });
+  }
+
+  // O destaque some assim que o campo é mexido.
+  var painelEtapa4 = wizard.querySelectorAll('.wizard-panel')[3];
+  if (painelEtapa4) {
+    ['input', 'change', 'click'].forEach(function (evento) {
+      painelEtapa4.addEventListener(evento, function () {
+        painelEtapa4.querySelectorAll('.campo-pendente').forEach(function (el) {
+          el.classList.remove('campo-pendente');
+        });
+      });
+    });
+  }
+
   submitBtn.addEventListener('click', function (e) {
     e.preventDefault();
 
@@ -2057,8 +2167,19 @@ function uploadImagemSeSelecionada(inputId, hiddenId, tipo) {
         return;
       }
     }
+    // ── Validações da Etapa 4 ──
+    // Nesta etapa não há "Próximo": o avanço é o próprio envio, então as
+    // regras entram aqui, antes de qualquer requisição.
+    var pendenteEtapa4 = primeiraPendenciaEtapa4();
+    if (pendenteEtapa4) {
+      avisarEtapa4(pendenteEtapa4.id, pendenteEtapa4.mensagem);
+      return;
+    }
+
     if (confirmacao && !confirmacao.checked) {
-      showToast('warning', 'Confirmação necessária', 'Marque a confirmação antes de enviar para aprovação.');
+      validacaoWizard.abrir('Marque a confirmação antes de enviar para aprovação.', function () {
+        if (confirmacao.focus) confirmacao.focus();
+      });
       return;
     }
 
