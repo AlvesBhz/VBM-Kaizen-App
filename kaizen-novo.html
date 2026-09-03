@@ -192,6 +192,17 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 .wizard-step-circle { background: rgba(4,21,35,.92); }
 .wizard-step-lbl { white-space: normal; overflow: visible; text-overflow: clip; max-width: 96px; text-align: center; line-height: 1.25; }
 
+/* Campo pendente na validação de etapa: contorno de atenção sem mexer
+   no layout (só borda e sombra, nenhuma mudança de caixa). Removido
+   assim que o usuário preenche — ver a validação de etapa no fim. */
+.campo-pendente,
+.campo-pendente .photo-upload-zone,
+.campo-pendente.waste-tags-grid {
+  border: 1.5px solid #c2770e !important;
+  border-radius: .5rem;
+  box-shadow: 0 0 0 3px rgba(194,119,14,.15);
+}
+
 /* Botões do cabeçalho do wizard (Cancelar / Salvar rascunho) */
 .wizard-header-btn.btn.btn-sm { padding: .38rem .85rem; font-size: .68rem; gap: .35rem; border-radius: 100px; }
 .wizard-header-btn.btn-white-outline { background: rgba(255,255,255,.05); color: #fff; border-color: rgba(255,255,255,.32); }
@@ -634,7 +645,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="wizard-panel-sub" data-i18n="wiz.panel2Sub">Documente como era a situação antes da melhoria — com evidência visual, se possível.</div>
 
           <div class="form-group">
-            <label class="form-label" data-i18n="f.imageBefore">Imagem do Antes <span class="field-tag-optional" data-i18n="f.optional">opcional</span></label>
+            <label class="form-label" data-i18n="f.imageBefore">Imagem do Antes <span class="req">*</span></label>
             <div class="photo-upload-zone">
               <input type="file" accept="image/*" id="imagem_antes" name="imagem_antes"/>
               <i class="fa-solid fa-camera photo-upload-icon"></i>
@@ -654,7 +665,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           </div>
 
           <div class="form-group">
-            <label class="form-label" data-i18n="f.wasteReduction">Redução de Desperdícios</label> <span class="field-tag-optional" data-i18n="f.optional">opcional</span><span class="field-tag-multi"><i class="fa-solid fa-square-check"></i> <span data-i18n="f.multiSelect">seleção múltipla</span></span>
+            <label class="form-label" data-i18n="f.wasteReduction">Redução de Desperdícios <span class="req">*</span></label> <span class="field-tag-multi"><i class="fa-solid fa-square-check"></i> <span data-i18n="f.multiSelect">seleção múltipla</span></span>
             <div class="waste-tags-grid" id="wasteTagsGrid"><!-- populado via /api/desperdicios --></div>
           </div>
 
@@ -1779,6 +1790,94 @@ function uploadImagemSeSelecionada(inputId, hiddenId, tipo) {
   }, true);
 })();
 
+// ─── Validação da Etapa 2 antes de avançar ───
+// Mesma técnica da Etapa 1: escuta na FASE DE CAPTURA do container e
+// interrompe o clique antes de ele chegar ao botão, sem tocar no motor
+// do wizard (vbm-app.js), que serve outras telas.
+//
+// AÇÃO 1 — Imagem do Antes.
+// O upload para o volume só acontece no envio final (ver
+// uploadImagemSeSelecionada), então aqui o hidden url_imagem_antes
+// ainda está vazio no caso normal. O que dá para afirmar nesta etapa é
+// que existe um ARQUIVO de imagem de verdade selecionado: presente,
+// com conteúdo (size > 0) e do tipo imagem. Se o hidden já vier
+// preenchido — upload concluído numa passagem anterior —, isso também
+// vale, e é o caso em que "upload concluído com sucesso" é verificável.
+(function () {
+  var wizard = document.querySelector('[data-wizard]');
+  if (!wizard) return;
+  var painel2 = wizard.querySelectorAll('.wizard-panel')[1];
+  if (!painel2) return;
+
+  function pendencia(el, mensagem, grupo) {
+    showToast('warning', 'Campo obrigatório', mensagem);
+    var alvo = grupo || (el && el.closest('.form-group'));
+    if (alvo) {
+      alvo.classList.add('campo-pendente');
+      alvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    if (el && el.focus) el.focus();
+  }
+
+  function limparPendencias() {
+    painel2.querySelectorAll('.campo-pendente').forEach(function (el) {
+      el.classList.remove('campo-pendente');
+    });
+  }
+
+  // Imagem "válida" = arquivo real escolhido (existe, tem bytes e é
+  // imagem) ou URL já gravada por um upload concluído.
+  function imagemAntesValida() {
+    var url = document.getElementById('url_imagem_antes');
+    if (url && String(url.value || '').trim()) return true;
+
+    var input = document.getElementById('imagem_antes');
+    var arquivo = input && input.files && input.files[0];
+    if (!arquivo) return false;
+    if (!arquivo.size) return false;                       // arquivo vazio
+    return /^image\//.test(arquivo.type || '');           // é imagem
+  }
+
+  wizard.addEventListener('click', function (e) {
+    var botao = e.target.closest('[data-wizard-next]');
+    if (!botao || !wizard.contains(botao)) return;
+    if (!painel2.classList.contains('active')) return;
+
+    limparPendencias();
+
+    if (!imagemAntesValida()) {
+      e.preventDefault();
+      e.stopPropagation();
+      return pendencia(document.getElementById('imagem_antes'),
+        'É obrigatório adicionar a imagem do Antes.');
+    }
+
+    // AÇÃO 2 — Descrição do Antes. Só espaços não conta como conteúdo.
+    var descricao = document.getElementById('descricao_antes');
+    if (!descricao || !String(descricao.value || '').trim()) {
+      e.preventDefault();
+      e.stopPropagation();
+      return pendencia(descricao, 'Informe a descrição do Antes.');
+    }
+
+    // AÇÃO 3 — pelo menos um desperdício marcado. A grade e a seleção
+    // múltipla continuam como estão: aqui só se conta o que já existe.
+    var grade = document.getElementById('wasteTagsGrid');
+    if (!grade || !grade.querySelector('input:checked')) {
+      e.preventDefault();
+      e.stopPropagation();
+      // O destaque vai na própria grade — os itens são muitos e marcar
+      // o grupo inteiro diria menos do que apontar a lista.
+      return pendencia(grade && grade.querySelector('input'),
+        'Selecione pelo menos um item de Redução de Desperdícios.', grade);
+    }
+  }, true);
+
+  // Some o destaque assim que a pendência é resolvida.
+  painel2.addEventListener('change', limparPendencias);
+  painel2.addEventListener('input', limparPendencias);
+})();
+
 // ─── Envio do Kaizen (Etapa 4 → "Enviar para Aprovação") ───
 // Substitui o mock genérico de vbm-app.js (ver data-wizard-custom-submit na
 // div[data-wizard], no topo da página): valida os campos obrigatórios de
@@ -1812,6 +1911,7 @@ function uploadImagemSeSelecionada(inputId, hiddenId, tipo) {
       { id: 'meta_objetivo', etapa: 0, rotulo: 'Meta / Objetivo' },
       { id: 'id_aprovador', etapa: 0, rotulo: 'Aprovador' },
       { id: 'descricao_antes', etapa: 1, rotulo: 'Descrição do Antes' },
+      { id: 'imagem_antes', etapa: 1, rotulo: 'Imagem do Antes' },
       { id: 'descricao_depois', etapa: 2, rotulo: 'Descrição do Depois' },
     ];
     for (var i = 0; i < camposObrigatorios.length; i++) {
