@@ -687,7 +687,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="wizard-panel-sub" data-i18n="wiz.panel3Sub">Mostre a solução aplicada e onde encontrar mais detalhes, se necessário.</div>
 
           <div class="form-group">
-            <label class="form-label" data-i18n="f.imageAfter">Imagem do Depois <span class="field-tag-optional" data-i18n="f.optional">opcional</span></label>
+            <label class="form-label" data-i18n="f.imageAfter">Imagem do Depois <span class="req">*</span></label>
             <div class="photo-upload-zone">
               <input type="file" accept="image/*" id="imagem_depois" name="imagem_depois"/>
               <i class="fa-solid fa-camera photo-upload-icon"></i>
@@ -704,7 +704,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           </div>
 
           <div class="form-group">
-            <label class="form-label" data-i18n="f.extraLinks">Links / Documentos Extras <span class="field-tag-optional" data-i18n="f.optional">opcional</span></label>
+            <label class="form-label" data-i18n="f.extraLinks">Links / Documentos Extras</label> <span class="field-tag-optional" data-i18n="f.optional">opcional</span>
             <div class="input-with-icon">
               <i class="fa-solid fa-link input-icon"></i>
               <input type="url" class="form-control" id="links_documentos" name="links_documentos" placeholder="https://... (SharePoint, evidências, anexos)" data-i18n-placeholder="f.extraLinksPlaceholder"/>
@@ -823,6 +823,28 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 </div>
 
 <div class="toast-container"></div>
+
+<!-- Modal de validação da Etapa 3 (ver "Validação da Etapa 3" nos
+     scripts). Fica na camada .confirm-backdrop, e NÃO em
+     .modal-backdrop, de propósito: os listeners genéricos de
+     initModals() (Escape e clique-fora) só alcançam .modal-backdrop, e
+     este modal precisa fechar exclusivamente pelo "X". -->
+<div class="confirm-backdrop" id="modalValidacaoEtapa3" role="alertdialog" aria-modal="true" aria-labelledby="tituloValidacaoEtapa3">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-icon" style="--hue:194,119,14;background:#fff4e5;border-color:rgba(194,119,14,.28);"><i class="fa-solid fa-triangle-exclamation" style="color:#c2770e;"></i></div>
+      <div class="modal-title" id="tituloValidacaoEtapa3" data-i18n="wiz.pendingField">Campo obrigatório</div>
+      <button class="modal-close" type="button" data-fechar-validacao aria-label="Fechar" data-i18n-aria="settings.close"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <p class="confirm-msg" id="mensagemValidacaoEtapa3"></p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-primary" type="button" data-fechar-validacao data-i18n="common.entendi">Entendi</button>
+    </div>
+  </div>
+</div>
+
 <script src="js/vbm-app.js?v=20260817-1"></script>
 <!-- Dados do usuário logado (Microsoft Graph) — reaproveita o token do
      login já existente; sem MSAL próprio, sem alterar o fluxo de auth. -->
@@ -945,6 +967,8 @@ function rotuloPessoa(p) {
       'nav.administracao': 'Administração',
       'role.operador': 'Operador',
       'common.cancelar': 'Cancelar',
+      'wiz.pendingField': 'Campo obrigatório',
+      'common.entendi': 'Entendi',
       'common.proximo': 'Próximo',
       'common.anterior': 'Anterior',
       'common.remover': 'Remover',
@@ -1074,6 +1098,8 @@ function rotuloPessoa(p) {
       'nav.administracao': 'Administration',
       'role.operador': 'Operator',
       'common.cancelar': 'Cancel',
+      'wiz.pendingField': 'Required field',
+      'common.entendi': 'Got it',
       'common.proximo': 'Next',
       'common.anterior': 'Previous',
       'common.remover': 'Remove',
@@ -1878,6 +1904,112 @@ function uploadImagemSeSelecionada(inputId, hiddenId, tipo) {
   painel2.addEventListener('input', limparPendencias);
 })();
 
+// ─── Validação da Etapa 3 antes de avançar ───
+// Mesma técnica das etapas 1 e 2: escuta na FASE DE CAPTURA do
+// container e interrompe o clique antes de ele chegar ao botão, sem
+// tocar no motor do wizard (vbm-app.js), que serve outras telas.
+//
+// AÇÃO 1 — Imagem do Depois: mesmo critério da Imagem do Antes. O
+// upload para o volume só acontece no envio final (ver
+// uploadImagemSeSelecionada), então aqui o hidden url_imagem_depois
+// ainda está vazio no caso normal; o que se pode afirmar nesta etapa é
+// que há um ARQUIVO de imagem de verdade — presente, com bytes e do
+// tipo imagem. Um arquivo pela metade não tem os dois.
+(function () {
+  var wizard = document.querySelector('[data-wizard]');
+  if (!wizard) return;
+  var painel3 = wizard.querySelectorAll('.wizard-panel')[2];
+  if (!painel3) return;
+
+  // AÇÃO 4 — toda mensagem desta etapa vira modal central. Não fecha
+  // sozinho, não fecha no clique fora e não fecha no ESC: só no "X"
+  // (ou no "Entendi", que é o mesmo gatilho). O foco vai para o campo
+  // pendente só depois de fechado, para o usuário ler a mensagem antes.
+  var modalValidacao = document.getElementById('modalValidacaoEtapa3');
+  var textoValidacao = document.getElementById('mensagemValidacaoEtapa3');
+  var campoPendente = null;
+
+  function fecharValidacao() {
+    if (!modalValidacao) return;
+    modalValidacao.classList.remove('open');
+    document.body.style.overflow = '';
+    if (campoPendente && campoPendente.focus) campoPendente.focus();
+    campoPendente = null;
+  }
+
+  if (modalValidacao) {
+    modalValidacao.querySelectorAll('[data-fechar-validacao]').forEach(function (b) {
+      b.addEventListener('click', fecharValidacao);
+    });
+  }
+
+  function pendencia(el, mensagem, grupo) {
+    campoPendente = el;
+    var alvo = grupo || (el && el.closest('.form-group'));
+    if (alvo) {
+      alvo.classList.add('campo-pendente');
+      alvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    if (modalValidacao && textoValidacao) {
+      textoValidacao.textContent = mensagem;
+      modalValidacao.classList.add('open');
+      document.body.style.overflow = 'hidden';
+      var x = modalValidacao.querySelector('[data-fechar-validacao]');
+      if (x && x.focus) x.focus();
+      return;
+    }
+    // Sem o modal no HTML, a mensagem ainda aparece — nunca em silêncio.
+    showToast('warning', 'Campo obrigatório', mensagem);
+    if (el && el.focus) el.focus();
+  }
+
+  function limparPendencias() {
+    painel3.querySelectorAll('.campo-pendente').forEach(function (el) {
+      el.classList.remove('campo-pendente');
+    });
+  }
+
+  function imagemDepoisValida() {
+    var url = document.getElementById('url_imagem_depois');
+    if (url && String(url.value || '').trim()) return true;
+
+    var input = document.getElementById('imagem_depois');
+    var arquivo = input && input.files && input.files[0];
+    if (!arquivo) return false;
+    if (!arquivo.size) return false;                       // arquivo vazio
+    return /^image\//.test(arquivo.type || '');           // é imagem
+  }
+
+  wizard.addEventListener('click', function (e) {
+    var botao = e.target.closest('[data-wizard-next]');
+    if (!botao || !wizard.contains(botao)) return;
+    if (!painel3.classList.contains('active')) return;
+
+    limparPendencias();
+
+    if (!imagemDepoisValida()) {
+      e.preventDefault();
+      e.stopPropagation();
+      return pendencia(document.getElementById('imagem_depois'),
+        'É obrigatório adicionar a Imagem do Depois.');
+    }
+
+    // AÇÃO 2 — Descrição do Depois. Só espaços não conta como conteúdo.
+    var descricao = document.getElementById('descricao_depois');
+    if (!descricao || !String(descricao.value || '').trim()) {
+      e.preventDefault();
+      e.stopPropagation();
+      return pendencia(descricao, 'Informe a Descrição do Depois.');
+    }
+
+    // AÇÃO 3 — "Links / Documentos Extras" é OPCIONAL: nenhuma regra
+    // aqui, de propósito. Vazio ou preenchido, o avanço segue.
+  }, true);
+
+  painel3.addEventListener('change', limparPendencias);
+  painel3.addEventListener('input', limparPendencias);
+})();
+
 // ─── Envio do Kaizen (Etapa 4 → "Enviar para Aprovação") ───
 // Substitui o mock genérico de vbm-app.js (ver data-wizard-custom-submit na
 // div[data-wizard], no topo da página): valida os campos obrigatórios de
@@ -1913,6 +2045,7 @@ function uploadImagemSeSelecionada(inputId, hiddenId, tipo) {
       { id: 'descricao_antes', etapa: 1, rotulo: 'Descrição do Antes' },
       { id: 'imagem_antes', etapa: 1, rotulo: 'Imagem do Antes' },
       { id: 'descricao_depois', etapa: 2, rotulo: 'Descrição do Depois' },
+      { id: 'imagem_depois', etapa: 2, rotulo: 'Imagem do Depois' },
     ];
     for (var i = 0; i < camposObrigatorios.length; i++) {
       var campo = camposObrigatorios[i];
