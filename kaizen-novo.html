@@ -192,6 +192,64 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 .wizard-step-circle { background: rgba(4,21,35,.92); }
 .wizard-step-lbl { white-space: normal; overflow: visible; text-overflow: clip; max-width: 96px; text-align: center; line-height: 1.25; }
 
+/* ── Modal de validação do wizard ──
+   Escopado em #modalValidacao: o .modal-head/.modal-body do Design
+   System continua igual em todos os outros modais da aplicação.
+
+   As linhas divisórias saem e o espaçamento passa a fazer a separação
+   — em um alerta de 2 ou 3 linhas elas fragmentavam mais do que
+   organizavam. O ícone alinha pelo topo do título, e a mensagem ganha
+   peso: ela é o conteúdo, não uma legenda. */
+#modalValidacao .modal { max-width: 460px; }
+#modalValidacao .modal-head {
+  border-bottom: none;
+  align-items: flex-start;
+  padding: 1.75rem 1.75rem .75rem;
+  gap: .9rem;
+}
+#modalValidacao .modal-title { line-height: 1.35; }
+#modalValidacao .modal-body { padding: 0 1.75rem 1.75rem; }
+/* O texto se alinha com o título, não com o ícone: 40px do ícone
+   (.modal-icon) + .9rem do gap. */
+#modalValidacao .validacao-conteudo { padding-left: calc(40px + .9rem); }
+#modalValidacao #mensagemValidacao {
+  font-size: .88rem;
+  color: var(--vbm-text);
+  margin-bottom: .85rem;
+}
+#modalValidacao .validacao-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
+#modalValidacao .validacao-item {
+  position: relative;
+  padding-left: 1.1rem;
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--vbm-dark);
+  line-height: 1.4;
+}
+#modalValidacao .validacao-item::before {
+  content: '';
+  position: absolute;
+  left: 0; top: .48em;
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: #c2770e;
+}
+[data-bg="dark"] #modalValidacao .validacao-item { color: #fff; }
+[data-bg="dark"] #modalValidacao #mensagemValidacao { color: rgba(244,247,251,.82); }
+@media (max-width: 600px) {
+  /* Em tela estreita o recuo do ícone comeria a largura do texto. */
+  #modalValidacao .validacao-conteudo { padding-left: 0; }
+  #modalValidacao .modal-head { padding: 1.35rem 1.35rem .6rem; }
+  #modalValidacao .modal-body { padding: 0 1.35rem 1.35rem; }
+}
+
 /* Toggle bloqueado para o usuário (Resultado Financeiro): mantém o
    desenho, só sinaliza que não é acionável. */
 .toggle.is-bloqueado { opacity: .5; cursor: not-allowed; pointer-events: none; }
@@ -846,10 +904,10 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       <button class="modal-close" type="button" data-fechar-validacao aria-label="Fechar" data-i18n-aria="settings.close"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
-      <p class="confirm-msg" id="mensagemValidacao"></p>
-    </div>
-    <div class="modal-foot">
-      <button class="btn btn-primary" type="button" data-fechar-validacao data-i18n="common.entendi">Entendi</button>
+      <div class="validacao-conteudo">
+        <p id="mensagemValidacao"></p>
+        <ul class="validacao-lista" id="listaValidacao"></ul>
+      </div>
     </div>
   </div>
 </div>
@@ -977,7 +1035,9 @@ function rotuloPessoa(p) {
       'role.operador': 'Operador',
       'common.cancelar': 'Cancelar',
       'wiz.pendingField': 'Campo obrigatório',
-      'common.entendi': 'Entendi',
+      'wiz.pendingFields': 'Campos obrigatórios pendentes',
+      'wiz.pendingIntro': 'Para continuar, preencha os seguintes campos:',
+      'wiz.pendingImageAfter': 'É obrigatório adicionar a Imagem do Depois.',
       'common.proximo': 'Próximo',
       'common.anterior': 'Anterior',
       'common.remover': 'Remover',
@@ -1108,7 +1168,9 @@ function rotuloPessoa(p) {
       'role.operador': 'Operator',
       'common.cancelar': 'Cancel',
       'wiz.pendingField': 'Required field',
-      'common.entendi': 'Got it',
+      'wiz.pendingFields': 'Pending required fields',
+      'wiz.pendingIntro': 'To continue, fill in the following fields:',
+      'wiz.pendingImageAfter': 'Adding the After Image is required.',
       'common.proximo': 'Next',
       'common.anterior': 'Previous',
       'common.remover': 'Remove',
@@ -1937,8 +1999,18 @@ function uploadImagemSeSelecionada(inputId, hiddenId, tipo) {
 // (Escape/clique-fora) registrados em initModals(), no vbm-app.js.
 window.validacaoWizard = (function () {
   var backdrop = document.getElementById('modalValidacao');
+  var titulo = document.getElementById('tituloValidacao');
   var texto = document.getElementById('mensagemValidacao');
+  var lista = document.getElementById('listaValidacao');
   var aoFechar = null;
+
+  // Tradução pelo mesmo mecanismo do resto da página (window.__i18n,
+  // preenchido em applyLang). O 2º argumento é só a rede de segurança
+  // para uma chave que ainda não exista no dicionário.
+  function traduzir(chave, padrao) {
+    var dict = window.__i18n || {};
+    return dict[chave] || padrao || chave;
+  }
 
   function fechar() {
     if (!backdrop) return;
@@ -1955,20 +2027,47 @@ window.validacaoWizard = (function () {
     });
   }
 
+  function mostrar(tituloChave, introTexto, itens, depois) {
+    if (!backdrop || !texto) {
+      // Sem o modal no HTML a mensagem ainda aparece — nunca em silêncio.
+      showToast('warning', traduzir('wiz.pendingField', 'Campo obrigatório'),
+        introTexto + (itens.length ? ' ' + itens.join(', ') : ''));
+      if (depois) depois();
+      return;
+    }
+    aoFechar = depois || null;
+    if (titulo) titulo.textContent = traduzir(tituloChave, titulo.textContent);
+    texto.textContent = introTexto;
+    if (lista) {
+      lista.innerHTML = '';
+      itens.forEach(function (nome) {
+        var li = document.createElement('li');
+        li.className = 'validacao-item';
+        li.textContent = nome;
+        lista.appendChild(li);
+      });
+    }
+    backdrop.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    var x = backdrop.querySelector('[data-fechar-validacao]');
+    if (x && x.focus) x.focus();
+  }
+
   return {
-    abrir: function (mensagem, depois) {
-      if (!backdrop || !texto) {
-        // Sem o modal no HTML a mensagem ainda aparece — nunca em silêncio.
-        showToast('warning', 'Campo obrigatório', mensagem);
-        if (depois) depois();
-        return;
-      }
-      aoFechar = depois || null;
-      texto.textContent = mensagem;
-      backdrop.classList.add('open');
-      document.body.style.overflow = 'hidden';
-      var x = backdrop.querySelector('[data-fechar-validacao]');
-      if (x && x.focus) x.focus();
+    // Lista de pendências (Etapa 3): recebe as CHAVES de tradução dos
+    // campos e monta "Para continuar, preencha os seguintes campos:"
+    // com um item por campo que ainda falta.
+    abrirLista: function (chavesCampos, depois) {
+      mostrar(
+        'wiz.pendingFields',
+        traduzir('wiz.pendingIntro', 'Para continuar, preencha os seguintes campos:'),
+        chavesCampos.map(function (c) { return traduzir(c.chave, c.padrao); }),
+        depois
+      );
+    },
+    // Mensagem única (Etapa 4), no mesmo desenho.
+    abrirMensagem: function (mensagem, depois) {
+      mostrar('wiz.pendingField', mensagem, [], depois);
     },
     fechar: fechar,
   };
@@ -1991,17 +2090,23 @@ window.validacaoWizard = (function () {
   var painel3 = wizard.querySelectorAll('.wizard-panel')[2];
   if (!painel3) return;
 
-  // Mensagem no modal padrão (ver window.validacaoWizard acima). O foco
-  // vai para o campo pendente só depois de fechado, para o usuário ler
-  // a mensagem antes.
-  function pendencia(el, mensagem, grupo) {
-    var alvo = grupo || (el && el.closest('.form-group'));
-    if (alvo) {
-      alvo.classList.add('campo-pendente');
-      alvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-    validacaoWizard.abrir(mensagem, function () {
-      if (el && el.focus) el.focus();
+  // Todas as pendências de uma vez (Opção B): destaca cada campo que
+  // falta e abre um único modal com a lista. Corrigir tudo numa passada
+  // custa um clique; uma mensagem por vez custaria um por campo.
+  //
+  // O foco vai para o PRIMEIRO campo pendente, e só depois que o
+  // usuário fecha o modal — para ele ler a lista inteira antes.
+  function apontarPendencias(pendencias) {
+    pendencias.forEach(function (p) {
+      var alvo = p.grupo || (p.el && p.el.closest('.form-group'));
+      if (alvo) alvo.classList.add('campo-pendente');
+    });
+    var primeiro = pendencias[0];
+    var alvoPrimeiro = primeiro.grupo || (primeiro.el && primeiro.el.closest('.form-group'));
+    if (alvoPrimeiro) alvoPrimeiro.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    validacaoWizard.abrirLista(pendencias, function () {
+      if (primeiro.el && primeiro.el.focus) primeiro.el.focus();
     });
   }
 
@@ -2029,23 +2134,34 @@ window.validacaoWizard = (function () {
 
     limparPendencias();
 
+    // Cada pendência traz a CHAVE de tradução do nome do campo — é o
+    // mesmo rótulo que o usuário lê na tela, no idioma dele.
+    var pendencias = [];
+
     if (!imagemDepoisValida()) {
-      e.preventDefault();
-      e.stopPropagation();
-      return pendencia(document.getElementById('imagem_depois'),
-        'É obrigatório adicionar a Imagem do Depois.');
+      pendencias.push({
+        el: document.getElementById('imagem_depois'),
+        chave: 'f.imageAfter', padrao: 'Imagem do Depois',
+      });
     }
 
-    // AÇÃO 2 — Descrição do Depois. Só espaços não conta como conteúdo.
+    // Descrição do Depois. Só espaços não conta como conteúdo.
     var descricao = document.getElementById('descricao_depois');
     if (!descricao || !String(descricao.value || '').trim()) {
-      e.preventDefault();
-      e.stopPropagation();
-      return pendencia(descricao, 'Informe a Descrição do Depois.');
+      pendencias.push({
+        el: descricao,
+        chave: 'f.descriptionAfter', padrao: 'Descrição do Depois',
+      });
     }
 
-    // AÇÃO 3 — "Links / Documentos Extras" é OPCIONAL: nenhuma regra
-    // aqui, de propósito. Vazio ou preenchido, o avanço segue.
+    // "Links / Documentos Extras" é OPCIONAL: fora desta lista de
+    // propósito. Vazio ou preenchido, o avanço segue.
+
+    if (pendencias.length) {
+      e.preventDefault();
+      e.stopPropagation();
+      apontarPendencias(pendencias);
+    }
   }, true);
 
   painel3.addEventListener('change', limparPendencias);
@@ -2124,7 +2240,7 @@ window.validacaoWizard = (function () {
     var el = document.getElementById(id);
     var grupo = el && el.closest('.form-group');
     if (grupo) grupo.classList.add('campo-pendente');
-    validacaoWizard.abrir(mensagem, function () {
+    validacaoWizard.abrirMensagem(mensagem, function () {
       if (el && el.focus) el.focus();
     });
   }
@@ -2177,7 +2293,7 @@ window.validacaoWizard = (function () {
     }
 
     if (confirmacao && !confirmacao.checked) {
-      validacaoWizard.abrir('Marque a confirmação antes de enviar para aprovação.', function () {
+      validacaoWizard.abrirMensagem('Marque a confirmação antes de enviar para aprovação.', function () {
         if (confirmacao.focus) confirmacao.focus();
       });
       return;
