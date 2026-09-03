@@ -1415,7 +1415,9 @@ function createTeamPicker(opts) {
       if (termo.length < 2) { fecharSugestoes(); return; }
       buscaTimer = setTimeout(function () {
         var url = opts.mdmSearch.url + '?q=' + encodeURIComponent(termo) +
-          (opts.mdmSearch.campo ? '&campo=' + opts.mdmSearch.campo : '');
+          (opts.mdmSearch.campo ? '&campo=' + opts.mdmSearch.campo : '') +
+          // Recorte por população: 1 = empregado próprio, 2 = terceiro.
+          (opts.mdmSearch.tipo ? '&tipo=' + opts.mdmSearch.tipo : '');
         fetch(url, { headers: { Accept: 'application/json' } })
           .then(function (r) { return r.ok ? r.json() : []; })
           .then(function (pessoas) { abrirSugestoes(Array.isArray(pessoas) ? pessoas : []); })
@@ -1451,7 +1453,8 @@ createTeamPicker({
   msgLimit: 'Limite de 2 membros atingido. Remova um para adicionar outro.',
   msgDefaultKey: 'f.valeTeamHelperDefault',
   msgLimitKey: 'f.valeTeamHelperLimit',
-  mdmSearch: { url: '/api/aprovadores/mdm', campo: 'nome' }
+  // tipo 1 = empregado próprio: a busca não pode oferecer terceiro aqui.
+  mdmSearch: { url: '/api/aprovadores/mdm', campo: 'nome', tipo: 1 }
 });
 
 createTeamPicker({
@@ -1466,7 +1469,12 @@ createTeamPicker({
   msgLimit: 'Limite de 1 membro externo atingido. Remova para adicionar outro.',
   msgDefaultKey: 'f.externalTeamHelperDefault',
   msgLimitKey: 'f.externalTeamHelperLimit',
-  mdmSearch: { url: '/api/usuarios' }
+  // Mesma busca da Equipe Vale — mesma rota, mesmo autocomplete, mesmo
+  // formato de sugestão — só que sobre a outra população: tipo 2 =
+  // terceiro. Antes apontava para /api/usuarios, que é a listagem da
+  // aba Usuários: outro contrato (até 500 linhas, sem TOP 10) e sem o
+  // casamento por "nome.sobrenome" do e-mail.
+  mdmSearch: { url: '/api/aprovadores/mdm', campo: 'nome', tipo: 2 }
 });
 
 // ─── Busca do Líder do Projeto (mesmo MDM da Equipe Vale, 1 pessoa só) ───

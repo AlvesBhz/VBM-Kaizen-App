@@ -627,19 +627,37 @@ apiRouter.get("/aprovadores/mdm", async (req, res) => {
     const coluna = String(req.query.campo || "").toLowerCase() === "email" ? "CD_EMAIL" : "NM_USUARIO";
     const termoLike = termoContem(termo);
 
+    // ?tipo=1 (empregado próprio) ou ?tipo=2 (terceiro) — usado pelos
+    // dois campos de equipe do Novo Kaizen, que buscam populações
+    // diferentes. Só esses dois valores são aceitos; qualquer outra
+    // coisa é ignorada e a busca segue sem recorte, que é o
+    // comportamento de quem já usava esta rota (aba Aprovadores).
+    const tipoPedido = parseInt(req.query.tipo, 10);
+    const tipo = tipoPedido === 1 || tipoPedido === 2 ? tipoPedido : null;
+
+    const params = [["termo", sql.NVarChar(255), termoLike]];
+    let filtroTipo = "";
+    if (tipo !== null) {
+      filtroTipo = "AND ID_TIPO_USUARIO = @tipo";
+      params.push(["tipo", sql.Int, tipo]);
+    }
+
     const result = await runQuery(
       `SELECT TOP (${MDM_BUSCA_TOP})
               ID_USUARIO, NM_USUARIO, CD_MATRICULA, CD_EMAIL, NM_POSICAO, NM_ESTADO, NM_CIDADE
        FROM ${FULL_MDM_TABLE}
-       WHERE NM_USUARIO LIKE @termo
+       -- O bloco de OR fica entre parênteses: sem eles o AND do tipo se
+       -- ligaria só à última alternativa e vazaria gente de outro tipo.
+       WHERE (NM_USUARIO LIKE @termo
           OR CD_EMAIL LIKE @termo
           OR CD_MATRICULA LIKE @termo
           -- nome.sobrenome@vale.com -> "nome sobrenome": cobre quando
           -- NM_USUARIO está vazio/errado mas o e-mail bate com o nome
           -- digitado (mesmo raciocínio do nomeDoEmail() no front-end).
-          OR REPLACE(LEFT(CD_EMAIL, CASE WHEN CHARINDEX('@', CD_EMAIL) > 0 THEN CHARINDEX('@', CD_EMAIL) - 1 ELSE LEN(CD_EMAIL) END), '.', ' ') LIKE @termo
+          OR REPLACE(LEFT(CD_EMAIL, CASE WHEN CHARINDEX('@', CD_EMAIL) > 0 THEN CHARINDEX('@', CD_EMAIL) - 1 ELSE LEN(CD_EMAIL) END), '.', ' ') LIKE @termo)
+       ${filtroTipo}
        ORDER BY NM_USUARIO`,
-      [["termo", sql.NVarChar(255), termoLike]]
+      params
     );
     res.json(result.recordset);
   } catch (err) {
