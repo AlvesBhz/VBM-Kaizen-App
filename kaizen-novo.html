@@ -1037,6 +1037,7 @@ function rotuloPessoa(p) {
       'wiz.pendingField': 'Campo obrigatório',
       'wiz.pendingFields': 'Campos obrigatórios pendentes',
       'wiz.pendingIntro': 'Para continuar, preencha os seguintes campos:',
+      'wiz.pendingConfirm': 'Confirmação de envio',
       'wiz.pendingImageAfter': 'É obrigatório adicionar a Imagem do Depois.',
       'common.proximo': 'Próximo',
       'common.anterior': 'Anterior',
@@ -1168,8 +1169,9 @@ function rotuloPessoa(p) {
       'role.operador': 'Operator',
       'common.cancelar': 'Cancel',
       'wiz.pendingField': 'Required field',
-      'wiz.pendingFields': 'Pending required fields',
-      'wiz.pendingIntro': 'To continue, fill in the following fields:',
+      'wiz.pendingFields': 'Required fields pending',
+      'wiz.pendingIntro': 'To continue, complete the following fields:',
+      'wiz.pendingConfirm': 'Submission confirmation',
       'wiz.pendingImageAfter': 'Adding the After Image is required.',
       'common.proximo': 'Next',
       'common.anterior': 'Previous',
@@ -1827,10 +1829,24 @@ function uploadImagemSeSelecionada(inputId, hiddenId, tipo) {
     return el ? String(el.value || '').trim() : '';
   }
 
-  function pendencia(id, mensagem) {
-    showToast('warning', 'Campo obrigatório', mensagem);
-    var el = document.getElementById(id);
-    if (el) el.focus();
+  // Todas as pendências de uma vez, no mesmo modal das demais etapas
+  // (ver window.validacaoWizard). Cada item traz a CHAVE de tradução do
+  // rótulo — o mesmo texto que o usuário lê na tela, no idioma dele.
+  function apontarPendencias(pendencias) {
+    var primeiro = pendencias[0];
+    validacaoWizard.abrirLista(pendencias, function () {
+      var el = document.getElementById(primeiro.id);
+      if (el && el.focus) el.focus();
+    });
+  }
+
+  // Erro que não é "campo em branco" (título repetido, falha de rede):
+  // vira mensagem única, no mesmo modal.
+  function avisar(id, mensagem) {
+    validacaoWizard.abrirMensagem(mensagem, function () {
+      var el = document.getElementById(id);
+      if (el && el.focus) el.focus();
+    });
   }
 
   // AÇÃO 2 — o mesmo título não pode existir duas vezes. A comparação
@@ -1846,19 +1862,20 @@ function uploadImagemSeSelecionada(inputId, hiddenId, tipo) {
       .then(function (d) { return !!(d && d.existe); });
   }
 
-  // Campos simples, na ordem da tela. Retorna a 1ª pendência.
-  function primeiraPendencia() {
-    var regras = [
-      ['id_categoria', 'Selecione uma categoria.'],                 // AÇÃO 3
-      ['id_replicacao_potencial', 'Informe a replicação em potencial.'], // AÇÃO 4
-      ['declaracao_problema', 'Informe a descrição do problema.'],   // AÇÃO 5
-      ['meta_objetivo', 'Informe a meta ou objetivo.'],              // AÇÃO 6
-      ['id_aprovador', 'Selecione um aprovador.'],                   // AÇÃO 7
-    ];
-    for (var i = 0; i < regras.length; i++) {
-      if (!valor(regras[i][0])) return regras[i];
-    }
-    return null;
+  // Campos obrigatórios, na ordem da tela. Retorna TODOS os que faltam.
+  var CAMPOS_ETAPA1 = [
+    ['titulo_kaizen', 'f.kaizenTitle', 'Título do Kaizen'],
+    ['id_categoria', 'f.category', 'Categoria'],
+    ['id_replicacao_potencial', 'f.replicationPotential', 'Replicação em Potencial'],
+    ['declaracao_problema', 'f.problemDescription', 'Descrição do Problema'],
+    ['meta_objetivo', 'f.goalObjective', 'Meta / Objetivo'],
+    ['id_aprovador', 'f.approver', 'Aprovador'],
+  ];
+
+  function pendenciasEtapa1() {
+    return CAMPOS_ETAPA1
+      .filter(function (c) { return !valor(c[0]); })
+      .map(function (c) { return { id: c[0], chave: c[1], padrao: c[2] }; });
   }
 
   wizard.addEventListener('click', function (e) {
@@ -1871,19 +1888,20 @@ function uploadImagemSeSelecionada(inputId, hiddenId, tipo) {
     e.preventDefault();
     e.stopPropagation();
 
-    var titulo = valor('titulo_kaizen');
-    if (!titulo) return pendencia('titulo_kaizen', 'Informe o título do Kaizen.');
+    var pendencias = pendenciasEtapa1();
+    if (pendencias.length) return apontarPendencias(pendencias);
 
+    // Todos preenchidos: só então a checagem de título repetido, que
+    // depende do servidor.
     botao.disabled = true;
-    tituloDuplicado(titulo)
+    tituloDuplicado(valor('titulo_kaizen'))
       .then(function (existe) {
         if (existe) {
-          pendencia('titulo_kaizen',
+          // Não é "campo em branco": é um valor já usado. Mensagem única.
+          avisar('titulo_kaizen',
             'Já existe um Kaizen cadastrado com este título. Informe um título diferente.');
           return;
         }
-        var falta = primeiraPendencia();
-        if (falta) return pendencia(falta[0], falta[1]);
 
         // Reabilita ANTES do reenvio: clique em botão desabilitado não
         // dispara evento nenhum, e o avanço ficaria preso aqui.
@@ -1896,8 +1914,7 @@ function uploadImagemSeSelecionada(inputId, hiddenId, tipo) {
         // único — e deixar passar arriscaria criar a duplicata que esta
         // regra existe para evitar.
         console.error('[kaizen] falha ao verificar o título:', err);
-        showToast('error', 'Não foi possível verificar o título',
-          'Tente novamente em instantes.');
+        avisar('titulo_kaizen', 'Não foi possível verificar o título. Tente novamente em instantes.');
       })
       .finally(function () { botao.disabled = false; });
   }, true);
@@ -1922,14 +1939,19 @@ function uploadImagemSeSelecionada(inputId, hiddenId, tipo) {
   var painel2 = wizard.querySelectorAll('.wizard-panel')[1];
   if (!painel2) return;
 
-  function pendencia(el, mensagem, grupo) {
-    showToast('warning', 'Campo obrigatório', mensagem);
-    var alvo = grupo || (el && el.closest('.form-group'));
-    if (alvo) {
-      alvo.classList.add('campo-pendente');
-      alvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-    if (el && el.focus) el.focus();
+  // Todas as pendências de uma vez, no mesmo modal das demais etapas.
+  function apontarPendencias(pendencias) {
+    pendencias.forEach(function (p) {
+      var alvo = p.grupo || (p.el && p.el.closest('.form-group'));
+      if (alvo) alvo.classList.add('campo-pendente');
+    });
+    var primeiro = pendencias[0];
+    var alvoPrimeiro = primeiro.grupo || (primeiro.el && primeiro.el.closest('.form-group'));
+    if (alvoPrimeiro) alvoPrimeiro.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    validacaoWizard.abrirLista(pendencias, function () {
+      if (primeiro.el && primeiro.el.focus) primeiro.el.focus();
+    });
   }
 
   function limparPendencias() {
@@ -1958,31 +1980,40 @@ function uploadImagemSeSelecionada(inputId, hiddenId, tipo) {
 
     limparPendencias();
 
+    var pendencias = [];
+
     if (!imagemAntesValida()) {
-      e.preventDefault();
-      e.stopPropagation();
-      return pendencia(document.getElementById('imagem_antes'),
-        'É obrigatório adicionar a imagem do Antes.');
+      pendencias.push({
+        el: document.getElementById('imagem_antes'),
+        chave: 'f.imageBefore', padrao: 'Imagem do Antes',
+      });
     }
 
-    // AÇÃO 2 — Descrição do Antes. Só espaços não conta como conteúdo.
+    // Descrição do Antes. Só espaços não conta como conteúdo.
     var descricao = document.getElementById('descricao_antes');
     if (!descricao || !String(descricao.value || '').trim()) {
-      e.preventDefault();
-      e.stopPropagation();
-      return pendencia(descricao, 'Informe a descrição do Antes.');
+      pendencias.push({
+        el: descricao,
+        chave: 'f.descriptionBefore', padrao: 'Descrição do Antes',
+      });
     }
 
-    // AÇÃO 3 — pelo menos um desperdício marcado. A grade e a seleção
-    // múltipla continuam como estão: aqui só se conta o que já existe.
+    // Pelo menos um desperdício marcado. A grade e a seleção múltipla
+    // continuam como estão: aqui só se conta o que já existe.
     var grade = document.getElementById('wasteTagsGrid');
     if (!grade || !grade.querySelector('input:checked')) {
+      pendencias.push({
+        // O destaque vai na própria grade — os itens são muitos e marcar
+        // o grupo inteiro diria menos do que apontar a lista.
+        el: grade && grade.querySelector('input'), grupo: grade,
+        chave: 'f.wasteReduction', padrao: 'Redução de Desperdícios',
+      });
+    }
+
+    if (pendencias.length) {
       e.preventDefault();
       e.stopPropagation();
-      // O destaque vai na própria grade — os itens são muitos e marcar
-      // o grupo inteiro diria menos do que apontar a lista.
-      return pendencia(grade && grade.querySelector('input'),
-        'Selecione pelo menos um item de Redução de Desperdícios.', grade);
+      apontarPendencias(pendencias);
     }
   }, true);
 
@@ -2192,56 +2223,56 @@ window.validacaoWizard = (function () {
   // AÇÃO 1 — Lições Aprendidas. Só espaços não conta como conteúdo.
   // A ordem das regras segue a ordem dos campos na tela; a primeira
   // pendência interrompe.
-  function primeiraPendenciaEtapa4() {
-    if (!valor('licoes_aprendidas')) {
-      return { id: 'licoes_aprendidas', mensagem: 'Informe as Lições Aprendidas.' };
+  // TODAS as pendências desta etapa, na ordem da tela. Cada item traz a
+  // CHAVE de tradução do rótulo — o mesmo texto que o usuário lê.
+  function pendenciasEtapa4() {
+    var faltando = [];
+    function exigir(id, chave, padrao) {
+      if (!valor(id)) faltando.push({ id: id, chave: chave, padrao: padrao });
     }
 
-    // AÇÃO 2 — condicional do "Resultado Financeiro". Hoje o toggle está
+    exigir('licoes_aprendidas', 'f.lessonsLearned', 'Lições Aprendidas');
+
+    // Condicional do "Resultado Financeiro". Hoje o toggle está
     // bloqueado, então este ramo não roda; ele existe pronto para o dia
     // em que o campo for liberado, sem depender de nova alteração aqui.
     if (valor('fl_resultado_financeiro') === 'true') {
-      if (!valor('id_resultado_financeiro')) {
-        return { id: 'id_resultado_financeiro', mensagem: 'Informe o Tipo de Resultado Financeiro.' };
-      }
-      if (!valor('moeda_resultado_financeiro')) {
-        return { id: 'moeda_resultado_financeiro', mensagem: 'Selecione a Moeda.' };
-      }
-      if (!valor('valor_resultado_financeiro')) {
-        return { id: 'valor_resultado_financeiro', mensagem: 'Informe o Valor Alcançado/Esperado.' };
-      }
+      exigir('id_resultado_financeiro', 'f.financialResultType', 'Tipo de Resultado Financeiro');
+      exigir('moeda_resultado_financeiro', 'f.resultCurrency', 'Moeda');
+      exigir('valor_resultado_financeiro', 'f.resultValue', 'Valor Alcançado/Esperado');
     }
 
-    // AÇÃO 3 — condicional do "Outros resultados": só cobra quando o
-    // bloco está ativo. Desligado, os dois campos seguem opcionais.
+    // Condicional do "Outros resultados": só cobra quando o bloco está
+    // ativo. Desligado, os dois campos seguem opcionais.
     if (valor('fl_resultado_outros') === 'true') {
-      if (!valor('id_resultado_outros')) {
-        return { id: 'id_resultado_outros', mensagem: 'Informe o Tipo de Resultado.' };
-      }
-      if (!valor('descricao_resultado_outros')) {
-        return { id: 'descricao_resultado_outros', mensagem: 'Informe a Descrição dos Resultados Alcançados.' };
-      }
+      exigir('id_resultado_outros', 'f.otherResultType', 'Tipo de Resultado');
+      exigir('descricao_resultado_outros', 'f.otherResultDescription', 'Descrição dos Resultados Alcançados');
     }
 
-    // AÇÃO 4 — Comparação com a Meta Inicial / Declaração do Problema.
-    if (!valor('comparacao_meta_inicial')) {
-      return {
-        id: 'comparacao_meta_inicial',
-        mensagem: 'Informe a comparação com a Meta Inicial / Declaração do Problema.',
-      };
+    exigir('comparacao_meta_inicial', 'f.comparisonWithGoal',
+      'Comparação com a Meta Inicial / Declaração do Problema');
+
+    // A confirmação de envio é pendência como qualquer outra: entra na
+    // mesma lista, para o usuário ver tudo o que falta numa só passada.
+    var confirmacao = document.getElementById('confirmacaoEnvio');
+    if (confirmacao && !confirmacao.checked) {
+      faltando.push({ id: 'confirmacaoEnvio', chave: 'wiz.pendingConfirm', padrao: 'Confirmação de envio' });
     }
 
-    return null;
+    return faltando;
   }
 
-  // Mesma apresentação da Etapa 3: o modal padrão (AÇÃO 5).
-  function avisarEtapa4(id, mensagem) {
+  // Mesma apresentação das demais etapas: lista única no modal padrão.
+  function apontarPendenciasEtapa4(pendencias) {
     irParaEtapa(3);
-    var el = document.getElementById(id);
-    var grupo = el && el.closest('.form-group');
-    if (grupo) grupo.classList.add('campo-pendente');
-    validacaoWizard.abrirMensagem(mensagem, function () {
-      if (el && el.focus) el.focus();
+    pendencias.forEach(function (p) {
+      var el = document.getElementById(p.id);
+      var grupo = el && el.closest('.form-group');
+      if (grupo) grupo.classList.add('campo-pendente');
+    });
+    var primeiro = document.getElementById(pendencias[0].id);
+    validacaoWizard.abrirLista(pendencias, function () {
+      if (primeiro && primeiro.focus) primeiro.focus();
     });
   }
 
@@ -2260,42 +2291,37 @@ window.validacaoWizard = (function () {
   submitBtn.addEventListener('click', function (e) {
     e.preventDefault();
 
-    var confirmacao = document.getElementById('confirmacaoEnvio');
+    // Rede de segurança dos campos das etapas 1 a 3: os portões de cada
+    // etapa já barram tudo isto, mas o envio confere de novo — se algo
+    // for limpo depois de a etapa ser passada, não sai daqui.
+    // Mesma exibição das demais: lista única no modal padrão.
     var camposObrigatorios = [
-      { id: 'titulo_kaizen', etapa: 0, rotulo: 'Título do Kaizen' },
-      { id: 'id_categoria', etapa: 0, rotulo: 'Categoria' },
-      { id: 'id_replicacao_potencial', etapa: 0, rotulo: 'Replicação em Potencial' },
-      { id: 'declaracao_problema', etapa: 0, rotulo: 'Descrição do Problema' },
-      { id: 'meta_objetivo', etapa: 0, rotulo: 'Meta / Objetivo' },
-      { id: 'id_aprovador', etapa: 0, rotulo: 'Aprovador' },
-      { id: 'descricao_antes', etapa: 1, rotulo: 'Descrição do Antes' },
-      { id: 'imagem_antes', etapa: 1, rotulo: 'Imagem do Antes' },
-      { id: 'descricao_depois', etapa: 2, rotulo: 'Descrição do Depois' },
-      { id: 'imagem_depois', etapa: 2, rotulo: 'Imagem do Depois' },
+      { id: 'titulo_kaizen', etapa: 0, chave: 'f.kaizenTitle', padrao: 'Título do Kaizen' },
+      { id: 'id_categoria', etapa: 0, chave: 'f.category', padrao: 'Categoria' },
+      { id: 'id_replicacao_potencial', etapa: 0, chave: 'f.replicationPotential', padrao: 'Replicação em Potencial' },
+      { id: 'declaracao_problema', etapa: 0, chave: 'f.problemDescription', padrao: 'Descrição do Problema' },
+      { id: 'meta_objetivo', etapa: 0, chave: 'f.goalObjective', padrao: 'Meta / Objetivo' },
+      { id: 'id_aprovador', etapa: 0, chave: 'f.approver', padrao: 'Aprovador' },
+      { id: 'imagem_antes', etapa: 1, chave: 'f.imageBefore', padrao: 'Imagem do Antes' },
+      { id: 'descricao_antes', etapa: 1, chave: 'f.descriptionBefore', padrao: 'Descrição do Antes' },
+      { id: 'imagem_depois', etapa: 2, chave: 'f.imageAfter', padrao: 'Imagem do Depois' },
+      { id: 'descricao_depois', etapa: 2, chave: 'f.descriptionAfter', padrao: 'Descrição do Depois' },
     ];
-    for (var i = 0; i < camposObrigatorios.length; i++) {
-      var campo = camposObrigatorios[i];
-      if (!valor(campo.id)) {
-        showToast('warning', 'Campo obrigatório', campo.rotulo + ' precisa ser preenchido.');
-        irParaEtapa(campo.etapa);
-        var el = document.getElementById(campo.id);
-        if (el) el.focus();
-        return;
-      }
+    var faltandoAntes = camposObrigatorios.filter(function (c) { return !valor(c.id); });
+    if (faltandoAntes.length) {
+      irParaEtapa(faltandoAntes[0].etapa);
+      validacaoWizard.abrirLista(faltandoAntes, function () {
+        var el = document.getElementById(faltandoAntes[0].id);
+        if (el && el.focus) el.focus();
+      });
+      return;
     }
     // ── Validações da Etapa 4 ──
     // Nesta etapa não há "Próximo": o avanço é o próprio envio, então as
     // regras entram aqui, antes de qualquer requisição.
-    var pendenteEtapa4 = primeiraPendenciaEtapa4();
-    if (pendenteEtapa4) {
-      avisarEtapa4(pendenteEtapa4.id, pendenteEtapa4.mensagem);
-      return;
-    }
-
-    if (confirmacao && !confirmacao.checked) {
-      validacaoWizard.abrirMensagem('Marque a confirmação antes de enviar para aprovação.', function () {
-        if (confirmacao.focus) confirmacao.focus();
-      });
+    var pendentesEtapa4 = pendenciasEtapa4();
+    if (pendentesEtapa4.length) {
+      apontarPendenciasEtapa4(pendentesEtapa4);
       return;
     }
 
