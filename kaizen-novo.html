@@ -511,14 +511,6 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
             <div class="wizard-header-title" data-i18n="wiz.title">Novo Kaizen</div>
             <div class="wizard-header-sub" data-i18n="wiz.subtitle">Registre sua iniciativa de melhoria contínua em 4 etapas</div>
           </div>
-          <div style="display:flex;gap:.6rem;flex-wrap:wrap;">
-            <button class="btn btn-white-outline btn-sm wizard-header-btn" onclick="if(confirm('Descartar rascunho?'))window.location.href='index.html'">
-              <i class="fa-solid fa-xmark"></i> <span data-i18n="common.cancelar">Cancelar</span>
-            </button>
-            <button class="btn btn-white-outline btn-sm wizard-header-btn" onclick="showToast('info','Salvo','Rascunho salvo com sucesso.',3000)">
-              <i class="fa-solid fa-floppy-disk"></i> <span data-i18n="wiz.saveDraft">Salvar rascunho</span>
-            </button>
-          </div>
         </div>
 
         <div class="wizard-steps" style="margin-top:1.75rem;margin-bottom:1.75rem;">
@@ -567,8 +559,8 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
               </select>
             </div>
             <div class="form-group">
-              <label class="form-label" data-i18n="f.replicationPotential">Replicação em Potencial <span class="field-tag-optional" data-i18n="f.optional">opcional</span></label>
-              <select class="form-control" id="id_replicacao_potencial" name="id_replicacao_potencial">
+              <label class="form-label" data-i18n="f.replicationPotential">Replicação em Potencial <span class="req">*</span></label>
+              <select class="form-control" id="id_replicacao_potencial" name="id_replicacao_potencial" required>
                 <option value="" data-i18n="f.select">Selecione...</option>
               </select>
             </div>
@@ -1491,6 +1483,11 @@ createTeamPicker({
   var lista = null, timer = null;
   function fechar() { if (lista) { lista.remove(); lista = null; } }
 
+  // O que o usuário vê no campo: "Nome — e-mail", nada além disso.
+  function rotuloLider(nome, email) {
+    return email ? nome + ' — ' + email : nome;
+  }
+
   input.addEventListener('input', function () {
     hidden.value = ''; // digitou de novo: a escolha anterior não vale mais
     var termo = input.value.trim();
@@ -1508,11 +1505,15 @@ createTeamPicker({
             var item = document.createElement('button');
             item.type = 'button';
             item.className = 'mdm-suggest-item';
+            // Só nome e e-mail: matrícula, ID_USUARIO e cargo são
+            // identificação interna e não vão para a tela. O ID continua
+            // viajando no hidden, que é o que o servidor lê.
             var r = rotuloPessoa(p);
-            item.innerHTML = '<strong>' + r.nome + '</strong><small>' + r.extra + '</small>';
+            var email = p.CD_EMAIL || p.DS_EMAIL || '';
+            item.innerHTML = '<strong>' + r.nome + '</strong><small>' + email + '</small>';
             item.addEventListener('mousedown', function (e) {
               e.preventDefault();
-              input.value = r.nome + (p.CD_EMAIL ? ' — ' + p.CD_EMAIL : '') + (p.CD_MATRICULA ? ' — ' + p.CD_MATRICULA : '');
+              input.value = rotuloLider(r.nome, email);
               hidden.value = p.ID_USUARIO;
               fechar();
             });
@@ -1532,7 +1533,7 @@ createTeamPicker({
       if (!dados || hidden.value) return; // já tem alguém escolhido na busca: não sobrescreve
       var email = dados.mail;
       if (email && !input.value) {
-        input.value = nomeDoEmail(email) + ' — ' + email + (dados.matricula ? ' — ' + dados.matricula : '');
+        input.value = rotuloLider(nomeDoEmail(email), email);
       }
     });
   }
@@ -1668,6 +1669,102 @@ function uploadImagemSeSelecionada(inputId, hiddenId, tipo) {
     });
 }
 
+// ─── Validação da Etapa 1 antes de avançar ───
+// O motor do wizard (vbm-app.js) troca de etapa sem perguntar nada a
+// ninguém. Em vez de alterá-lo — ele serve outras telas —, este bloco
+// escuta o clique de "Próximo" na FASE DE CAPTURA do container: quando
+// algo está pendente, para o evento antes de ele chegar ao botão, e o
+// motor nem chega a ser acionado.
+//
+// Ordem das checagens = ordem dos campos na tela. A primeira pendência
+// interrompe, com o foco indo para o campo que falta.
+(function () {
+  var wizard = document.querySelector('[data-wizard]');
+  if (!wizard) return;
+  var painel1 = wizard.querySelector('.wizard-panel');
+  var liberado = false;
+
+  function valor(id) {
+    var el = document.getElementById(id);
+    return el ? String(el.value || '').trim() : '';
+  }
+
+  function pendencia(id, mensagem) {
+    showToast('warning', 'Campo obrigatório', mensagem);
+    var el = document.getElementById(id);
+    if (el) el.focus();
+  }
+
+  // AÇÃO 2 — o mesmo título não pode existir duas vezes. A comparação
+  // (sem acentuar diferença de caixa, sem espaço nas pontas) é feita no
+  // banco — ver GET /api/kaizens/titulo-existe em server.js.
+  function tituloDuplicado(titulo) {
+    return fetch('/api/kaizens/titulo-existe?titulo=' + encodeURIComponent(titulo),
+                 { headers: { Accept: 'application/json' } })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function (d) { return !!(d && d.existe); });
+  }
+
+  // Campos simples, na ordem da tela. Retorna a 1ª pendência.
+  function primeiraPendencia() {
+    var regras = [
+      ['id_categoria', 'Selecione uma categoria.'],                 // AÇÃO 3
+      ['id_replicacao_potencial', 'Informe a replicação em potencial.'], // AÇÃO 4
+      ['declaracao_problema', 'Informe a descrição do problema.'],   // AÇÃO 5
+      ['meta_objetivo', 'Informe a meta ou objetivo.'],              // AÇÃO 6
+      ['id_aprovador', 'Selecione um aprovador.'],                   // AÇÃO 7
+    ];
+    for (var i = 0; i < regras.length; i++) {
+      if (!valor(regras[i][0])) return regras[i];
+    }
+    return null;
+  }
+
+  wizard.addEventListener('click', function (e) {
+    var botao = e.target.closest('[data-wizard-next]');
+    if (!botao || !wizard.contains(botao)) return;
+    // Só a Etapa 1 tem estas regras; as demais seguem como antes.
+    if (!painel1 || !painel1.classList.contains('active')) return;
+    if (liberado) { liberado = false; return; } // reenvio já validado
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    var titulo = valor('titulo_kaizen');
+    if (!titulo) return pendencia('titulo_kaizen', 'Informe o título do Kaizen.');
+
+    botao.disabled = true;
+    tituloDuplicado(titulo)
+      .then(function (existe) {
+        if (existe) {
+          pendencia('titulo_kaizen',
+            'Já existe um Kaizen cadastrado com este título. Informe um título diferente.');
+          return;
+        }
+        var falta = primeiraPendencia();
+        if (falta) return pendencia(falta[0], falta[1]);
+
+        // Reabilita ANTES do reenvio: clique em botão desabilitado não
+        // dispara evento nenhum, e o avanço ficaria preso aqui.
+        botao.disabled = false;
+        liberado = true;
+        botao.click(); // tudo certo: deixa o motor do wizard avançar
+      })
+      .catch(function (err) {
+        // Sem resposta do servidor não dá para afirmar que o título é
+        // único — e deixar passar arriscaria criar a duplicata que esta
+        // regra existe para evitar.
+        console.error('[kaizen] falha ao verificar o título:', err);
+        showToast('error', 'Não foi possível verificar o título',
+          'Tente novamente em instantes.');
+      })
+      .finally(function () { botao.disabled = false; });
+  }, true);
+})();
+
 // ─── Envio do Kaizen (Etapa 4 → "Enviar para Aprovação") ───
 // Substitui o mock genérico de vbm-app.js (ver data-wizard-custom-submit na
 // div[data-wizard], no topo da página): valida os campos obrigatórios de
@@ -1696,6 +1793,7 @@ function uploadImagemSeSelecionada(inputId, hiddenId, tipo) {
     var camposObrigatorios = [
       { id: 'titulo_kaizen', etapa: 0, rotulo: 'Título do Kaizen' },
       { id: 'id_categoria', etapa: 0, rotulo: 'Categoria' },
+      { id: 'id_replicacao_potencial', etapa: 0, rotulo: 'Replicação em Potencial' },
       { id: 'declaracao_problema', etapa: 0, rotulo: 'Descrição do Problema' },
       { id: 'meta_objetivo', etapa: 0, rotulo: 'Meta / Objetivo' },
       { id: 'id_aprovador', etapa: 0, rotulo: 'Aprovador' },

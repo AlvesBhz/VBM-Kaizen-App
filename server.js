@@ -2178,6 +2178,34 @@ apiRouter.get("/kaizens/resumo", async (req, res) => {
   }
 });
 
+// GET /kaizens/titulo-existe?titulo= — o título já está em uso?
+//
+// Usado pela Etapa 1 do Novo Kaizen antes de liberar o avanço: dois
+// Kaizens com o mesmo nome são indistinguíveis na Biblioteca e na fila
+// de aprovação.
+//
+// A comparação é a mesma dos dois lados: LTRIM/RTRIM tira espaço
+// sobrando e LOWER iguala maiúsculas e minúsculas — "  Setup " e
+// "setup" são o mesmo título.
+//
+// Registrada ANTES de /kaizens/:id, senão ":id" capturaria a rota.
+apiRouter.get("/kaizens/titulo-existe", async (req, res) => {
+  try {
+    const titulo = String(req.query.titulo || "").trim();
+    if (!titulo) return res.json({ existe: false });
+
+    const result = await runQuery(
+      `SELECT TOP (1) 1 AS X FROM ${FULL_PVC_TABLE}
+        WHERE LOWER(LTRIM(RTRIM(NM_KAIZEN))) = LOWER(LTRIM(RTRIM(@titulo)))`,
+      [["titulo", sql.NVarChar(PVC_LIMITES.NM_KAIZEN), titulo]]
+    );
+    res.json({ existe: result.recordset.length > 0 });
+  } catch (err) {
+    console.error("[kaizens/titulo-existe] erro:", err.message);
+    res.status(500).json({ error: "Erro ao verificar o título: " + err.message });
+  }
+});
+
 // GET /kaizens/:id — detalhe completo pro modal (Declaração do
 // Problema, Antes/Depois, Resultados, Aprendizados). :id é ID_KAIZEN.
 apiRouter.get("/kaizens/:id", async (req, res) => {
