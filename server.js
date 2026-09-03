@@ -619,13 +619,32 @@ function termoContem(texto) {
 }
 const MDM_BUSCA_TOP = 10;
 
+// "Começa com": só o curinga à direita. Mesmo escape do termoContem —
+// [, % e _ digitados são caracteres, não curingas.
+function termoComecaCom(texto) {
+  return String(texto).replace(/[[%_]/g, (c) => "[" + c + "]") + "%";
+}
+// Na busca por prefixo o 1º caractere já vale, e o teto sobe: com uma
+// letra só, 10 linhas seriam um recorte arbitrário do alfabeto.
+const MDM_BUSCA_INICIO_MIN = 1;
+const MDM_BUSCA_INICIO_TOP = 50;
+
 apiRouter.get("/aprovadores/mdm", async (req, res) => {
   try {
+    // ?modo=inicio — casa pelo COMEÇO do nome ("cr" traz quem começa
+    // com "cr", não quem tem "cr" no meio) e já busca no 1º caractere.
+    // Usado pelos dois campos de equipe do Novo Kaizen; sem o parâmetro,
+    // a rota segue como sempre (contém, mínimo de 2) — é o que a aba
+    // Aprovadores usa.
+    const porInicio = String(req.query.modo || "").toLowerCase() === "inicio";
+
     const termo = String(req.query.q || "").trim();
-    if (termo.length < MDM_BUSCA_MIN) return res.json([]);
+    const minimo = porInicio ? MDM_BUSCA_INICIO_MIN : MDM_BUSCA_MIN;
+    if (termo.length < minimo) return res.json([]);
 
     const coluna = String(req.query.campo || "").toLowerCase() === "email" ? "CD_EMAIL" : "NM_USUARIO";
-    const termoLike = termoContem(termo);
+    const termoLike = porInicio ? termoComecaCom(termo) : termoContem(termo);
+    const teto = porInicio ? MDM_BUSCA_INICIO_TOP : MDM_BUSCA_TOP;
 
     // ?tipo=1 (empregado próprio) ou ?tipo=2 (terceiro) — usado pelos
     // dois campos de equipe do Novo Kaizen, que buscam populações
@@ -642,19 +661,27 @@ apiRouter.get("/aprovadores/mdm", async (req, res) => {
       params.push(["tipo", sql.Int, tipo]);
     }
 
+    // nome.sobrenome@vale.com -> "nome sobrenome": cobre quando
+    // NM_USUARIO está vazio/errado mas o e-mail bate com o nome digitado
+    // (mesmo raciocínio do nomeDoEmail() no front-end).
+    const nomeDoEmail =
+      "REPLACE(LEFT(CD_EMAIL, CASE WHEN CHARINDEX('@', CD_EMAIL) > 0 " +
+      "THEN CHARINDEX('@', CD_EMAIL) - 1 ELSE LEN(CD_EMAIL) END), '.', ' ')";
+
+    // Por prefixo a busca é de NOME: casar e-mail e matrícula pelo começo
+    // traria gente que não "começa com" o que foi digitado no nome.
+    const alternativas = porInicio
+      ? [`NM_USUARIO LIKE @termo`, `${nomeDoEmail} LIKE @termo`]
+      : [`NM_USUARIO LIKE @termo`, `CD_EMAIL LIKE @termo`,
+         `CD_MATRICULA LIKE @termo`, `${nomeDoEmail} LIKE @termo`];
+
     const result = await runQuery(
-      `SELECT TOP (${MDM_BUSCA_TOP})
+      `SELECT TOP (${teto})
               ID_USUARIO, NM_USUARIO, CD_MATRICULA, CD_EMAIL, NM_POSICAO, NM_ESTADO, NM_CIDADE
        FROM ${FULL_MDM_TABLE}
        -- O bloco de OR fica entre parênteses: sem eles o AND do tipo se
        -- ligaria só à última alternativa e vazaria gente de outro tipo.
-       WHERE (NM_USUARIO LIKE @termo
-          OR CD_EMAIL LIKE @termo
-          OR CD_MATRICULA LIKE @termo
-          -- nome.sobrenome@vale.com -> "nome sobrenome": cobre quando
-          -- NM_USUARIO está vazio/errado mas o e-mail bate com o nome
-          -- digitado (mesmo raciocínio do nomeDoEmail() no front-end).
-          OR REPLACE(LEFT(CD_EMAIL, CASE WHEN CHARINDEX('@', CD_EMAIL) > 0 THEN CHARINDEX('@', CD_EMAIL) - 1 ELSE LEN(CD_EMAIL) END), '.', ' ') LIKE @termo)
+       WHERE (${alternativas.join(" OR ")})
        ${filtroTipo}
        ORDER BY NM_USUARIO`,
       params

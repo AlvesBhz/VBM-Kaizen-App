@@ -1409,15 +1409,21 @@ function createTeamPicker(opts) {
 
   var buscaTimer = null;
   if (opts.mdmSearch) {
+    // Quantos caracteres antes de consultar. Os campos de equipe pedem 1
+    // (a busca é por começo do nome, então a 1ª letra já filtra muito);
+    // sem opts.mdmSearch.min continua valendo 2, como antes.
+    var minimoBusca = opts.mdmSearch.min || 2;
     searchInput.addEventListener('input', function () {
       var termo = searchInput.value.trim();
       clearTimeout(buscaTimer);
-      if (termo.length < 2) { fecharSugestoes(); return; }
+      if (termo.length < minimoBusca) { fecharSugestoes(); return; }
       buscaTimer = setTimeout(function () {
         var url = opts.mdmSearch.url + '?q=' + encodeURIComponent(termo) +
           (opts.mdmSearch.campo ? '&campo=' + opts.mdmSearch.campo : '') +
           // Recorte por população: 1 = empregado próprio, 2 = terceiro.
-          (opts.mdmSearch.tipo ? '&tipo=' + opts.mdmSearch.tipo : '');
+          (opts.mdmSearch.tipo ? '&tipo=' + opts.mdmSearch.tipo : '') +
+          // modo=inicio: casa pelo COMEÇO do nome, não por "contém".
+          (opts.mdmSearch.modo ? '&modo=' + opts.mdmSearch.modo : '');
         fetch(url, { headers: { Accept: 'application/json' } })
           .then(function (r) { return r.ok ? r.json() : []; })
           .then(function (pessoas) { abrirSugestoes(Array.isArray(pessoas) ? pessoas : []); })
@@ -1454,7 +1460,7 @@ createTeamPicker({
   msgDefaultKey: 'f.valeTeamHelperDefault',
   msgLimitKey: 'f.valeTeamHelperLimit',
   // tipo 1 = empregado próprio: a busca não pode oferecer terceiro aqui.
-  mdmSearch: { url: '/api/aprovadores/mdm', campo: 'nome', tipo: 1 }
+  mdmSearch: { url: '/api/aprovadores/mdm', campo: 'nome', tipo: 1, modo: 'inicio', min: 1 }
 });
 
 createTeamPicker({
@@ -1474,7 +1480,7 @@ createTeamPicker({
   // terceiro. Antes apontava para /api/usuarios, que é a listagem da
   // aba Usuários: outro contrato (até 500 linhas, sem TOP 10) e sem o
   // casamento por "nome.sobrenome" do e-mail.
-  mdmSearch: { url: '/api/aprovadores/mdm', campo: 'nome', tipo: 2 }
+  mdmSearch: { url: '/api/aprovadores/mdm', campo: 'nome', tipo: 2, modo: 'inicio', min: 1 }
 });
 
 // ─── Busca do Líder do Projeto (mesmo MDM da Equipe Vale, 1 pessoa só) ───
