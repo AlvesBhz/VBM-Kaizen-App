@@ -66,7 +66,13 @@
       "arquivo": "fa-solid-circle-xmark.svg",
       "url": "assets/icons/fa-solid-circle-xmark.svg",
       "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/circle-xmark.svg",
-      "bytes": 571
+      "bytes": 635,
+      "fill": "#1a1a1a",
+      "observacao": "fill e viewBox ajustados para o <img> ficar do tamanho e da cor do glifo que substitui",
+      "viewBoxOriginal": "0 0 512 512",
+      "escala": 0.72,
+      "aba": "motivosreprovacao",
+      "viewBox": "-99.56 -99.56 711.11 711.11"
     },
     {
       "classe": "fa-solid fa-dollar-sign",
@@ -82,7 +88,13 @@
       "arquivo": "fa-solid-globe.svg",
       "url": "assets/icons/fa-solid-globe.svg",
       "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/globe.svg",
-      "bytes": 1301
+      "bytes": 1358,
+      "fill": "#1a8bbf",
+      "observacao": "fill e viewBox ajustados para o <img> ficar do tamanho e da cor do glifo que substitui",
+      "viewBoxOriginal": "0 0 512 512",
+      "escala": 0.72,
+      "aba": "replicacao",
+      "viewBox": "-99.56 -99.56 711.11 711.11"
     },
     {
       "classe": "fa-solid fa-hand-holding-hand",
@@ -114,7 +126,13 @@
       "arquivo": "fa-solid-layer-group.svg",
       "url": "assets/icons/fa-solid-layer-group.svg",
       "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/layer-group.svg",
-      "bytes": 920
+      "bytes": 981,
+      "fill": "#3cb5e5",
+      "observacao": "fill e viewBox ajustados para o <img> ficar do tamanho e da cor do glifo que substitui",
+      "viewBoxOriginal": "0 0 576 512",
+      "escala": 0.72,
+      "aba": "tiporesultados",
+      "viewBox": "-67.56 -99.56 711.11 711.11"
     },
     {
       "classe": "fa-solid fa-leaf",
@@ -162,7 +180,13 @@
       "arquivo": "fa-solid-recycle.svg",
       "url": "assets/icons/fa-solid-recycle.svg",
       "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/recycle.svg",
-      "bytes": 1318
+      "bytes": 1377,
+      "fill": "#1a8bbf",
+      "observacao": "fill e viewBox ajustados para o <img> ficar do tamanho e da cor do glifo que substitui",
+      "viewBoxOriginal": "0 0 512 512",
+      "escala": 0.72,
+      "aba": "desperdicios",
+      "viewBox": "-99.56 -99.56 711.11 711.11"
     },
     {
       "classe": "fa-solid fa-rotate-right",
@@ -194,7 +218,13 @@
       "arquivo": "fa-solid-tag.svg",
       "url": "assets/icons/fa-solid-tag.svg",
       "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/tag.svg",
-      "bytes": 495
+      "bytes": 553,
+      "fill": "#1a8bbf",
+      "observacao": "fill e viewBox ajustados para o <img> ficar do tamanho e da cor do glifo que substitui",
+      "viewBoxOriginal": "0 0 448 512",
+      "escala": 0.72,
+      "aba": "categorias",
+      "viewBox": "-131.56 -99.56 711.11 711.11"
     },
     {
       "classe": "fa-solid fa-tags",
@@ -210,7 +240,13 @@
       "arquivo": "fa-solid-trophy.svg",
       "url": "assets/icons/fa-solid-trophy.svg",
       "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/trophy.svg",
-      "bytes": 986
+      "bytes": 1043,
+      "fill": "#1a8bbf",
+      "observacao": "fill e viewBox ajustados para o <img> ficar do tamanho e da cor do glifo que substitui",
+      "viewBoxOriginal": "0 0 576 512",
+      "escala": 0.72,
+      "aba": "resultados",
+      "viewBox": "-67.56 -99.56 711.11 711.11"
     },
     {
       "classe": "fa-solid fa-truck",

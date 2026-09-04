@@ -17,7 +17,7 @@
     modalAddId: "modalAddMotivoReprovacao", modalEditId: "modalEditMotivoReprovacao",
     prefixoAdd: "motRepAdd", prefixoEdit: "motRepEdit",
     btnSalvarAddId: "btnSaveAddMotivoReprovacao", btnSalvarEditId: "btnSaveEditMotivoReprovacao",
-    classeIcone: "purple", iconePadrao: "fa-solid fa-circle-xmark",
+    classeIcone: "purple", iconePadrao: "assets/icons/fa-solid-circle-xmark.svg",
     palavraBadge: null, palavraBadgeSingular: null,
     // Limites do DER (kzn_motivo_reprovacao): NM_MOTIVO VARCHAR(30) /
     // DS_MOTIVO VARCHAR(100) — mesmo tamanho das outras tabelas

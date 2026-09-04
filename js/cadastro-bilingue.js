@@ -205,9 +205,10 @@ window.criarCadastroBilingue = function (cfg) {
     item.dataset.id = reg.ID;
     item.innerHTML =
       '<div class="admin-item-icon ' + cfg.classeIcone + '">' +
-        (reg.URL_ICONE
-          ? '<img src="' + escapeHtml(reg.URL_ICONE) + '" alt="" loading="lazy">'
-          : '<i class="' + cfg.iconePadrao + '"></i>') +
+        // Os dois lados são URL de assets/icons: o banco (URL_ICONE) quando
+        // o registro tem ícone próprio, senão o ícone padrão da aba. Mesmo
+        // <img> nos dois casos — só muda de onde vem o endereço.
+        '<img src="' + escapeHtml(reg.URL_ICONE || cfg.iconePadrao) + '" alt="" loading="lazy">' +
       "</div>" +
       '<div class="admin-item-body">' +
         '<div class="admin-item-name">' + escapeHtml(reg.NM) + semTraducaoHtml(reg) + "</div>" +

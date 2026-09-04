@@ -17,7 +17,7 @@
     modalAddId: "modalAddTipoResultado", modalEditId: "modalEditTipoResultado",
     prefixoAdd: "tiporesAdd", prefixoEdit: "tiporesEdit",
     btnSalvarAddId: "btnSaveAddTipoResultado", btnSalvarEditId: "btnSaveEditTipoResultado",
-    classeIcone: "teal", iconePadrao: "fa-solid fa-layer-group",
+    classeIcone: "teal", iconePadrao: "assets/icons/fa-solid-layer-group.svg",
     palavraBadge: null, palavraBadgeSingular: null,
     // Limite do DER (kzn_tipo_resultado): NM_TIPO_RESULTADO VARCHAR(30)
     // — mesmo tamanho de nome das outras 4 tabelas bilíngues (server.js

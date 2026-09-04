@@ -11,7 +11,7 @@
     modalAddId: "modalAddResultado", modalEditId: "modalEditResultado",
     prefixoAdd: "resAdd", prefixoEdit: "resEdit",
     btnSalvarAddId: "btnSaveAddResultado", btnSalvarEditId: "btnSaveEditResultado",
-    classeIcone: "yellow", iconePadrao: "fa-solid fa-trophy",
+    classeIcone: "yellow", iconePadrao: "assets/icons/fa-solid-trophy.svg",
     palavraBadge: null, palavraBadgeSingular: null,
     // Limites do DER (kzn_resultados): NM_RESULTADO VARCHAR(30) /
     // DS_RESULTADO VARCHAR(100) — mesmo tamanho das outras 3 tabelas

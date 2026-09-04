@@ -30,7 +30,7 @@
 
   var ROTA = "categorias";
   var CLASSE_ICONE = "green";
-  var ICONE_PADRAO = "fa-solid fa-tag";
+  var ICONE_PADRAO = "assets/icons/fa-solid-tag.svg";
   var PALAVRA_BADGE = "kaizens";
   var PALAVRA_BADGE_SINGULAR = "kaizen";
   var ROTULO_SINGULAR = "Categoria";
@@ -129,9 +129,10 @@
     item.dataset.id = reg.ID;
     item.innerHTML =
       '<div class="admin-item-icon ' + CLASSE_ICONE + '">' +
-        (reg.URL_ICONE
-          ? '<img src="' + escapeHtml(reg.URL_ICONE) + '" alt="" loading="lazy">'
-          : '<i class="' + ICONE_PADRAO + '"></i>') +
+        // Os dois lados são URL de assets/icons: o banco (URL_ICONE) quando
+        // o registro tem ícone próprio, senão o ícone padrão da aba. Mesmo
+        // <img> nos dois casos — só muda de onde vem o endereço.
+        '<img src="' + escapeHtml(reg.URL_ICONE || ICONE_PADRAO) + '" alt="" loading="lazy">' +
       "</div>" +
       '<div class="admin-item-body">' +
         '<div class="admin-item-name">' + escapeHtml(reg.NM) + semTraducaoHtml(reg) + "</div>" +
