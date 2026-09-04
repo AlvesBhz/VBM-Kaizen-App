@@ -110,7 +110,66 @@ window.criarCadastroBilingue = function (cfg) {
     return null;
   }
 
-  function montarPayload(nomePtEl, descPtEl, nomeEnEl, descEnEl, comboEl) {
+  // ---- ícone do registro (URL_ICONE) --------------------------------
+  // Mesma lógica já validada na aba Categorias (js/categorias.js), aqui
+  // no motor para valer também em Replicação, Desperdícios e Resultados.
+  // Aba sem seletor de ícone (Tipo Resultados, Mot. Reprovação) não tem
+  // a grade nem o campo no HTML, e a coluna não existe na tabela: tudo
+  // abaixo devolve null e nada vai no corpo — a aba segue igual.
+  //
+  // A pasta sai do próprio iconePadrao, que já aponta para a pasta da
+  // aba (assets/icons/<aba>/), então nenhuma configuração muda.
+  var PASTA_ICONES = String(cfg.iconePadrao || "").replace(/[^/]+$/, "");
+
+  // "fa-solid fa-globe" -> "assets/icons/replicacao/fa-solid-globe.svg".
+  // O "fa-" do segundo termo NÃO se repete no nome do arquivo.
+  function caminhoDoIcone(classe) {
+    var partes = String(classe || "").trim().split(/\s+/).filter(Boolean);
+    if (partes.length < 2 || !PASTA_ICONES) return null;
+    return PASTA_ICONES + partes[0] + "-" + partes[partes.length - 1].replace(/^fa-/, "") + ".svg";
+  }
+
+  // O inverso: usado para reacender o botão certo ao abrir a edição.
+  function classeDoCaminho(caminho) {
+    var arquivo = String(caminho || "").split("/").pop();
+    if (!/^fa-[a-z]+-[a-z0-9-]+\.svg$/.test(arquivo)) return null;
+    var partes = arquivo.replace(/\.svg$/, "").split("-");
+    return partes[0] + "-" + partes[1] + " fa-" + partes.slice(2).join("-");
+  }
+
+  function iconeSelecionado(prefixo) {
+    var input = el(prefixo + "IconInput");
+    return input ? caminhoDoIcone(input.value) : null;
+  }
+
+  // Deixa a paleta mostrando o ícone gravado: acende o botão e alinha o
+  // campo escondido. Caminho fora da paleta (registro antigo, ícone
+  // próprio) não acende nada — e é aí que iconeAlterado protege o valor.
+  function aplicarIconeNaPaleta(prefixo, caminho) {
+    var grade = el(prefixo + "IconGrid");
+    if (!grade) return;
+    var classe = classeDoCaminho(caminho);
+    var alvo = classe ? grade.querySelector('[data-icon="' + classe + '"]') : null;
+    grade.querySelectorAll(".icon-swatch").forEach(function (s) {
+      s.classList.toggle("active", s === alvo);
+    });
+    var input = el(prefixo + "IconInput");
+    if (input && classe) input.value = classe;
+  }
+
+  // false = o usuário não tocou na paleta nesta edição, então o ícone não
+  // vai no corpo e o servidor preserva o que já está gravado. Sem isso,
+  // editar só o nome de um registro com ícone fora da paleta trocaria o
+  // ícone dele sem ninguém pedir.
+  var iconeAlterado = false;
+  var gradeEdicao = el(cfg.prefixoEdit + "IconGrid");
+  if (gradeEdicao) {
+    gradeEdicao.addEventListener("click", function (e) {
+      if (e.target.closest(".icon-swatch")) iconeAlterado = true;
+    });
+  }
+
+  function montarPayload(nomePtEl, descPtEl, nomeEnEl, descEnEl, comboEl, prefixoIcone) {
     var payload = {
       pt: { NM: nomePtEl ? nomePtEl.value.trim() : "", DS: descPtEl ? descPtEl.value.trim() : "" },
       en: { NM: nomeEnEl ? nomeEnEl.value.trim() : "", DS: descEnEl ? descEnEl.value.trim() : "" },
@@ -119,6 +178,13 @@ window.criarCadastroBilingue = function (cfg) {
       var bruto = comboEl ? comboEl.value : "";
       payload[comboExtra.campo] = bruto ? parseInt(bruto, 10) : null;
     }
+    // Só vai no corpo quando há o que gravar: na criação, sempre (o
+    // registro nasce com o ícone da paleta); na edição, apenas se o
+    // usuário escolheu outro. Ausente, o servidor preserva o URL_ICONE
+    // que já está gravado.
+    var podeEnviar = prefixoIcone !== cfg.prefixoEdit || iconeAlterado;
+    var icone = podeEnviar ? iconeSelecionado(prefixoIcone) : null;
+    if (icone) payload.urlIcone = icone;
     return payload;
   }
 
@@ -268,6 +334,10 @@ window.criarCadastroBilingue = function (cfg) {
   // ── Editar ──
   function abrirEdicao(reg) {
     idEmEdicao = reg.ID;
+    iconeAlterado = false;
+    // Já acende com o que a listagem trouxe do banco; o GET abaixo
+    // confirma. Sem isso a paleta abriria no valor fixo do HTML.
+    aplicarIconeNaPaleta(cfg.prefixoEdit, reg.URL_ICONE || cfg.iconePadrao);
     if (window.openModal) openModal(cfg.modalEditId);
 
     fetch("/api/" + cfg.rota + "/" + encodeURIComponent(reg.ID))
@@ -288,6 +358,14 @@ window.criarCadastroBilingue = function (cfg) {
         }
         if (editDescEn) editDescEn.value = (data.en && data.en.DS) || "";
         if (comboExtra) carregarOpcoesCombo(data[comboExtra.campo]);
+        // O ícone é do registro (mesmo nos 2 idiomas) e vem do banco —
+        // mas esta resposta é assíncrona e não pode passar por cima de
+        // uma escolha que o usuário já fez enquanto ela vinha (rede
+        // lenta), nem pintar a paleta de um registro que já não é o
+        // aberto. Nos dois casos gravaria um ícone que ninguém escolheu.
+        if (!iconeAlterado && idEmEdicao === reg.ID) {
+          aplicarIconeNaPaleta(cfg.prefixoEdit, data.urlIcone || cfg.iconePadrao);
+        }
       })
       .catch(function (err) {
         console.error("[" + cfg.rota + "] falha ao carregar para edição:", err);
@@ -300,7 +378,7 @@ window.criarCadastroBilingue = function (cfg) {
       if (window.showToast) showToast("error", "Erro", "Registro não identificado — feche e abra o formulário de novo.");
       return;
     }
-    var payload = montarPayload(editNamePt, editDescPt, editNameEn, editDescEn, editComboEl);
+    var payload = montarPayload(editNamePt, editDescPt, editNameEn, editDescEn, editComboEl, cfg.prefixoEdit);
     var erro = validar(payload.pt.NM, payload.pt.DS, payload.en.NM, payload.en.DS, editComboEl ? editComboEl.value : null);
     if (erro) {
       if (window.showToast) showToast("warning", "Campo inválido", erro);
@@ -347,7 +425,7 @@ window.criarCadastroBilingue = function (cfg) {
   }
 
   function salvarCriacao() {
-    var payload = montarPayload(addNamePt, addDescPt, addNameEn, addDescEn, addComboEl);
+    var payload = montarPayload(addNamePt, addDescPt, addNameEn, addDescEn, addComboEl, cfg.prefixoAdd);
     var erro = validar(payload.pt.NM, payload.pt.DS, payload.en.NM, payload.en.DS, addComboEl ? addComboEl.value : null);
     if (erro) {
       if (window.showToast) showToast("warning", "Campo inválido", erro);
