@@ -1,0 +1,272 @@
+{
+  "fonte": "Font Awesome Free 6.6.0 (solid)",
+  "licenca": "CC BY 4.0 — https://fontawesome.com/license/free",
+  "pacote": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz",
+  "gerado": "2026-09-04",
+  "icones": [
+    {
+      "classe": "fa-solid fa-ban",
+      "icone": "ban",
+      "arquivo": "fa-solid-ban.svg",
+      "url": "assets/icons/fa-solid-ban.svg",
+      "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/ban.svg",
+      "bytes": 541
+    },
+    {
+      "classe": "fa-solid fa-bolt",
+      "icone": "bolt",
+      "arquivo": "fa-solid-bolt.svg",
+      "url": "assets/icons/fa-solid-bolt.svg",
+      "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/bolt.svg",
+      "bytes": 537
+    },
+    {
+      "classe": "fa-solid fa-broom",
+      "icone": "broom",
+      "arquivo": "fa-solid-broom.svg",
+      "url": "assets/icons/fa-solid-broom.svg",
+      "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/broom.svg",
+      "bytes": 782
+    },
+    {
+      "classe": "fa-solid fa-building",
+      "icone": "building",
+      "arquivo": "fa-solid-building.svg",
+      "url": "assets/icons/fa-solid-building.svg",
+      "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/building.svg",
+      "bytes": 1084
+    },
+    {
+      "classe": "fa-solid fa-chart-line",
+      "icone": "chart-line",
+      "arquivo": "fa-solid-chart-line.svg",
+      "url": "assets/icons/fa-solid-chart-line.svg",
+      "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/chart-line.svg",
+      "bytes": 648
+    },
+    {
+      "classe": "fa-solid fa-circle-check",
+      "icone": "circle-check",
+      "arquivo": "fa-solid-circle-check.svg",
+      "url": "assets/icons/fa-solid-circle-check.svg",
+      "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/circle-check.svg",
+      "bytes": 484
+    },
+    {
+      "classe": "fa-solid fa-circle-info",
+      "icone": "circle-info",
+      "arquivo": "fa-solid-circle-info.svg",
+      "url": "assets/icons/fa-solid-circle-info.svg",
+      "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/circle-info.svg",
+      "bytes": 555
+    },
+    {
+      "classe": "fa-solid fa-circle-xmark",
+      "icone": "circle-xmark",
+      "arquivo": "fa-solid-circle-xmark.svg",
+      "url": "assets/icons/fa-solid-circle-xmark.svg",
+      "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/circle-xmark.svg",
+      "bytes": 571
+    },
+    {
+      "classe": "fa-solid fa-dollar-sign",
+      "icone": "dollar-sign",
+      "arquivo": "fa-solid-dollar-sign.svg",
+      "url": "assets/icons/fa-solid-dollar-sign.svg",
+      "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/dollar-sign.svg",
+      "bytes": 1218
+    },
+    {
+      "classe": "fa-solid fa-globe",
+      "icone": "globe",
+      "arquivo": "fa-solid-globe.svg",
+      "url": "assets/icons/fa-solid-globe.svg",
+      "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/globe.svg",
+      "bytes": 1301
+    },
+    {
+      "classe": "fa-solid fa-hand-holding-hand",
+      "icone": "hand-holding-hand",
+      "arquivo": "fa-solid-hand-holding-hand.svg",
+      "url": "assets/icons/fa-solid-hand-holding-hand.svg",
+      "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/hand-holding-hand.svg",
+      "bytes": 1037
+    },
+    {
+      "classe": "fa-solid fa-helmet-safety",
+      "icone": "helmet-safety",
+      "arquivo": "fa-solid-helmet-safety.svg",
+      "url": "assets/icons/fa-solid-helmet-safety.svg",
+      "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/helmet-safety.svg",
+      "bytes": 729
+    },
+    {
+      "classe": "fa-solid fa-industry",
+      "icone": "industry",
+      "arquivo": "fa-solid-industry.svg",
+      "url": "assets/icons/fa-solid-industry.svg",
+      "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/industry.svg",
+      "bytes": 513
+    },
+    {
+      "classe": "fa-solid fa-layer-group",
+      "icone": "layer-group",
+      "arquivo": "fa-solid-layer-group.svg",
+      "url": "assets/icons/fa-solid-layer-group.svg",
+      "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/layer-group.svg",
+      "bytes": 920
+    },
+    {
+      "classe": "fa-solid fa-leaf",
+      "icone": "leaf",
+      "arquivo": "fa-solid-leaf.svg",
+      "url": "assets/icons/fa-solid-leaf.svg",
+      "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/leaf.svg",
+      "bytes": 732
+    },
+    {
+      "classe": "fa-solid fa-magnifying-glass",
+      "icone": "magnifying-glass",
+      "arquivo": "fa-solid-magnifying-glass.svg",
+      "url": "assets/icons/fa-solid-magnifying-glass.svg",
+      "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/magnifying-glass.svg",
+      "bytes": 523
+    },
+    {
+      "classe": "fa-solid fa-map-location-dot",
+      "icone": "map-location-dot",
+      "arquivo": "fa-solid-map-location-dot.svg",
+      "url": "assets/icons/fa-solid-map-location-dot.svg",
+      "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/map-location-dot.svg",
+      "bytes": 874
+    },
+    {
+      "classe": "fa-solid fa-pen",
+      "icone": "pen",
+      "arquivo": "fa-solid-pen.svg",
+      "url": "assets/icons/fa-solid-pen.svg",
+      "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/pen.svg",
+      "bytes": 551
+    },
+    {
+      "classe": "fa-solid fa-plus",
+      "icone": "plus",
+      "arquivo": "fa-solid-plus.svg",
+      "url": "assets/icons/fa-solid-plus.svg",
+      "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/plus.svg",
+      "bytes": 492
+    },
+    {
+      "classe": "fa-solid fa-recycle",
+      "icone": "recycle",
+      "arquivo": "fa-solid-recycle.svg",
+      "url": "assets/icons/fa-solid-recycle.svg",
+      "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/recycle.svg",
+      "bytes": 1318
+    },
+    {
+      "classe": "fa-solid fa-rotate-right",
+      "icone": "rotate-right",
+      "arquivo": "fa-solid-rotate-right.svg",
+      "url": "assets/icons/fa-solid-rotate-right.svg",
+      "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/rotate-right.svg",
+      "bytes": 656
+    },
+    {
+      "classe": "fa-solid fa-screwdriver-wrench",
+      "icone": "screwdriver-wrench",
+      "arquivo": "fa-solid-screwdriver-wrench.svg",
+      "url": "assets/icons/fa-solid-screwdriver-wrench.svg",
+      "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/screwdriver-wrench.svg",
+      "bytes": 1072
+    },
+    {
+      "classe": "fa-solid fa-shield-halved",
+      "icone": "shield-halved",
+      "arquivo": "fa-solid-shield-halved.svg",
+      "url": "assets/icons/fa-solid-shield-halved.svg",
+      "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/shield-halved.svg",
+      "bytes": 562
+    },
+    {
+      "classe": "fa-solid fa-tag",
+      "icone": "tag",
+      "arquivo": "fa-solid-tag.svg",
+      "url": "assets/icons/fa-solid-tag.svg",
+      "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/tag.svg",
+      "bytes": 495
+    },
+    {
+      "classe": "fa-solid fa-tags",
+      "icone": "tags",
+      "arquivo": "fa-solid-tags.svg",
+      "url": "assets/icons/fa-solid-tags.svg",
+      "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/tags.svg",
+      "bytes": 699
+    },
+    {
+      "classe": "fa-solid fa-trophy",
+      "icone": "trophy",
+      "arquivo": "fa-solid-trophy.svg",
+      "url": "assets/icons/fa-solid-trophy.svg",
+      "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/trophy.svg",
+      "bytes": 986
+    },
+    {
+      "classe": "fa-solid fa-truck",
+      "icone": "truck",
+      "arquivo": "fa-solid-truck.svg",
+      "url": "assets/icons/fa-solid-truck.svg",
+      "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/truck.svg",
+      "bytes": 699
+    },
+    {
+      "classe": "fa-solid fa-user-check",
+      "icone": "user-check",
+      "arquivo": "fa-solid-user-check.svg",
+      "url": "assets/icons/fa-solid-user-check.svg",
+      "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/user-check.svg",
+      "bytes": 618
+    },
+    {
+      "classe": "fa-solid fa-user-pen",
+      "icone": "user-pen",
+      "arquivo": "fa-solid-user-pen.svg",
+      "url": "assets/icons/fa-solid-user-pen.svg",
+      "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/user-pen.svg",
+      "bytes": 775
+    },
+    {
+      "classe": "fa-solid fa-user-plus",
+      "icone": "user-plus",
+      "arquivo": "fa-solid-user-plus.svg",
+      "url": "assets/icons/fa-solid-user-plus.svg",
+      "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/user-plus.svg",
+      "bytes": 667
+    },
+    {
+      "classe": "fa-solid fa-users-gear",
+      "icone": "users-gear",
+      "arquivo": "fa-solid-users-gear.svg",
+      "url": "assets/icons/fa-solid-users-gear.svg",
+      "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/users-gear.svg",
+      "bytes": 2453
+    },
+    {
+      "classe": "fa-solid fa-wrench",
+      "icone": "wrench",
+      "arquivo": "fa-solid-wrench.svg",
+      "url": "assets/icons/fa-solid-wrench.svg",
+      "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/wrench.svg",
+      "bytes": 743
+    },
+    {
+      "classe": "fa-solid fa-xmark",
+      "icone": "xmark",
+      "arquivo": "fa-solid-xmark.svg",
+      "url": "assets/icons/fa-solid-xmark.svg",
+      "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/xmark.svg",
+      "bytes": 570
+    }
+  ]
+}
