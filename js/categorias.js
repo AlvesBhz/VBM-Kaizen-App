@@ -30,7 +30,7 @@
 
   var ROTA = "categorias";
   var CLASSE_ICONE = "green";
-  var PASTA_ICONES = "assets/icons/";
+  var PASTA_ICONES = "assets/icons/categorias/";
   var ICONE_PADRAO = PASTA_ICONES + "fa-solid-tag.svg";
   var PALAVRA_BADGE = "kaizens";
   var PALAVRA_BADGE_SINGULAR = "kaizen";
@@ -97,10 +97,12 @@
 
   // Caminho do arquivo a partir da classe do seletor: os botões da paleta
   // guardam "fa-solid fa-leaf" (data-icon, em admin.html) e o arquivo
-  // correspondente é assets/icons/fa-solid-leaf.svg — mesma convenção de
-  // nomes de assets/icons/icones.json. Converter aqui evita mexer nos 20
-  // botões do HTML e mantém pickCategoryIcon() como está.
-  // "fa-solid fa-leaf" -> "assets/icons/fa-solid-leaf.svg". O "fa-" do
+  // correspondente é assets/icons/categorias/fa-solid-leaf.svg. Cada tab
+  // tem a sua pasta com os ícones da própria paleta (ver
+  // assets/icons/icones.json), então o caminho sai de PASTA_ICONES + nome,
+  // sem tabela de exceções. Converter aqui evita mexer nos 20 botões do
+  // HTML e mantém pickCategoryIcon() como está.
+  // "fa-solid fa-leaf" -> "assets/icons/categorias/fa-solid-leaf.svg". O "fa-" do
   // segundo termo NÃO se repete no nome do arquivo (ver icones.json).
   function caminhoDoIcone(classe) {
     var partes = String(classe || "").trim().split(/\s+/).filter(Boolean);

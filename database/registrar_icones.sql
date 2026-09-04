@@ -27,22 +27,22 @@ BEGIN TRANSACTION;
 
 /* --- Categorias — ícone padrão da aba: fa-tag ---------------------- */
 UPDATE [ci].[kzn_categoria]
-   SET URL_ICONE = 'assets/icons/fa-solid-tag.svg'
+   SET URL_ICONE = 'assets/icons/categorias/fa-solid-tag.svg'
  WHERE URL_ICONE IS NULL;
 
 /* --- Potencial de Replicação — ícone padrão da aba: fa-globe ------- */
 UPDATE [ci].[kzn_replicacao]
-   SET URL_ICONE = 'assets/icons/fa-solid-globe.svg'
+   SET URL_ICONE = 'assets/icons/replicacao/fa-solid-globe.svg'
  WHERE URL_ICONE IS NULL;
 
 /* --- Redução de Desperdícios — ícone padrão da aba: fa-recycle ----- */
 UPDATE [ci].[kzn_desperdicio]
-   SET URL_ICONE = 'assets/icons/fa-solid-recycle.svg'
+   SET URL_ICONE = 'assets/icons/desperdicios/fa-solid-recycle.svg'
  WHERE URL_ICONE IS NULL;
 
 /* --- Resultados — ícone padrão da aba: fa-trophy ------------------- */
 UPDATE [ci].[kzn_resultados]
-   SET URL_ICONE = 'assets/icons/fa-solid-trophy.svg'
+   SET URL_ICONE = 'assets/icons/resultados/fa-solid-trophy.svg'
  WHERE URL_ICONE IS NULL;
 
 COMMIT;
@@ -54,10 +54,10 @@ UNION ALL SELECT 'kzn_desperdicio', COUNT(*) FROM [ci].[kzn_desperdicio] WHERE U
 UNION ALL SELECT 'kzn_resultados',  COUNT(*) FROM [ci].[kzn_resultados]  WHERE URL_ICONE IS NULL;
 
 /* --- Para trocar o ícone de UM registro específico ------------------
-   Basta apontar para outro arquivo de assets/icons (os 33 ícones da
-   tela estão todos lá, ver assets/icons/icones.json). Exemplo:
+   Basta apontar para outro arquivo de assets/icons (os ícones de cada aba estão
+   na pasta da própria aba, ver assets/icons/icones.json). Exemplo:
 
      UPDATE [ci].[kzn_categoria]
-        SET URL_ICONE = 'assets/icons/fa-solid-helmet-safety.svg'
+        SET URL_ICONE = 'assets/icons/categorias/fa-solid-helmet-safety.svg'
       WHERE ID_CATEGORIA = 1;   -- vale para as 2 linhas (PT e EN) do registro
    ------------------------------------------------------------------- */

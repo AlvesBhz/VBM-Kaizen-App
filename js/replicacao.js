@@ -11,7 +11,7 @@
     modalAddId: "modalAddReplicacao", modalEditId: "modalEditReplicacao",
     prefixoAdd: "replAdd", prefixoEdit: "replEdit",
     btnSalvarAddId: "btnSaveAddReplicacao", btnSalvarEditId: "btnSaveEditReplicacao",
-    classeIcone: "blue", iconePadrao: "assets/icons/fa-solid-globe.svg",
+    classeIcone: "blue", iconePadrao: "assets/icons/replicacao/fa-solid-globe.svg",
     palavraBadge: null, palavraBadgeSingular: null,
     // Limites do DER (kzn_replicacao): NM_REPLICACAO VARCHAR(30) /
     // DS_REPLICACAO VARCHAR(100) — mesmo tamanho das outras 3 tabelas
