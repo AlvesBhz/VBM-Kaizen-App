@@ -1234,6 +1234,8 @@ apiRouter.put("/usuarios/:id/status", async (req, res) => {
 // exatamente as MESMAS colunas VARCHAR(30)/VARCHAR(100) — não há mais
 // exceção nenhuma, as 4 sempre tiveram o mesmo tamanho.
 const CADASTRO_LIMITES_DER = { nome: 30, descricao: 100 };
+// URL_ICONE VARCHAR(200) — igual nas 4 tabelas que têm a coluna (DER).
+const ICONE_MAX = 200;
 
 function tabelaCadastro(envVar, padrao) {
   return `[${DB_SCHEMA}].[${safeIdentifier(process.env[envVar], padrao)}]`;
@@ -1352,6 +1354,21 @@ function registrarCadastroBilingue(cfg) {
   // (extraEditavel.obrigatorio) — sem isso, o INSERT falha só lá no
   // banco com "Cannot insert the value NULL...", uma mensagem que não
   // diz ao usuário qual campo faltou.
+  // Caminho do ícone aceito para gravação: caminho relativo/absoluto do
+  // próprio app (assets/icons/x.svg, /icones/x.svg) ou URL http(s), sempre
+  // terminando em extensão de imagem. Recusa "..", aspas e sinais de tag —
+  // o valor volta para a tela dentro de <img src>, então nada de conteúdo
+  // que possa escapar do atributo. Só vale para o que é GRAVADO agora; a
+  // leitura de registros antigos continua aceitando o que já está no banco.
+  const ICONE_FORMATO = /^(https?:\/\/[^\s"'<>]+|\/?[A-Za-z0-9._\-/]+)\.(svg|png|jpg|jpeg|webp|gif)$/i;
+
+  function validarIcone(urlIcone) {
+    if (urlIcone === undefined) return null; // não veio: não mexe na coluna
+    if (urlIcone.length > ICONE_MAX) return `O caminho do ícone deve ter no máximo ${ICONE_MAX} caracteres.`;
+    if (urlIcone.includes("..") || !ICONE_FORMATO.test(urlIcone)) return "Caminho de ícone inválido.";
+    return null;
+  }
+
   function validarExtra(extra) {
     if (!extraEditavel) return null;
     if (extra != null && Number.isNaN(extra)) return `${extraEditavel.col} inválido.`;
@@ -1374,6 +1391,13 @@ function registrarCadastroBilingue(cfg) {
       const bruto = req.body?.[extraEditavel.campo];
       corpo.extra = bruto === "" || bruto == null ? null : parseInt(bruto, 10);
     }
+    // URL_ICONE: só existe quando a tela tem seletor de ícone. Ausente ou
+    // vazio vira undefined — e undefined significa "não mexe na coluna",
+    // nunca "apaga o ícone" (ver upsertIdioma).
+    if (temIcone) {
+      const bruto = req.body?.urlIcone;
+      corpo.urlIcone = typeof bruto === "string" && bruto.trim() ? bruto.trim() : undefined;
+    }
     return corpo;
   }
 
@@ -1391,11 +1415,20 @@ function registrarCadastroBilingue(cfg) {
   const colsHerdadas = (temIcone ? ["URL_ICONE"] : []).concat(extras);
   const selectHerdado = (col) => `(SELECT TOP (1) ${col} FROM ${tabela} WHERE ${pk} = @id)`;
 
-  function upsertIdioma(id, idIdioma, nome, descricao, idUsuario, extraValor) {
-    const colsInsert = [pk, "ID_IDIOMA"].concat(colsHerdadas, [colNome], colDescricao ? [colDescricao] : [], ["SG_ATIVO", "DT_ATUALIZACAO"])
+  function upsertIdioma(id, idIdioma, nome, descricao, idUsuario, extraValor, urlIcone) {
+    // URL_ICONE tem 2 caminhos, e só um vale por chamada:
+    //   corpo TROUXE o ícone -> grava o valor recebido (no INSERT e no
+    //     UPDATE), que é a aba com seletor de ícone (Categorias);
+    //   corpo NÃO trouxe -> comportamento de sempre: herda da linha do
+    //     outro idioma no INSERT e o UPDATE não toca na coluna. É o que
+    //     preserva o ícone dos registros já existentes e mantém as abas
+    //     sem seletor exatamente como eram.
+    const gravaIcone = temIcone && urlIcone != null;
+    const herdadas = gravaIcone ? extras : colsHerdadas;
+    const colsInsert = [pk, "ID_IDIOMA"].concat(gravaIcone ? ["URL_ICONE"] : [], herdadas, [colNome], colDescricao ? [colDescricao] : [], ["SG_ATIVO", "DT_ATUALIZACAO"])
       .concat(capturarUsuario ? [colUsuario] : [])
       .concat(extraEditavel ? [extraEditavel.col] : []);
-    const valsInsert = ["@id", "@idIdioma"].concat(colsHerdadas.map(selectHerdado), ["@nome"], colDescricao ? ["@descricao"] : [], ["'S'", "GETDATE()"])
+    const valsInsert = ["@id", "@idIdioma"].concat(gravaIcone ? ["@urlIcone"] : [], herdadas.map(selectHerdado), ["@nome"], colDescricao ? ["@descricao"] : [], ["'S'", "GETDATE()"])
       // Sempre quem está salvando agora — criar ou editar, sem distinguir
       // (mesmo desenho de DT_ATUALIZACAO, ao lado).
       .concat(capturarUsuario ? ["@idUsuario"] : [])
@@ -1405,6 +1438,7 @@ function registrarCadastroBilingue(cfg) {
       // extraValor).
       .concat(extraEditavel ? ["@extra"] : []);
     const setUpdate = `${colNome} = @nome` + (colDescricao ? `, ${colDescricao} = @descricao` : "") + `, DT_ATUALIZACAO = GETDATE()`
+      + (gravaIcone ? `, URL_ICONE = @urlIcone` : "")
       + (capturarUsuario ? `, ${colUsuario} = @idUsuario` : "")
       + (extraEditavel ? `, ${extraEditavel.col} = @extra` : "");
 
@@ -1419,6 +1453,8 @@ function registrarCadastroBilingue(cfg) {
     if (capturarUsuario) params.push(["idUsuario", sql.Int, idUsuario ?? null]);
     // Sem seleção no combo: grava NULL, nunca bloqueia o salvamento.
     if (extraEditavel) params.push(["extra", sql.Int, extraValor ?? null]);
+    // VARCHAR(200) no DER (database/DER_VBM_Kaizen_CI.html).
+    if (gravaIcone) params.push(["urlIcone", sql.NVarChar(ICONE_MAX), urlIcone]);
 
     return runQuery(
       `MERGE INTO ${tabela} AS target
@@ -1520,6 +1556,7 @@ function registrarCadastroBilingue(cfg) {
       const colsSelectId = ["ID_IDIOMA", `${colNome} AS NM`];
       if (colDescricao) colsSelectId.push(`${colDescricao} AS DS`);
       if (extraEditavel) colsSelectId.push(`${extraEditavel.col} AS EXTRA`);
+      if (temIcone) colsSelectId.push("URL_ICONE");
       const result = await runQuery(
         `SELECT ${colsSelectId.join(", ")} FROM ${tabela} WHERE ${pk} = @id`,
         [["id", sql.Int, id]]
@@ -1536,6 +1573,9 @@ function registrarCadastroBilingue(cfg) {
         // Mesmo valor nos 2 idiomas (não é um dado bilíngue) — pega de
         // qualquer linha que exista.
         ...(extraEditavel ? { [extraEditavel.campo]: (pt && pt.EXTRA) ?? (en && en.EXTRA) ?? null } : {}),
+        // Idem: o ícone é do registro, não do idioma. A tela de edição usa
+        // este valor para já abrir com o ícone que está gravado.
+        ...(temIcone ? { urlIcone: (pt && pt.URL_ICONE) ?? (en && en.URL_ICONE) ?? null } : {}),
       });
     } catch (err) {
       console.error(`${log} erro ao consultar por ID:`, err.message);
@@ -1554,11 +1594,13 @@ function registrarCadastroBilingue(cfg) {
       const id = parseInt(req.params.id, 10);
       if (!Number.isInteger(id)) return res.status(400).json({ error: `${pk} inválido.` });
 
-      const { nomePt, descPt, nomeEn, descEn, extra } = lerCorpo(req);
+      const { nomePt, descPt, nomeEn, descEn, extra, urlIcone } = lerCorpo(req);
       const erro = validarCampos(nomePt, descPt, nomeEn, descEn);
       if (erro) return res.status(400).json({ error: erro });
       const erroExtra = validarExtra(extra);
       if (erroExtra) return res.status(400).json({ error: erroExtra });
+      const erroIcone = validarIcone(urlIcone);
+      if (erroIcone) return res.status(400).json({ error: erroIcone });
 
       const existe = await runQuery(
         `SELECT TOP (1) 1 AS X FROM ${tabela} WHERE ${pk} = @id`,
@@ -1573,8 +1615,8 @@ function registrarCadastroBilingue(cfg) {
       const idUsuario = capturarUsuario ? await idUsuarioLogado(req) : null;
 
       await Promise.all([
-        upsertIdioma(id, ID_IDIOMA_PT, nomePt, descPt, idUsuario, extra),
-        upsertIdioma(id, ID_IDIOMA_EN, nomeEn, descEn, idUsuario, extra),
+        upsertIdioma(id, ID_IDIOMA_PT, nomePt, descPt, idUsuario, extra, urlIcone),
+        upsertIdioma(id, ID_IDIOMA_EN, nomeEn, descEn, idUsuario, extra, urlIcone),
       ]);
       res.json({ ok: true });
     } catch (err) {
@@ -1592,11 +1634,13 @@ function registrarCadastroBilingue(cfg) {
   // situação que o upsert do editar já resolve numa edição seguinte.
   apiRouter.post(`/${rota}`, async (req, res) => {
     try {
-      const { nomePt, descPt, nomeEn, descEn, extra } = lerCorpo(req);
+      const { nomePt, descPt, nomeEn, descEn, extra, urlIcone } = lerCorpo(req);
       const erro = validarCampos(nomePt, descPt, nomeEn, descEn);
       if (erro) return res.status(400).json({ error: erro });
       const erroExtra = validarExtra(extra);
       if (erroExtra) return res.status(400).json({ error: erroExtra });
+      const erroIcone = validarIcone(urlIcone);
+      if (erroIcone) return res.status(400).json({ error: erroIcone });
 
       const proximo = await runQuery(`SELECT ISNULL(MAX(${pk}), 0) + 1 AS PROXIMO FROM ${tabela}`);
       const id = proximo.recordset[0].PROXIMO;
@@ -1604,8 +1648,8 @@ function registrarCadastroBilingue(cfg) {
       const idUsuario = capturarUsuario ? await idUsuarioLogado(req) : null;
 
       await Promise.all([
-        upsertIdioma(id, ID_IDIOMA_PT, nomePt, descPt, idUsuario, extra),
-        upsertIdioma(id, ID_IDIOMA_EN, nomeEn, descEn, idUsuario, extra),
+        upsertIdioma(id, ID_IDIOMA_PT, nomePt, descPt, idUsuario, extra, urlIcone),
+        upsertIdioma(id, ID_IDIOMA_EN, nomeEn, descEn, idUsuario, extra, urlIcone),
       ]);
       res.status(201).json({ ok: true, ID: id });
     } catch (err) {

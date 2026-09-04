@@ -18,7 +18,12 @@
       "arquivo": "fa-solid-bolt.svg",
       "url": "assets/icons/fa-solid-bolt.svg",
       "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/bolt.svg",
-      "bytes": 537
+      "bytes": 598,
+      "fill": "#1a8bbf",
+      "paleta": "categorias",
+      "viewBoxOriginal": "0 0 448 512",
+      "viewBox": "-131.56 -99.56 711.11 711.11",
+      "observacao": "fill e viewBox ajustados para o <img> ficar do tamanho e da cor do glifo"
     },
     {
       "classe": "fa-solid fa-broom",
@@ -26,7 +31,12 @@
       "arquivo": "fa-solid-broom.svg",
       "url": "assets/icons/fa-solid-broom.svg",
       "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/broom.svg",
-      "bytes": 782
+      "bytes": 842,
+      "fill": "#1a8bbf",
+      "paleta": "categorias",
+      "viewBoxOriginal": "0 0 576 512",
+      "viewBox": "-67.56 -99.56 711.11 711.11",
+      "observacao": "fill e viewBox ajustados para o <img> ficar do tamanho e da cor do glifo"
     },
     {
       "classe": "fa-solid fa-building",
@@ -50,7 +60,12 @@
       "arquivo": "fa-solid-circle-check.svg",
       "url": "assets/icons/fa-solid-circle-check.svg",
       "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/circle-check.svg",
-      "bytes": 484
+      "bytes": 544,
+      "fill": "#1a8bbf",
+      "paleta": "categorias",
+      "viewBoxOriginal": "0 0 512 512",
+      "viewBox": "-99.56 -99.56 711.11 711.11",
+      "observacao": "fill e viewBox ajustados para o <img> ficar do tamanho e da cor do glifo"
     },
     {
       "classe": "fa-solid fa-circle-info",
@@ -110,7 +125,12 @@
       "arquivo": "fa-solid-helmet-safety.svg",
       "url": "assets/icons/fa-solid-helmet-safety.svg",
       "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/helmet-safety.svg",
-      "bytes": 729
+      "bytes": 789,
+      "fill": "#1a8bbf",
+      "paleta": "categorias",
+      "viewBoxOriginal": "0 0 576 512",
+      "viewBox": "-67.56 -99.56 711.11 711.11",
+      "observacao": "fill e viewBox ajustados para o <img> ficar do tamanho e da cor do glifo"
     },
     {
       "classe": "fa-solid fa-industry",
@@ -118,7 +138,12 @@
       "arquivo": "fa-solid-industry.svg",
       "url": "assets/icons/fa-solid-industry.svg",
       "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/industry.svg",
-      "bytes": 513
+      "bytes": 573,
+      "fill": "#1a8bbf",
+      "paleta": "categorias",
+      "viewBoxOriginal": "0 0 576 512",
+      "viewBox": "-67.56 -99.56 711.11 711.11",
+      "observacao": "fill e viewBox ajustados para o <img> ficar do tamanho e da cor do glifo"
     },
     {
       "classe": "fa-solid fa-layer-group",
@@ -140,7 +165,12 @@
       "arquivo": "fa-solid-leaf.svg",
       "url": "assets/icons/fa-solid-leaf.svg",
       "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/leaf.svg",
-      "bytes": 732
+      "bytes": 792,
+      "fill": "#1a8bbf",
+      "paleta": "categorias",
+      "viewBoxOriginal": "0 0 512 512",
+      "viewBox": "-99.56 -99.56 711.11 711.11",
+      "observacao": "fill e viewBox ajustados para o <img> ficar do tamanho e da cor do glifo"
     },
     {
       "classe": "fa-solid fa-magnifying-glass",
@@ -202,7 +232,12 @@
       "arquivo": "fa-solid-screwdriver-wrench.svg",
       "url": "assets/icons/fa-solid-screwdriver-wrench.svg",
       "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/screwdriver-wrench.svg",
-      "bytes": 1072
+      "bytes": 1132,
+      "fill": "#1a8bbf",
+      "paleta": "categorias",
+      "viewBoxOriginal": "0 0 512 512",
+      "viewBox": "-99.56 -99.56 711.11 711.11",
+      "observacao": "fill e viewBox ajustados para o <img> ficar do tamanho e da cor do glifo"
     },
     {
       "classe": "fa-solid fa-shield-halved",
@@ -254,7 +289,12 @@
       "arquivo": "fa-solid-truck.svg",
       "url": "assets/icons/fa-solid-truck.svg",
       "origem": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.6.0.tgz#package/svgs/solid/truck.svg",
-      "bytes": 699
+      "bytes": 759,
+      "fill": "#1a8bbf",
+      "paleta": "categorias",
+      "viewBoxOriginal": "0 0 640 512",
+      "viewBox": "-35.56 -99.56 711.11 711.11",
+      "observacao": "fill e viewBox ajustados para o <img> ficar do tamanho e da cor do glifo"
     },
     {
       "classe": "fa-solid fa-user-check",

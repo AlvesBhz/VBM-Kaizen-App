@@ -30,7 +30,8 @@
 
   var ROTA = "categorias";
   var CLASSE_ICONE = "green";
-  var ICONE_PADRAO = "assets/icons/fa-solid-tag.svg";
+  var PASTA_ICONES = "assets/icons/";
+  var ICONE_PADRAO = PASTA_ICONES + "fa-solid-tag.svg";
   var PALAVRA_BADGE = "kaizens";
   var PALAVRA_BADGE_SINGULAR = "kaizen";
   var ROTULO_SINGULAR = "Categoria";
@@ -94,11 +95,74 @@
     return null;
   }
 
-  function montarPayload(nomePtEl, descPtEl, nomeEnEl, descEnEl) {
-    return {
+  // Caminho do arquivo a partir da classe do seletor: os botões da paleta
+  // guardam "fa-solid fa-leaf" (data-icon, em admin.html) e o arquivo
+  // correspondente é assets/icons/fa-solid-leaf.svg — mesma convenção de
+  // nomes de assets/icons/icones.json. Converter aqui evita mexer nos 20
+  // botões do HTML e mantém pickCategoryIcon() como está.
+  // "fa-solid fa-leaf" -> "assets/icons/fa-solid-leaf.svg". O "fa-" do
+  // segundo termo NÃO se repete no nome do arquivo (ver icones.json).
+  function caminhoDoIcone(classe) {
+    var partes = String(classe || "").trim().split(/\s+/).filter(Boolean);
+    if (partes.length < 2) return null;
+    return PASTA_ICONES + partes[0] + "-" + partes[partes.length - 1].replace(/^fa-/, "") + ".svg";
+  }
+
+  // Classe equivalente a um caminho — o inverso de caminhoDoIcone(), usado
+  // para reacender o botão certo da paleta ao abrir a edição.
+  function classeDoCaminho(caminho) {
+    var arquivo = String(caminho || "").split("/").pop();
+    if (!/^fa-[a-z]+-[a-z0-9-]+\.svg$/.test(arquivo)) return null;
+    var partes = arquivo.replace(/\.svg$/, "").split("-");
+    return partes[0] + "-" + partes[1] + " fa-" + partes.slice(2).join("-");
+  }
+
+  function iconeSelecionado(prefixo) {
+    var input = el(prefixo + "IconInput");
+    return input ? caminhoDoIcone(input.value) : null;
+  }
+
+  // Deixa a paleta mostrando o ícone que está gravado no banco: acende o
+  // botão correspondente e alinha o campo escondido. Caminho fora da
+  // paleta (registro antigo, ícone próprio) não acende nada — e é
+  // justamente aí que iconeAlterado protege o valor original.
+  function aplicarIconeNaPaleta(prefixo, caminho) {
+    var classe = classeDoCaminho(caminho);
+    var grade = el(prefixo + "IconGrid");
+    if (!grade) return;
+    var alvo = classe ? grade.querySelector('[data-icon="' + classe + '"]') : null;
+    grade.querySelectorAll(".icon-swatch").forEach(function (s) {
+      s.classList.toggle("active", s === alvo);
+    });
+    var input = el(prefixo + "IconInput");
+    if (input && classe) input.value = classe;
+  }
+
+  // false = o usuário não tocou na paleta nesta edição, então o ícone não
+  // vai no corpo e o servidor preserva o que já está gravado. Sem isso,
+  // editar só o nome de um registro com ícone fora da paleta trocaria o
+  // ícone dele sem ninguém pedir.
+  var iconeAlterado = false;
+  var gradeEdicao = el("catEditIconGrid");
+  if (gradeEdicao) {
+    gradeEdicao.addEventListener("click", function (e) {
+      if (e.target.closest(".icon-swatch")) iconeAlterado = true;
+    });
+  }
+
+  function montarPayload(nomePtEl, descPtEl, nomeEnEl, descEnEl, prefixoIcone) {
+    var payload = {
       pt: { NM: nomePtEl ? nomePtEl.value.trim() : "", DS: descPtEl ? descPtEl.value.trim() : "" },
       en: { NM: nomeEnEl ? nomeEnEl.value.trim() : "", DS: descEnEl ? descEnEl.value.trim() : "" },
     };
+    // Só vai no corpo quando há o que gravar: na criação, sempre (o
+    // registro nasce com o ícone da paleta); na edição, apenas se o
+    // usuário escolheu outro. Ausente, o servidor preserva o URL_ICONE
+    // que já está gravado.
+    var podeEnviar = prefixoIcone !== "catEdit" || iconeAlterado;
+    var icone = podeEnviar ? iconeSelecionado(prefixoIcone) : null;
+    if (icone) payload.urlIcone = icone;
+    return payload;
   }
 
   function statusEl(texto, erro) {
@@ -197,6 +261,10 @@
   // ── Editar ──
   function abrirEdicao(reg) {
     idEmEdicao = reg.ID;
+    iconeAlterado = false;
+    // Já acende com o que a listagem trouxe do banco; o GET abaixo
+    // confirma. Sem isso a paleta abriria no valor fixo do HTML.
+    aplicarIconeNaPaleta("catEdit", reg.URL_ICONE || ICONE_PADRAO);
     if (window.openModal) openModal("modalEditCategoria");
 
     fetch("/api/" + ROTA + "/" + encodeURIComponent(reg.ID))
@@ -216,6 +284,8 @@
           if (window.updateCategoryDescCounter) updateCategoryDescCounter(editDescPt, "catEdit", DESCRICAO_MAX);
         }
         if (editDescEn) editDescEn.value = (data.en && data.en.DS) || "";
+        // O ícone é do registro (mesmo nos 2 idiomas) e vem do banco.
+        aplicarIconeNaPaleta("catEdit", data.urlIcone || ICONE_PADRAO);
       })
       .catch(function (err) {
         console.error("[categorias] falha ao carregar para edição:", err);
@@ -228,7 +298,7 @@
       if (window.showToast) showToast("error", "Erro", "Registro não identificado — feche e abra o formulário de novo.");
       return;
     }
-    var payload = montarPayload(editNamePt, editDescPt, editNameEn, editDescEn);
+    var payload = montarPayload(editNamePt, editDescPt, editNameEn, editDescEn, "catEdit");
     var erro = validar(payload.pt.NM, payload.pt.DS, payload.en.NM, payload.en.DS);
     if (erro) {
       if (window.showToast) showToast("warning", "Campo inválido", erro);
@@ -280,7 +350,7 @@
   }
 
   function salvarCriacao() {
-    var payload = montarPayload(addNamePt, addDescPt, addNameEn, addDescEn);
+    var payload = montarPayload(addNamePt, addDescPt, addNameEn, addDescEn, "catAdd");
     var erro = validar(payload.pt.NM, payload.pt.DS, payload.en.NM, payload.en.DS);
     if (erro) {
       if (window.showToast) showToast("warning", "Campo inválido", erro);
