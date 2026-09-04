@@ -65,6 +65,21 @@ const DB_SCHEMA = safeIdentifier(process.env.AZURE_SQL_SCHEMA, "dbo");
 const DB_TABLE = safeIdentifier(process.env.AZURE_SQL_TABLE, "kzn_aprovador");
 const FULL_TABLE_NAME = `[${DB_SCHEMA}].[${DB_TABLE}]`;
 
+// Data/hora de gravação no horário de Brasília.
+//
+// GETDATE() devolve o relógio do SERVIDOR, e o Azure SQL roda em UTC —
+// por isso DT_ATUALIZACAO nascia 3 horas à frente. A conversão é feita
+// pelo FUSO ('E. South America Standard Time' = São Paulo), não por um
+// -3 fixo: se o horário de verão voltar, o cálculo continua certo
+// sozinho. O CAST devolve DATETIME2, o tipo da coluna no DER.
+//
+// É expressão SQL, não parâmetro: entra direto no INSERT/UPDATE, no
+// lugar exato onde antes estava GETDATE(). Os parênteses em volta do AT
+// TIME ZONE são de propósito — deixam explícito que é ele que o CAST
+// recebe, sem depender da precedência.
+const AGORA_BRASILIA =
+  "CAST((SYSDATETIMEOFFSET() AT TIME ZONE 'E. South America Standard Time') AS DATETIME2)";
+
 // Mesmo schema dos aprovadores; tabela própria, também sobrescrevível
 // por env var caso o nome real divirja do padrão.
 const DB_CATEGORIA_TABLE = safeIdentifier(process.env.AZURE_SQL_CATEGORIA_TABLE, "kzn_categoria");
@@ -785,7 +800,7 @@ apiRouter.post("/aprovadores", async (req, res) => {
 
     await runQuery(
       `INSERT INTO ${FULL_TABLE_NAME} (ID_APROVADOR, CD_MATRICULA, ID_USUARIO, SG_ATIVO, DT_ATUALIZACAO)
-       VALUES (@idAprovador, @matricula, @id, 'S', GETDATE())`,
+       VALUES (@idAprovador, @matricula, @id, 'S', ${AGORA_BRASILIA})`,
       [
         ["idAprovador", sql.Int, idAprovador],
         ["matricula", sql.NVarChar(30), matricula],
@@ -836,7 +851,7 @@ apiRouter.put("/aprovadores/:id", async (req, res) => {
     // matrícula deixaria a linha com um par que não existe no MDM.
     const alterado = await runQuery(
       `UPDATE ${FULL_TABLE_NAME}
-          SET ID_USUARIO = @idNovo, CD_MATRICULA = @matricula, DT_ATUALIZACAO = GETDATE()
+          SET ID_USUARIO = @idNovo, CD_MATRICULA = @matricula, DT_ATUALIZACAO = ${AGORA_BRASILIA}
         WHERE ID_USUARIO = @idAtual`,
       [
         ["idNovo", sql.Int, idNovo],
@@ -864,7 +879,7 @@ apiRouter.put("/aprovadores/:id/status", async (req, res) => {
     }
 
     const result = await runQuery(
-      `UPDATE ${FULL_TABLE_NAME} SET SG_ATIVO = @sgAtivo, DT_ATUALIZACAO = GETDATE()
+      `UPDATE ${FULL_TABLE_NAME} SET SG_ATIVO = @sgAtivo, DT_ATUALIZACAO = ${AGORA_BRASILIA}
        WHERE ID_USUARIO = @id`,
       [
         ["sgAtivo", sql.Char(1), req.body.ativo ? "S" : "N"],
@@ -1142,7 +1157,7 @@ apiRouter.post("/usuarios", async (req, res) => {
       `INSERT INTO ${FULL_MDM_TABLE}
          (ID_USUARIO, CD_MATRICULA, ID_TIPO_USUARIO, SG_ATIVO, ${colunas.join(", ")}, DT_ATUALIZACAO)
        VALUES
-         (@id, @matricula, @tipo, @sgAtivo, ${colunas.map((c) => "@" + c).join(", ")}, GETDATE())`,
+         (@id, @matricula, @tipo, @sgAtivo, ${colunas.map((c) => "@" + c).join(", ")}, ${AGORA_BRASILIA})`,
       [
         ...chave,
         ["sgAtivo", sql.Char(1), req.body?.ATIVO === false ? "N" : "S"],
@@ -1169,7 +1184,7 @@ apiRouter.put("/usuarios/:id", async (req, res) => {
     const atribuicoes = COLUNAS_MDM_TEXTO.map(([c]) => `${c} = @${c}`).join(", ");
     const alterado = await runQuery(
       `UPDATE ${FULL_MDM_TABLE}
-          SET ${atribuicoes}, DT_ATUALIZACAO = GETDATE()
+          SET ${atribuicoes}, DT_ATUALIZACAO = ${AGORA_BRASILIA}
         WHERE ${FILTRO_CHAVE_MDM}`,
       [
         ["id", sql.Int, idUsuario],
@@ -1197,7 +1212,7 @@ apiRouter.put("/usuarios/:id/status", async (req, res) => {
     }
 
     const alterado = await runQuery(
-      `UPDATE ${FULL_MDM_TABLE} SET SG_ATIVO = @sgAtivo, DT_ATUALIZACAO = GETDATE()
+      `UPDATE ${FULL_MDM_TABLE} SET SG_ATIVO = @sgAtivo, DT_ATUALIZACAO = ${AGORA_BRASILIA}
         WHERE ${FILTRO_CHAVE_MDM}`,
       [
         ["sgAtivo", sql.Char(1), req.body.ativo ? "S" : "N"],
@@ -1428,7 +1443,7 @@ function registrarCadastroBilingue(cfg) {
     const colsInsert = [pk, "ID_IDIOMA"].concat(gravaIcone ? ["URL_ICONE"] : [], herdadas, [colNome], colDescricao ? [colDescricao] : [], ["SG_ATIVO", "DT_ATUALIZACAO"])
       .concat(capturarUsuario ? [colUsuario] : [])
       .concat(extraEditavel ? [extraEditavel.col] : []);
-    const valsInsert = ["@id", "@idIdioma"].concat(gravaIcone ? ["@urlIcone"] : [], herdadas.map(selectHerdado), ["@nome"], colDescricao ? ["@descricao"] : [], ["'S'", "GETDATE()"])
+    const valsInsert = ["@id", "@idIdioma"].concat(gravaIcone ? ["@urlIcone"] : [], herdadas.map(selectHerdado), ["@nome"], colDescricao ? ["@descricao"] : [], ["'S'", AGORA_BRASILIA])
       // Sempre quem está salvando agora — criar ou editar, sem distinguir
       // (mesmo desenho de DT_ATUALIZACAO, ao lado).
       .concat(capturarUsuario ? ["@idUsuario"] : [])
@@ -1437,7 +1452,7 @@ function registrarCadastroBilingue(cfg) {
       // 2 idiomas, porque os 2 upserts do mesmo POST/PUT usam o mesmo
       // extraValor).
       .concat(extraEditavel ? ["@extra"] : []);
-    const setUpdate = `${colNome} = @nome` + (colDescricao ? `, ${colDescricao} = @descricao` : "") + `, DT_ATUALIZACAO = GETDATE()`
+    const setUpdate = `${colNome} = @nome` + (colDescricao ? `, ${colDescricao} = @descricao` : "") + `, DT_ATUALIZACAO = ${AGORA_BRASILIA}`
       + (gravaIcone ? `, URL_ICONE = @urlIcone` : "")
       + (capturarUsuario ? `, ${colUsuario} = @idUsuario` : "")
       + (extraEditavel ? `, ${extraEditavel.col} = @extra` : "");
@@ -1670,7 +1685,7 @@ function registrarCadastroBilingue(cfg) {
       }
 
       const result = await runQuery(
-        `UPDATE ${tabela} SET SG_ATIVO = @sgAtivo, DT_ATUALIZACAO = GETDATE() WHERE ${pk} = @id`,
+        `UPDATE ${tabela} SET SG_ATIVO = @sgAtivo, DT_ATUALIZACAO = ${AGORA_BRASILIA} WHERE ${pk} = @id`,
         [
           ["sgAtivo", sql.Char(1), req.body.ativo ? "S" : "N"],
           ["id", sql.Int, id],
