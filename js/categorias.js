@@ -286,8 +286,14 @@
           if (window.updateCategoryDescCounter) updateCategoryDescCounter(editDescPt, "catEdit", DESCRICAO_MAX);
         }
         if (editDescEn) editDescEn.value = (data.en && data.en.DS) || "";
-        // O ícone é do registro (mesmo nos 2 idiomas) e vem do banco.
-        aplicarIconeNaPaleta("catEdit", data.urlIcone || ICONE_PADRAO);
+        // O ícone é do registro (mesmo nos 2 idiomas) e vem do banco —
+        // mas esta resposta é assíncrona e não pode passar por cima de
+        // uma escolha que o usuário já fez enquanto ela vinha (rede
+        // lenta), nem pintar a paleta de um registro que já não é o
+        // aberto. Nos dois casos gravaria um ícone que ninguém escolheu.
+        if (!iconeAlterado && idEmEdicao === reg.ID) {
+          aplicarIconeNaPaleta("catEdit", data.urlIcone || ICONE_PADRAO);
+        }
       })
       .catch(function (err) {
         console.error("[categorias] falha ao carregar para edição:", err);
