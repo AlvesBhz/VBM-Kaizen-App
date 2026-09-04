@@ -135,6 +135,26 @@
       return marcado && marcado.value === "email" ? "email" : "nome";
     }
 
+    // O rótulo do campo de busca acompanha o critério escolhido: "Nome"
+    // ou "E-mail" no lugar do genérico "Usuário".
+    //
+    // O texto vem do rótulo do PRÓPRIO rádio, que o i18n da tela já
+    // traduziu — assim não há dicionário duplicado aqui e o rótulo sai
+    // certo em qualquer idioma. A chave data-i18n também é trocada, para
+    // que uma troca de idioma feita depois retraduza o rótulo sozinha
+    // (translatePanel, em admin.html, varre todo [data-i18n]).
+    var grupoBusca = buscaInput ? buscaInput.closest(".form-suggest-wrap") : null;
+    var rotuloBusca = grupoBusca ? grupoBusca.querySelector(".form-label") : null;
+
+    function ajustarRotuloBusca() {
+      if (!rotuloBusca) return;
+      var porEmail = criterio() === "email";
+      var chave = porEmail ? "adm.byEmail" : "adm.byName";
+      var fonte = document.querySelector('.form-radios [data-i18n="' + chave + '"]');
+      rotuloBusca.setAttribute("data-i18n", chave);
+      rotuloBusca.textContent = fonte ? fonte.textContent.trim() : (porEmail ? "E-mail" : "Nome");
+    }
+
     // Salvar só habilita com alguém realmente escolhido na lista —
     // digitar um nome parecido não basta.
     function definirSelecionado(u) {
@@ -244,6 +264,7 @@
       function (radio) {
         radio.addEventListener("change", function () {
           limpar();
+          ajustarRotuloBusca();
           if (buscaInput) buscaInput.focus();
         });
       }
@@ -256,6 +277,7 @@
     });
 
     definirSelecionado(null); // estado inicial: Salvar desabilitado
+    ajustarRotuloBusca();     // rótulo já nasce igual ao critério marcado
 
     return {
       /** ID_USUARIO escolhido, ou null. */
