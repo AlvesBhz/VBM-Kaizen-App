@@ -1,23 +1,31 @@
 /**
  * VBM Kaizen — aba "Aprovadores" (admin.html).
  *
- * kzn_aprovador é uma tabela de PAPEL: pelo DER guarda só ID_USUARIO
- * (FK do MDM), SG_ATIVO e DT_ATUALIZACAO. Nome, cargo, matrícula e
- * e-mail vêm de kzn_mdm_hierarquia por join, feito no servidor.
+ * kzn_aprovador é uma tabela de PAPEL, com duas pessoas por linha:
  *
- * Editar aqui é APONTAR o registro para outra pessoa (trocar o
- * ID_USUARIO): é o único campo editável da tabela, já que o SG_ATIVO é
- * o próprio botão de ativar/desativar. Os dados pessoais mudam no MDM,
- * nunca por esta tela.
+ *   CD_MATRICULA  quem RECEBE o direito de aprovar (o aprovador)
+ *   ID_USUARIO    quem CONCEDE o direito (o usuário logado ao gravar)
+ *   ID_APROVADOR  a PK, e a identidade do registro nesta tela
+ *   SG_ATIVO, DT_ATUALIZACAO
+ *
+ * Nome, cargo e e-mail do aprovador vêm de kzn_mdm_hierarquia por
+ * CD_MATRICULA, num join feito no servidor.
+ *
+ * O registro NÃO é identificado por ID_USUARIO: o mesmo concedente
+ * aparece em vários registros, então a chave é o ID_APROVADOR.
+ *
+ * Editar aqui é APONTAR o registro para outro aprovador (trocar a
+ * matrícula) — e, ao salvar, o concedente passa a ser quem salvou. Os
+ * dados pessoais mudam no MDM, nunca por esta tela.
  *
  * Os dois modais (adicionar e editar) são IGUAIS: escolhe-se a PESSOA
- * numa busca ao MDM e grava-se o ID_USUARIO correspondente — ver
- * criarBuscaMdm(), instanciada uma vez para cada modal.
+ * numa busca ao MDM e grava-se a matrícula dela — ver criarBuscaMdm(),
+ * instanciada uma vez para cada modal.
  *
- *   GET  /api/aprovadores            lista (join com o MDM)
+ *   GET  /api/aprovadores            lista (join com o MDM por matrícula)
  *   GET  /api/aprovadores/mdm        busca por nome ou e-mail (top 10)
- *   POST /api/aprovadores            adiciona (só ID_USUARIO)
- *   PUT  /api/aprovadores/:id        troca o ID_USUARIO do registro
+ *   POST /api/aprovadores            adiciona
+ *   PUT  /api/aprovadores/:id        :id = ID_APROVADOR
  *   PUT  /api/aprovadores/:id/status ativa/desativa (SG_ATIVO)
  *
  * Depende de funções globais de vbm-app.js: closeModal / showToast.
@@ -60,7 +68,10 @@
     var nome = row.NM_USUARIO || "(usuário fora do MDM)";
     var item = document.createElement("div");
     item.className = "admin-item" + (row.ATIVO ? "" : " admin-item-inactive");
-    item.dataset.id = row.ID_USUARIO;
+    // Identidade do REGISTRO é o ID_APROVADOR (a PK). ID_USUARIO da
+    // tabela é quem CONCEDEU o direito e se repete entre registros, por
+    // isso não serve de chave.
+    item.dataset.id = row.ID_APROVADOR;
     item.innerHTML =
       '<div class="admin-avatar" style="background:linear-gradient(135deg,#3cb5e5,#1a8bbf);">' + escapeHtml(initials(row.NM_USUARIO)) + "</div>" +
       '<div class="admin-item-body">' +
@@ -349,7 +360,7 @@
   // O preenchimento reusa o que a listagem já trouxe do mesmo join com o
   // MDM: nenhuma consulta extra ao abrir o modal.
   function abrirEdicao(row) {
-    idEmEdicao = row.ID_USUARIO;
+    idEmEdicao = row.ID_APROVADOR;
     buscaEdit.preencher({
       ID_USUARIO: row.ID_USUARIO,
       NM_USUARIO: row.NM_USUARIO,
@@ -406,7 +417,7 @@
     });
     if (!confirmado) return;
 
-    fetch("/api/aprovadores/" + encodeURIComponent(row.ID_USUARIO) + "/status", {
+    fetch("/api/aprovadores/" + encodeURIComponent(row.ID_APROVADOR) + "/status", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ativo: ativar }),

@@ -578,19 +578,41 @@ apiRouter.get("/aprovadores", async (req, res) => {
     // DS_EMAIL — divergência só descoberta em produção, via "Invalid
     // column name"). Alias AS DS_EMAIL preserva o contrato do JSON
     // abaixo e o que o front-end já espera, sem tocar em mais nada.
+    // QUEM é o aprovador vem de CD_MATRICULA (quem RECEBE o direito de
+    // aprovar). ID_USUARIO desta tabela é outra pessoa: quem CONCEDEU o
+    // direito — o usuário logado no momento da gravação.
+    //
+    // OUTER APPLY com TOP (1) em vez de LEFT JOIN direto: a PK do MDM é
+    // (ID_USUARIO, CD_MATRICULA, ID_TIPO_USUARIO), então a mesma
+    // matrícula pode aparecer em mais de um tipo e um join simples
+    // duplicaria o aprovador na lista.
     const result = await runQuery(
       `SELECT TOP (@limite)
-              a.ID_USUARIO, a.SG_ATIVO, a.DT_ATUALIZACAO,
-              m.CD_MATRICULA, m.NM_USUARIO, m.CD_EMAIL AS DS_EMAIL,
+              a.ID_APROVADOR, a.CD_MATRICULA, a.SG_ATIVO, a.DT_ATUALIZACAO,
+              a.ID_USUARIO AS ID_CONCEDENTE,
+              m.ID_USUARIO, m.NM_USUARIO, m.CD_EMAIL AS DS_EMAIL,
               m.NM_POSICAO, m.NM_ESTADO, m.NM_CIDADE
        FROM ${FULL_TABLE_NAME} a
-       LEFT JOIN ${FULL_MDM_TABLE} m ON m.ID_USUARIO = a.ID_USUARIO
-       ORDER BY m.NM_USUARIO, a.ID_USUARIO`,
+       OUTER APPLY (
+         SELECT TOP (1) x.ID_USUARIO, x.NM_USUARIO, x.CD_EMAIL,
+                        x.NM_POSICAO, x.NM_ESTADO, x.NM_CIDADE
+         FROM ${FULL_MDM_TABLE} x
+         WHERE x.CD_MATRICULA = a.CD_MATRICULA
+         ORDER BY x.ID_TIPO_USUARIO
+       ) m
+       ORDER BY m.NM_USUARIO, a.ID_APROVADOR`,
       [["limite", sql.Int, limite]]
     );
     res.json(
       result.recordset.map((r) => ({
+        // Identidade do REGISTRO: é a PK. ID_USUARIO não serve mais para
+        // isso — o mesmo concedente aparece em vários registros.
+        ID_APROVADOR: r.ID_APROVADOR,
+        // ID_USUARIO do APROVADOR (vem do MDM), usado para reabrir o
+        // modal já preenchido com a pessoa certa.
         ID_USUARIO: r.ID_USUARIO,
+        // Quem concedeu o direito.
+        ID_CONCEDENTE: r.ID_CONCEDENTE,
         CD_MATRICULA: r.CD_MATRICULA,
         NM_USUARIO: r.NM_USUARIO,
         DS_EMAIL: r.DS_EMAIL,
@@ -780,12 +802,22 @@ apiRouter.post("/aprovadores", async (req, res) => {
       return res.status(400).json({ error: "Usuário não encontrado no MDM — verifique o ID_USUARIO." });
     }
 
+    // Duplicidade é por MATRÍCULA: é ela que diz QUEM recebe o direito.
     const jaExiste = await runQuery(
-      `SELECT TOP (1) 1 AS X FROM ${FULL_TABLE_NAME} WHERE ID_USUARIO = @id`,
-      [["id", sql.Int, idUsuario]]
+      `SELECT TOP (1) 1 AS X FROM ${FULL_TABLE_NAME} WHERE CD_MATRICULA = @matricula`,
+      [["matricula", sql.NVarChar(30), matricula]]
     );
     if (jaExiste.recordset.length) {
       return res.status(409).json({ error: "Este usuário já está cadastrado como aprovador." });
+    }
+
+    // ID_USUARIO = quem CONCEDE o direito = o usuário logado. Resolvido
+    // no servidor (idUsuarioLogado), nunca enviado pelo cliente.
+    const idConcedente = await idUsuarioLogado(req);
+    if (idConcedente == null) {
+      return res.status(400).json({
+        error: "Não foi possível identificar o usuário logado no MDM para registrar quem concedeu o direito.",
+      });
     }
 
     // ID_APROVADOR é NOT NULL e NÃO é identity: o banco não gera valor
@@ -800,14 +832,14 @@ apiRouter.post("/aprovadores", async (req, res) => {
 
     await runQuery(
       `INSERT INTO ${FULL_TABLE_NAME} (ID_APROVADOR, CD_MATRICULA, ID_USUARIO, SG_ATIVO, DT_ATUALIZACAO)
-       VALUES (@idAprovador, @matricula, @id, 'S', ${AGORA_BRASILIA})`,
+       VALUES (@idAprovador, @matricula, @idConcedente, 'S', ${AGORA_BRASILIA})`,
       [
         ["idAprovador", sql.Int, idAprovador],
         ["matricula", sql.NVarChar(30), matricula],
-        ["id", sql.Int, idUsuario],
+        ["idConcedente", sql.Int, idConcedente],
       ]
     );
-    res.status(201).json({ ok: true, ID_APROVADOR: idAprovador, ID_USUARIO: idUsuario });
+    res.status(201).json({ ok: true, ID_APROVADOR: idAprovador, ID_USUARIO: idUsuario, ID_CONCEDENTE: idConcedente });
   } catch (err) {
     console.error("[aprovadores] erro ao inserir:", err.message);
     res.status(500).json({ error: "Erro ao inserir aprovador: " + err.message });
@@ -824,45 +856,57 @@ apiRouter.post("/aprovadores", async (req, res) => {
 // existente no MDM e sem duplicar um aprovador já cadastrado.
 apiRouter.put("/aprovadores/:id", async (req, res) => {
   try {
-    const idAtual = parseInt(req.params.id, 10);
+    // :id é o ID_APROVADOR (a PK). Antes era o ID_USUARIO, o que deixou
+    // de servir: ID_USUARIO agora é quem CONCEDE, e o mesmo concedente
+    // aparece em vários registros — filtrar por ele atingiria todos eles
+    // de uma vez.
+    const idAprovador = parseInt(req.params.id, 10);
     const idNovo = parseInt(req.body?.ID_USUARIO, 10);
-    if (!Number.isInteger(idAtual)) return res.status(400).json({ error: "ID_USUARIO inválido." });
+    if (!Number.isInteger(idAprovador)) return res.status(400).json({ error: "ID_APROVADOR inválido." });
     if (!Number.isInteger(idNovo)) {
       return res.status(400).json({ error: "ID_USUARIO é obrigatório e deve ser um número inteiro." });
     }
 
+    // idNovo é a pessoa escolhida na busca do MDM: o que a tabela guarda
+    // dela é a MATRÍCULA (quem RECEBE o direito de aprovar).
     const matricula = await matriculaDoMdm(idNovo);
     if (matricula == null) {
       return res.status(400).json({ error: "Usuário não encontrado no MDM — verifique o ID_USUARIO." });
     }
 
-    if (idNovo !== idAtual) {
-      const jaExiste = await runQuery(
-        `SELECT TOP (1) 1 AS X FROM ${FULL_TABLE_NAME} WHERE ID_USUARIO = @id`,
-        [["id", sql.Int, idNovo]]
-      );
-      if (jaExiste.recordset.length) {
-        return res.status(409).json({ error: "Este usuário já está cadastrado como aprovador." });
-      }
+    // Já existe outro registro para essa matrícula? (o próprio não conta)
+    const jaExiste = await runQuery(
+      `SELECT TOP (1) 1 AS X FROM ${FULL_TABLE_NAME}
+        WHERE CD_MATRICULA = @matricula AND ID_APROVADOR <> @idAprovador`,
+      [["matricula", sql.NVarChar(30), matricula], ["idAprovador", sql.Int, idAprovador]]
+    );
+    if (jaExiste.recordset.length) {
+      return res.status(409).json({ error: "Este usuário já está cadastrado como aprovador." });
     }
 
-    // CD_MATRICULA acompanha o ID_USUARIO: as duas colunas descrevem a
-    // MESMA pessoa, então apontar o registro para outra sem atualizar a
-    // matrícula deixaria a linha com um par que não existe no MDM.
+    // ID_USUARIO = quem CONCEDE = o usuário logado agora. Editar é
+    // reconceder o direito, então o concedente passa a ser quem salvou.
+    const idConcedente = await idUsuarioLogado(req);
+    if (idConcedente == null) {
+      return res.status(400).json({
+        error: "Não foi possível identificar o usuário logado no MDM para registrar quem concedeu o direito.",
+      });
+    }
+
     const alterado = await runQuery(
       `UPDATE ${FULL_TABLE_NAME}
-          SET ID_USUARIO = @idNovo, CD_MATRICULA = @matricula, DT_ATUALIZACAO = ${AGORA_BRASILIA}
-        WHERE ID_USUARIO = @idAtual`,
+          SET CD_MATRICULA = @matricula, ID_USUARIO = @idConcedente, DT_ATUALIZACAO = ${AGORA_BRASILIA}
+        WHERE ID_APROVADOR = @idAprovador`,
       [
-        ["idNovo", sql.Int, idNovo],
         ["matricula", sql.NVarChar(30), matricula],
-        ["idAtual", sql.Int, idAtual],
+        ["idConcedente", sql.Int, idConcedente],
+        ["idAprovador", sql.Int, idAprovador],
       ]
     );
     if (!alterado.rowsAffected[0]) {
       return res.status(404).json({ error: "Aprovador não encontrado." });
     }
-    res.json({ ok: true, ID_USUARIO: idNovo });
+    res.json({ ok: true, ID_APROVADOR: idAprovador, ID_USUARIO: idNovo, ID_CONCEDENTE: idConcedente });
   } catch (err) {
     console.error("[aprovadores] erro ao editar:", err.message);
     res.status(500).json({ error: "Erro ao editar aprovador: " + err.message });
@@ -872,18 +916,29 @@ apiRouter.put("/aprovadores/:id", async (req, res) => {
 // Ativar/desativar — mesmo contrato das abas de cadastro.
 apiRouter.put("/aprovadores/:id/status", async (req, res) => {
   try {
-    const id = parseInt(req.params.id, 10);
-    if (!Number.isInteger(id)) return res.status(400).json({ error: "ID_USUARIO inválido." });
+    // :id é o ID_APROVADOR (a PK) — ver o comentário no PUT acima.
+    const idAprovador = parseInt(req.params.id, 10);
+    if (!Number.isInteger(idAprovador)) return res.status(400).json({ error: "ID_APROVADOR inválido." });
     if (typeof req.body?.ativo !== "boolean") {
       return res.status(400).json({ error: "Campo 'ativo' (true/false) é obrigatório." });
     }
 
+    // Ativar/desativar também é gravação: registra quem fez.
+    const idConcedente = await idUsuarioLogado(req);
+    if (idConcedente == null) {
+      return res.status(400).json({
+        error: "Não foi possível identificar o usuário logado no MDM para registrar quem concedeu o direito.",
+      });
+    }
+
     const result = await runQuery(
-      `UPDATE ${FULL_TABLE_NAME} SET SG_ATIVO = @sgAtivo, DT_ATUALIZACAO = ${AGORA_BRASILIA}
-       WHERE ID_USUARIO = @id`,
+      `UPDATE ${FULL_TABLE_NAME}
+          SET SG_ATIVO = @sgAtivo, ID_USUARIO = @idConcedente, DT_ATUALIZACAO = ${AGORA_BRASILIA}
+        WHERE ID_APROVADOR = @idAprovador`,
       [
         ["sgAtivo", sql.Char(1), req.body.ativo ? "S" : "N"],
-        ["id", sql.Int, id],
+        ["idConcedente", sql.Int, idConcedente],
+        ["idAprovador", sql.Int, idAprovador],
       ]
     );
     if (!result.rowsAffected[0]) return res.status(404).json({ error: "Aprovador não encontrado." });
