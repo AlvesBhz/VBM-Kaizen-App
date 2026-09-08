@@ -80,6 +80,26 @@ const FULL_TABLE_NAME = `[${DB_SCHEMA}].[${DB_TABLE}]`;
 const AGORA_BRASILIA =
   "CAST((SYSDATETIMEOFFSET() AT TIME ZONE 'E. South America Standard Time') AS DATETIME2)";
 
+/**
+ * Comparação de matrícula entre kzn_aprovador e kzn_mdm_hierarquia.
+ *
+ * As duas colunas se chamam CD_MATRICULA mas NÃO têm o mesmo tipo: uma é
+ * numérica e a do MDM é texto — e o MDM guarda matrículas com letra
+ * (ex.: 'FG002634'). Comparar direto faz o SQL Server converter o texto
+ * para int e a consulta inteira morre com "Conversion failed when
+ * converting the varchar value 'FG002634' to data type int", mesmo que a
+ * linha com letra não tenha nada a ver com o aprovador procurado.
+ *
+ * Por isso a comparação nunca é direta:
+ *   - TRY_CAST nos dois lados resolve o caso numérico e ignora zeros à
+ *     esquerda ('000100' = 100). TRY_CAST devolve NULL em vez de estourar.
+ *   - CAST para texto nos dois lados cobre a matrícula com letra.
+ * Nenhum dos dois ramos pode lançar erro de conversão.
+ */
+const MATRICULA_IGUAL = (a, b) =>
+  `(TRY_CAST(${a} AS BIGINT) = TRY_CAST(${b} AS BIGINT)` +
+  ` OR CAST(${a} AS VARCHAR(30)) = CAST(${b} AS VARCHAR(30)))`;
+
 // Mesmo schema dos aprovadores; tabela própria, também sobrescrevível
 // por env var caso o nome real divirja do padrão.
 const DB_CATEGORIA_TABLE = safeIdentifier(process.env.AZURE_SQL_CATEGORIA_TABLE, "kzn_categoria");
@@ -597,7 +617,7 @@ apiRouter.get("/aprovadores", async (req, res) => {
          SELECT TOP (1) x.ID_USUARIO, x.NM_USUARIO, x.CD_EMAIL,
                         x.NM_POSICAO, x.NM_ESTADO, x.NM_CIDADE
          FROM ${FULL_MDM_TABLE} x
-         WHERE x.CD_MATRICULA = a.CD_MATRICULA
+         WHERE ${MATRICULA_IGUAL("x.CD_MATRICULA", "a.CD_MATRICULA")}
          ORDER BY x.ID_TIPO_USUARIO
        ) m
        ORDER BY m.NM_USUARIO, a.ID_APROVADOR`,
@@ -804,7 +824,7 @@ apiRouter.post("/aprovadores", async (req, res) => {
 
     // Duplicidade é por MATRÍCULA: é ela que diz QUEM recebe o direito.
     const jaExiste = await runQuery(
-      `SELECT TOP (1) 1 AS X FROM ${FULL_TABLE_NAME} WHERE CD_MATRICULA = @matricula`,
+      `SELECT TOP (1) 1 AS X FROM ${FULL_TABLE_NAME} WHERE ${MATRICULA_IGUAL("CD_MATRICULA", "@matricula")}`,
       [["matricula", sql.NVarChar(30), matricula]]
     );
     if (jaExiste.recordset.length) {
@@ -877,7 +897,7 @@ apiRouter.put("/aprovadores/:id", async (req, res) => {
     // Já existe outro registro para essa matrícula? (o próprio não conta)
     const jaExiste = await runQuery(
       `SELECT TOP (1) 1 AS X FROM ${FULL_TABLE_NAME}
-        WHERE CD_MATRICULA = @matricula AND ID_APROVADOR <> @idAprovador`,
+        WHERE ${MATRICULA_IGUAL("CD_MATRICULA", "@matricula")} AND ID_APROVADOR <> @idAprovador`,
       [["matricula", sql.NVarChar(30), matricula], ["idAprovador", sql.Int, idAprovador]]
     );
     if (jaExiste.recordset.length) {
