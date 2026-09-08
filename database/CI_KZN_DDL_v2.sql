@@ -329,6 +329,22 @@
        automática seguem o padrão do restante do script — não é possível
        confirmar pela árvore do Object Explorer se já existem assim no
        banco real.
+     - CORREÇÃO: CI.KZN_MEMBROS_EQUIPE não existia no banco real — a
+       tabela estava corretamente desenhada no DDL de referência desde a
+       primeira versão, mas nunca tinha sido de fato criada (mesma
+       situação de KZN_KAIZEN_DESPERDICIO, ver item acima). O time já
+       resolveu isso diretamente no repositório da aplicação real, com
+       dois scripts próprios: database/diagnostico_membros_equipe.sql
+       (só leitura, confere se a tabela existe e por quê o app quebra sem
+       ela) e database/criar_membros_equipe.sql (cria a tabela). Esses
+       dois scripts CONFIRMAM, por texto, o alerta que este cabeçalho já
+       vinha sinalizando: CI.KZN_MDM_HIERARQUIA não tem UNIQUE/PK cobrindo
+       ID_USUARIO sozinho — por isso NENHUMA FK pra ID_USUARIO pode ser
+       criada ali, nem aqui. Esta seção (15) foi atualizada pra bater com
+       essa realidade confirmada — ver correção detalhada na própria
+       seção 15. Diferente do alerta genérico (que ainda cobre ~15 outras
+       FKs não confirmadas individualmente), esta é a PRIMEIRA confirmação
+       concreta, então foi corrigida de verdade, não só sinalizada.
    ============================================================================== */
 
 SET NOCOUNT ON;
@@ -892,6 +908,27 @@ GO
    15. TABELA: CI.KZN_MEMBROS_EQUIPE
    (usuários que participaram do Kaizen — conceito distinto de KZN_APROVADOR;
    referencia a MDM diretamente, qualquer colaborador pode ser membro)
+
+   CORREÇÃO (constatada nesta rodada, confirmada por
+   database/criar_membros_equipe.sql — script real já criado e mesclado
+   na aplicação pra resolver "Invalid object name 'ci.kzn_membros_equipe'"):
+     - SEM FK_..._USUARIO pra CI.KZN_MDM_HIERARQUIA (ID_USUARIO): o script
+       real confirma, por texto, que essa FK não pode existir — MDM não
+       tem UNIQUE/PK cobrindo ID_USUARIO sozinho, porque a mesma pessoa
+       tem mais de uma linha lá (mesmo problema que já causou o bug da
+       matrícula errada em KZN_APROVADOR). Isso deixa de ser só uma
+       ASSUNÇÃO/alerta (como estava documentado até a rodada anterior) e
+       passa a ser um fato confirmado — mas só pra esta tabela; as outras
+       ~15 FKs do schema que também apontam pra MDM (ID_USUARIO) continuam
+       sinalizadas como alerta não resolvido (ver ASSUNÇÃO no cabeçalho).
+     - FK_KZN_MEMBROS_EQUIPE_KAIZEN ganhou ON DELETE CASCADE, replicando o
+       script real (apaga a equipe junto quando o Kaizen é apagado).
+     - DT_ATUALIZACAO virou DATETIME2(7) NULL, sem DEFAULT (era
+       DATETIME2(3) NOT NULL DEFAULT SYSDATETIME()): o script real deixou
+       assim de propósito porque a aplicação (server.js) sempre envia o
+       valor no INSERT — replicado aqui pra bater com o que já roda em
+       produção. O trigger de auto-atualização (seção 18) continua
+       existindo e não é afetado por essa mudança (só age em UPDATE).
    ------------------------------------------------------------------------------ */
 IF OBJECT_ID('CI.KZN_MEMBROS_EQUIPE', 'U') IS NULL
 BEGIN
@@ -899,14 +936,13 @@ BEGIN
     (
         ID_KAIZEN       INT                             NOT NULL,
         ID_USUARIO      INT                             NOT NULL,
-        DT_ATUALIZACAO  DATETIME2(3)                    NOT NULL
-            CONSTRAINT DF_KZN_MEMBROS_EQUIPE_DT_ATUALIZACAO DEFAULT (SYSDATETIME()),
+        DT_ATUALIZACAO  DATETIME2(7)                        NULL,
 
         CONSTRAINT PK_KZN_MEMBROS_EQUIPE           PRIMARY KEY CLUSTERED (ID_KAIZEN, ID_USUARIO),
         CONSTRAINT FK_KZN_MEMBROS_EQUIPE_KAIZEN    FOREIGN KEY (ID_KAIZEN)
-            REFERENCES CI.KZN_PEDRAVISAOCONSOLIDADA (ID_KAIZEN),
-        CONSTRAINT FK_KZN_MEMBROS_EQUIPE_USUARIO   FOREIGN KEY (ID_USUARIO)
-            REFERENCES CI.KZN_MDM_HIERARQUIA (ID_USUARIO)
+            REFERENCES CI.KZN_PEDRAVISAOCONSOLIDADA (ID_KAIZEN) ON DELETE CASCADE
+        -- ID_USUARIO NÃO tem FK de banco: CI.KZN_MDM_HIERARQUIA não tem
+        -- UNIQUE/PK cobrindo ID_USUARIO sozinho (confirmado — ver correção acima)
     );
 END
 GO
@@ -1303,8 +1339,9 @@ BEGIN
     END
     IF OBJECT_ID('CI.KZN_LOG_PEDRAVISAOCONSOLIDADA', 'U') IS NOT NULL
         ALTER TABLE CI.KZN_LOG_PEDRAVISAOCONSOLIDADA ADD CONSTRAINT FK_KZN_LOG_PVC_USUARIO FOREIGN KEY (ID_USUARIO_OPERACAO) REFERENCES CI.KZN_MDM_HIERARQUIA (ID_USUARIO);
-    IF OBJECT_ID('CI.KZN_MEMBROS_EQUIPE', 'U') IS NOT NULL
-        ALTER TABLE CI.KZN_MEMBROS_EQUIPE ADD CONSTRAINT FK_KZN_MEMBROS_EQUIPE_USUARIO FOREIGN KEY (ID_USUARIO) REFERENCES CI.KZN_MDM_HIERARQUIA (ID_USUARIO);
+    -- FK_KZN_MEMBROS_EQUIPE_USUARIO NÃO é recriada aqui (nem em nenhum
+    -- outro ponto do script): confirmado que não pode existir — ver
+    -- correção na seção 15.
     IF OBJECT_ID('CI.KZN_TIPO_USUARIO', 'U') IS NOT NULL
         ALTER TABLE CI.KZN_TIPO_USUARIO ADD CONSTRAINT FK_KZN_TIPO_USUARIO_USUARIO FOREIGN KEY (ID_USUARIO) REFERENCES CI.KZN_MDM_HIERARQUIA (ID_USUARIO);
 
