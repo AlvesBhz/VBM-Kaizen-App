@@ -28,8 +28,7 @@
  *   PUT  /api/aprovadores/:id        :id = ID_APROVADOR
  *   PUT  /api/aprovadores/:id/status ativa/desativa (SG_ATIVO)
  *
- * Depende de funções globais de vbm-app.js: closeModal / confirmarAcao
- * (e showToast só como rede de segurança — ver avisar()).
+ * Depende de funções globais de vbm-app.js: closeModal / showToast.
  */
 (function () {
   var listEl = document.getElementById("aprovadoresList");
@@ -63,120 +62,6 @@
       stateEl.style.display = "none";
       listEl.style.display = "";
     }
-  }
-
-  /* ── Aviso da aba (APRESENTAÇÃO) ──────────────────────────────────
-     A mesma mensagem de sempre, no desenho do modal de validação do
-     "Novo Kaizen": cartão centralizado sobre overlay, no lugar do toast
-     no canto inferior direito.
-
-     Só a apresentação muda. Os gatilhos, os textos, os tipos e o tempo
-     de tela (4 s) continuam idênticos aos do showToast() que esta
-     função substitui — inclusive a assinatura, para os pontos de
-     chamada não mudarem de forma.
-
-     Fica escopado nesta aba de propósito: showToast() é global e
-     atende as demais telas, que seguem exatamente como estão.
-
-     Reaproveita as classes do Design System que o admin.html já
-     carrega — .confirm-backdrop/.modal/.modal-head/.modal-icon/
-     .modal-title/.modal-close/.modal-body de css/vbm-app.css, com as
-     animações de entrada/saída e o modo escuro que vêm junto. O
-     refinamento de espaçamento está no <style> do admin.html,
-     escopado em #avisoAprovadores.
-
-     A camada é .confirm-backdrop (e não .modal-backdrop) pelo mesmo
-     motivo do modal do Novo Kaizen: os listeners genéricos de Escape e
-     clique-fora do initModals() só alcançam .modal-backdrop e assumem
-     modais fixos no HTML — este é criado em runtime e cuida do próprio
-     fechamento. */
-  var TEMPO_AVISO = 4000; // mesma duração padrão do showToast
-  var ICONE_AVISO = {
-    success: "fa-circle-check", error: "fa-circle-xmark",
-    warning: "fa-triangle-exclamation", info: "fa-circle-info",
-  };
-  // [--hue do badge, cor do glifo] — as mesmas cores por tipo do toast.
-  var COR_AVISO = {
-    success: ["22,163,74", "#16a34a"], error: ["220,38,38", "#dc2626"],
-    warning: ["194,119,14", "#c2770e"], info: ["60,181,229", "#3cb5e5"],
-  };
-  var avisoEl = null;
-  var avisoTimer = null;
-
-  function avisoModal() {
-    if (avisoEl) return avisoEl;
-    var el = document.createElement("div");
-    el.className = "confirm-backdrop";
-    el.id = "avisoAprovadores";
-    el.setAttribute("role", "alertdialog");
-    el.setAttribute("aria-modal", "true");
-    el.setAttribute("aria-labelledby", "avisoAprovadoresTitulo");
-    el.innerHTML =
-      '<div class="modal">' +
-        '<div class="modal-head">' +
-          '<div class="modal-icon" data-role="icone"><i class="fa-solid"></i></div>' +
-          '<div class="modal-title" id="avisoAprovadoresTitulo" data-role="titulo"></div>' +
-          '<button class="modal-close" type="button" data-role="fechar" aria-label="Fechar">' +
-            '<i class="fa-solid fa-xmark"></i></button>' +
-        "</div>" +
-        '<div class="modal-body">' +
-          '<div class="aviso-conteudo"><p data-role="mensagem"></p></div>' +
-        "</div>" +
-      "</div>";
-    document.body.appendChild(el);
-    el.querySelector('[data-role="fechar"]').addEventListener("click", fecharAviso);
-    // Clicar fora também fecha. O overlay cobre a tela inteira; sem
-    // isso a aba ficaria intocável pelos 4 s do aviso — o toast que ele
-    // substitui nunca barrou um clique, e barrar seria mudar o
-    // comportamento da tela, não a aparência dela.
-    el.addEventListener("click", function (e) {
-      if (e.target === el) fecharAviso();
-    });
-    avisoEl = el;
-    return el;
-  }
-
-  function fecharAviso() {
-    if (!avisoEl || !avisoEl.classList.contains("open")) return;
-    clearTimeout(avisoTimer);
-    avisoEl.classList.add("closing");
-    var fechado = false;
-    function finalizar() {
-      if (fechado) return;
-      fechado = true;
-      avisoEl.classList.remove("open", "closing");
-    }
-    avisoEl.addEventListener("animationend", finalizar, { once: true });
-    setTimeout(finalizar, 300); // salvaguarda se a animação não disparar
-  }
-
-  // Mesma assinatura do showToast(tipo, titulo, mensagem, duracao).
-  function avisar(tipo, titulo, mensagem, duracao) {
-    var el = null;
-    try { el = avisoModal(); } catch (e) { el = null; }
-    if (!el) {
-      // Sem o cartão, a mensagem ainda aparece — nunca em silêncio.
-      if (window.showToast) showToast(tipo, titulo, mensagem, duracao);
-      return;
-    }
-    var cor = COR_AVISO[tipo] || COR_AVISO.info;
-    var badge = el.querySelector('[data-role="icone"]');
-    var glifo = badge.querySelector("i");
-    // Mesma convenção dos outros modais: --hue dirige o tom translúcido
-    // no modo escuro; o modo claro fica explícito aqui.
-    badge.style.setProperty("--hue", cor[0]);
-    badge.style.background = "rgba(" + cor[0] + ",.12)";
-    badge.style.borderColor = "rgba(" + cor[0] + ",.28)";
-    glifo.className = "fa-solid " + (ICONE_AVISO[tipo] || ICONE_AVISO.info);
-    glifo.style.color = cor[1];
-    el.querySelector('[data-role="titulo"]').textContent = titulo || "";
-    el.querySelector('[data-role="mensagem"]').textContent = mensagem || "";
-    clearTimeout(avisoTimer);
-    el.classList.remove("closing");
-    el.classList.add("open");
-    var x = el.querySelector('[data-role="fechar"]');
-    if (x && x.focus) x.focus();
-    avisoTimer = setTimeout(fecharAviso, duracao || TEMPO_AVISO);
   }
 
   function renderItem(row) {
@@ -443,7 +328,7 @@
     var id = buscaAdd.id();
     var matricula = buscaAdd.matricula();
     if (!id) {
-      avisar("warning", "Campo obrigatório", "Busque e selecione o usuário na lista.");
+      if (window.showToast) showToast("warning", "Campo obrigatório", "Busque e selecione o usuário na lista.");
       return;
     }
     if (btnSaveAdd) btnSaveAdd.disabled = true;
@@ -461,12 +346,12 @@
       .then(function () {
         buscaAdd.limpar();
         if (window.closeModal) closeModal("modalAddAprovador");
-        avisar("success", "Aprovador adicionado", "Aprovador cadastrado com sucesso!");
+        if (window.showToast) showToast("success", "Aprovador adicionado", "Aprovador cadastrado com sucesso!");
         loadAprovadores();
         avisarMudanca();
       })
       .catch(function (err) {
-        avisar("error", "Erro ao inserir", err.message);
+        if (window.showToast) showToast("error", "Erro ao inserir", err.message);
       })
       .finally(function () {
         // Reabilita só se ainda houver alguém selecionado: depois de um
@@ -502,7 +387,7 @@
     var id = buscaEdit.id();
     var matricula = buscaEdit.matricula();
     if (!id) {
-      avisar("warning", "Campo obrigatório", "Busque e selecione o usuário na lista.");
+      if (window.showToast) showToast("warning", "Campo obrigatório", "Busque e selecione o usuário na lista.");
       return;
     }
     if (btnSaveEdit) btnSaveEdit.disabled = true;
@@ -519,13 +404,13 @@
       })
       .then(function () {
         if (window.closeModal) closeModal("modalEditAprovador");
-        avisar("success", "Salvo", "Aprovador atualizado com sucesso!");
+        if (window.showToast) showToast("success", "Salvo", "Aprovador atualizado com sucesso!");
         loadAprovadores();
         avisarMudanca();
       })
       .catch(function (err) {
         console.error("[aprovadores] falha ao salvar:", err);
-        avisar("error", "Erro ao salvar", err.message);
+        if (window.showToast) showToast("error", "Erro ao salvar", err.message);
       })
       .finally(function () {
         if (btnSaveEdit) btnSaveEdit.disabled = !buscaEdit.id();
@@ -558,12 +443,14 @@
         row.ATIVO = ativar;
         item.replaceWith(renderItem(row));
         avisarMudanca();
-        avisar("success", ativar ? "Reativado" : "Desativado",
-          '"' + nome + '" ' + (ativar ? "reativado" : "desativado") + " com sucesso.");
+        if (window.showToast) {
+          showToast("success", ativar ? "Reativado" : "Desativado",
+            '"' + nome + '" ' + (ativar ? "reativado" : "desativado") + " com sucesso.");
+        }
       })
       .catch(function (err) {
         console.error("[aprovadores] erro ao atualizar status:", err);
-        avisar("error", "Erro", "Não foi possível atualizar o status. " + err.message);
+        if (window.showToast) showToast("error", "Erro", "Não foi possível atualizar o status. " + err.message);
       });
   }
 

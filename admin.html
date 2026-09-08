@@ -518,43 +518,6 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
    sinalizado como indisponível, sem mexer no layout da barra. */
 .filter-select:disabled { opacity:.5; cursor:not-allowed; }
 
-/* ── Aviso da aba Aprovadores (criado em runtime por js/aprovadores.js) ──
-   Mesmo desenho do modal de validação do "Novo Kaizen": cartão
-   centralizado sobre o overlay, cabeçalho sem divisória (o espaçamento
-   é que separa), ícone alinhado pelo topo do título e a mensagem
-   alinhada ao título, não ao ícone.
-
-   A caixa, o overlay, as animações e o modo escuro vêm prontos de
-   css/vbm-app.css (.confirm-backdrop/.modal/.modal-head/.modal-icon/
-   .modal-title/.modal-close/.modal-body). Aqui fica só o refinamento
-   de espaçamento, escopado em #avisoAprovadores: os demais modais
-   desta tela continuam exatamente como estão. */
-#avisoAprovadores .modal { max-width: 460px; }
-#avisoAprovadores .modal-head {
-  border-bottom: none;
-  align-items: flex-start;
-  padding: 1.75rem 1.75rem .75rem;
-  gap: .9rem;
-}
-#avisoAprovadores .modal-title { line-height: 1.35; }
-#avisoAprovadores .modal-body { padding: 0 1.75rem 1.75rem; }
-/* O texto se alinha com o título, não com o ícone: 40px do ícone
-   (.modal-icon) + .9rem do gap. */
-#avisoAprovadores .aviso-conteudo { padding-left: calc(40px + .9rem); }
-#avisoAprovadores .aviso-conteudo p {
-  margin: 0;
-  font-size: .88rem;
-  color: var(--vbm-text);
-  line-height: 1.5;
-}
-[data-bg="dark"] #avisoAprovadores .aviso-conteudo p { color: rgba(244,247,251,.82); }
-@media (max-width: 600px) {
-  /* Em tela estreita o recuo do ícone comeria a largura do texto. */
-  #avisoAprovadores .aviso-conteudo { padding-left: 0; }
-  #avisoAprovadores .modal-head { padding: 1.35rem 1.35rem .6rem; }
-  #avisoAprovadores .modal-body { padding: 0 1.35rem 1.35rem; }
-}
-
 /* Scrollbar discreto (webkit) para um acabamento mais premium */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
