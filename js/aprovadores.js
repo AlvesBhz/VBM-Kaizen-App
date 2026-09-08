@@ -139,6 +139,12 @@
     };
     // Vínculo interno com o registro escolhido: é o que vai no salvamento.
     var idSelecionado = null;
+    // CD_MATRICULA da LINHA do MDM que o usuário escolheu. Vai junto no
+    // salvamento porque o mesmo ID_USUARIO pode ter mais de uma linha no
+    // MDM (a PK é ID_USUARIO + CD_MATRICULA + ID_TIPO_USUARIO), com
+    // matrículas diferentes — reprocurar só pelo ID no servidor pode
+    // pegar a linha errada.
+    var matriculaSelecionada = null;
     var timerBusca = null;
 
     function criterio() {
@@ -170,6 +176,7 @@
     // digitar um nome parecido não basta.
     function definirSelecionado(u) {
       idSelecionado = u ? u.ID_USUARIO : null;
+      matriculaSelecionada = u ? u.CD_MATRICULA : null;
       Object.keys(campos).forEach(function (col) {
         if (campos[col]) campos[col].value = (u && u[col]) || "";
       });
@@ -293,6 +300,8 @@
     return {
       /** ID_USUARIO escolhido, ou null. */
       id: function () { return idSelecionado; },
+      /** CD_MATRICULA da linha do MDM escolhida, ou null. */
+      matricula: function () { return matriculaSelecionada; },
       limpar: limpar,
       /** Abre já preenchido com um registro conhecido (modo edição). */
       preencher: function (u) {
@@ -317,6 +326,7 @@
 
   function saveAdd() {
     var id = buscaAdd.id();
+    var matricula = buscaAdd.matricula();
     if (!id) {
       if (window.showToast) showToast("warning", "Campo obrigatório", "Busque e selecione o usuário na lista.");
       return;
@@ -325,7 +335,7 @@
     fetch("/api/aprovadores", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ID_USUARIO: id }),
+      body: JSON.stringify({ ID_USUARIO: id, CD_MATRICULA: matricula }),
     })
       .then(function (res) {
         return res.json().then(function (data) {
@@ -375,6 +385,7 @@
 
   function saveEdit() {
     var id = buscaEdit.id();
+    var matricula = buscaEdit.matricula();
     if (!id) {
       if (window.showToast) showToast("warning", "Campo obrigatório", "Busque e selecione o usuário na lista.");
       return;
@@ -383,7 +394,7 @@
     fetch("/api/aprovadores/" + encodeURIComponent(idEmEdicao), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ID_USUARIO: id }),
+      body: JSON.stringify({ ID_USUARIO: id, CD_MATRICULA: matricula }),
     })
       .then(function (res) {
         return res.json().then(function (data) {

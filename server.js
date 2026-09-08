@@ -783,9 +783,37 @@ apiRouter.get("/aprovadores/mdm/:id", async (req, res) => {
 //
 // Devolve null quando o ID_USUARIO não existe lá — o que também serve
 // de validação, poupando uma consulta só para conferir a existência.
-async function matriculaDoMdm(idUsuario) {
+/**
+ * CD_MATRICULA da pessoa, lida de kzn_mdm_hierarquia.
+ *
+ * A PK do MDM é (ID_USUARIO, CD_MATRICULA, ID_TIPO_USUARIO): o MESMO
+ * ID_USUARIO pode ter mais de uma linha, com matrículas DIFERENTES.
+ * Procurar só pelo ID e pegar TOP (1) sem ORDER BY devolvia uma linha
+ * qualquer — era assim que a matrícula errada acabava gravada.
+ *
+ * Por isso a tela manda também a CD_MATRICULA da linha que o usuário
+ * escolheu na busca. Ela não é gravada como veio: serve para ACHAR a
+ * linha certa, e o que vai para o banco é o valor que está no MDM.
+ * Sem ela (cliente antigo), cai no modo por ID — agora com ORDER BY,
+ * para pelo menos ser sempre a mesma linha.
+ */
+async function matriculaDoMdm(idUsuario, matriculaEscolhida) {
+  if (matriculaEscolhida != null && String(matriculaEscolhida).trim() !== "") {
+    const exata = await runQuery(
+      `SELECT TOP (1) CD_MATRICULA FROM ${FULL_MDM_TABLE}
+        WHERE ID_USUARIO = @id AND CD_MATRICULA = @matricula
+        ORDER BY ID_TIPO_USUARIO`,
+      [["id", sql.Int, idUsuario], ["matricula", sql.NVarChar(30), String(matriculaEscolhida).trim()]]
+    );
+    const achada = exata.recordset[0];
+    if (achada && achada.CD_MATRICULA != null) return achada.CD_MATRICULA;
+    return null; // par que não existe no MDM: não inventa uma matrícula
+  }
+
   const r = await runQuery(
-    `SELECT TOP (1) CD_MATRICULA FROM ${FULL_MDM_TABLE} WHERE ID_USUARIO = @id`,
+    `SELECT TOP (1) CD_MATRICULA FROM ${FULL_MDM_TABLE}
+      WHERE ID_USUARIO = @id
+      ORDER BY ID_TIPO_USUARIO, CD_MATRICULA`,
     [["id", sql.Int, idUsuario]]
   );
   const linha = r.recordset[0];
@@ -817,7 +845,7 @@ apiRouter.post("/aprovadores", async (req, res) => {
       return res.status(400).json({ error: "ID_USUARIO é obrigatório e deve ser um número inteiro." });
     }
 
-    const matricula = await matriculaDoMdm(idUsuario);
+    const matricula = await matriculaDoMdm(idUsuario, req.body?.CD_MATRICULA);
     if (matricula == null) {
       return res.status(400).json({ error: "Usuário não encontrado no MDM — verifique o ID_USUARIO." });
     }
@@ -889,7 +917,7 @@ apiRouter.put("/aprovadores/:id", async (req, res) => {
 
     // idNovo é a pessoa escolhida na busca do MDM: o que a tabela guarda
     // dela é a MATRÍCULA (quem RECEBE o direito de aprovar).
-    const matricula = await matriculaDoMdm(idNovo);
+    const matricula = await matriculaDoMdm(idNovo, req.body?.CD_MATRICULA);
     if (matricula == null) {
       return res.status(400).json({ error: "Usuário não encontrado no MDM — verifique o ID_USUARIO." });
     }
