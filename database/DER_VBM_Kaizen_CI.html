@@ -224,6 +224,8 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
 <path class="rel" d="M700,1825 L737.5,1825 Q747.5,1825 747.5,1815 L747.5,1143 Q747.5,1133 757.5,1133 L795,1133" marker-end="url(#arrow-key)" data-from="e_RESULTADO_KAIZEN" data-to="e_PVC" data-fk-row="0"/>
 <path class="rel soft" d="M700,1847 L787.5,1847 Q797.5,1847 797.5,1837 L797.5,795 Q797.5,785 807.5,785 L785,785" marker-end="url(#arrow-key)" data-from="e_RESULTADO_KAIZEN" data-to="e_RESULTADOS" data-fk-row="1"/>
 <path class="rel" d="M1050,1847 L932.5,1847 Q922.5,1847 922.5,1837 L922.5,1143 Q922.5,1133 912.5,1133 L795,1133" marker-end="url(#arrow-key)" data-from="e_KAIZEN_HIERARQUIA" data-to="e_PVC" data-fk-row="1"/>
+<path class="rel" d="M1400,1825 L1107.5,1825 Q1097.5,1825 1097.5,1815 L1097.5,1143 Q1097.5,1133 1087.5,1133 L795,1133" marker-end="url(#arrow-key)" data-from="e_KZDESP" data-to="e_PVC" data-fk-row="0"/>
+<path class="rel soft" d="M1400,1847 L1190,1847 Q1180,1847 1180,1837 L1180,499 Q1180,489 1170,489 L960,489" marker-end="url(#arrow-key)" data-from="e_KZDESP" data-to="e_DESPERDICIO" data-fk-row="1"/>
 </svg>
 
 <div class="group-label" style="left:0;top:-26px;" data-i18n="group.masters">Mestres de referência</div>
@@ -457,6 +459,14 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
     <div class="field"><span class="field-name pk">ID_KAIZEN_HIERARQUIA</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name fk">ID_KAIZEN</span><span class="field-type">INT</span></div>
     <div class="field note">NM_HIERARQUIA_N1…N8 (8x, VARCHAR(80))</div>
+    <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
+  </div>
+</div>
+<div class="entity aux" id="e_KZDESP" style="left:1400px;top:1764px;width:260px;height:120px;">
+  <div class="entity-head"><div class="entity-icon">KD</div><div class="entity-title">KZN_KAIZEN_DESPERDICIO</div></div>
+  <div class="entity-body">
+    <div class="field"><span class="field-name pk fk">ID_KAIZEN</span><span class="field-type">INT</span></div>
+    <div class="field"><span class="field-name pk fk">ID_DESPERDICIO</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
   </div>
 </div>

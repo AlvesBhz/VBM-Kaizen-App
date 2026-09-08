@@ -312,6 +312,23 @@
        (cascata em ~15 tabelas) fora do escopo do que foi pedido (só
        KZN_APROVADOR/KZN_ADMIN) e que exige confirmação do time antes de
        mexer. Ficou sinalizado aqui pra não passar despercebido.
+     - NOVA TABELA CI.KZN_KAIZEN_DESPERDICIO (pedido do time, nesta rodada
+       — ajuste inicial: só esta tabela, entre as descobertas ao comparar
+       a lista de tabelas real do banco com o DER; ficaram de fora desta
+       rodada CI.KZN_MDM_TEMP e a divergência de CI.KZN_MEMBROS_EQUIPE
+       apontadas na mesma comparação). Junção N:N Kaizen x Desperdício —
+       PK composta (ID_KAIZEN, ID_DESPERDICIO), só ID_KAIZEN com FK de
+       banco (ID_DESPERDICIO não tem, mesma razão de KZN_RESULTADO_KAIZEN:
+       KZN_DESPERDICIO tem PK composta com ID_IDIOMA). Estrutura e nomes
+       de constraint (PK_KZN_KZDESP, FK_KZN_KZDESP_KAIZEN) copiados
+       exatamente da estrutura real anexada pelo time. ASSUNÇÃO:
+       DT_ATUALIZACAO ficou em DATETIME2(7) — a própria imagem mostra essa
+       precisão, divergindo do DATETIME2(3) usado em todo o resto do
+       schema; replicado tal qual, não "corrigido" pra (3), já que o
+       pedido foi alinhar com a realidade. DEFAULT/trigger de atualização
+       automática seguem o padrão do restante do script — não é possível
+       confirmar pela árvore do Object Explorer se já existem assim no
+       banco real.
    ============================================================================== */
 
 SET NOCOUNT ON;
@@ -332,6 +349,7 @@ GO
    1. DROP (ordem inversa das dependências) — descomente para recriar do zero
    ============================================================================== */
 /*
+DROP TABLE IF EXISTS CI.KZN_KAIZEN_DESPERDICIO;
 DROP TABLE IF EXISTS CI.KZN_KAIZEN_HIERARQUIA;
 DROP TABLE IF EXISTS CI.KZN_RESULTADO_KAIZEN;
 DROP TABLE IF EXISTS CI.KZN_MEMBROS_EQUIPE;
@@ -947,6 +965,42 @@ BEGIN
 
     CREATE NONCLUSTERED INDEX IX_KZN_KAIZEN_HIERARQUIA_KAIZEN
         ON CI.KZN_KAIZEN_HIERARQUIA (ID_KAIZEN);
+END
+GO
+
+/* ------------------------------------------------------------------------------
+   17b. TABELA: CI.KZN_KAIZEN_DESPERDICIO  (pedido do time, nesta rodada —
+   tabela descoberta ao conferir a estrutura real do banco; não fazia parte
+   de nenhuma versão anterior deste script)
+   (junção N:N Kaizen x Desperdício — mesmo desenho de KZN_RESULTADO_KAIZEN:
+   PK composta (ID_KAIZEN, ID_DESPERDICIO), FK só em ID_KAIZEN; ID_DESPERDICIO
+   NÃO tem FK de banco porque KZN_DESPERDICIO tem PK composta
+   (ID_DESPERDICIO, ID_IDIOMA) — confirmado pela estrutura real, que também
+   só lista FK_KZN_KZDESP_KAIZEN, nenhuma FK em ID_DESPERDICIO. Nomes de
+   constraint (PK_KZN_KZDESP / FK_KZN_KZDESP_KAIZEN) mantidos exatamente
+   como estão no banco real, mesmo divergindo do padrão PK_<TABELA>/
+   FK_<TABELA>_<COLUNA> usado no resto do script — pra não recriar/renomear
+   um objeto que já existe em produção. ASSUNÇÃO: DT_ATUALIZACAO em
+   DATETIME2(7) (não (3), como em todo o resto do schema) — replicado tal
+   qual a estrutura real; DEFAULT/trigger de atualização automática
+   seguem o mesmo padrão das demais tabelas, não confirmados na imagem
+   (a árvore do Object Explorer não mostra DEFAULT de coluna).
+   ------------------------------------------------------------------------------ */
+IF OBJECT_ID('CI.KZN_KAIZEN_DESPERDICIO', 'U') IS NULL
+BEGIN
+    CREATE TABLE CI.KZN_KAIZEN_DESPERDICIO
+    (
+        ID_KAIZEN       INT                             NOT NULL,
+        ID_DESPERDICIO  INT                             NOT NULL,
+        DT_ATUALIZACAO  DATETIME2(7)                    NOT NULL
+            CONSTRAINT DF_KZN_KZDESP_DT_ATUALIZACAO DEFAULT (SYSDATETIME()),
+
+        CONSTRAINT PK_KZN_KZDESP        PRIMARY KEY CLUSTERED (ID_KAIZEN, ID_DESPERDICIO),
+        CONSTRAINT FK_KZN_KZDESP_KAIZEN FOREIGN KEY (ID_KAIZEN)
+            REFERENCES CI.KZN_PEDRAVISAOCONSOLIDADA (ID_KAIZEN)
+        -- ID_DESPERDICIO NÃO tem FK de banco: KZN_DESPERDICIO tem PK composta
+        -- (ID_DESPERDICIO, ID_IDIOMA); integridade fica sob responsabilidade da aplicação
+    );
 END
 GO
 
@@ -1654,6 +1708,16 @@ BEGIN
     IF NOT UPDATE(DT_ATUALIZACAO)
         UPDATE T SET DT_ATUALIZACAO = SYSDATETIME()
         FROM CI.KZN_KAIZEN_HIERARQUIA T JOIN inserted i ON i.ID_KAIZEN_HIERARQUIA = T.ID_KAIZEN_HIERARQUIA;
+END
+GO
+
+CREATE OR ALTER TRIGGER CI.TR_KZN_KZDESP_UPD ON CI.KZN_KAIZEN_DESPERDICIO AFTER UPDATE AS
+BEGIN
+    SET NOCOUNT ON;
+    IF NOT UPDATE(DT_ATUALIZACAO)
+        UPDATE T SET DT_ATUALIZACAO = SYSDATETIME()
+        FROM CI.KZN_KAIZEN_DESPERDICIO T
+        JOIN inserted i ON i.ID_KAIZEN = T.ID_KAIZEN AND i.ID_DESPERDICIO = T.ID_DESPERDICIO;
 END
 GO
 
