@@ -1452,15 +1452,29 @@ textarea.lang-slot-input.form-control { min-height: 1.4rem; resize: vertical; }
 }
 
 /* ═══════════════════════════════════════════════════
-   CONFIRMAÇÃO DE AÇÃO (window.confirmarAcao)
-   Substitui o window.confirm() nativo nas ações de ativar/desativar.
-   Reaproveita .modal/.modal-head/.modal-icon/.modal-body/.modal-foot
-   (mesmo visual dos modais de Add/Edit), só numa camada própria
-   (.confirm-backdrop em vez de .modal-backdrop): os listeners
-   genéricos de Escape/clique-fora em initModals() varrem
-   ".modal-backdrop" pensando em modais fixos no HTML — este é criado
-   em runtime e tem que resolver uma Promise ao fechar, então cuida do
-   próprio ciclo de vida sem se misturar com esse mecanismo.
+   CARTÕES DE RUNTIME — confirmação (window.confirmarAcao) e
+   aviso (window.showToast)
+   ---------------------------------------------------
+   Os dois são criados em JavaScript, não ficam no HTML, e dividem a
+   mesma camada .confirm-backdrop (e não .modal-backdrop): os listeners
+   genéricos de Escape/clique-fora de initModals() varrem
+   ".modal-backdrop" pensando em modais fixos no HTML — estes cuidam do
+   próprio ciclo de vida (um resolve uma Promise, o outro tem relógio)
+   sem se misturar com aquele mecanismo.
+
+   A caixa vem de .modal/.modal-head/.modal-icon/.modal-title/
+   .modal-close/.modal-body/.modal-foot, os mesmos dos modais de
+   Add/Edit. O que muda aqui é o RITMO, e ele é um só para os dois:
+
+     · sem divisórias — em um cartão de 2 ou 3 linhas as linhas
+       fragmentavam mais do que organizavam; quem separa é o espaço;
+     · ícone e título centrados um pelo outro, inclusive quando o
+       título ocupa duas linhas;
+     · texto alinhado ao TÍTULO (recuo de 40px do ícone + .9rem do
+       gap), não ao ícone — a mensagem é o conteúdo, não uma legenda.
+
+   É o desenho do modal de validação do Novo Kaizen, promovido a padrão
+   da aplicação.
 ═══════════════════════════════════════════════════ */
 .confirm-backdrop {
   position: fixed; inset: 0;
@@ -1475,15 +1489,47 @@ textarea.lang-slot-input.form-control { min-height: 1.4rem; resize: vertical; }
 .confirm-backdrop.closing { animation: fadeOut .2s ease forwards; }
 .confirm-backdrop.open .modal { animation: scaleIn .28s var(--ease-spring); }
 .confirm-backdrop.closing .modal { animation: scaleOut .2s ease forwards; }
-.confirm-backdrop .modal { max-width: 420px; }
-.confirm-backdrop .modal-body { padding: 1.5rem 2rem .25rem; }
-.confirm-msg { font-size: .85rem; color: var(--vbm-mid); line-height: 1.6; margin: 0; }
+.confirm-backdrop .modal { max-width: 460px; }
+.confirm-backdrop .modal-head {
+  border-bottom: none;
+  /* Centro do ícone no centro do título (o .modal-head do Design
+     System já centra; fica explícito aqui porque é regra do padrão). */
+  align-items: center;
+  padding: 1.75rem 1.75rem .75rem;
+  gap: .9rem;
+}
+.confirm-backdrop .modal-title { line-height: 1.35; }
+.confirm-backdrop .modal-body { padding: 0 1.75rem 1.25rem; }
+/* Confirmação sem mensagem (só título + botões): sem isso o padding do
+   corpo vazio abriria um vão solto antes dos botões. */
+.confirm-backdrop .modal-body.is-vazio { padding-bottom: 0; }
+.confirm-backdrop .modal-foot {
+  border-top: none;
+  padding: .25rem 1.75rem 1.5rem;
+}
+/* O recuo que alinha o texto com o título: 40px do .modal-icon + .9rem
+   do gap do cabeçalho. */
+.confirm-backdrop .confirm-msg,
+.confirm-backdrop .aviso-conteudo { padding-left: calc(40px + .9rem); }
+.confirm-msg { font-size: .88rem; color: var(--vbm-text); line-height: 1.5; margin: 0; }
 [data-bg="dark"] .confirm-backdrop .modal {
   background: linear-gradient(160deg, #10131a 0%, var(--vbm-blue-deep) 100%);
   border: 1px solid rgba(255,255,255,.08);
 }
-[data-bg="dark"] .confirm-backdrop .modal-head { border-color: rgba(255,255,255,.08); }
-[data-bg="dark"] .confirm-backdrop .modal-foot { border-color: rgba(255,255,255,.08); }
+[data-bg="dark"] .confirm-msg { color: rgba(244,247,251,.82); }
+
+/* ── Aviso (window.showToast) ── */
+.aviso-conteudo p { margin: 0; font-size: .88rem; color: var(--vbm-text); line-height: 1.5; }
+[data-bg="dark"] .aviso-conteudo p { color: rgba(244,247,251,.82); }
+
+@media (max-width: 600px) {
+  /* Em tela estreita o recuo do ícone comeria a largura do texto. */
+  .confirm-backdrop .confirm-msg,
+  .confirm-backdrop .aviso-conteudo { padding-left: 0; }
+  .confirm-backdrop .modal-head { padding: 1.35rem 1.35rem .6rem; }
+  .confirm-backdrop .modal-body { padding: 0 1.35rem 1.1rem; }
+  .confirm-backdrop .modal-foot { padding: .25rem 1.35rem 1.35rem; }
+}
 
 .btn-danger {
   background: #dc2626; color: #fff;

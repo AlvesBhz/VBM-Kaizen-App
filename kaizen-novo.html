@@ -200,14 +200,10 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
    — em um alerta de 2 ou 3 linhas elas fragmentavam mais do que
    organizavam. O ícone alinha pelo topo do título, e a mensagem ganha
    peso: ela é o conteúdo, não uma legenda. */
-#modalValidacao .modal { max-width: 460px; }
-#modalValidacao .modal-head {
-  border-bottom: none;
-  align-items: flex-start;
-  padding: 1.75rem 1.75rem .75rem;
-  gap: .9rem;
-}
-#modalValidacao .modal-title { line-height: 1.35; }
+/* A caixa, o cabeçalho sem divisória, o ícone centrado com o título e o
+   recuo do texto vêm de .confirm-backdrop, em vbm-app.css — é o padrão
+   dos cartões de runtime da aplicação. Aqui fica só o que é desta tela:
+   o corpo, que termina na lista de pendências e não em botões. */
 #modalValidacao .modal-body { padding: 0 1.75rem 1.75rem; }
 /* O texto se alinha com o título, não com o ícone: 40px do ícone
    (.modal-icon) + .9rem do gap. */

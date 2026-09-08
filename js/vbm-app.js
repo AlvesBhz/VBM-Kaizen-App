@@ -313,9 +313,105 @@
     });
   }
 
-  /* ── Toast Notifications ── */
+  /* ── Avisos (window.showToast) ──
+     O aviso sai como um cartão centralizado sobre overlay, no mesmo
+     desenho do modal de validação do Novo Kaizen e do
+     window.confirmarAcao — os três dividem .confirm-backdrop/.modal e
+     o ritmo definido em vbm-app.css. Antes era um toast no canto
+     inferior direito.
+
+     A APRESENTAÇÃO é o que mudou. A assinatura, os tipos, as cores por
+     tipo, os textos e a temporização (4 s) são os de sempre, então as
+     44 chamadas espalhadas pelo sistema continuam valendo como estão.
+
+     Só um cartão por vez: um aviso novo reaproveita o que está aberto,
+     troca o conteúdo e reinicia o relógio. O toast antigo empilhava,
+     mas na prática as chamadas são uma por ação do usuário.
+
+     Fecha pelo "X", pelo clique fora e sozinho ao fim do tempo. O
+     clique fora existe porque o overlay cobre a tela: sem ele a página
+     ficaria intocável durante o aviso, e o toast que este cartão
+     substitui nunca barrou um clique. */
+  const AVISO_ICONES = { success: 'fa-circle-check', error: 'fa-circle-xmark', warning: 'fa-triangle-exclamation', info: 'fa-circle-info' };
+  // [--hue do badge, cor do glifo] — as mesmas cores por tipo de antes.
+  const AVISO_CORES = {
+    success: ['22,163,74', '#16a34a'], error: ['220,38,38', '#dc2626'],
+    warning: ['194,119,14', '#c2770e'], info: ['60,181,229', '#3cb5e5'],
+  };
+  let avisoEl = null;
+  let avisoTimer = null;
+
+  function avisoModal() {
+    if (avisoEl) return avisoEl;
+    const el = document.createElement('div');
+    el.className = 'confirm-backdrop';
+    el.id = 'avisoApp';
+    el.setAttribute('role', 'alertdialog');
+    el.setAttribute('aria-modal', 'true');
+    el.setAttribute('aria-labelledby', 'avisoAppTitulo');
+    el.innerHTML =
+      '<div class="modal">' +
+        '<div class="modal-head">' +
+          '<div class="modal-icon" data-role="icone"><i class="fa-solid"></i></div>' +
+          '<div class="modal-title" id="avisoAppTitulo" data-role="titulo"></div>' +
+          '<button class="modal-close" type="button" data-role="fechar" aria-label="Fechar">' +
+            '<i class="fa-solid fa-xmark"></i></button>' +
+        '</div>' +
+        '<div class="modal-body">' +
+          '<div class="aviso-conteudo"><p data-role="mensagem"></p></div>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(el);
+    el.querySelector('[data-role="fechar"]').addEventListener('click', fecharAviso);
+    el.addEventListener('click', function (e) { if (e.target === el) fecharAviso(); });
+    avisoEl = el;
+    return el;
+  }
+
+  function fecharAviso() {
+    if (!avisoEl || !avisoEl.classList.contains('open')) return;
+    clearTimeout(avisoTimer);
+    avisoEl.classList.add('closing');
+    let fechado = false;
+    function finalizar() {
+      if (fechado) return;
+      fechado = true;
+      avisoEl.classList.remove('open', 'closing');
+    }
+    avisoEl.addEventListener('animationend', finalizar, { once: true });
+    setTimeout(finalizar, 300); // salvaguarda se a animação não disparar
+  }
+
   window.showToast = function(type, title, msg, duration) {
     duration = duration || 4000;
+    let el = null;
+    try { el = avisoModal(); } catch (e) { el = null; }
+    // Sem o cartão a mensagem ainda aparece — nunca em silêncio.
+    if (!el) return toastNoCanto(type, title, msg, duration);
+
+    const cor = AVISO_CORES[type] || AVISO_CORES.info;
+    const badge = el.querySelector('[data-role="icone"]');
+    const glifo = badge.querySelector('i');
+    // Mesma convenção dos outros modais: --hue dirige o tom translúcido
+    // no modo escuro; o modo claro fica explícito aqui.
+    badge.style.setProperty('--hue', cor[0]);
+    badge.style.background = 'rgba(' + cor[0] + ',.12)';
+    badge.style.borderColor = 'rgba(' + cor[0] + ',.28)';
+    glifo.className = 'fa-solid ' + (AVISO_ICONES[type] || AVISO_ICONES.info);
+    glifo.style.color = cor[1];
+    el.querySelector('[data-role="titulo"]').textContent = title == null ? '' : title;
+    el.querySelector('[data-role="mensagem"]').textContent = msg == null ? '' : msg;
+    clearTimeout(avisoTimer);
+    el.classList.remove('closing');
+    el.classList.add('open');
+    const x = el.querySelector('[data-role="fechar"]');
+    if (x && x.focus) x.focus();
+    avisoTimer = setTimeout(fecharAviso, duration);
+  };
+
+  /* Rede de segurança: o toast no canto, como era antes. Só roda se o
+     cartão não puder ser criado. */
+  function toastNoCanto(type, title, msg, duration) {
     let container = document.querySelector('.toast-container');
     if (!container) {
       container = document.createElement('div');
@@ -329,9 +425,6 @@
     toast.innerHTML = '<i class="fa-solid ' + (icons[type] || 'fa-circle-info') + ' toast-icon" style="color:' + (colors[type] || '#3cb5e5') + '"></i><div class="toast-body"><div class="toast-title">' + title + '</div><div class="toast-msg">' + msg + '</div></div><button type="button" class="toast-close" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>';
     container.appendChild(toast);
 
-    // Fechamento animado (manual ou automático) — antes o toast era
-    // removido do DOM na hora (this.parentElement.remove()), sem
-    // nenhuma transição de saída, só a entrada tinha animação.
     let fechado = false;
     function fechar() {
       if (fechado || !toast.parentElement) return;
@@ -342,7 +435,7 @@
     }
     toast.querySelector('.toast-close').addEventListener('click', fechar);
     setTimeout(fechar, duration);
-  };
+  }
 
   /* ── Confirmação de ação (window.confirmarAcao) ──
      Substitui o window.confirm() nativo nas ações de ativar/desativar
@@ -394,6 +487,9 @@
     titulo.textContent = opcoes.titulo || 'Confirmar ação?';
     msg.textContent = opcoes.mensagem || '';
     msg.style.display = opcoes.mensagem ? '' : 'none';
+    // Sem mensagem o corpo fica vazio e o padding dele viraria um vão
+    // solto entre o título e os botões.
+    msg.parentElement.classList.toggle('is-vazio', !opcoes.mensagem);
     iconeI.className = 'fa-solid ' + (perigoso ? 'fa-triangle-exclamation' : 'fa-circle-check');
     btnOk.textContent = opcoes.confirmarLabel || (perigoso ? 'Desativar' : 'Confirmar');
     btnOk.className = 'btn ' + (perigoso ? 'btn-danger' : 'btn-primary');
