@@ -345,6 +345,25 @@
        seção 15. Diferente do alerta genérico (que ainda cobre ~15 outras
        FKs não confirmadas individualmente), esta é a PRIMEIRA confirmação
        concreta, então foi corrigida de verdade, não só sinalizada.
+     - STATUS do Kaizen deixou de ser string (pedido do time, nesta
+       rodada): CI.KZN_PEDRAVISAOCONSOLIDADA.SG_STATUS (VARCHAR(30) +
+       CK_KZN_PVC_STATUS + DEFAULT 'ABERTO') foi REMOVIDA e substituída por
+       ID_STATUS INT, apontando pro cadastro CI.KZN_STATUS. SEM FK de
+       banco — KZN_STATUS tem PK composta (ID_STATUS, ID_IDIOMA) e o SQL
+       Server não aceita FK pra parte de chave composta; é a mesma decisão
+       já registrada pra ID_CATEGORIA/ID_REPLICACAO/ID_DESPERDICIO/
+       ID_MOTIVO. A descrição NÃO foi desnormalizada no PVC (nada de
+       DS_STATUS lá): vem por join com KZN_STATUS, no idioma da tela —
+       copiar o texto congelaria um idioma só e ficaria obsoleto quando o
+       cadastro mudasse. ID_MOTIVO e KZN_MOTIVO_REPROVACAO ficaram
+       INTOCADOS: guardam a justificativa de reprovação escrita pelo
+       aprovador (texto livre), conceito distinto de status — misturar os
+       dois apagaria essa justificativa. Migração idempotente na seção
+       17.2c; seed dos 5 status na seção 20.
+       ALERTA: quebra a aplicação até o app ser ajustado — server.js e o
+       front ainda usam SG_STATUS (fila de aprovação, dashboard,
+       listagens, POST /kaizens/:id/reprovar). Ajuste do app não foi
+       feito nesta rodada.
    ============================================================================== */
 
 SET NOCOUNT ON;
@@ -820,8 +839,7 @@ BEGIN
         ID_REPLICACAO              INT                                 NULL,   -- ASSUNÇÃO: opcional
         DS_PROBLEMA                VARCHAR(100)                        NULL,
         DS_OBJETIVO                VARCHAR(100)                        NULL,
-        SG_STATUS                  VARCHAR(30)                     NOT NULL
-            CONSTRAINT DF_KZN_PVC_STATUS DEFAULT ('ABERTO'),               -- ASSUNÇÃO: domínio provisório, ver CK abaixo
+        ID_STATUS                  INT                                 NULL,   -- status do Kaizen (CI.KZN_STATUS). Sem FK de banco: KZN_STATUS tem PK composta (ID_STATUS, ID_IDIOMA) e o SQL Server não permite FK pra parte de chave composta — mesma regra já aplicada a ID_CATEGORIA/ID_REPLICACAO/ID_DESPERDICIO/ID_MOTIVO
         ID_APROVADOR               INT                                 NULL,   -- só preenchido quando alguém aprova/reprova
         URL_IMG_ANTES               VARCHAR(200)                       NULL,
         DS_ESTADO_ANTES            VARCHAR(100)                        NULL,
@@ -836,7 +854,7 @@ BEGIN
         DT_CRIACAO                 DATETIME2(3)                    NOT NULL
             CONSTRAINT DF_KZN_PVC_DT_CRIACAO DEFAULT (SYSDATETIME()),
         DT_CONCLUSAO               DATE                                NULL,
-        ID_MOTIVO                  INT                                 NULL,   -- só preenchido quando SG_STATUS = REPROVADO
+        ID_MOTIVO                  INT                                 NULL,   -- justificativa da reprovação (CI.KZN_MOTIVO_REPROVACAO); inalterado nesta rodada
         DT_ATUALIZACAO             DATETIME2(3)                    NOT NULL
             CONSTRAINT DF_KZN_PVC_DT_ATUALIZACAO DEFAULT (SYSDATETIME()),
         ID_USUARIO_ATUALIZACAO     INT                             NOT NULL,   -- app envia a cada INSERT/UPDATE (quem está agindo)
@@ -855,12 +873,12 @@ BEGIN
         CONSTRAINT FK_KZN_PVC_APROVADOR            FOREIGN KEY (ID_APROVADOR)
             REFERENCES CI.KZN_APROVADOR (ID_APROVADOR),
         CONSTRAINT FK_KZN_PVC_MOEDA                FOREIGN KEY (ID_MOEDA)
-            REFERENCES CI.KZN_MOEDA (ID_MOEDA),
-        CONSTRAINT CK_KZN_PVC_STATUS               CHECK (SG_STATUS IN
-            ('ABERTO','EM_APROVACAO','APROVADO','REPROVADO','CONCLUIDO'))   -- ASSUNÇÃO: ajustar domínio real
+            REFERENCES CI.KZN_MOEDA (ID_MOEDA)
+        -- CK_KZN_PVC_STATUS removido: o domínio de status deixou de ser uma
+        -- lista fixa de strings e passou a ser a tabela CI.KZN_STATUS
     );
 
-    CREATE NONCLUSTERED INDEX IX_KZN_PVC_STATUS        ON CI.KZN_PEDRAVISAOCONSOLIDADA (SG_STATUS);
+    CREATE NONCLUSTERED INDEX IX_KZN_PVC_STATUS        ON CI.KZN_PEDRAVISAOCONSOLIDADA (ID_STATUS);
     CREATE NONCLUSTERED INDEX IX_KZN_PVC_CATEGORIA     ON CI.KZN_PEDRAVISAOCONSOLIDADA (ID_CATEGORIA);
     CREATE NONCLUSTERED INDEX IX_KZN_PVC_USUARIO_LIDER ON CI.KZN_PEDRAVISAOCONSOLIDADA (ID_USUARIO_LIDER);
 END
@@ -950,7 +968,7 @@ BEGIN
     (
         ID_LOG_DETALHE   INT                             NOT NULL,
         ID_LOG           INT                             NOT NULL,
-        NM_CAMPO         VARCHAR(30)                     NOT NULL,   -- nome da coluna alterada, ex.: 'SG_STATUS'
+        NM_CAMPO         VARCHAR(30)                     NOT NULL,   -- nome da coluna alterada, ex.: 'ID_STATUS'
         VL_ANTERIOR      VARCHAR(200)                        NULL,   -- ASSUNÇÃO: texto — ver comentário acima
         VL_NOVO          VARCHAR(200)                        NULL,
 
@@ -1436,6 +1454,73 @@ IF OBJECT_ID('CI.KZN_MDM_HIERARQUIA', 'U') IS NOT NULL
 GO
 
 /* ------------------------------------------------------------------------------
+   17.2c MIGRAÇÃO — SG_STATUS -> ID_STATUS em CI.KZN_PEDRAVISAOCONSOLIDADA
+   (idempotente; pedido do time, nesta rodada)
+   O status deixou de ser string livre (VARCHAR(30) + CK_KZN_PVC_STATUS) e
+   passou a ser ID_STATUS INT, apontando pro cadastro CI.KZN_STATUS. Sem FK
+   de banco: KZN_STATUS tem PK composta (ID_STATUS, ID_IDIOMA) e o SQL
+   Server não aceita FK pra parte de chave composta — mesma decisão já
+   aplicada a ID_CATEGORIA/ID_REPLICACAO/ID_DESPERDICIO/ID_MOTIVO.
+
+   Roda ANTES da 17.3 de propósito: a 17.3 (reordenação física) referencia
+   ID_STATUS de forma estática, então a coluna precisa existir antes.
+
+   Passos: (1) cria ID_STATUS; (2) converte o valor antigo pelo mapa fixo
+   abaixo, que é o mesmo domínio do CK antigo e casa com os IDs semeados na
+   seção 20; (3) remove CK/DEFAULT/índice de SG_STATUS e a própria coluna.
+   O UPDATE usa sp_executesql porque SG_STATUS pode já não existir (2ª
+   execução) — referência estática quebraria a compilação do batch inteiro.
+
+   ATENÇÃO — ISTO É UMA MUDANÇA QUEBRA-COMPATIBILIDADE PARA A APLICAÇÃO:
+   server.js e o front ainda leem/gravam SG_STATUS (fila de aprovação,
+   dashboard, listagens). Rodar esta seção sem publicar o ajuste do app
+   derruba essas telas. Ver resumo da entrega.
+   ------------------------------------------------------------------------------ */
+IF OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA', 'U') IS NOT NULL
+   AND EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA') AND name = 'SG_STATUS')
+BEGIN
+    PRINT 'Migrando CI.KZN_PEDRAVISAOCONSOLIDADA: SG_STATUS -> ID_STATUS...';
+
+    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA') AND name = 'ID_STATUS')
+        ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ADD ID_STATUS INT NULL;
+
+    EXEC sp_executesql N'
+        UPDATE CI.KZN_PEDRAVISAOCONSOLIDADA
+        SET ID_STATUS = CASE UPPER(LTRIM(RTRIM(SG_STATUS)))
+                            WHEN ''ABERTO''       THEN 1
+                            WHEN ''EM_APROVACAO'' THEN 2
+                            WHEN ''APROVADO''     THEN 3
+                            WHEN ''REPROVADO''    THEN 4
+                            WHEN ''CONCLUIDO''    THEN 5
+                        END
+        WHERE ID_STATUS IS NULL;';
+
+    -- Não deixa passar status fora do domínio conhecido (viraria NULL silencioso)
+    DECLARE @semMapa INT;
+    EXEC sp_executesql N'SELECT @qt = COUNT(*) FROM CI.KZN_PEDRAVISAOCONSOLIDADA WHERE ID_STATUS IS NULL',
+                       N'@qt INT OUTPUT', @qt = @semMapa OUTPUT;
+    IF @semMapa > 0
+    BEGIN
+        RAISERROR('Migração abortada: %d Kaizen(s) com SG_STATUS fora do domínio conhecido (ABERTO/EM_APROVACAO/APROVADO/REPROVADO/CONCLUIDO). Ajuste esses registros ou o mapa desta seção antes de reexecutar — nenhuma coluna foi removida.', 16, 1, @semMapa);
+        RETURN;
+    END
+
+    IF OBJECT_ID('CI.CK_KZN_PVC_STATUS', 'C') IS NOT NULL
+        ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA DROP CONSTRAINT CK_KZN_PVC_STATUS;
+    IF OBJECT_ID('CI.DF_KZN_PVC_STATUS', 'D') IS NOT NULL
+        ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA DROP CONSTRAINT DF_KZN_PVC_STATUS;
+    IF EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA') AND name = 'IX_KZN_PVC_STATUS')
+        DROP INDEX IX_KZN_PVC_STATUS ON CI.KZN_PEDRAVISAOCONSOLIDADA;
+
+    ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA DROP COLUMN SG_STATUS;
+
+    CREATE NONCLUSTERED INDEX IX_KZN_PVC_STATUS ON CI.KZN_PEDRAVISAOCONSOLIDADA (ID_STATUS);
+
+    PRINT 'Migração de status concluída (SG_STATUS removida).';
+END
+GO
+
+/* ------------------------------------------------------------------------------
    17.3 MIGRAÇÃO — CI.KZN_PEDRAVISAOCONSOLIDADA (idempotente)
    Reorganiza a ordem física das colunas pra DT_CRIACAO ficar imediatamente
    antes de DT_CONCLUSAO. SQL Server não reordena coluna via ALTER TABLE — a
@@ -1477,8 +1562,7 @@ BEGIN
         ID_REPLICACAO              INT                                 NULL,
         DS_PROBLEMA                VARCHAR(100)                        NULL,
         DS_OBJETIVO                VARCHAR(100)                        NULL,
-        SG_STATUS                  VARCHAR(30)                     NOT NULL
-            CONSTRAINT DF_KZN_PVC_STATUS_NEW DEFAULT ('ABERTO'),
+        ID_STATUS                  INT                                 NULL,
         ID_APROVADOR               INT                                 NULL,
         URL_IMG_ANTES               VARCHAR(200)                       NULL,
         DS_ESTADO_ANTES            VARCHAR(100)                        NULL,
@@ -1502,12 +1586,12 @@ BEGIN
     -- 3) copia os dados na ordem/colunas novas
     INSERT INTO CI.KZN_PEDRAVISAOCONSOLIDADA_NEW
     (ID_KAIZEN, ID_USUARIO_CADASTRO, ID_USUARIO_LIDER, NM_KAIZEN, ID_CATEGORIA, ID_REPLICACAO,
-     DS_PROBLEMA, DS_OBJETIVO, SG_STATUS, ID_APROVADOR, URL_IMG_ANTES, DS_ESTADO_ANTES,
+     DS_PROBLEMA, DS_OBJETIVO, ID_STATUS, ID_APROVADOR, URL_IMG_ANTES, DS_ESTADO_ANTES,
      URL_IMG_DEPOIS, DS_ESTADO_DEPOIS, URL_REFERENCIA, ID_DESPERDICIO, DS_LICOES_APRENDIDAS,
      VL_RESULTADO_FINANCEIRO, ID_MOEDA, DS_RESULTADO_ESPERADO, DT_CRIACAO, DT_CONCLUSAO,
      ID_MOTIVO, DT_ATUALIZACAO, ID_USUARIO_ATUALIZACAO)
     SELECT ID_KAIZEN, ID_USUARIO_CADASTRO, ID_USUARIO_LIDER, NM_KAIZEN, ID_CATEGORIA, ID_REPLICACAO,
-           DS_PROBLEMA, DS_OBJETIVO, SG_STATUS, ID_APROVADOR, URL_IMG_ANTES, DS_ESTADO_ANTES,
+           DS_PROBLEMA, DS_OBJETIVO, ID_STATUS, ID_APROVADOR, URL_IMG_ANTES, DS_ESTADO_ANTES,
            URL_IMG_DEPOIS, DS_ESTADO_DEPOIS, URL_REFERENCIA, ID_DESPERDICIO, DS_LICOES_APRENDIDAS,
            VL_RESULTADO_FINANCEIRO, ID_MOEDA, DS_RESULTADO_ESPERADO, DT_CRIACAO, DT_CONCLUSAO,
            ID_MOTIVO, DT_ATUALIZACAO, ID_USUARIO_ATUALIZACAO
@@ -1527,9 +1611,8 @@ BEGIN
     ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ADD CONSTRAINT FK_KZN_PVC_USUARIO_ATUALIZACAO FOREIGN KEY (ID_USUARIO_ATUALIZACAO) REFERENCES CI.KZN_MDM_HIERARQUIA (ID_USUARIO);
     ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ADD CONSTRAINT FK_KZN_PVC_APROVADOR FOREIGN KEY (ID_APROVADOR) REFERENCES CI.KZN_APROVADOR (ID_APROVADOR);
     ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ADD CONSTRAINT FK_KZN_PVC_MOEDA FOREIGN KEY (ID_MOEDA) REFERENCES CI.KZN_MOEDA (ID_MOEDA);
-    ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ADD CONSTRAINT CK_KZN_PVC_STATUS CHECK (SG_STATUS IN ('ABERTO','EM_APROVACAO','APROVADO','REPROVADO','CONCLUIDO'));
 
-    CREATE NONCLUSTERED INDEX IX_KZN_PVC_STATUS        ON CI.KZN_PEDRAVISAOCONSOLIDADA (SG_STATUS);
+    CREATE NONCLUSTERED INDEX IX_KZN_PVC_STATUS        ON CI.KZN_PEDRAVISAOCONSOLIDADA (ID_STATUS);
     CREATE NONCLUSTERED INDEX IX_KZN_PVC_CATEGORIA     ON CI.KZN_PEDRAVISAOCONSOLIDADA (ID_CATEGORIA);
     CREATE NONCLUSTERED INDEX IX_KZN_PVC_USUARIO_LIDER ON CI.KZN_PEDRAVISAOCONSOLIDADA (ID_USUARIO_LIDER);
 
@@ -1912,9 +1995,9 @@ BEGIN
         FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
         WHERE NOT (d.DS_OBJETIVO = i.DS_OBJETIVO OR (d.DS_OBJETIVO IS NULL AND i.DS_OBJETIVO IS NULL))
         UNION ALL
-        SELECT lm.ID_LOG, 'SG_STATUS', CONVERT(VARCHAR(200), d.SG_STATUS), CONVERT(VARCHAR(200), i.SG_STATUS)
+        SELECT lm.ID_LOG, 'ID_STATUS', CONVERT(VARCHAR(200), d.ID_STATUS), CONVERT(VARCHAR(200), i.ID_STATUS)
         FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
-        WHERE NOT (d.SG_STATUS = i.SG_STATUS OR (d.SG_STATUS IS NULL AND i.SG_STATUS IS NULL))
+        WHERE NOT (d.ID_STATUS = i.ID_STATUS OR (d.ID_STATUS IS NULL AND i.ID_STATUS IS NULL))
         UNION ALL
         SELECT lm.ID_LOG, 'ID_APROVADOR', CONVERT(VARCHAR(200), d.ID_APROVADOR), CONVERT(VARCHAR(200), i.ID_APROVADOR)
         FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
@@ -1994,6 +2077,28 @@ USING (VALUES
     ON T.SG_IDIOMA = S.SG_IDIOMA
 WHEN NOT MATCHED BY TARGET THEN
     INSERT (ID_IDIOMA, SG_IDIOMA, NM_IDIOMA, NM_PAIS) VALUES (S.ID_IDIOMA, S.SG_IDIOMA, S.NM_IDIOMA, S.NM_PAIS);
+GO
+
+-- KZN_STATUS: seed OBRIGATÓRIO (não é dado fictício) — os 5 status são
+-- exatamente os valores que o antigo CK_KZN_PVC_STATUS aceitava em
+-- SG_STATUS, e a migração da seção 17.2c mapeia a string antiga pra
+-- estes IDs. Bilíngue (PT/EN) como as demais tabelas de domínio.
+MERGE CI.KZN_STATUS AS T
+USING (VALUES
+    (1, 1, 'Aberto',        'Kaizen registrado, ainda não enviado para aprovação'),
+    (2, 1, 'Em aprovação',  'Aguardando avaliação do aprovador'),
+    (3, 1, 'Aprovado',      'Aprovado pelo aprovador responsável'),
+    (4, 1, 'Reprovado',     'Reprovado — a justificativa fica em KZN_MOTIVO_REPROVACAO'),
+    (5, 1, 'Concluído',     'Kaizen finalizado'),
+    (1, 2, 'Open',          'Kaizen registered, not yet submitted for approval'),
+    (2, 2, 'In approval',   'Waiting for the approver review'),
+    (3, 2, 'Approved',      'Approved by the responsible approver'),
+    (4, 2, 'Rejected',      'Rejected — justification is kept in KZN_MOTIVO_REPROVACAO'),
+    (5, 2, 'Completed',     'Kaizen finished')
+) AS S (ID_STATUS, ID_IDIOMA, NM_STATUS, DS_STATUS)
+    ON T.ID_STATUS = S.ID_STATUS AND T.ID_IDIOMA = S.ID_IDIOMA
+WHEN NOT MATCHED BY TARGET THEN
+    INSERT (ID_STATUS, ID_IDIOMA, NM_STATUS, DS_STATUS) VALUES (S.ID_STATUS, S.ID_IDIOMA, S.NM_STATUS, S.DS_STATUS);
 GO
 
 MERGE CI.KZN_MOEDA AS T
@@ -2092,7 +2197,6 @@ BEGIN
     ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ALTER COLUMN NM_KAIZEN               VARCHAR(30)  NOT NULL;
     ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ALTER COLUMN DS_PROBLEMA             VARCHAR(100)     NULL;
     ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ALTER COLUMN DS_OBJETIVO             VARCHAR(100)     NULL;
-    ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ALTER COLUMN SG_STATUS               VARCHAR(30)  NOT NULL;
     ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ALTER COLUMN URL_IMG_ANTES           VARCHAR(200)     NULL;
     ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ALTER COLUMN DS_ESTADO_ANTES         VARCHAR(100)     NULL;
     ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ALTER COLUMN URL_IMG_DEPOIS          VARCHAR(200)     NULL;
