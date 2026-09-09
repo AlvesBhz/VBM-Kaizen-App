@@ -928,9 +928,20 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
             '<span style="font-size:.72rem;color:rgba(255,255,255,.55);">Total ' + a + '</span>' +
             '<span style="font-family:\'Poppins\',sans-serif;font-weight:700;font-size:.85rem;color:#fff;">' + resumo.porAno[a] + '</span></div>';
         }).join('');
-        document.getElementById('bibQtdAprovado').textContent = resumo.porStatus.APROVADO || 0;
-        document.getElementById('bibQtdReprovado').textContent = resumo.porStatus.REPROVADO || 0;
-        document.getElementById('bibQtdAguardando').textContent = resumo.porStatus.EM_APROVACAO || 0;
+        // As chaves de porStatus passaram a ser o NM_STATUS do cadastro
+        // (kzn_status), não mais os literais antigos. Casa pelo nome sem
+        // acento, como o badge do card já faz.
+        function qtdPorNome() {
+          var nomes = Array.prototype.slice.call(arguments);
+          var total = 0;
+          Object.keys(resumo.porStatus || {}).forEach(function (k) {
+            if (nomes.indexOf(semAcento(k)) !== -1) total += resumo.porStatus[k];
+          });
+          return total;
+        }
+        document.getElementById('bibQtdAprovado').textContent = qtdPorNome('aprovado', 'concluido');
+        document.getElementById('bibQtdReprovado').textContent = qtdPorNome('reprovado', 'rejeitado');
+        document.getElementById('bibQtdAguardando').textContent = qtdPorNome('em aprovacao', 'aguardando');
       })
       .catch(function () {});
   }

@@ -2386,7 +2386,7 @@ window.validacaoWizard = (function () {
       .then(function (resultado) {
         if (!resultado.ok) throw new Error((resultado.corpo && resultado.corpo.error) || 'Falha ao enviar o Kaizen.');
         showToast('success', 'Kaizen enviado!', 'Kaizen #' + resultado.corpo.ID_KAIZEN + ' enviado para aprovação.');
-        setTimeout(function () { window.location.href = 'index.html'; }, 1800);
+        setTimeout(function () { window.location.href = 'biblioteca.html'; }, 1800);
       })
       .catch(function (err) {
         showToast('error', 'Erro ao enviar', err.message || 'Não foi possível enviar o Kaizen.');
