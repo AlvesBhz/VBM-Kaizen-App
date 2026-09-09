@@ -2112,6 +2112,43 @@ function paramsComPendente(params) {
     : params;
 }
 
+/** ID do status pelo NOME em português, direto de kzn_status.
+ *
+ *  Serve de saída quando a variável de ambiente não foi configurada: o
+ *  ID de um cadastro é dado do banco, e buscá-lo pelo nome é melhor do
+ *  que deixar o Kaizen nascer sem status. A variável, quando existe,
+ *  continua tendo prioridade — é o caminho previsível, que não quebra
+ *  se alguém renomear o status na aba.
+ *
+ *  Aceita mais de um nome porque o mesmo estado pode estar cadastrado
+ *  com rótulos diferentes. Resultado guardado em memória: é catálogo,
+ *  não muda a cada Kaizen. */
+const cacheStatusPorNome = new Map();
+async function idStatusPorNome(nomes) {
+  const chave = nomes.join("|");
+  if (cacheStatusPorNome.has(chave)) return cacheStatusPorNome.get(chave);
+  try {
+    const lista = await runQuery(
+      `SELECT ID_STATUS, NM_STATUS FROM ${FULL_STATUS_TABLE}
+        WHERE ID_IDIOMA = @idIdioma AND SG_ATIVO = 'S'`,
+      [["idIdioma", sql.Int, ID_IDIOMA_PT]]
+    );
+    const semAcento = (x) =>
+      String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    const alvo = nomes.map(semAcento);
+    const achado = lista.recordset.find((r) => alvo.includes(semAcento(r.NM_STATUS)));
+    const id = achado ? achado.ID_STATUS : null;
+    if (id != null) cacheStatusPorNome.set(chave, id);
+    return id;
+  } catch (err) {
+    console.error("[status] não foi possível resolver pelo nome:", err.message);
+    return null;
+  }
+}
+
+// Nomes aceitos para "aguardando aprovação" — o Kaizen nasce com este.
+const NOMES_EM_APROVACAO = ["Aguardando aprovação", "Em aprovação", "Aguardando", "Em análise"];
+
 const ERRO_STATUS_NAO_CONFIGURADO =
   "Catálogo de status não configurado. Cadastre os status na aba " +
   "Administração > Status Kaizen e informe os IDs em " +
@@ -2262,8 +2299,13 @@ apiRouter.post("/kaizens", async (req, res) => {
       // ID_STATUS só entra no comando quando há catálogo configurado;
       // sem ele a coluna nem é citada, e o Kaizen nasce sem status em vez
       // de com um número inventado.
-      const gravaStatus = STATUS_IDS.emAprovacao != null;
-      if (gravaStatus) reqInsert.input("idStatus", sql.Int, STATUS_IDS.emAprovacao);
+      // Prioridade: a variável de ambiente; sem ela, busca pelo nome no
+      // cadastro. Só fica sem status se nem o nome existir em kzn_status.
+      const idStatusNovo = STATUS_IDS.emAprovacao != null
+        ? STATUS_IDS.emAprovacao
+        : await idStatusPorNome(NOMES_EM_APROVACAO);
+      const gravaStatus = idStatusNovo != null;
+      if (gravaStatus) reqInsert.input("idStatus", sql.Int, idStatusNovo);
       reqInsert.input("idAprovador", sql.Int, idAprovador);
       reqInsert.input("urlImgAntes", sql.NVarChar(PVC_LIMITES.URL_IMG), urlImgAntes);
       reqInsert.input("dsEstadoAntes", sql.NVarChar(PVC_LIMITES.DS_ESTADO_ANTES), descricaoAntes);
@@ -2344,7 +2386,7 @@ apiRouter.post("/kaizens", async (req, res) => {
       }
 
       await tx.commit();
-      res.status(201).json({ ok: true, ID_KAIZEN: idKaizen, ID_STATUS: STATUS_IDS.emAprovacao });
+      res.status(201).json({ ok: true, ID_KAIZEN: idKaizen, ID_STATUS: idStatusNovo });
     } catch (errTx) {
       await tx.rollback().catch(() => {});
       throw errTx;
