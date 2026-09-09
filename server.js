@@ -80,6 +80,27 @@ const FULL_TABLE_NAME = `[${DB_SCHEMA}].[${DB_TABLE}]`;
 const AGORA_BRASILIA =
   "CAST((SYSDATETIMEOFFSET() AT TIME ZONE 'E. South America Standard Time') AS DATETIME2)";
 
+/** Contrapartida do AGORA_BRASILIA na SAÍDA da API.
+ *
+ * DATETIME2 não guarda fuso: o que está na coluna é o relógio de
+ * Brasília, e mais nada. O driver (tedious, useUTC:true por padrão)
+ * monta o Date tratando esse relógio como se fosse UTC — então os
+ * componentes UTC do Date são exatamente o que está gravado.
+ *
+ * Se esse Date virar JSON sozinho, sai com "Z" no fim e o navegador
+ * desconta o fuso dele de novo: 14:30 gravado aparecia 11:30 na tela.
+ * Antes isso não incomodava porque a gravação estava 3h à frente e os
+ * dois erros se cancelavam; com a gravação certa, o desconto ficaria
+ * visível.
+ *
+ * Devolver "YYYY-MM-DDTHH:mm:ss" SEM o "Z" faz o navegador ler o mesmo
+ * relógio como local — sem somar nem subtrair nada. Não depende do fuso
+ * do servidor nem do aparelho de quem acessa. */
+function relogioLocal(valor) {
+  if (!(valor instanceof Date) || Number.isNaN(valor.getTime())) return valor ?? null;
+  return valor.toISOString().slice(0, 19);
+}
+
 /**
  * Comparação de matrícula entre kzn_aprovador e kzn_mdm_hierarquia.
  *
@@ -644,7 +665,7 @@ apiRouter.get("/aprovadores", async (req, res) => {
         NM_ESTADO: r.NM_ESTADO,
         NM_CIDADE: r.NM_CIDADE,
         ATIVO: r.SG_ATIVO === "S",
-        DT_ATUALIZACAO: r.DT_ATUALIZACAO,
+        DT_ATUALIZACAO: relogioLocal(r.DT_ATUALIZACAO),
       }))
     );
   } catch (err) {
@@ -2211,7 +2232,7 @@ apiRouter.post("/kaizens", async (req, res) => {
           (@idKaizen, @idUsuarioCadastro, @idUsuarioLider, @nmKaizen, @idCategoria, @idReplicacao,
            @dsProblema, @dsObjetivo, @sgStatus, @idAprovador, @urlImgAntes, @dsEstadoAntes,
            @urlImgDepois, @dsEstadoDepois, @urlReferencia, @idDesperdicio, @dsLicoes,
-           @vlResultado, @idMoeda, @dsResultadoEsperado, GETDATE(), GETDATE(),
+           @vlResultado, @idMoeda, @dsResultadoEsperado, ${AGORA_BRASILIA}, ${AGORA_BRASILIA},
            @idUsuarioCadastro)`);
 
       for (const idMembro of membros) {
@@ -2220,7 +2241,7 @@ apiRouter.post("/kaizens", async (req, res) => {
         reqM.input("idUsuario", sql.Int, idMembro);
         await reqM.query(
           `INSERT INTO ${FULL_MEMBROS_TABLE} (ID_KAIZEN, ID_USUARIO, DT_ATUALIZACAO)
-           VALUES (@idKaizen, @idUsuario, GETDATE())`
+           VALUES (@idKaizen, @idUsuario, ${AGORA_BRASILIA})`
         );
       }
 
@@ -2230,7 +2251,7 @@ apiRouter.post("/kaizens", async (req, res) => {
         reqD.input("idDesperdicio", sql.Int, idDesp);
         await reqD.query(
           `INSERT INTO ${FULL_KZ_DESPERDICIO_TABLE} (ID_KAIZEN, ID_DESPERDICIO, DT_ATUALIZACAO)
-           VALUES (@idKaizen, @idDesperdicio, GETDATE())`
+           VALUES (@idKaizen, @idDesperdicio, ${AGORA_BRASILIA})`
         );
       }
 
@@ -2255,7 +2276,7 @@ apiRouter.post("/kaizens", async (req, res) => {
             INSERT INTO ${FULL_RESULTADOS_TABLE}
               (ID_RESULTADO, ID_IDIOMA, ID_TIPO_RESULTADO, NM_RESULTADO, DS_RESULTADO, SG_ATIVO, ID_USUARIO, DT_ATUALIZACAO)
             VALUES
-              (@idResultado, @idIdioma, @idTipoResultado, @nmResultado, @dsResultado, 'S', @idUsuario, GETDATE())`);
+              (@idResultado, @idIdioma, @idTipoResultado, @nmResultado, @dsResultado, 'S', @idUsuario, ${AGORA_BRASILIA})`);
         }
 
         const reqRK = new sql.Request(tx);
@@ -2263,7 +2284,7 @@ apiRouter.post("/kaizens", async (req, res) => {
         reqRK.input("idResultado", sql.Int, idResultado);
         await reqRK.query(
           `INSERT INTO ${FULL_RESULTADO_KAIZEN_TABLE} (ID_KAIZEN, ID_RESULTADO, DT_ATUALIZACAO)
-           VALUES (@idKaizen, @idResultado, GETDATE())`
+           VALUES (@idKaizen, @idResultado, ${AGORA_BRASILIA})`
         );
       }
 
@@ -2295,7 +2316,12 @@ apiRouter.post("/kaizens", async (req, res) => {
 // dígitos do ano de criação + ID_KAIZEN com 3 dígitos). Não existe
 // coluna própria pra isso no DER — é só formatação de exibição.
 function rotuloIdKaizen(idKaizen, dtCriacao) {
-  const ano = dtCriacao ? new Date(dtCriacao).getFullYear() : new Date().getFullYear();
+  // getUTCFullYear, não getFullYear: os componentes UTC do Date são o
+  // relógio que está na coluna (ver relogioLocal). getFullYear usaria o
+  // fuso do processo Node — hoje UTC, o que dava no mesmo por acaso,
+  // mas bastaria definir TZ no app.yaml para o rótulo passar a errar o
+  // ano nos Kaizens criados na virada.
+  const ano = dtCriacao ? new Date(dtCriacao).getUTCFullYear() : new Date().getUTCFullYear();
   return `KZN${String(ano).slice(-2)}-${String(idKaizen).padStart(3, "0")}`;
 }
 
@@ -2348,8 +2374,8 @@ apiRouter.get("/kaizens", async (req, res) => {
         ROTULO: rotuloIdKaizen(r.ID_KAIZEN, r.DT_CRIACAO),
         NM_KAIZEN: r.NM_KAIZEN,
         SG_STATUS: r.SG_STATUS,
-        DT_CRIACAO: r.DT_CRIACAO,
-        DT_CONCLUSAO: r.DT_CONCLUSAO,
+        DT_CRIACAO: relogioLocal(r.DT_CRIACAO),
+        DT_CONCLUSAO: relogioLocal(r.DT_CONCLUSAO),
         NM_CATEGORIA: r.NM_CATEGORIA,
         NM_LIDER: r.NM_LIDER,
         NM_ESTADO: r.NM_ESTADO,
@@ -2464,8 +2490,8 @@ apiRouter.get("/kaizens/:id", async (req, res) => {
       ROTULO: rotuloIdKaizen(k.ID_KAIZEN, k.DT_CRIACAO),
       NM_KAIZEN: k.NM_KAIZEN,
       SG_STATUS: k.SG_STATUS,
-      DT_CRIACAO: k.DT_CRIACAO,
-      DT_CONCLUSAO: k.DT_CONCLUSAO,
+      DT_CRIACAO: relogioLocal(k.DT_CRIACAO),
+      DT_CONCLUSAO: relogioLocal(k.DT_CONCLUSAO),
       NM_CATEGORIA: k.NM_CATEGORIA,
       NM_REPLICACAO: k.NM_REPLICACAO,
       NM_LIDER: k.NM_LIDER,
@@ -2542,7 +2568,7 @@ apiRouter.get("/aprovacoes", async (req, res) => {
       ID_KAIZEN: r.ID_KAIZEN,
       ROTULO: rotuloIdKaizen(r.ID_KAIZEN, r.DT_CRIACAO),
       NM_KAIZEN: r.NM_KAIZEN,
-      DT_CRIACAO: r.DT_CRIACAO,
+      DT_CRIACAO: relogioLocal(r.DT_CRIACAO),
       NM_CATEGORIA: r.NM_CATEGORIA,
       NM_LIDER: r.NM_LIDER,
       NM_ESTADO: r.NM_ESTADO,
@@ -2577,7 +2603,7 @@ apiRouter.post("/kaizens/:id/aprovar", async (req, res) => {
     }
     await runQuery(
       `UPDATE ${FULL_PVC_TABLE}
-       SET SG_STATUS = 'APROVADO', DT_CONCLUSAO = GETDATE(), DT_ATUALIZACAO = GETDATE(), ID_USUARIO_ATUALIZACAO = @idUsuario
+       SET SG_STATUS = 'APROVADO', DT_CONCLUSAO = ${AGORA_BRASILIA}, DT_ATUALIZACAO = ${AGORA_BRASILIA}, ID_USUARIO_ATUALIZACAO = @idUsuario
        WHERE ID_KAIZEN = @idKaizen`,
       [["idKaizen", sql.Int, idKaizen], ["idUsuario", sql.Int, idUsuario]]
     );
@@ -2624,7 +2650,7 @@ apiRouter.post("/kaizens/:id/reprovar", async (req, res) => {
         reqM.input("idUsuario", sql.Int, idUsuario);
         await reqM.query(`
           INSERT INTO ${FULL_MOTIVO_TABLE} (ID_MOTIVO, ID_IDIOMA, NM_MOTIVO, DS_MOTIVO, SG_ATIVO, ID_USUARIO, DT_ATUALIZACAO)
-          VALUES (@idMotivo, @idIdioma, @nmMotivo, @dsMotivo, 'S', @idUsuario, GETDATE())`);
+          VALUES (@idMotivo, @idIdioma, @nmMotivo, @dsMotivo, 'S', @idUsuario, ${AGORA_BRASILIA})`);
       }
 
       const reqUp = new sql.Request(tx);
@@ -2633,7 +2659,7 @@ apiRouter.post("/kaizens/:id/reprovar", async (req, res) => {
       reqUp.input("idUsuario", sql.Int, idUsuario);
       await reqUp.query(`
         UPDATE ${FULL_PVC_TABLE}
-        SET SG_STATUS = 'REPROVADO', ID_MOTIVO = @idMotivo, DT_ATUALIZACAO = GETDATE(), ID_USUARIO_ATUALIZACAO = @idUsuario
+        SET SG_STATUS = 'REPROVADO', ID_MOTIVO = @idMotivo, DT_ATUALIZACAO = ${AGORA_BRASILIA}, ID_USUARIO_ATUALIZACAO = @idUsuario
         WHERE ID_KAIZEN = @idKaizen`);
 
       await tx.commit();
