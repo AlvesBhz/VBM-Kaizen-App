@@ -515,11 +515,13 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
           <i class="fa-solid fa-magnifying-glass"></i>
           <input type="text" id="bibFiltroNome" placeholder="Nome do Kaizen..." data-i18n-placeholder="bib.searchPlaceholder"/>
         </div>
-        <!-- Preenchido com o usuário logado ao abrir a página (ver
-             window.VBMUsuario, já usado pelo cabeçalho). -->
-        <select class="filter-select" id="bibFiltroUsuario">
-          <option value="" data-i18n="filter.allUsers">Todos os usuários</option>
-        </select>
+        <!-- Mesmo comportamento do campo de Nome do Kaizen, mas sobre o
+             nome do líder. Vem preenchido com o usuário logado ao abrir a
+             página (ver window.VBMUsuario, já usado pelo cabeçalho). -->
+        <div class="filter-search">
+          <i class="fa-solid fa-user"></i>
+          <input type="text" id="bibFiltroUsuario" placeholder="Nome do usuário..." data-i18n-placeholder="bib.userPlaceholder"/>
+        </div>
         <select class="filter-select" id="bibFiltroUnidade">
           <option value="" data-i18n="filter.allUnits">Todas as unidades</option>
         </select>
@@ -792,15 +794,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   // Nome do líder de cada Kaizen, para o filtro de usuário. NM_LIDER e o
   // "nome" de /api/me saem da MESMA coluna (kzn_mdm_hierarquia.NM_USUARIO),
   // então a comparação é exata, não uma heurística de nome.
-  function popularOpcoesUsuario() {
-    var lideres = [...new Set(todos.map(function (k) { return k.NM_LIDER; }).filter(Boolean))]
-      .sort(function (a, b) { return a.localeCompare(b, 'pt-BR'); });
-    var atual = selUsuario.value;
-    selUsuario.innerHTML = selUsuario.options[0].outerHTML +
-      lideres.map(function (n) { return '<option value="' + n + '">' + n + '</option>'; }).join('');
-    selUsuario.value = atual;
-  }
-
   // Normalização usada pelo filtro de nome: sem maiúsculas, sem espaços
   // nas pontas e sem espaço repetido no meio.
   function normalizar(texto) {
@@ -810,7 +803,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   /** Aplica TODOS os filtros de uma vez, em memória, sobre "todos". */
   function aplicarFiltros() {
     var nome = normalizar(inputNome.value);
-    var usuario = selUsuario.value;
+    var usuario = normalizar(selUsuario.value);
     var estado = selUnidade.value;
     var categoria = selCategoria.value;
     var status = selStatus.value;
@@ -818,7 +811,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
     lote = todos.filter(function (k) {
       if (nome && normalizar(k.NM_KAIZEN).indexOf(nome) === -1) return false;
-      if (usuario && k.NM_LIDER !== usuario) return false;
+      if (usuario && normalizar(k.NM_LIDER).indexOf(usuario) === -1) return false;
       if (estado && k.NM_ESTADO !== estado) return false;
       if (categoria && String(k.ID_CATEGORIA) !== String(categoria)) return false;
       if (status && String(k.ID_STATUS) !== String(status)) return false;
@@ -851,7 +844,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       .then(function (itens) {
         todos = itens || [];
         popularOpcoesDinamicas();
-        popularOpcoesUsuario();
         aplicarUsuarioLogado();
         aplicarFiltros();
       })
@@ -864,7 +856,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   selPeriodo.addEventListener('change', aplicarFiltros);
   selCategoria.addEventListener('change', aplicarFiltros);
   selStatus.addEventListener('change', aplicarFiltros);
-  selUsuario.addEventListener('change', aplicarFiltros);
+  selUsuario.addEventListener('input', aplicarFiltros);
   inputNome.addEventListener('input', aplicarFiltros);
 
   /* Filtro de usuário preenchido com quem está logado, reaproveitando o
@@ -882,11 +874,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   var usuarioJaAplicado = false;
 
   function aplicarUsuarioLogado() {
-    if (usuarioJaAplicado || !nomeUsuarioLogado || !todos.length) return;
-    var existe = Array.prototype.some.call(selUsuario.options, function (o) {
-      return o.value === nomeUsuarioLogado;
-    });
-    if (!existe) return;
+    if (usuarioJaAplicado || !nomeUsuarioLogado) return;
     usuarioJaAplicado = true;
     selUsuario.value = nomeUsuarioLogado;
   }
@@ -897,7 +885,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       // inclusive quando vem do /api/me (carregarDoDatabricks, em
       // js/usuario-graph.js, adapta a resposta para esse formato).
       nomeUsuarioLogado = (perfil && perfil.displayName) || null;
-      if (usuarioJaAplicado || !todos.length) return; // a lista ainda vai aplicar
+      if (usuarioJaAplicado) return;
       aplicarUsuarioLogado();
       if (usuarioJaAplicado) aplicarFiltros();
     });
@@ -1141,6 +1129,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       'bib.searchPlaceholder': 'Nome do Kaizen...',
       'bib.showingCount': '31 Kaizens aprovados · Exibindo 6',
       'bib.countTemplate': '{total} Kaizens · Exibindo {n}',
+      'bib.userPlaceholder': 'Nome do usuário...',
       'bib.loadMore': 'Carregar mais',
       'bib.summaryTitle': 'Resumo da Biblioteca',
       'bib.total2024': 'Total 2024',
@@ -1203,6 +1192,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       'bib.searchPlaceholder': 'Kaizen name...',
       'bib.showingCount': '31 approved Kaizens · Showing 6',
       'bib.countTemplate': '{total} Kaizens · Showing {n}',
+      'bib.userPlaceholder': 'User name...',
       'bib.loadMore': 'Load more',
       'bib.summaryTitle': 'Library Summary',
       'bib.total2024': 'Total 2024',
