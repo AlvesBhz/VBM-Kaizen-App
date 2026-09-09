@@ -286,6 +286,23 @@ window.criarCadastroBilingue = function (cfg) {
         '<button type="button" class="btn-icon ' + (reg.ATIVO ? "btn-icon-red" : "btn-icon-blue") + ' btn-icon-sm" data-action="status" title="' + (reg.ATIVO ? "Desativar" : "Reativar") + '"><i class="fa-solid ' + (reg.ATIVO ? "fa-ban" : "fa-rotate-right") + '"></i></button>' +
       "</div>";
 
+    // Ícone que não carrega — arquivo SVG ainda não publicado, ou
+    // URL_ICONE apontando para um caminho que não existe mais — deixava
+    // o cartão com o símbolo de imagem quebrada do navegador. Cai no
+    // glifo do Font Awesome correspondente, que é vendorizado junto com
+    // a aplicação e não depende de nenhum arquivo em assets/icons.
+    var img = item.querySelector(".admin-item-icon img");
+    if (img) {
+      img.addEventListener("error", function () {
+        var classe = classeDoCaminho(img.getAttribute("src")) ||
+                     classeDoCaminho(cfg.iconePadrao);
+        if (!classe) return; // sem classe reconhecível, deixa como está
+        var glifo = document.createElement("i");
+        glifo.className = classe;
+        img.replaceWith(glifo);
+      }, { once: true });
+    }
+
     item.querySelector('[data-action="editar"]').addEventListener("click", function () { abrirEdicao(reg); });
     item.querySelector('[data-action="status"]').addEventListener("click", function () { alternarStatus(reg, item); });
     return item;
