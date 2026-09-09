@@ -51,18 +51,20 @@ GO
 /* =====================================================================
    PARTE 2 — O(s) registro(s) principal(is): quando e por quem
    ---------------------------------------------------------------------
-   DT_CRIACAO/CRIADO_POR e DT_ATUALIZACAO/ATUALIZADO_POR vêm das próprias
-   colunas de CI.KZN_PEDRAVISAOCONSOLIDADA (o que está gravado AGORA na
-   linha) — pra ver o HISTÓRICO de todas as alterações, use a Parte 3.
+   DT_ATUALIZACAO/ATUALIZADO_POR vêm das próprias colunas de
+   CI.KZN_PEDRAVISAOCONSOLIDADA (o que está gravado AGORA na linha).
+   DT_CRIACAO não é mais coluna: vem da linha 'C' do log — pra ver o
+   HISTÓRICO completo de alterações, use a Parte 3.
    ===================================================================== */
 DECLARE @ID_KAIZEN INT = NULL;   -- <<< AJUSTAR (opcional): um ID_KAIZEN específico, ou NULL para todos
 
 SELECT
     p.ID_KAIZEN,
     p.NM_KAIZEN,
-    p.SG_STATUS,
-    p.DT_CRIACAO,
-    CRIADO_POR       = mc.NM_USUARIO,
+    p.ID_STATUS,
+    STATUS_NOME       = st.NM_STATUS,
+    DT_CRIACAO        = lc.DT_OPERACAO,
+    CRIADO_POR        = mc.NM_USUARIO,
     MATRICULA_CRIADOR = mc.CD_MATRICULA,
     p.DT_ATUALIZACAO,
     ATUALIZADO_POR    = ma.NM_USUARIO,
@@ -70,6 +72,14 @@ SELECT
 FROM        CI.KZN_PEDRAVISAOCONSOLIDADA p
 LEFT JOIN   CI.KZN_MDM_HIERARQUIA mc ON mc.ID_USUARIO = p.ID_USUARIO_CADASTRO
 LEFT JOIN   CI.KZN_MDM_HIERARQUIA ma ON ma.ID_USUARIO = p.ID_USUARIO_ATUALIZACAO
+/* DT_CRIACAO deixou de ser coluna da tabela: a data de criacao agora vem
+   da linha 'C' do log de auditoria. */
+LEFT JOIN   CI.KZN_LOG_PEDRAVISAOCONSOLIDADA lc
+       ON   lc.ID_KAIZEN = p.ID_KAIZEN AND lc.TP_OPERACAO = 'C'
+/* KZN_STATUS tem PK composta (ID_STATUS, ID_IDIOMA) - TOP 1 pelo idioma
+   para nao multiplicar a linha do Kaizen por idioma. */
+OUTER APPLY (SELECT TOP (1) s.NM_STATUS FROM CI.KZN_STATUS s
+             WHERE s.ID_STATUS = p.ID_STATUS ORDER BY s.ID_IDIOMA) st
 WHERE       (@ID_KAIZEN IS NULL OR p.ID_KAIZEN = @ID_KAIZEN)
 ORDER BY    p.ID_KAIZEN;
 GO

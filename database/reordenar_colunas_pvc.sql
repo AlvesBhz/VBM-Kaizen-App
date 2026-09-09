@@ -1,8 +1,8 @@
 /* =====================================================================
    Reordena as colunas fisicas de CI.KZN_PEDRAVISAOCONSOLIDADA
    ---------------------------------------------------------------------
-   OBJETIVO: colocar ID_STATUS na 9a posicao e DS_MOTIVO na 23a, deixando
-   a ordem fisica das 25 colunas identica a do DER. As duas entraram por
+   OBJETIVO: colocar ID_STATUS na 9a posicao e DS_MOTIVO na 22a, deixando
+   a ordem fisica das 24 colunas identica a do DER. As duas entraram por
    "ALTER TABLE ... ADD" em migracoes anteriores e foram parar no fim da
    tabela.
 
@@ -14,7 +14,7 @@
      1. captura, por metadados, tudo que esta amarrado a tabela hoje
         (FKs que entram, FKs que saem, PK, indices, defaults, checks,
         constraints unique e os triggers);
-     2. cria CI.KZN_PVC_NEW com as colunas na ordem correta;
+     2. cria CI.KZN_PVC_NEW com as 24 colunas na ordem correta;
      3. copia todas as linhas e CONFERE a contagem;
      4. dropa a tabela antiga e renomeia a nova;
      5. recria tudo que capturou no passo 1.
@@ -86,7 +86,12 @@ BEGIN
     RETURN;
 END
 
-/* Ordem-alvo: as 25 colunas exatamente como aparecem no DER. */
+/* Ordem-alvo: as 24 colunas exatamente como aparecem no DER.
+   DT_CRIACAO nao esta aqui: foi removida da tabela (ver
+   remover_dt_criacao_pvc.sql), e com isso DS_MOTIVO passou da 23a para a
+   22a posicao. RODE O remover_dt_criacao_pvc.sql ANTES DESTE: com a
+   coluna ainda presente, a checagem E0.1 aborta apontando DT_CRIACAO
+   como coluna fora da ordem-alvo. */
 DECLARE @ordem TABLE (POS INT PRIMARY KEY, NM SYSNAME);
 INSERT INTO @ordem (POS, NM) VALUES
     ( 1, 'ID_KAIZEN'),              ( 2, 'ID_USUARIO_CADASTRO'),
@@ -99,11 +104,10 @@ INSERT INTO @ordem (POS, NM) VALUES
     (15, 'URL_REFERENCIA'),         (16, 'ID_DESPERDICIO'),
     (17, 'DS_LICOES_APRENDIDAS'),   (18, 'VL_RESULTADO_FINANCEIRO'),
     (19, 'ID_MOEDA'),               (20, 'DS_RESULTADO_ESPERADO'),
-    (21, 'DT_CRIACAO'),             (22, 'DT_CONCLUSAO'),
-    (23, 'DS_MOTIVO'),              (24, 'DT_ATUALIZACAO'),
-    (25, 'ID_USUARIO_ATUALIZACAO');
+    (21, 'DT_CONCLUSAO'),           (22, 'DS_MOTIVO'),
+    (23, 'DT_ATUALIZACAO'),         (24, 'ID_USUARIO_ATUALIZACAO');
 
-/* E0.1 - a tabela real precisa ter EXATAMENTE essas 25 colunas. Um
+/* E0.1 - a tabela real precisa ter EXATAMENTE essas 24 colunas. Um
    descompasso (coluna faltando ou coluna extra que a lista nao preve)
    significaria perda silenciosa de dados na copia - entao aborta. */
 SELECT @qt = COUNT(*) FROM @ordem o
@@ -159,7 +163,7 @@ IF NOT EXISTS (
     SELECT 1 FROM sys.columns c JOIN @ordem o ON o.NM = c.name
     WHERE c.object_id = @objId AND c.column_id <> o.POS)
 BEGIN
-    PRINT 'Nada a fazer - as 25 colunas ja estao na ordem do DER (ID_STATUS na 9a, DS_MOTIVO na 23a).';
+    PRINT 'Nada a fazer - as 24 colunas ja estao na ordem do DER (ID_STATUS na 9a, DS_MOTIVO na 22a).';
     RETURN;
 END
 
@@ -350,7 +354,7 @@ BEGIN TRY
 (' + @cols + N'
 );';
     EXEC sp_executesql @sql;
-    PRINT '  E3.2 ok - CI.KZN_PVC_NEW criada com as 25 colunas na ordem do DER.';
+    PRINT '  E3.2 ok - CI.KZN_PVC_NEW criada com as 24 colunas na ordem do DER.';
 
     /* 3.3 - copia os dados */
     SET @sql = N'INSERT INTO ' + @tblNew + N' (' + @colList + N') SELECT ' + @colList + N' FROM ' + @tbl + N';';
@@ -397,7 +401,7 @@ BEGIN TRY
     PRINT '  E3.5 ok - ' + CAST(@n AS VARCHAR(10)) + ' objeto(s) recriado(s).';
 
     COMMIT TRANSACTION;
-    PRINT 'Concluido: CI.KZN_PEDRAVISAOCONSOLIDADA reconstruida com ID_STATUS na 9a posicao e DS_MOTIVO na 23a.';
+    PRINT 'Concluido: CI.KZN_PEDRAVISAOCONSOLIDADA reconstruida com ID_STATUS na 9a posicao e DS_MOTIVO na 22a.';
 
 END TRY
 BEGIN CATCH
