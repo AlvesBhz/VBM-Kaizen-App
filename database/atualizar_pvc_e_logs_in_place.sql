@@ -13,23 +13,25 @@
    KZN_PEDRAVISAOCONSOLIDADA
      E1. SG_STATUS (VARCHAR(30)) -> ID_STATUS (INT), com o ID BUSCADO em
          ci.kzn_status pelo nome (sem mapa fixo).
-     E2. ID_MOTIVO (INT) -> DS_MOTIVO (VARCHAR(300)), migrando o TEXTO
-         REAL de ci.kzn_motivo_reprovacao.DS_MOTIVO.
-     E3. 10 campos de texto para VARCHAR(300) (so ampliacao).
+     E2. 10 campos de texto para VARCHAR(300) (so ampliacao).
+
+     A troca ID_MOTIVO -> DS_MOTIVO NAO esta aqui (ja aplicada). Se
+     precisar dela em algum ambiente, use
+     database/migrar_motivo_para_ds_motivo.sql.
 
    KZN_LOG_PEDRAVISAOCONSOLIDADA
-     E4. Garante a SEQUENCE de ID_LOG. A coluna e NOT NULL sem IDENTITY
+     E3. Garante a SEQUENCE de ID_LOG. A coluna e NOT NULL sem IDENTITY
          nem DEFAULT e os triggers nunca a informavam - todo INSERT ou
          UPDATE na tabela principal falhava com "Cannot insert the value
          NULL into column 'ID_LOG'". A sequence nasce alinhada ao maior
          ID_LOG ja gravado, entao nao colide com o historico existente.
 
    KZN_LOG_PEDRAVISAOCONSOLIDADA_DETALHE
-     E5. Cria a tabela e sua sequence se ainda nao existirem, e amplia
+     E4. Cria a tabela e sua sequence se ainda nao existirem, e amplia
          VL_ANTERIOR/VL_NOVO para VARCHAR(300) - senao o historico
          truncaria em 200 os campos que agora tem 300.
 
-   E6. Recria os triggers TR_KZN_PVC_INS / TR_KZN_PVC_UPD na versao
+   E5. Recria os triggers TR_KZN_PVC_INS / TR_KZN_PVC_UPD na versao
        atual: usam a sequence e auditam ID_STATUS e DS_MOTIVO.
 
    IDEMPOTENTE: cada etapa checa antes de agir; rodar de novo nao
@@ -37,13 +39,27 @@
    com um PRINT.
 
    *** QUEBRA A APLICACAO ATE O DEPLOY DO APP AJUSTADO ***
-   server.js ainda usa SG_STATUS, ID_MOTIVO e PVC_LIMITES com os
-   tamanhos antigos.
+   server.js ainda usa SG_STATUS e PVC_LIMITES com os tamanhos antigos.
 
    Schema: 'CI'.
    ===================================================================== */
 
 SET NOCOUNT ON;
+
+/* =====================================================================
+   E0 - PRE-CHECAGEM
+   O trigger de auditoria da ultima etapa referencia DS_MOTIVO. Se a
+   coluna ainda nao existir (troca ID_MOTIVO -> DS_MOTIVO nao aplicada),
+   a criacao do trigger falharia com "Invalid column name".
+   ===================================================================== */
+IF OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA','U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.columns
+                   WHERE object_id = OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA') AND name = 'DS_MOTIVO')
+BEGIN
+    RAISERROR('Abortado: CI.KZN_PEDRAVISAOCONSOLIDADA nao tem DS_MOTIVO. Rode antes database/migrar_motivo_para_ds_motivo.sql - o trigger da ultima etapa depende dessa coluna. Nada foi alterado.', 16, 1);
+    RETURN;
+END
+GO
 
 /* =====================================================================
    E1 - KZN_PEDRAVISAOCONSOLIDADA: SG_STATUS -> ID_STATUS
@@ -104,48 +120,7 @@ END
 GO
 
 /* =====================================================================
-   E2 - KZN_PEDRAVISAOCONSOLIDADA: ID_MOTIVO -> DS_MOTIVO
-   ===================================================================== */
-IF NOT EXISTS (SELECT 1 FROM sys.columns
-               WHERE object_id = OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA') AND name = 'ID_MOTIVO')
-    PRINT 'E2 pulada - ID_MOTIVO ja foi removida.';
-GO
-
-IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA') AND name = 'ID_MOTIVO')
-   AND NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA') AND name = 'DS_MOTIVO')
-    ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ADD DS_MOTIVO VARCHAR(300) NULL;
-GO
-
-IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA') AND name = 'ID_MOTIVO')
-BEGIN
-    IF OBJECT_ID('CI.KZN_MOTIVO_REPROVACAO','U') IS NOT NULL
-        EXEC sp_executesql N'
-            UPDATE p
-            SET    p.DS_MOTIVO = m.DS_MOTIVO
-            FROM   CI.KZN_PEDRAVISAOCONSOLIDADA p
-            CROSS APPLY (
-                SELECT TOP (1) x.DS_MOTIVO
-                FROM   CI.KZN_MOTIVO_REPROVACAO x
-                WHERE  x.ID_MOTIVO = p.ID_MOTIVO
-                ORDER BY CASE WHEN x.ID_IDIOMA = 1 THEN 0 ELSE 1 END, x.ID_IDIOMA
-            ) m
-            WHERE  p.ID_MOTIVO IS NOT NULL AND p.DS_MOTIVO IS NULL;';
-    ELSE
-        PRINT 'AVISO: CI.KZN_MOTIVO_REPROVACAO nao existe - DS_MOTIVO fica vazia (sem texto de origem).';
-
-    DECLARE @orfaos INT;
-    EXEC sp_executesql N'SELECT @qt = COUNT(*) FROM CI.KZN_PEDRAVISAOCONSOLIDADA WHERE ID_MOTIVO IS NOT NULL AND DS_MOTIVO IS NULL',
-                       N'@qt INT OUTPUT', @qt = @orfaos OUTPUT;
-    IF @orfaos > 0
-        PRINT 'AVISO: ' + CAST(@orfaos AS VARCHAR(10)) + ' Kaizen(s) tinham ID_MOTIVO sem texto correspondente - DS_MOTIVO ficou nula neles.';
-
-    EXEC sp_executesql N'ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA DROP COLUMN ID_MOTIVO;';
-    PRINT 'E2 ok - justificativa migrada para DS_MOTIVO; ID_MOTIVO removida.';
-END
-GO
-
-/* =====================================================================
-   E3 - KZN_PEDRAVISAOCONSOLIDADA: 10 campos para VARCHAR(300)
+   E2 - KZN_PEDRAVISAOCONSOLIDADA: 10 campos para VARCHAR(300)
    (so ampliacao - nenhum dado e perdido, nulidade inalterada)
    ===================================================================== */
 ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ALTER COLUMN DS_PROBLEMA           VARCHAR(300) NULL;
@@ -162,11 +137,11 @@ GO
 IF EXISTS (SELECT 1 FROM sys.columns
            WHERE object_id = OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA') AND name = 'DS_MOTIVO')
     ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ALTER COLUMN DS_MOTIVO         VARCHAR(300) NULL;
-PRINT 'E3 ok - campos de texto ampliados para VARCHAR(300).';
+PRINT 'E2 ok - campos de texto ampliados para VARCHAR(300).';
 GO
 
 /* =====================================================================
-   E4 - KZN_LOG_PEDRAVISAOCONSOLIDADA: sequence de ID_LOG
+   E3 - KZN_LOG_PEDRAVISAOCONSOLIDADA: sequence de ID_LOG
    Nasce alinhada ao maior ID_LOG ja gravado (START WITH exige literal,
    por isso o CREATE SEQUENCE e montado via SQL dinamico).
    ===================================================================== */
@@ -178,14 +153,14 @@ BEGIN
     DECLARE @sqlSeq nvarchar(300) = N'CREATE SEQUENCE CI.SEQ_KZN_LOG_PVC AS INT START WITH '
                                   + CAST(@prox AS nvarchar(20)) + N' INCREMENT BY 1;';
     EXEC sp_executesql @sqlSeq;
-    PRINT 'E4 ok - SEQ_KZN_LOG_PVC criada a partir de ' + CAST(@prox AS VARCHAR(20)) + '.';
+    PRINT 'E3 ok - SEQ_KZN_LOG_PVC criada a partir de ' + CAST(@prox AS VARCHAR(20)) + '.';
 END
 ELSE
-    PRINT 'E4 pulada - SEQ_KZN_LOG_PVC ja existe.';
+    PRINT 'E3 pulada - SEQ_KZN_LOG_PVC ja existe.';
 GO
 
 /* =====================================================================
-   E5 - KZN_LOG_PEDRAVISAOCONSOLIDADA_DETALHE
+   E4 - KZN_LOG_PEDRAVISAOCONSOLIDADA_DETALHE
    ===================================================================== */
 IF OBJECT_ID('CI.KZN_LOG_PEDRAVISAOCONSOLIDADA_DETALHE', 'U') IS NULL
 BEGIN
@@ -221,12 +196,12 @@ IF OBJECT_ID('CI.KZN_LOG_PEDRAVISAOCONSOLIDADA_DETALHE','U') IS NOT NULL
 BEGIN
     ALTER TABLE CI.KZN_LOG_PEDRAVISAOCONSOLIDADA_DETALHE ALTER COLUMN VL_ANTERIOR VARCHAR(300) NULL;
     ALTER TABLE CI.KZN_LOG_PEDRAVISAOCONSOLIDADA_DETALHE ALTER COLUMN VL_NOVO     VARCHAR(300) NULL;
-    PRINT 'E5 ok - tabela de detalhe pronta e ampliada para VARCHAR(300).';
+    PRINT 'E4 ok - tabela de detalhe pronta e ampliada para VARCHAR(300).';
 END
 GO
 
 /* =====================================================================
-   E6 - TRIGGERS na versao atual (usam a sequence; auditam ID_STATUS e
+   E5 - TRIGGERS na versao atual (usam a sequence; auditam ID_STATUS e
    DS_MOTIVO). CREATE OR ALTER: nao derruba nada, so redefine.
    ===================================================================== */
 CREATE OR ALTER TRIGGER CI.TR_KZN_PVC_INS ON CI.KZN_PEDRAVISAOCONSOLIDADA AFTER INSERT AS
@@ -362,7 +337,7 @@ END
 GO
 
 /* =====================================================================
-   E7 - CONFERENCIA
+   E6 - CONFERENCIA
    ===================================================================== */
 SELECT  TABELA = 'KZN_PEDRAVISAOCONSOLIDADA', COLUNA = c.name,
         TIPO = ty.name + CASE WHEN ty.name = 'varchar' THEN '(' + CAST(c.max_length AS VARCHAR(10)) + ')' ELSE '' END
