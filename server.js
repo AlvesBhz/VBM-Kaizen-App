@@ -2123,14 +2123,19 @@ const ERRO_STATUS_NAO_CONFIGURADO =
 // cadastro, não os 100 caracteres que o helper da tela antiga sugeria.
 const PVC_LIMITES = {
   NM_KAIZEN: 30,
-  DS_PROBLEMA: 100,
-  DS_OBJETIVO: 100,
-  DS_ESTADO_ANTES: 100,
-  DS_ESTADO_DEPOIS: 100,
-  URL_REFERENCIA: 200,
-  DS_LICOES_APRENDIDAS: 100,
-  DS_RESULTADO_ESPERADO: 100,
-  URL_IMG: 200,
+  // Os campos de texto livre e de URL foram para VARCHAR(300) no DER
+  // atual. Só NM_KAIZEN continua em 30. Alargar não invalida nada do que
+  // já está gravado: o que cabia em 100 cabe em 300.
+  DS_PROBLEMA: 300,
+  DS_OBJETIVO: 300,
+  DS_ESTADO_ANTES: 300,
+  DS_ESTADO_DEPOIS: 300,
+  URL_REFERENCIA: 300,
+  DS_LICOES_APRENDIDAS: 300,
+  DS_RESULTADO_ESPERADO: 300,
+  URL_IMG: 300,
+  // DS_MOTIVO: texto da reprovação, gravado direto na linha do Kaizen.
+  DS_MOTIVO: 300,
 };
 
 apiRouter.post("/kaizens", async (req, res) => {
@@ -2710,8 +2715,9 @@ apiRouter.post("/kaizens/:id/reprovar", async (req, res) => {
     const idKaizen = parseInt(req.params.id, 10);
     const motivo = String((req.body && req.body.motivo) || "").trim();
     if (!motivo) return res.status(400).json({ error: "Motivo da reprovação é obrigatório." });
-    // 100 = tamanho de DS_MOTIVO no DER.
-    if (motivo.length > 100) return res.status(400).json({ error: "Motivo deve ter no máximo 100 caracteres." });
+    if (motivo.length > PVC_LIMITES.DS_MOTIVO) {
+      return res.status(400).json({ error: `Motivo deve ter no máximo ${PVC_LIMITES.DS_MOTIVO} caracteres.` });
+    }
     const idUsuario = await idUsuarioLogado(req);
     if (!idUsuario) return res.status(401).json({ error: "Não foi possível identificar o usuário logado." });
     if (!(await souOAprovadorDoKaizen(idKaizen, idUsuario))) {
@@ -2726,7 +2732,7 @@ apiRouter.post("/kaizens/:id/reprovar", async (req, res) => {
        WHERE ID_KAIZEN = @idKaizen`,
       [["idKaizen", sql.Int, idKaizen], ["idUsuario", sql.Int, idUsuario],
        ["idStatus", sql.Int, STATUS_IDS.reprovado],
-       ["motivo", sql.NVarChar(100), motivo]]
+       ["motivo", sql.NVarChar(PVC_LIMITES.DS_MOTIVO), motivo]]
     );
     res.json({ ok: true });
   } catch (err) {

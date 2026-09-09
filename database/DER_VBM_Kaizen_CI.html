@@ -209,7 +209,7 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
 <path class="rel" d="M785,939 L700,939 Q697.5,939 697.5,936.5 L697.5,63.5 Q697.5,61 695,61 L700,61" marker-end="url(#arrow-key)" data-from="e_RESULTADOS" data-to="e_MDM" data-fk-row="7"/>
 <path class="rel" d="M795,1155 L757.5,1155 Q747.5,1155 747.5,1145 L747.5,71 Q747.5,61 737.5,61 L700,61" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_MDM" data-fk-row="1"/>
 <path class="rel" d="M795,1177 L757.5,1177 Q747.5,1177 747.5,1167 L747.5,71 Q747.5,61 737.5,61 L700,61" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_MDM" data-fk-row="2"/>
-<path class="rel" d="M795,1661 L757.5,1661 Q747.5,1661 747.5,1651 L747.5,71 Q747.5,61 737.5,61 L700,61" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_MDM" data-fk-row="24"/>
+<path class="rel" d="M795,1639 L757.5,1639 Q747.5,1639 747.5,1629 L747.5,71 Q747.5,61 737.5,61 L700,61" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_MDM" data-fk-row="23"/>
 <path class="rel soft" d="M795,1309 L1652.5,1309 Q1662.5,1309 1662.5,1299 L1662.5,499 Q1662.5,489 1672.5,489 L1750,489" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_STATUS" data-fk-row="8"/>
 <path class="rel soft" d="M475,1221 L357.5,1221 Q347.5,1221 347.5,1211 L347.5,499 Q347.5,489 337.5,489 L260,489" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_CATEGORIA" data-fk-row="4"/>
 <path class="rel soft" d="M475,1243 L512.5,1243 Q522.5,1243 522.5,1233 L522.5,499 Q522.5,489 532.5,489 L610,489" marker-end="url(#arrow-key)" data-from="e_PVC" data-to="e_REPLICACAO" data-fk-row="5"/>
@@ -385,7 +385,7 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
 </div>
 
 <div class="group-label" style="left:0;top:1046px;" data-i18n="group.main">Tabela principal &amp; auditoria</div>
-<div class="entity main" id="e_PVC" style="left:475px;top:1072px;width:320px;height:604px;">
+<div class="entity main" id="e_PVC" style="left:475px;top:1072px;width:320px;height:582px;">
   <div class="entity-head"><div class="entity-icon">KZ</div><div class="entity-title">KZN_PEDRAVISAOCONSOLIDADA</div></div>
   <div class="entity-body">
     <div class="field"><span class="field-name pk">ID_KAIZEN</span><span class="field-type">INT</span></div>
@@ -394,23 +394,22 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
     <div class="field"><span class="field-name">NM_KAIZEN</span><span class="field-type">VARCHAR(30)</span></div>
     <div class="field"><span class="field-name fk">ID_CATEGORIA</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name fk">ID_REPLICACAO</span><span class="field-type">INT</span></div>
-    <div class="field"><span class="field-name">DS_PROBLEMA</span><span class="field-type">VARCHAR(100)</span></div>
-    <div class="field"><span class="field-name">DS_OBJETIVO</span><span class="field-type">VARCHAR(100)</span></div>
+    <div class="field"><span class="field-name">DS_PROBLEMA</span><span class="field-type">VARCHAR(300)</span></div>
+    <div class="field"><span class="field-name">DS_OBJETIVO</span><span class="field-type">VARCHAR(300)</span></div>
     <div class="field"><span class="field-name fk">ID_STATUS</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name fk">ID_APROVADOR</span><span class="field-type">INT</span></div>
-    <div class="field"><span class="field-name">URL_IMG_ANTES</span><span class="field-type">VARCHAR(200)</span></div>
-    <div class="field"><span class="field-name">DS_ESTADO_ANTES</span><span class="field-type">VARCHAR(100)</span></div>
-    <div class="field"><span class="field-name">URL_IMG_DEPOIS</span><span class="field-type">VARCHAR(200)</span></div>
-    <div class="field"><span class="field-name">DS_ESTADO_DEPOIS</span><span class="field-type">VARCHAR(100)</span></div>
-    <div class="field"><span class="field-name">URL_REFERENCIA</span><span class="field-type">VARCHAR(200)</span></div>
+    <div class="field"><span class="field-name">URL_IMG_ANTES</span><span class="field-type">VARCHAR(300)</span></div>
+    <div class="field"><span class="field-name">DS_ESTADO_ANTES</span><span class="field-type">VARCHAR(300)</span></div>
+    <div class="field"><span class="field-name">URL_IMG_DEPOIS</span><span class="field-type">VARCHAR(300)</span></div>
+    <div class="field"><span class="field-name">DS_ESTADO_DEPOIS</span><span class="field-type">VARCHAR(300)</span></div>
+    <div class="field"><span class="field-name">URL_REFERENCIA</span><span class="field-type">VARCHAR(300)</span></div>
     <div class="field"><span class="field-name fk">ID_DESPERDICIO</span><span class="field-type">INT</span></div>
-    <div class="field"><span class="field-name">DS_LICOES_APRENDIDAS</span><span class="field-type">VARCHAR(100)</span></div>
+    <div class="field"><span class="field-name">DS_LICOES_APRENDIDAS</span><span class="field-type">VARCHAR(300)</span></div>
     <div class="field"><span class="field-name">VL_RESULTADO_FINANCEIRO</span><span class="field-type">DECIMAL(18,2)</span></div>
     <div class="field"><span class="field-name fk">ID_MOEDA</span><span class="field-type">INT</span></div>
-    <div class="field"><span class="field-name">DS_RESULTADO_ESPERADO</span><span class="field-type">VARCHAR(100)</span></div>
-    <div class="field"><span class="field-name">DT_CRIACAO</span><span class="field-type">DATETIME2</span></div>
+    <div class="field"><span class="field-name">DS_RESULTADO_ESPERADO</span><span class="field-type">VARCHAR(300)</span></div>
     <div class="field"><span class="field-name">DT_CONCLUSAO</span><span class="field-type">DATE</span></div>
-    <div class="field"><span class="field-name">DS_MOTIVO</span><span class="field-type">VARCHAR(100)</span></div>
+    <div class="field"><span class="field-name">DS_MOTIVO</span><span class="field-type">VARCHAR(300)</span></div>
     <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
     <div class="field"><span class="field-name fk">ID_USUARIO_ATUALIZACAO</span><span class="field-type">INT</span></div>
   </div>
@@ -431,8 +430,8 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
     <div class="field"><span class="field-name pk">ID_LOG_DETALHE</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name fk">ID_LOG</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name">NM_CAMPO</span><span class="field-type">VARCHAR(30)</span></div>
-    <div class="field"><span class="field-name">VL_ANTERIOR</span><span class="field-type">VARCHAR(200)</span></div>
-    <div class="field"><span class="field-name">VL_NOVO</span><span class="field-type">VARCHAR(200)</span></div>
+    <div class="field"><span class="field-name">VL_ANTERIOR</span><span class="field-type">VARCHAR(300)</span></div>
+    <div class="field"><span class="field-name">VL_NOVO</span><span class="field-type">VARCHAR(300)</span></div>
   </div>
 </div>
 
