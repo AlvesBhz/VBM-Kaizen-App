@@ -650,14 +650,30 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 // GET /api/kaizens (lista, filtros por querystring), GET /api/kaizens/:id
 // (detalhe do modal), GET /api/kaizens/resumo (contadores do hero).
 (function () {
-  var STATUS_INFO = {
-    APROVADO: { classe: 'badge-aprovado', rotulo: 'Aprovado' },
-    REPROVADO: { classe: 'badge-reprovado', rotulo: 'Reprovado' },
-    EM_APROVACAO: { classe: 'badge-aguardando', rotulo: 'Aguardando' },
-    ABERTO: { classe: 'badge-rascunho', rotulo: 'Rascunho' },
-    CONCLUIDO: { classe: 'badge-aprovado', rotulo: 'Concluído' },
+  // O TEXTO do status vem do cadastro (kzn_status.NM_STATUS, no idioma
+  // pedido) — a tela não decide mais o rótulo. A COR continua aqui: o
+  // cadastro não tem coluna de cor, e o casamento é pelo nome em
+  // português, com queda para o azul neutro em qualquer status novo.
+  var CLASSE_POR_NOME = {
+    'aprovado': 'badge-aprovado',
+    'concluido': 'badge-aprovado',
+    'reprovado': 'badge-reprovado',
+    'rejeitado': 'badge-reprovado',
+    'em aprovacao': 'badge-aguardando',
+    'aguardando': 'badge-aguardando',
+    'rascunho': 'badge-rascunho',
+    'aberto': 'badge-rascunho',
   };
-  function statusInfo(sg) { return STATUS_INFO[sg] || { classe: 'badge-blue', rotulo: sg || '—' }; }
+  function semAcento(t) {
+    return String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  }
+  function statusInfo(k) {
+    var nome = k && k.NM_STATUS;
+    return {
+      classe: CLASSE_POR_NOME[semAcento(nome)] || 'badge-blue',
+      rotulo: nome || '—',
+    };
+  }
 
   function urlImagem(path) {
     return path ? '/api/kaizens/imagem?path=' + encodeURIComponent(path) : '';
@@ -690,7 +706,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   var detalheCache = {};
 
   function cartaoHtml(k) {
-    var info = statusInfo(k.SG_STATUS);
+    var info = statusInfo(k);
     var tags = (k.TAGS || []).map(function (t) { return '<span class="kaizen-tag">' + t + '</span>'; }).join('');
     return (
       '<div class="kaizen-card" data-filter-item>' +
@@ -713,7 +729,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   }
 
   function linhaHtml(k) {
-    var info = statusInfo(k.SG_STATUS);
+    var info = statusInfo(k);
     return (
       '<tr data-filter-item>' +
       '<td><span style="font-family:\'Poppins\',sans-serif;color:var(--vbm-blue);font-size:.72rem;">' + k.ROTULO + '</span></td>' +
@@ -754,13 +770,18 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     // as opções dos outros.
     var estados = [...new Set(todos.map(function (k) { return k.NM_ESTADO; }).filter(Boolean))].sort();
     var anos = [...new Set(todos.map(anoDe).filter(Boolean))].sort().reverse();
-    var status = [...new Set(todos.map(function (k) { return k.SG_STATUS; }).filter(Boolean))]
-      .sort(function (a, b) { return statusInfo(a).rotulo.localeCompare(statusInfo(b).rotulo, 'pt-BR'); });
+    // Um par ID/nome por status presente nos registros carregados.
+    var vistos = {};
+    todos.forEach(function (k) {
+      if (k.ID_STATUS != null && !vistos[k.ID_STATUS]) vistos[k.ID_STATUS] = k.NM_STATUS || String(k.ID_STATUS);
+    });
+    var status = Object.keys(vistos)
+      .sort(function (a, b) { return String(vistos[a]).localeCompare(String(vistos[b]), 'pt-BR'); });
 
     var estadoAtual = selUnidade.value, anoAtual = selPeriodo.value, statusAtual = selStatus.value;
     selUnidade.innerHTML = selUnidade.options[0].outerHTML + estados.map(function (e) { return '<option value="' + e + '">' + e + '</option>'; }).join('');
     selPeriodo.innerHTML = selPeriodo.options[0].outerHTML + anos.map(function (a) { return '<option value="' + a + '">' + a + '</option>'; }).join('');
-    selStatus.innerHTML = selStatus.options[0].outerHTML + status.map(function (s) { return '<option value="' + s + '">' + statusInfo(s).rotulo + '</option>'; }).join('');
+    selStatus.innerHTML = selStatus.options[0].outerHTML + status.map(function (s) { return '<option value="' + s + '">' + vistos[s] + '</option>'; }).join('');
     selUnidade.value = estadoAtual;
     selPeriodo.value = anoAtual;
     selStatus.value = statusAtual;
@@ -798,7 +819,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       if (usuario && k.NM_LIDER !== usuario) return false;
       if (estado && k.NM_ESTADO !== estado) return false;
       if (categoria && String(k.ID_CATEGORIA) !== String(categoria)) return false;
-      if (status && k.SG_STATUS !== status) return false;
+      if (status && String(k.ID_STATUS) !== String(status)) return false;
       if (ano && anoDe(k) !== ano) return false;
       return true;
     });

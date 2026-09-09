@@ -186,7 +186,10 @@ const FULL_RESULTADO_KAIZEN_TABLE = `[${DB_SCHEMA}].[${DB_RESULTADO_KAIZEN_TABLE
 // env vars/padrões já usados nos cadastros bilíngues acima (registrarCadastroBilingue).
 const FULL_REPLICACAO_TABLE = tabelaCadastro("AZURE_SQL_REPLICACAO_TABLE", "kzn_replicacao");
 const FULL_DESPERDICIO_TABLE = tabelaCadastro("AZURE_SQL_DESPERDICIO_TABLE", "kzn_desperdicio");
-const FULL_MOTIVO_TABLE = tabelaCadastro("AZURE_SQL_MOTIVO_REPROVACAO_TABLE", "kzn_motivo_reprovacao");
+// kzn_status substituiu kzn_motivo_reprovacao, que saiu do DER: agora é
+// o cadastro do CICLO DE VIDA do Kaizen (PVC.ID_STATUS aponta para cá) e
+// a origem do rótulo mostrado nas telas.
+const FULL_STATUS_TABLE = tabelaCadastro("AZURE_SQL_STATUS_TABLE", "kzn_status");
 
 // kzn_categoria guarda 1 LINHA POR IDIOMA para a mesma categoria (mesmo
 // ID_CATEGORIA, ID_IDIOMA diferente) — confirmado no DER
@@ -1929,10 +1932,9 @@ registrarCadastroBilingue({
 // temIcone passa a true e o modal ganha a paleta de ícones que as outras
 // abas com ícone já usam — nenhum componente novo.
 //
-// ATENÇÃO: kzn_motivo_reprovacao NÃO foi desativada. O fluxo de
-// reprovação (POST /kaizens/:id/reprovar) continua gravando nela e
-// alimentando kzn_pedravisaoconsolidada.ID_MOTIVO. A migração pedida
-// era da ABA; os dois passam a ser cadastros independentes.
+// kzn_motivo_reprovacao saiu do DER por completo: o fluxo de reprovação
+// passou a gravar o texto direto em PVC.DS_MOTIVO (ver o próprio
+// POST /kaizens/:id/reprovar).
 registrarCadastroBilingue({
   rota: "status",
   tabela: tabelaCadastro("AZURE_SQL_STATUS_TABLE", "kzn_status"),
@@ -2070,15 +2072,51 @@ apiRouter.post("/kaizens/imagem", receberImagemUnica, async (req, res) => {
   }
 });
 
-// Convenção de SG_STATUS em kzn_pedravisaoconsolidada. Valores aceitos
-// pelo CHECK CK_KZN_PVC_STATUS no banco: ABERTO, EM_APROVACAO,
-// APROVADO, REPROVADO, CONCLUIDO. Ainda não existe backend para a tela
-// de aprovação (ver o próprio arquivo de especificação: "isso de
-// aprovar vamos ver em outra tela") — mantenha em sincronia com aquela
-// tela quando ela existir.
-const STATUS_AGUARDANDO_APROVACAO = "EM_APROVACAO";
-const STATUS_APROVADO = "APROVADO";
-const STATUS_CANCELADO = "REPROVADO";
+// Ciclo de vida do Kaizen — kzn_pedravisaoconsolidada.ID_STATUS.
+//
+// Era SG_STATUS, um VARCHAR com literais ('EM_APROVACAO', 'APROVADO',
+// 'REPROVADO'). No DER atual virou ID_STATUS, chave estrangeira para
+// kzn_status — que é um CADASTRO, editável pela aba Status Kaizen. Não
+// há mais literal para o código fixar.
+//
+// Como kzn_status é cadastro, o número de cada status é dado do banco,
+// não do código: vem de variável de ambiente, SEM padrão. Fixar um
+// número aqui seria adivinhar, e adivinhar errado grava o status errado
+// em produção sem ninguém perceber.
+//
+// Enquanto não estiverem configuradas:
+//   · criar Kaizen funciona e NÃO toca em ID_STATUS (a coluna fica como
+//     o banco a deixar) — a tela de Novo Kaizen segue no ar;
+//   · a fila de aprovação trata "sem status" como pendente;
+//   · aprovar/reprovar RECUSAM com mensagem clara, porque registrar uma
+//     decisão sem poder gravar qual foi ela não é registrar nada.
+//
+// Para configurar: veja database/popular_status.sql, que cria os
+// status e devolve os IDs prontos para o app.yaml.
+function idStatusDeEnv(variavel) {
+  const bruto = process.env[variavel];
+  const n = parseInt(bruto, 10);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+const STATUS_IDS = {
+  emAprovacao: idStatusDeEnv("AZURE_SQL_STATUS_ID_EM_APROVACAO"),
+  aprovado: idStatusDeEnv("AZURE_SQL_STATUS_ID_APROVADO"),
+  reprovado: idStatusDeEnv("AZURE_SQL_STATUS_ID_REPROVADO"),
+};
+/** Acrescenta @idStatusPendente aos parâmetros só quando o filtro de
+ *  "pendente" cita esse parâmetro — sem catálogo o WHERE usa
+ *  "ID_STATUS IS NULL" e mandar o parâmetro sobrando quebraria. */
+function paramsComPendente(params) {
+  return STATUS_IDS.emAprovacao != null
+    ? params.concat([["idStatusPendente", sql.Int, STATUS_IDS.emAprovacao]])
+    : params;
+}
+
+const ERRO_STATUS_NAO_CONFIGURADO =
+  "Catálogo de status não configurado. Cadastre os status na aba " +
+  "Administração > Status Kaizen e informe os IDs em " +
+  "AZURE_SQL_STATUS_ID_EM_APROVACAO, AZURE_SQL_STATUS_ID_APROVADO e " +
+  "AZURE_SQL_STATUS_ID_REPROVADO (ver database/popular_status.sql).";
 
 // Limites de texto — vêm do DER (database/DER_VBM_Kaizen.html /
 // e_PVC). NM_KAIZEN é VARCHAR(30): o mesmo limite curto das tabelas de
@@ -2216,7 +2254,11 @@ apiRouter.post("/kaizens", async (req, res) => {
       reqInsert.input("idReplicacao", sql.Int, idReplicacao);
       reqInsert.input("dsProblema", sql.NVarChar(PVC_LIMITES.DS_PROBLEMA), declaracaoProblema);
       reqInsert.input("dsObjetivo", sql.NVarChar(PVC_LIMITES.DS_OBJETIVO), metaObjetivo);
-      reqInsert.input("sgStatus", sql.NVarChar(30), STATUS_AGUARDANDO_APROVACAO);
+      // ID_STATUS só entra no comando quando há catálogo configurado;
+      // sem ele a coluna nem é citada, e o Kaizen nasce sem status em vez
+      // de com um número inventado.
+      const gravaStatus = STATUS_IDS.emAprovacao != null;
+      if (gravaStatus) reqInsert.input("idStatus", sql.Int, STATUS_IDS.emAprovacao);
       reqInsert.input("idAprovador", sql.Int, idAprovador);
       reqInsert.input("urlImgAntes", sql.NVarChar(PVC_LIMITES.URL_IMG), urlImgAntes);
       reqInsert.input("dsEstadoAntes", sql.NVarChar(PVC_LIMITES.DS_ESTADO_ANTES), descricaoAntes);
@@ -2232,13 +2274,13 @@ apiRouter.post("/kaizens", async (req, res) => {
       await reqInsert.query(`
         INSERT INTO ${FULL_PVC_TABLE}
           (ID_KAIZEN, ID_USUARIO_CADASTRO, ID_USUARIO_LIDER, NM_KAIZEN, ID_CATEGORIA, ID_REPLICACAO,
-           DS_PROBLEMA, DS_OBJETIVO, SG_STATUS, ID_APROVADOR, URL_IMG_ANTES, DS_ESTADO_ANTES,
+           DS_PROBLEMA, DS_OBJETIVO,${gravaStatus ? " ID_STATUS," : ""} ID_APROVADOR, URL_IMG_ANTES, DS_ESTADO_ANTES,
            URL_IMG_DEPOIS, DS_ESTADO_DEPOIS, URL_REFERENCIA, ID_DESPERDICIO, DS_LICOES_APRENDIDAS,
            VL_RESULTADO_FINANCEIRO, ID_MOEDA, DS_RESULTADO_ESPERADO, DT_CRIACAO, DT_ATUALIZACAO,
            ID_USUARIO_ATUALIZACAO)
         VALUES
           (@idKaizen, @idUsuarioCadastro, @idUsuarioLider, @nmKaizen, @idCategoria, @idReplicacao,
-           @dsProblema, @dsObjetivo, @sgStatus, @idAprovador, @urlImgAntes, @dsEstadoAntes,
+           @dsProblema, @dsObjetivo,${gravaStatus ? " @idStatus," : ""} @idAprovador, @urlImgAntes, @dsEstadoAntes,
            @urlImgDepois, @dsEstadoDepois, @urlReferencia, @idDesperdicio, @dsLicoes,
            @vlResultado, @idMoeda, @dsResultadoEsperado, ${AGORA_BRASILIA}, ${AGORA_BRASILIA},
            @idUsuarioCadastro)`);
@@ -2297,7 +2339,7 @@ apiRouter.post("/kaizens", async (req, res) => {
       }
 
       await tx.commit();
-      res.status(201).json({ ok: true, ID_KAIZEN: idKaizen, SG_STATUS: STATUS_AGUARDANDO_APROVACAO });
+      res.status(201).json({ ok: true, ID_KAIZEN: idKaizen, ID_STATUS: STATUS_IDS.emAprovacao });
     } catch (errTx) {
       await tx.rollback().catch(() => {});
       throw errTx;
@@ -2346,7 +2388,7 @@ function rotuloIdKaizen(idKaizen, dtCriacao) {
 apiRouter.get("/kaizens", async (req, res) => {
   try {
     const idIdioma = idIdiomaDaRequisicao(req);
-    const status = textoOuNuloGlobal(req.query.status);
+    const idStatus = intOuNuloGlobal(req.query.status);
     const idCategoria = intOuNuloGlobal(req.query.categoria);
     const estado = textoOuNuloGlobal(req.query.estado);
     const ano = intOuNuloGlobal(req.query.ano);
@@ -2356,7 +2398,9 @@ apiRouter.get("/kaizens", async (req, res) => {
     // "1 = 1" é a base para o WHERE nunca ficar vazio quando nenhum
     // filtro vier — o resto do comando segue exatamente igual.
     const filtros = ["1 = 1"];
-    if (status) { filtros.push("p.SG_STATUS = @status"); params.push(["status", sql.NVarChar(30), status.toUpperCase()]); }
+    // O filtro passa a ser por ID_STATUS (o valor que a Biblioteca manda
+    // vem do próprio kzn_status), não mais pelo literal antigo.
+    if (idStatus != null) { filtros.push("p.ID_STATUS = @idStatus"); params.push(["idStatus", sql.Int, idStatus]); }
     if (idCategoria != null) { filtros.push("p.ID_CATEGORIA = @idCategoria"); params.push(["idCategoria", sql.Int, idCategoria]); }
     if (estado) { filtros.push("lider.NM_ESTADO = @estado"); params.push(["estado", sql.NVarChar(100), estado]); }
     if (ano != null) { filtros.push("YEAR(ISNULL(p.DT_CONCLUSAO, p.DT_CRIACAO)) = @ano"); params.push(["ano", sql.Int, ano]); }
@@ -2366,7 +2410,8 @@ apiRouter.get("/kaizens", async (req, res) => {
     }
 
     const result = await runQuery(
-      `SELECT p.ID_KAIZEN, p.NM_KAIZEN, p.SG_STATUS, p.DT_CRIACAO, p.DT_CONCLUSAO,
+      `SELECT p.ID_KAIZEN, p.NM_KAIZEN, p.ID_STATUS, st.NM_STATUS, st.DS_STATUS,
+              p.DT_CRIACAO, p.DT_CONCLUSAO,
               p.ID_CATEGORIA, cat.NM_CATEGORIA,
               lider.NM_USUARIO AS NM_LIDER, lider.NM_ESTADO, lider.NM_CIDADE,
               p.URL_IMG_ANTES, p.URL_IMG_DEPOIS,
@@ -2376,6 +2421,7 @@ apiRouter.get("/kaizens", async (req, res) => {
                 WHERE kd.ID_KAIZEN = p.ID_KAIZEN) AS NM_DESPERDICIO_1
        FROM ${FULL_PVC_TABLE} p
        LEFT JOIN ${FULL_CATEGORIA_TABLE} cat ON cat.ID_CATEGORIA = p.ID_CATEGORIA AND cat.ID_IDIOMA = @idIdioma
+       LEFT JOIN ${FULL_STATUS_TABLE} st ON st.ID_STATUS = p.ID_STATUS AND st.ID_IDIOMA = @idIdioma
        LEFT JOIN ${FULL_MDM_TABLE} lider ON lider.ID_USUARIO = p.ID_USUARIO_LIDER
        WHERE ${filtros.join(" AND ")}
        ORDER BY ISNULL(p.DT_CONCLUSAO, p.DT_CRIACAO) DESC`,
@@ -2387,7 +2433,11 @@ apiRouter.get("/kaizens", async (req, res) => {
         ID_KAIZEN: r.ID_KAIZEN,
         ROTULO: rotuloIdKaizen(r.ID_KAIZEN, r.DT_CRIACAO),
         NM_KAIZEN: r.NM_KAIZEN,
-        SG_STATUS: r.SG_STATUS,
+        // O rótulo do status vem do cadastro (kzn_status), no idioma
+        // pedido — a tela não decide mais o texto por conta própria.
+        ID_STATUS: r.ID_STATUS,
+        NM_STATUS: r.NM_STATUS,
+        DS_STATUS: r.DS_STATUS,
         DT_CRIACAO: relogioLocal(r.DT_CRIACAO),
         DT_CONCLUSAO: relogioLocal(r.DT_CONCLUSAO),
         // ID_CATEGORIA acompanha o nome: o filtro de categoria da
@@ -2417,11 +2467,14 @@ apiRouter.get("/kaizens/resumo", async (req, res) => {
       `SELECT YEAR(DT_CRIACAO) AS ANO, COUNT(*) AS QTD FROM ${FULL_PVC_TABLE} GROUP BY YEAR(DT_CRIACAO)`
     );
     const porStatus = await runQuery(
-      `SELECT SG_STATUS, COUNT(*) AS QTD FROM ${FULL_PVC_TABLE} GROUP BY SG_STATUS`
+      `SELECT st.NM_STATUS, COUNT(*) AS QTD
+         FROM ${FULL_PVC_TABLE} p
+         LEFT JOIN ${FULL_STATUS_TABLE} st ON st.ID_STATUS = p.ID_STATUS AND st.ID_IDIOMA = @idIdiomaBase
+        GROUP BY st.NM_STATUS`, [["idIdiomaBase", sql.Int, ID_IDIOMA_PT]]
     );
     res.json({
       porAno: Object.fromEntries(porAno.recordset.map((r) => [r.ANO, r.QTD])),
-      porStatus: Object.fromEntries(porStatus.recordset.map((r) => [r.SG_STATUS, r.QTD])),
+      porStatus: Object.fromEntries(porStatus.recordset.map((r) => [r.NM_STATUS || "(sem status)", r.QTD])),
     });
   } catch (err) {
     console.error("[kaizens/resumo] erro:", err.message);
@@ -2467,11 +2520,13 @@ apiRouter.get("/kaizens/:id", async (req, res) => {
 
     const principal = await runQuery(
       `SELECT p.*, cat.NM_CATEGORIA, repl.NM_REPLICACAO, moeda.SG_MOEDA, moeda.NM_MOEDA,
+              st.NM_STATUS, st.DS_STATUS,
               lider.NM_USUARIO AS NM_LIDER, lider.NM_ESTADO, lider.NM_CIDADE,
               aprov.NM_USUARIO AS NM_APROVADOR
        FROM ${FULL_PVC_TABLE} p
        LEFT JOIN ${FULL_CATEGORIA_TABLE} cat ON cat.ID_CATEGORIA = p.ID_CATEGORIA AND cat.ID_IDIOMA = @idIdioma
        LEFT JOIN ${FULL_REPLICACAO_TABLE} repl ON repl.ID_REPLICACAO = p.ID_REPLICACAO AND repl.ID_IDIOMA = @idIdioma
+       LEFT JOIN ${FULL_STATUS_TABLE} st ON st.ID_STATUS = p.ID_STATUS AND st.ID_IDIOMA = @idIdioma
        LEFT JOIN ${FULL_MOEDA_TABLE} moeda ON moeda.ID_MOEDA = p.ID_MOEDA
        LEFT JOIN ${FULL_MDM_TABLE} lider ON lider.ID_USUARIO = p.ID_USUARIO_LIDER
        LEFT JOIN ${FULL_TABLE_NAME} aprovFk ON aprovFk.ID_APROVADOR = p.ID_APROVADOR
@@ -2507,7 +2562,9 @@ apiRouter.get("/kaizens/:id", async (req, res) => {
       ID_KAIZEN: k.ID_KAIZEN,
       ROTULO: rotuloIdKaizen(k.ID_KAIZEN, k.DT_CRIACAO),
       NM_KAIZEN: k.NM_KAIZEN,
-      SG_STATUS: k.SG_STATUS,
+      ID_STATUS: k.ID_STATUS,
+      NM_STATUS: k.NM_STATUS,
+      DS_STATUS: k.DS_STATUS,
       DT_CRIACAO: relogioLocal(k.DT_CRIACAO),
       DT_CONCLUSAO: relogioLocal(k.DT_CONCLUSAO),
       NM_CATEGORIA: k.NM_CATEGORIA,
@@ -2544,7 +2601,7 @@ apiRouter.get("/kaizens/:id", async (req, res) => {
 // kzn_aprovador.ID_USUARIO), nunca por cargo/admin geral.
 // ------------------------------------------------------------------
 
-// GET /aprovacoes — fila de pendentes (SG_STATUS=EM_APROVACAO) do
+// GET /aprovacoes — fila de pendentes (ID_STATUS do status configurado) do
 // aprovador logado.
 // GET /aprovacoes/contagem — só o número, pro badge laranja do menu
 // (Aprovação) em todas as telas. Ver js/vbm-app.js.
@@ -2555,8 +2612,8 @@ apiRouter.get("/aprovacoes/contagem", async (req, res) => {
     const r = await runQuery(
       `SELECT COUNT(*) AS QTD FROM ${FULL_PVC_TABLE} p
        JOIN ${FULL_TABLE_NAME} a ON a.ID_APROVADOR = p.ID_APROVADOR AND a.ID_USUARIO = @idUsuario
-       WHERE p.SG_STATUS = 'EM_APROVACAO'`,
-      [["idUsuario", sql.Int, idUsuario]]
+       WHERE ${STATUS_IDS.emAprovacao != null ? "p.ID_STATUS = @idStatusPendente" : "p.ID_STATUS IS NULL"}`,
+      paramsComPendente([["idUsuario", sql.Int, idUsuario]])
     );
     res.json({ qtd: r.recordset[0].QTD });
   } catch (err) {
@@ -2578,9 +2635,9 @@ apiRouter.get("/aprovacoes", async (req, res) => {
        JOIN ${FULL_TABLE_NAME} a ON a.ID_APROVADOR = p.ID_APROVADOR AND a.ID_USUARIO = @idUsuario
        LEFT JOIN ${FULL_CATEGORIA_TABLE} cat ON cat.ID_CATEGORIA = p.ID_CATEGORIA AND cat.ID_IDIOMA = @idIdioma
        LEFT JOIN ${FULL_MDM_TABLE} lider ON lider.ID_USUARIO = p.ID_USUARIO_LIDER
-       WHERE p.SG_STATUS = 'EM_APROVACAO'
+       WHERE ${STATUS_IDS.emAprovacao != null ? "p.ID_STATUS = @idStatusPendente" : "p.ID_STATUS IS NULL"}
        ORDER BY p.DT_CRIACAO ASC`,
-      [["idUsuario", sql.Int, idUsuario], ["idIdioma", sql.Int, idIdioma]]
+      paramsComPendente([["idUsuario", sql.Int, idUsuario], ["idIdioma", sql.Int, idIdioma]])
     );
     res.json(result.recordset.map((r) => ({
       ID_KAIZEN: r.ID_KAIZEN,
@@ -2605,8 +2662,11 @@ async function souOAprovadorDoKaizen(idKaizen, idUsuario) {
   const r = await runQuery(
     `SELECT p.ID_KAIZEN FROM ${FULL_PVC_TABLE} p
      JOIN ${FULL_TABLE_NAME} a ON a.ID_APROVADOR = p.ID_APROVADOR
-     WHERE p.ID_KAIZEN = @idKaizen AND a.ID_USUARIO = @idUsuario AND p.SG_STATUS = 'EM_APROVACAO'`,
-    [["idKaizen", sql.Int, idKaizen], ["idUsuario", sql.Int, idUsuario]]
+     WHERE p.ID_KAIZEN = @idKaizen AND a.ID_USUARIO = @idUsuario AND ${STATUS_IDS.emAprovacao != null ? "p.ID_STATUS = @idStatusPendente" : "p.ID_STATUS IS NULL"}`,
+    STATUS_IDS.emAprovacao != null
+      ? [["idKaizen", sql.Int, idKaizen], ["idUsuario", sql.Int, idUsuario],
+         ["idStatusPendente", sql.Int, STATUS_IDS.emAprovacao]]
+      : [["idKaizen", sql.Int, idKaizen], ["idUsuario", sql.Int, idUsuario]]
   );
   return r.recordset.length > 0;
 }
@@ -2619,11 +2679,15 @@ apiRouter.post("/kaizens/:id/aprovar", async (req, res) => {
     if (!(await souOAprovadorDoKaizen(idKaizen, idUsuario))) {
       return res.status(403).json({ error: "Você não é o aprovador designado deste Kaizen (ou ele já foi decidido)." });
     }
+    // Sem catálogo não há como registrar QUAL foi a decisão: recusa em
+    // vez de marcar o Kaizen como decidido sem dizer como.
+    if (STATUS_IDS.aprovado == null) return res.status(503).json({ error: ERRO_STATUS_NAO_CONFIGURADO });
     await runQuery(
       `UPDATE ${FULL_PVC_TABLE}
-       SET SG_STATUS = 'APROVADO', DT_CONCLUSAO = ${AGORA_BRASILIA}, DT_ATUALIZACAO = ${AGORA_BRASILIA}, ID_USUARIO_ATUALIZACAO = @idUsuario
+       SET ID_STATUS = @idStatus, DT_CONCLUSAO = ${AGORA_BRASILIA}, DT_ATUALIZACAO = ${AGORA_BRASILIA}, ID_USUARIO_ATUALIZACAO = @idUsuario
        WHERE ID_KAIZEN = @idKaizen`,
-      [["idKaizen", sql.Int, idKaizen], ["idUsuario", sql.Int, idUsuario]]
+      [["idKaizen", sql.Int, idKaizen], ["idUsuario", sql.Int, idUsuario],
+       ["idStatus", sql.Int, STATUS_IDS.aprovado]]
     );
     res.json({ ok: true });
   } catch (err) {
@@ -2632,60 +2696,39 @@ apiRouter.post("/kaizens/:id/aprovar", async (req, res) => {
   }
 });
 
-// Reprovar: a pessoa ESCREVE o motivo (texto livre) — vira 1 linha nova
-// em kzn_motivo_reprovacao (nos 2 idiomas, mesmo texto — não há como
-// auto-traduzir texto livre, mesmo tratamento dado a "Outros
-// resultados" no Novo Kaizen) e o ID_MOTIVO gerado é gravado em
-// kzn_pedravisaoconsolidada.ID_MOTIVO, como pedido.
+// Reprovar: a pessoa ESCREVE o motivo, e o texto vai direto para
+// kzn_pedravisaoconsolidada.DS_MOTIVO (VARCHAR(100) no DER).
+//
+// Antes o motivo virava uma linha nova em kzn_motivo_reprovacao — nos 2
+// idiomas, com o mesmo texto — e o Kaizen guardava só o ID_MOTIVO. Essa
+// tabela saiu do DER: cada reprovação criava um "cadastro" novo que
+// ninguém reaproveitava, e o texto era de um Kaizen só. Guardado na
+// própria linha do Kaizen, some a transação, somem os 3 comandos e some
+// o cadastro que crescia sem controle.
 apiRouter.post("/kaizens/:id/reprovar", async (req, res) => {
   try {
     const idKaizen = parseInt(req.params.id, 10);
     const motivo = String((req.body && req.body.motivo) || "").trim();
     if (!motivo) return res.status(400).json({ error: "Motivo da reprovação é obrigatório." });
+    // 100 = tamanho de DS_MOTIVO no DER.
     if (motivo.length > 100) return res.status(400).json({ error: "Motivo deve ter no máximo 100 caracteres." });
     const idUsuario = await idUsuarioLogado(req);
     if (!idUsuario) return res.status(401).json({ error: "Não foi possível identificar o usuário logado." });
     if (!(await souOAprovadorDoKaizen(idKaizen, idUsuario))) {
       return res.status(403).json({ error: "Você não é o aprovador designado deste Kaizen (ou ele já foi decidido)." });
     }
+    if (STATUS_IDS.reprovado == null) return res.status(503).json({ error: ERRO_STATUS_NAO_CONFIGURADO });
 
-    const pool = await getPool();
-    const tx = new sql.Transaction(pool);
-    await tx.begin();
-    try {
-      const proximo = await new sql.Request(tx).query(
-        `SELECT ISNULL(MAX(ID_MOTIVO), 0) + 1 AS PROXIMO FROM ${FULL_MOTIVO_TABLE}`
-      );
-      const idMotivo = proximo.recordset[0].PROXIMO;
-      const nmMotivo = motivo.slice(0, 30);
-
-      for (const idIdioma of [1, 2]) {
-        const reqM = new sql.Request(tx);
-        reqM.input("idMotivo", sql.Int, idMotivo);
-        reqM.input("idIdioma", sql.Int, idIdioma);
-        reqM.input("nmMotivo", sql.NVarChar(30), nmMotivo);
-        reqM.input("dsMotivo", sql.NVarChar(100), motivo);
-        reqM.input("idUsuario", sql.Int, idUsuario);
-        await reqM.query(`
-          INSERT INTO ${FULL_MOTIVO_TABLE} (ID_MOTIVO, ID_IDIOMA, NM_MOTIVO, DS_MOTIVO, SG_ATIVO, ID_USUARIO, DT_ATUALIZACAO)
-          VALUES (@idMotivo, @idIdioma, @nmMotivo, @dsMotivo, 'S', @idUsuario, ${AGORA_BRASILIA})`);
-      }
-
-      const reqUp = new sql.Request(tx);
-      reqUp.input("idKaizen", sql.Int, idKaizen);
-      reqUp.input("idMotivo", sql.Int, idMotivo);
-      reqUp.input("idUsuario", sql.Int, idUsuario);
-      await reqUp.query(`
-        UPDATE ${FULL_PVC_TABLE}
-        SET SG_STATUS = 'REPROVADO', ID_MOTIVO = @idMotivo, DT_ATUALIZACAO = ${AGORA_BRASILIA}, ID_USUARIO_ATUALIZACAO = @idUsuario
-        WHERE ID_KAIZEN = @idKaizen`);
-
-      await tx.commit();
-      res.json({ ok: true });
-    } catch (errTx) {
-      await tx.rollback().catch(() => {});
-      throw errTx;
-    }
+    await runQuery(
+      `UPDATE ${FULL_PVC_TABLE}
+       SET ID_STATUS = @idStatus, DS_MOTIVO = @motivo,
+           DT_ATUALIZACAO = ${AGORA_BRASILIA}, ID_USUARIO_ATUALIZACAO = @idUsuario
+       WHERE ID_KAIZEN = @idKaizen`,
+      [["idKaizen", sql.Int, idKaizen], ["idUsuario", sql.Int, idUsuario],
+       ["idStatus", sql.Int, STATUS_IDS.reprovado],
+       ["motivo", sql.NVarChar(100), motivo]]
+    );
+    res.json({ ok: true });
   } catch (err) {
     console.error("[reprovar] erro:", err.message);
     res.status(500).json({ error: "Erro ao reprovar: " + err.message });
