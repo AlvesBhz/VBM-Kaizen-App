@@ -1921,20 +1921,28 @@ registrarCadastroBilingue({
   capturarUsuarioResponsavel: true,
 });
 
-// kzn_motivo_reprovacao (DER atualizado): ID_MOTIVO, ID_IDIOMA,
-// NM_MOTIVO VARCHAR(30), DS_MOTIVO VARCHAR(100), SG_ATIVO, ID_USUARIO,
-// DT_ATUALIZACAO — mesmos limites de nome/descrição das outras tabelas
-// bilíngues, mas SEM URL_ICONE.
+// kzn_status: ID_STATUS, ID_IDIOMA, URL_ICONE VARCHAR(200),
+// NM_STATUS VARCHAR(30), DS_STATUS VARCHAR(100), SG_ATIVO, ID_USUARIO,
+// DT_ATUALIZACAO. Substitui kzn_motivo_reprovacao nesta aba do admin.
+//
+// Diferença em relação à tabela antiga: kzn_status TEM URL_ICONE, então
+// temIcone passa a true e o modal ganha a paleta de ícones que as outras
+// abas com ícone já usam — nenhum componente novo.
+//
+// ATENÇÃO: kzn_motivo_reprovacao NÃO foi desativada. O fluxo de
+// reprovação (POST /kaizens/:id/reprovar) continua gravando nela e
+// alimentando kzn_pedravisaoconsolidada.ID_MOTIVO. A migração pedida
+// era da ABA; os dois passam a ser cadastros independentes.
 registrarCadastroBilingue({
-  rota: "motivosreprovacao",
-  tabela: tabelaCadastro("AZURE_SQL_MOTIVO_REPROVACAO_TABLE", "kzn_motivo_reprovacao"),
-  pk: "ID_MOTIVO",
-  colNome: "NM_MOTIVO",
-  colDescricao: "DS_MOTIVO",
+  rota: "status",
+  tabela: tabelaCadastro("AZURE_SQL_STATUS_TABLE", "kzn_status"),
+  pk: "ID_STATUS",
+  colNome: "NM_STATUS",
+  colDescricao: "DS_STATUS",
   maxNome: CADASTRO_LIMITES_DER.nome,
   maxDescricao: CADASTRO_LIMITES_DER.descricao,
-  temIcone: false,
-  rotuloSing: "motivo de reprovação",
+  temIcone: true,
+  rotuloSing: "status",
   // ID_USUARIO: mesmo padrão das demais abas — grava automaticamente
   // quem criou/editou.
   capturarUsuarioResponsavel: true,
