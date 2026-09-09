@@ -8,7 +8,7 @@
  * Add/Edit bilíngues). Este arquivo define o motor único
  * (window.criarCadastroBilingue) usado por js/replicacao.js,
  * js/desperdicios.js, js/resultados.js, js/tiporesultados.js e
- * js/motivosreprovacao.js — cada um só passando a configuração da sua
+ * js/status.js — cada um só passando a configuração da sua
  * própria aba (rota, ids dos elementos, textos, limites de campo).
  * js/categorias.js é a exceção: fica de fora deste motor de propósito
  * (ver header desse arquivo). Precisa ser carregado ANTES dos 5 acima.
