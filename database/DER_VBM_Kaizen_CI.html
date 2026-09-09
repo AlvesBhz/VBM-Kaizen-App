@@ -187,6 +187,8 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
   <marker id="arrow-key" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker>
 </defs>
 <path class="rel" d="M260,511 L295,511 Q305,511 305,501 L305,71 Q305,61 315,61 L350,61" marker-end="url(#arrow-key)" data-from="e_CATEGORIA" data-to="e_IDIOMA" data-fk-row="1"/>
+<path class="rel" d="M1750,511 L1190,511 Q1180,511 1180,501 L1180,71 Q1180,61 1170,61 L610,61" marker-end="url(#arrow-key)" data-from="e_STATUS" data-to="e_IDIOMA" data-fk-row="1"/>
+<path class="rel" d="M1750,621 L1365,621 Q1355,621 1355,611 L1355,71 Q1355,61 1345,61 L960,61" marker-end="url(#arrow-key)" data-from="e_STATUS" data-to="e_MDM" data-fk-row="6"/>
 <path class="rel" d="M610,511 L490,511 Q480,511 480,501 L480,71 Q480,61 470,61 L350,61" marker-end="url(#arrow-key)" data-from="e_REPLICACAO" data-to="e_IDIOMA" data-fk-row="1"/>
 <path class="rel" d="M700,511 L665,511 Q655,511 655,501 L655,71 Q655,61 645,61 L610,61" marker-end="url(#arrow-key)" data-from="e_DESPERDICIO" data-to="e_IDIOMA" data-fk-row="1"/>
 <path class="rel" d="M1400,511 L1015,511 Q1005,511 1005,501 L1005,71 Q1005,61 995,61 L610,61" marker-end="url(#arrow-key)" data-from="e_TIPO_RESULTADO" data-to="e_IDIOMA" data-fk-row="1"/>
@@ -350,6 +352,19 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
     <div class="field"><span class="field-name pk">ID_TIPO_RESULTADO</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name pk fk">ID_IDIOMA</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name">NM_TIPO_RESULTADO</span><span class="field-type">VARCHAR(30)</span></div>
+    <div class="field"><span class="field-name">SG_ATIVO</span><span class="field-type">VARCHAR(1)</span></div>
+    <div class="field"><span class="field-name fk">ID_USUARIO</span><span class="field-type">INT</span></div>
+    <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
+  </div>
+</div>
+<div class="entity" id="e_STATUS" style="left:1750px;top:428px;width:260px;height:230px;">
+  <div class="entity-head"><div class="entity-icon">ST</div><div class="entity-title">KZN_STATUS</div></div>
+  <div class="entity-body">
+    <div class="field"><span class="field-name pk">ID_STATUS</span><span class="field-type">INT</span></div>
+    <div class="field"><span class="field-name pk fk">ID_IDIOMA</span><span class="field-type">INT</span></div>
+    <div class="field"><span class="field-name">URL_ICONE</span><span class="field-type">VARCHAR(200)</span></div>
+    <div class="field"><span class="field-name">NM_STATUS</span><span class="field-type">VARCHAR(30)</span></div>
+    <div class="field"><span class="field-name">DS_STATUS</span><span class="field-type">VARCHAR(100)</span></div>
     <div class="field"><span class="field-name">SG_ATIVO</span><span class="field-type">VARCHAR(1)</span></div>
     <div class="field"><span class="field-name fk">ID_USUARIO</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
