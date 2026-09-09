@@ -34,6 +34,17 @@
    E5. Recria os triggers TR_KZN_PVC_INS / TR_KZN_PVC_UPD na versao
        atual: usam a sequence e auditam ID_STATUS e DS_MOTIVO.
 
+   ORDEM IMPORTA: os triggers da tabela principal sao DESABILITADOS na
+   E0b e so reabilitados na E6, depois de recriados. Sem isso o UPDATE
+   da E1 faz o trigger antigo (que ainda cita ID_MOTIVO) recompilar e
+   estourar "Invalid column name" - foi exatamente o que aconteceu na
+   primeira execucao. Como efeito colateral desejado, a migracao nao
+   gera entradas de auditoria como se fosse edicao de usuario.
+
+   SE O SCRIPT ABORTAR NO MEIO, os triggers ficam desabilitados. Rode de
+   novo (e idempotente) ou reabilite manualmente com:
+       ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ENABLE TRIGGER ALL;
+
    IDEMPOTENTE: cada etapa checa antes de agir; rodar de novo nao
    duplica nem desfaz nada. As etapas que nao se aplicam sao puladas
    com um PRINT.
@@ -58,6 +69,24 @@ IF OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA','U') IS NOT NULL
 BEGIN
     RAISERROR('Abortado: CI.KZN_PEDRAVISAOCONSOLIDADA nao tem DS_MOTIVO. Rode antes database/migrar_motivo_para_ds_motivo.sql - o trigger da ultima etapa depende dessa coluna. Nada foi alterado.', 16, 1);
     RETURN;
+END
+GO
+
+/* =====================================================================
+   E0b - DESABILITA OS TRIGGERS DA TABELA PRINCIPAL
+   ---------------------------------------------------------------------
+   OBRIGATORIO antes de qualquer UPDATE aqui. O trigger que esta HOJE no
+   banco foi criado antes destas mudancas e ainda referencia colunas que
+   nao existem mais (ex.: ID_MOTIVO) - qualquer UPDATE na tabela o faz
+   recompilar e estourar "Invalid column name". Alem disso, a migracao
+   nao deve poluir o historico de auditoria como se fosse edicao de
+   usuario. Os triggers sao recriados na versao correta na E5 e
+   reabilitados na E6.
+   ===================================================================== */
+IF OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA','U') IS NOT NULL
+BEGIN
+    ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA DISABLE TRIGGER ALL;
+    PRINT 'E0b ok - triggers de CI.KZN_PEDRAVISAOCONSOLIDADA desabilitados durante a migracao.';
 END
 GO
 
@@ -337,7 +366,17 @@ END
 GO
 
 /* =====================================================================
-   E6 - CONFERENCIA
+   E6 - REABILITA OS TRIGGERS (agora na versao correta, recriada na E5)
+   ===================================================================== */
+IF OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA','U') IS NOT NULL
+BEGIN
+    ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ENABLE TRIGGER ALL;
+    PRINT 'E6 ok - triggers reabilitados.';
+END
+GO
+
+/* =====================================================================
+   E7 - CONFERENCIA
    ===================================================================== */
 SELECT  TABELA = 'KZN_PEDRAVISAOCONSOLIDADA', COLUNA = c.name,
         TIPO = ty.name + CASE WHEN ty.name = 'varchar' THEN '(' + CAST(c.max_length AS VARCHAR(10)) + ')' ELSE '' END
@@ -353,7 +392,7 @@ WHERE       c.object_id = OBJECT_ID('CI.KZN_LOG_PEDRAVISAOCONSOLIDADA_DETALHE')
   AND       c.name IN ('VL_ANTERIOR','VL_NOVO')
 ORDER BY 1, 2;
 
-SELECT  SEQUENCE_NAME = name, PROXIMO_VALOR = CAST(current_value AS BIGINT) + increment
+SELECT  SEQUENCE_NAME = name, PROXIMO_VALOR = CAST(current_value AS BIGINT) + CAST(increment AS BIGINT)
 FROM    sys.sequences
 WHERE   schema_id = SCHEMA_ID('CI') AND name IN ('SEQ_KZN_LOG_PVC','SEQ_KZN_LOG_PVC_DETALHE');
 
