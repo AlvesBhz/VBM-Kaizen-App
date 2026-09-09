@@ -2281,13 +2281,13 @@ apiRouter.post("/kaizens", async (req, res) => {
           (ID_KAIZEN, ID_USUARIO_CADASTRO, ID_USUARIO_LIDER, NM_KAIZEN, ID_CATEGORIA, ID_REPLICACAO,
            DS_PROBLEMA, DS_OBJETIVO,${gravaStatus ? " ID_STATUS," : ""} ID_APROVADOR, URL_IMG_ANTES, DS_ESTADO_ANTES,
            URL_IMG_DEPOIS, DS_ESTADO_DEPOIS, URL_REFERENCIA, ID_DESPERDICIO, DS_LICOES_APRENDIDAS,
-           VL_RESULTADO_FINANCEIRO, ID_MOEDA, DS_RESULTADO_ESPERADO, DT_CRIACAO, DT_ATUALIZACAO,
+           VL_RESULTADO_FINANCEIRO, ID_MOEDA, DS_RESULTADO_ESPERADO, DT_ATUALIZACAO,
            ID_USUARIO_ATUALIZACAO)
         VALUES
           (@idKaizen, @idUsuarioCadastro, @idUsuarioLider, @nmKaizen, @idCategoria, @idReplicacao,
            @dsProblema, @dsObjetivo,${gravaStatus ? " @idStatus," : ""} @idAprovador, @urlImgAntes, @dsEstadoAntes,
            @urlImgDepois, @dsEstadoDepois, @urlReferencia, @idDesperdicio, @dsLicoes,
-           @vlResultado, @idMoeda, @dsResultadoEsperado, ${AGORA_BRASILIA}, ${AGORA_BRASILIA},
+           @vlResultado, @idMoeda, @dsResultadoEsperado, ${AGORA_BRASILIA},
            @idUsuarioCadastro)`);
 
       for (const idMembro of membros) {
@@ -2408,7 +2408,7 @@ apiRouter.get("/kaizens", async (req, res) => {
     if (idStatus != null) { filtros.push("p.ID_STATUS = @idStatus"); params.push(["idStatus", sql.Int, idStatus]); }
     if (idCategoria != null) { filtros.push("p.ID_CATEGORIA = @idCategoria"); params.push(["idCategoria", sql.Int, idCategoria]); }
     if (estado) { filtros.push("lider.NM_ESTADO = @estado"); params.push(["estado", sql.NVarChar(100), estado]); }
-    if (ano != null) { filtros.push("YEAR(ISNULL(p.DT_CONCLUSAO, p.DT_CRIACAO)) = @ano"); params.push(["ano", sql.Int, ano]); }
+    if (ano != null) { filtros.push("YEAR(ISNULL(p.DT_CONCLUSAO, p.DT_ATUALIZACAO)) = @ano"); params.push(["ano", sql.Int, ano]); }
     if (q) {
       filtros.push("(p.NM_KAIZEN LIKE @q OR lider.NM_USUARIO LIKE @q OR CAST(p.ID_KAIZEN AS VARCHAR(20)) LIKE @q)");
       params.push(["q", sql.NVarChar(255), termoContem(q)]);
@@ -2416,7 +2416,7 @@ apiRouter.get("/kaizens", async (req, res) => {
 
     const result = await runQuery(
       `SELECT p.ID_KAIZEN, p.NM_KAIZEN, p.ID_STATUS, st.NM_STATUS, st.DS_STATUS,
-              p.DT_CRIACAO, p.DT_CONCLUSAO,
+              p.DT_ATUALIZACAO AS DT_CRIACAO, p.DT_CONCLUSAO,
               p.ID_CATEGORIA, cat.NM_CATEGORIA,
               lider.NM_USUARIO AS NM_LIDER, lider.NM_ESTADO, lider.NM_CIDADE,
               p.URL_IMG_ANTES, p.URL_IMG_DEPOIS,
@@ -2429,7 +2429,7 @@ apiRouter.get("/kaizens", async (req, res) => {
        LEFT JOIN ${FULL_STATUS_TABLE} st ON st.ID_STATUS = p.ID_STATUS AND st.ID_IDIOMA = @idIdioma
        LEFT JOIN ${FULL_MDM_TABLE} lider ON lider.ID_USUARIO = p.ID_USUARIO_LIDER
        WHERE ${filtros.join(" AND ")}
-       ORDER BY ISNULL(p.DT_CONCLUSAO, p.DT_CRIACAO) DESC`,
+       ORDER BY ISNULL(p.DT_CONCLUSAO, p.DT_ATUALIZACAO) DESC`,
       params
     );
 
@@ -2469,7 +2469,7 @@ apiRouter.get("/kaizens", async (req, res) => {
 apiRouter.get("/kaizens/resumo", async (req, res) => {
   try {
     const porAno = await runQuery(
-      `SELECT YEAR(DT_CRIACAO) AS ANO, COUNT(*) AS QTD FROM ${FULL_PVC_TABLE} GROUP BY YEAR(DT_CRIACAO)`
+      `SELECT YEAR(DT_ATUALIZACAO) AS ANO, COUNT(*) AS QTD FROM ${FULL_PVC_TABLE} GROUP BY YEAR(DT_ATUALIZACAO)`
     );
     const porStatus = await runQuery(
       `SELECT st.NM_STATUS, COUNT(*) AS QTD
@@ -2524,7 +2524,7 @@ apiRouter.get("/kaizens/:id", async (req, res) => {
     const idIdioma = idIdiomaDaRequisicao(req);
 
     const principal = await runQuery(
-      `SELECT p.*, cat.NM_CATEGORIA, repl.NM_REPLICACAO, moeda.SG_MOEDA, moeda.NM_MOEDA,
+      `SELECT p.*, p.DT_ATUALIZACAO AS DT_CRIACAO, cat.NM_CATEGORIA, repl.NM_REPLICACAO, moeda.SG_MOEDA, moeda.NM_MOEDA,
               st.NM_STATUS, st.DS_STATUS,
               lider.NM_USUARIO AS NM_LIDER, lider.NM_ESTADO, lider.NM_CIDADE,
               aprov.NM_USUARIO AS NM_APROVADOR
@@ -2634,14 +2634,14 @@ apiRouter.get("/aprovacoes", async (req, res) => {
     const idIdioma = idIdiomaDaRequisicao(req);
 
     const result = await runQuery(
-      `SELECT p.ID_KAIZEN, p.NM_KAIZEN, p.DT_CRIACAO, cat.NM_CATEGORIA,
+      `SELECT p.ID_KAIZEN, p.NM_KAIZEN, p.DT_ATUALIZACAO AS DT_CRIACAO, cat.NM_CATEGORIA,
               lider.NM_USUARIO AS NM_LIDER, lider.NM_ESTADO, lider.NM_CIDADE
        FROM ${FULL_PVC_TABLE} p
        JOIN ${FULL_TABLE_NAME} a ON a.ID_APROVADOR = p.ID_APROVADOR AND a.ID_USUARIO = @idUsuario
        LEFT JOIN ${FULL_CATEGORIA_TABLE} cat ON cat.ID_CATEGORIA = p.ID_CATEGORIA AND cat.ID_IDIOMA = @idIdioma
        LEFT JOIN ${FULL_MDM_TABLE} lider ON lider.ID_USUARIO = p.ID_USUARIO_LIDER
        WHERE ${STATUS_IDS.emAprovacao != null ? "p.ID_STATUS = @idStatusPendente" : "p.ID_STATUS IS NULL"}
-       ORDER BY p.DT_CRIACAO ASC`,
+       ORDER BY p.DT_ATUALIZACAO ASC`,
       paramsComPendente([["idUsuario", sql.Int, idUsuario], ["idIdioma", sql.Int, idIdioma]])
     );
     res.json(result.recordset.map((r) => ({
