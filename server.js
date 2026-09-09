@@ -2326,23 +2326,29 @@ function rotuloIdKaizen(idKaizen, dtCriacao) {
 }
 
 // GET /kaizens — lista pra grade/tabela da Biblioteca. Filtros por
-// querystring, todos opcionais: status (default APROVADO), categoria
-// (ID_CATEGORIA), estado (NM_ESTADO do líder, usado como "unidade" na
-// tela), ano, q (busca por título/líder/ID).
+// querystring, TODOS opcionais: status, categoria (ID_CATEGORIA),
+// estado (NM_ESTADO do líder, usado como "unidade" na tela), ano,
+// q (busca por título/líder/ID).
+//
+// Sem ?status a rota devolve TODOS os Kaizens, de qualquer status.
+// Antes o padrão era APROVADO, e a Biblioteca — única consumidora desta
+// rota — nunca mandava o parâmetro: na prática os Kaizens em aprovação,
+// reprovados e em rascunho não apareciam em lugar nenhum. O filtro de
+// status virou escolha da tela, não um padrão escondido aqui.
 apiRouter.get("/kaizens", async (req, res) => {
   try {
     const idIdioma = idIdiomaDaRequisicao(req);
-    const status = String(req.query.status || "APROVADO").toUpperCase();
+    const status = textoOuNuloGlobal(req.query.status);
     const idCategoria = intOuNuloGlobal(req.query.categoria);
     const estado = textoOuNuloGlobal(req.query.estado);
     const ano = intOuNuloGlobal(req.query.ano);
     const q = textoOuNuloGlobal(req.query.q);
 
-    const params = [
-      ["idIdioma", sql.Int, idIdioma],
-      ["status", sql.NVarChar(30), status],
-    ];
-    const filtros = ["p.SG_STATUS = @status"];
+    const params = [["idIdioma", sql.Int, idIdioma]];
+    // "1 = 1" é a base para o WHERE nunca ficar vazio quando nenhum
+    // filtro vier — o resto do comando segue exatamente igual.
+    const filtros = ["1 = 1"];
+    if (status) { filtros.push("p.SG_STATUS = @status"); params.push(["status", sql.NVarChar(30), status.toUpperCase()]); }
     if (idCategoria != null) { filtros.push("p.ID_CATEGORIA = @idCategoria"); params.push(["idCategoria", sql.Int, idCategoria]); }
     if (estado) { filtros.push("lider.NM_ESTADO = @estado"); params.push(["estado", sql.NVarChar(100), estado]); }
     if (ano != null) { filtros.push("YEAR(ISNULL(p.DT_CONCLUSAO, p.DT_CRIACAO)) = @ano"); params.push(["ano", sql.Int, ano]); }
@@ -2353,7 +2359,7 @@ apiRouter.get("/kaizens", async (req, res) => {
 
     const result = await runQuery(
       `SELECT p.ID_KAIZEN, p.NM_KAIZEN, p.SG_STATUS, p.DT_CRIACAO, p.DT_CONCLUSAO,
-              cat.NM_CATEGORIA,
+              p.ID_CATEGORIA, cat.NM_CATEGORIA,
               lider.NM_USUARIO AS NM_LIDER, lider.NM_ESTADO, lider.NM_CIDADE,
               p.URL_IMG_ANTES, p.URL_IMG_DEPOIS,
               (SELECT TOP (1) d.NM_DESPERDICIO
@@ -2376,6 +2382,10 @@ apiRouter.get("/kaizens", async (req, res) => {
         SG_STATUS: r.SG_STATUS,
         DT_CRIACAO: relogioLocal(r.DT_CRIACAO),
         DT_CONCLUSAO: relogioLocal(r.DT_CONCLUSAO),
+        // ID_CATEGORIA acompanha o nome: o filtro de categoria da
+        // Biblioteca guarda o ID (vem de /api/categorias) e sem ele a
+        // comparação teria de ser por texto, que muda com o idioma.
+        ID_CATEGORIA: r.ID_CATEGORIA,
         NM_CATEGORIA: r.NM_CATEGORIA,
         NM_LIDER: r.NM_LIDER,
         NM_ESTADO: r.NM_ESTADO,

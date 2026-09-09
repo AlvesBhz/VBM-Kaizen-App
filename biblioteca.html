@@ -507,18 +507,30 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     <!-- Filter bar -->
     <div class="section-card reveal">
       <div class="filter-bar">
+        <!-- Nome do Kaizen. Sem data-filter-input: o filtro genérico de
+             vbm-app.js esconde item por item pelo texto do card, o que
+             brigaria com a paginação (Carregar mais) e com os demais
+             filtros. Quem filtra aqui é aplicarFiltros(), no rodapé. -->
         <div class="filter-search">
           <i class="fa-solid fa-magnifying-glass"></i>
-          <input type="text" placeholder="Buscar por título, líder, ID ou palavra-chave..." data-i18n-placeholder="bib.searchPlaceholder" data-filter-input="bibList"/>
+          <input type="text" id="bibFiltroNome" placeholder="Nome do Kaizen..." data-i18n-placeholder="bib.searchPlaceholder"/>
         </div>
+        <!-- Preenchido com o usuário logado ao abrir a página (ver
+             window.VBMUsuario, já usado pelo cabeçalho). -->
+        <select class="filter-select" id="bibFiltroUsuario">
+          <option value="" data-i18n="filter.allUsers">Todos os usuários</option>
+        </select>
         <select class="filter-select" id="bibFiltroUnidade">
           <option value="" data-i18n="filter.allUnits">Todas as unidades</option>
         </select>
         <select class="filter-select" id="bibFiltroCategoria">
           <option value="" data-i18n="filter.allCategories">Todas as categorias</option>
         </select>
+        <select class="filter-select" id="bibFiltroStatus">
+          <option value="" data-i18n="filter.allStatus">Todos os status</option>
+        </select>
         <select class="filter-select" id="bibFiltroPeriodo">
-          <option value="" data-i18n="filter.allPeriod">Todo o período</option>
+          <option value="" data-i18n="filter.allYears">Todos os anos</option>
         </select>
         <div class="filter-view-toggle" style="margin-left:auto;">
           <button class="filter-view-btn active" data-view-toggle="biblioteca" data-view="grid" title="Grade" data-i18n-title="common.grid"><i class="fa-solid fa-th-large"></i></button>
@@ -663,8 +675,15 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   var selUnidade = document.getElementById('bibFiltroUnidade');
   var selCategoria = document.getElementById('bibFiltroCategoria');
   var selPeriodo = document.getElementById('bibFiltroPeriodo');
+  var selUsuario = document.getElementById('bibFiltroUsuario');
+  var selStatus = document.getElementById('bibFiltroStatus');
+  var inputNome = document.getElementById('bibFiltroNome');
   if (!bibList) return;
 
+  // "todos" guarda o que veio da API UMA vez; "lote" é o recorte que os
+  // filtros produzem. Antes cada mudança de filtro refazia a consulta —
+  // agora a filtragem é em memória e a rede só é usada no carregamento.
+  var todos = [];
   var lote = [];
   var visiveis = 6;
   var PAGE_SIZE = 6;
@@ -720,41 +739,146 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
   loadMoreBtn.addEventListener('click', function () { visiveis += PAGE_SIZE; render(); });
 
+  // Ano da CRIAÇÃO do Kaizen. A data chega da API como "2026-09-09T14:30:00"
+  // (relógio, sem fuso — ver relogioLocal em server.js), então os 4
+  // primeiros caracteres já são o ano: ler assim evita depender do fuso
+  // de quem acessa, que na virada do ano mudaria o resultado.
+  function anoDe(k) {
+    return k.DT_CRIACAO ? String(k.DT_CRIACAO).slice(0, 4) : '';
+  }
+
   function popularOpcoesDinamicas() {
-    // Unidade e período vêm dos próprios resultados já carregados —
-    // evita mais uma chamada só pra listar valores distintos.
-    var estados = [...new Set(lote.map(function (k) { return k.NM_ESTADO; }).filter(Boolean))].sort();
-    var anos = [...new Set(lote.map(function (k) { return new Date(k.DT_CONCLUSAO || k.DT_CRIACAO).getFullYear(); }))].sort().reverse();
-    var estadoAtual = selUnidade.value, anoAtual = selPeriodo.value;
+    // Unidade, status e ano saem dos próprios registros já carregados —
+    // nenhuma chamada extra só para listar valores distintos. A base é
+    // "todos", não o recorte filtrado: senão escolher um filtro apagaria
+    // as opções dos outros.
+    var estados = [...new Set(todos.map(function (k) { return k.NM_ESTADO; }).filter(Boolean))].sort();
+    var anos = [...new Set(todos.map(anoDe).filter(Boolean))].sort().reverse();
+    var status = [...new Set(todos.map(function (k) { return k.SG_STATUS; }).filter(Boolean))]
+      .sort(function (a, b) { return statusInfo(a).rotulo.localeCompare(statusInfo(b).rotulo, 'pt-BR'); });
+
+    var estadoAtual = selUnidade.value, anoAtual = selPeriodo.value, statusAtual = selStatus.value;
     selUnidade.innerHTML = selUnidade.options[0].outerHTML + estados.map(function (e) { return '<option value="' + e + '">' + e + '</option>'; }).join('');
     selPeriodo.innerHTML = selPeriodo.options[0].outerHTML + anos.map(function (a) { return '<option value="' + a + '">' + a + '</option>'; }).join('');
+    selStatus.innerHTML = selStatus.options[0].outerHTML + status.map(function (s) { return '<option value="' + s + '">' + statusInfo(s).rotulo + '</option>'; }).join('');
     selUnidade.value = estadoAtual;
     selPeriodo.value = anoAtual;
+    selStatus.value = statusAtual;
+  }
+
+  // Nome do líder de cada Kaizen, para o filtro de usuário. NM_LIDER e o
+  // "nome" de /api/me saem da MESMA coluna (kzn_mdm_hierarquia.NM_USUARIO),
+  // então a comparação é exata, não uma heurística de nome.
+  function popularOpcoesUsuario() {
+    var lideres = [...new Set(todos.map(function (k) { return k.NM_LIDER; }).filter(Boolean))]
+      .sort(function (a, b) { return a.localeCompare(b, 'pt-BR'); });
+    var atual = selUsuario.value;
+    selUsuario.innerHTML = selUsuario.options[0].outerHTML +
+      lideres.map(function (n) { return '<option value="' + n + '">' + n + '</option>'; }).join('');
+    selUsuario.value = atual;
+  }
+
+  // Normalização usada pelo filtro de nome: sem maiúsculas, sem espaços
+  // nas pontas e sem espaço repetido no meio.
+  function normalizar(texto) {
+    return String(texto || '').toLowerCase().trim().replace(/\s+/g, ' ');
+  }
+
+  /** Aplica TODOS os filtros de uma vez, em memória, sobre "todos". */
+  function aplicarFiltros() {
+    var nome = normalizar(inputNome.value);
+    var usuario = selUsuario.value;
+    var estado = selUnidade.value;
+    var categoria = selCategoria.value;
+    var status = selStatus.value;
+    var ano = selPeriodo.value;
+
+    lote = todos.filter(function (k) {
+      if (nome && normalizar(k.NM_KAIZEN).indexOf(nome) === -1) return false;
+      if (usuario && k.NM_LIDER !== usuario) return false;
+      if (estado && k.NM_ESTADO !== estado) return false;
+      if (categoria && String(k.ID_CATEGORIA) !== String(categoria)) return false;
+      if (status && k.SG_STATUS !== status) return false;
+      if (ano && anoDe(k) !== ano) return false;
+      return true;
+    });
+    visiveis = PAGE_SIZE;
+    render();
+  }
+
+  // Idioma da última carga. A lista traz textos vindos do banco
+  // (categoria, desperdício), então trocar de idioma pede uma nova
+  // consulta — mas SÓ quando o idioma muda mesmo. O applyLang inicial
+  // dispara 'vbm:idioma' logo depois da primeira carga; sem esta guarda
+  // a página abria fazendo a mesma consulta duas vezes.
+  var idiomaDaLista = null;
+  function idiomaDaTela() {
+    var sel = document.getElementById('langSelect');
+    return (sel && sel.value) || 'pt-BR';
   }
 
   function carregarLista() {
-    var params = new URLSearchParams();
-    if (selCategoria.value) params.set('categoria', selCategoria.value);
-    if (selUnidade.value) params.set('estado', selUnidade.value);
-    if (selPeriodo.value) params.set('ano', selPeriodo.value);
-
+    // Sem parâmetro nenhum: a rota devolve TODOS os Kaizens, de qualquer
+    // status. Uma chamada só, no carregamento da página; daí em diante
+    // os filtros trabalham sobre esses dados.
+    idiomaDaLista = idiomaDaTela();
     bibList.innerHTML = '<p style="padding:1.5rem;color:var(--vbm-mid);font-size:.8rem;">Carregando…</p>';
-    fetch('/api/kaizens?' + params.toString(), { headers: { Accept: 'application/json' } })
+    fetch('/api/kaizens', { headers: { Accept: 'application/json' } })
       .then(function (r) { return r.ok ? r.json() : []; })
       .then(function (itens) {
-        lote = itens || [];
-        visiveis = PAGE_SIZE;
+        todos = itens || [];
         popularOpcoesDinamicas();
-        render();
+        popularOpcoesUsuario();
+        aplicarUsuarioLogado();
+        aplicarFiltros();
       })
       .catch(function () {
         bibList.innerHTML = '<p style="padding:1.5rem;color:#dc2626;font-size:.8rem;">Erro ao carregar a Biblioteca.</p>';
       });
   }
 
-  selUnidade.addEventListener('change', carregarLista);
-  selPeriodo.addEventListener('change', carregarLista);
-  selCategoria.addEventListener('change', carregarLista);
+  selUnidade.addEventListener('change', aplicarFiltros);
+  selPeriodo.addEventListener('change', aplicarFiltros);
+  selCategoria.addEventListener('change', aplicarFiltros);
+  selStatus.addEventListener('change', aplicarFiltros);
+  selUsuario.addEventListener('change', aplicarFiltros);
+  inputNome.addEventListener('input', aplicarFiltros);
+
+  /* Filtro de usuário preenchido com quem está logado, reaproveitando o
+     window.VBMUsuario que o cabeçalho já carrega — sem chamada nova.
+
+     O perfil e a lista chegam por caminhos independentes e em qualquer
+     ordem, então quem chegar depois chama aplicarUsuarioLogado(): ela é
+     idempotente e só age quando as duas pontas já existem. Sem isso, o
+     perfil chegando primeiro encontraria o select ainda vazio e a
+     seleção se perderia em silêncio.
+
+     Só marca se a pessoa for líder de algum Kaizen. Senão a tela abriria
+     sem nenhum resultado e pareceria falha de carregamento. */
+  var nomeUsuarioLogado = null;
+  var usuarioJaAplicado = false;
+
+  function aplicarUsuarioLogado() {
+    if (usuarioJaAplicado || !nomeUsuarioLogado || !todos.length) return;
+    var existe = Array.prototype.some.call(selUsuario.options, function (o) {
+      return o.value === nomeUsuarioLogado;
+    });
+    if (!existe) return;
+    usuarioJaAplicado = true;
+    selUsuario.value = nomeUsuarioLogado;
+  }
+
+  if (window.VBMUsuario) {
+    window.VBMUsuario.aoCarregar(function (perfil) {
+      // O perfil segue o formato do Graph: o nome está em displayName,
+      // inclusive quando vem do /api/me (carregarDoDatabricks, em
+      // js/usuario-graph.js, adapta a resposta para esse formato).
+      nomeUsuarioLogado = (perfil && perfil.displayName) || null;
+      if (usuarioJaAplicado || !todos.length) return; // a lista ainda vai aplicar
+      aplicarUsuarioLogado();
+      if (usuarioJaAplicado) aplicarFiltros();
+    });
+  }
 
   // Categoria (única lista bilíngue do filtro): populada à parte, não
   // depende dos resultados já carregados, senão só mostraria categorias
@@ -850,7 +974,13 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   carregarCategorias();
   carregarResumo();
   carregarLista();
-  window.addEventListener('vbm:idioma', function () { carregarCategorias(); carregarLista(); });
+  window.addEventListener('vbm:idioma', function () {
+    // O applyLang inicial também dispara este evento; recarregar aqui
+    // repetiria a consulta que acabou de sair. Só refaz em troca real.
+    if (idiomaDaTela() === idiomaDaLista) return;
+    carregarCategorias();
+    carregarLista();
+  });
 })();
 </script>
 <script>
@@ -962,6 +1092,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       'filter.allCategories': 'Todas as categorias',
       'filter.allUnits': 'Todas as unidades',
       'filter.allPeriod': 'Todo o período',
+      'filter.allUsers': 'Todos os usuários',
+      'filter.allStatus': 'Todos os status',
+      'filter.allYears': 'Todos os anos',
       'cat.seguranca': 'Segurança',
       'cat.producao': 'Produção',
       'cat.manutencao': 'Manutenção',
@@ -971,7 +1104,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       'bib.officialRepo': 'Repositório Oficial',
       'bib.heroDesc': 'Todos os Kaizens aprovados da organização. Consulte, inspire-se e replique melhorias em sua área.',
       'bib.unidade': 'Unidade',
-      'bib.searchPlaceholder': 'Buscar por título, líder, ID ou palavra-chave...',
+      'bib.searchPlaceholder': 'Nome do Kaizen...',
       'bib.showingCount': '31 Kaizens aprovados · Exibindo 6',
       'bib.loadMore': 'Carregar mais',
       'bib.summaryTitle': 'Resumo da Biblioteca',
@@ -1020,6 +1153,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       'filter.allCategories': 'All categories',
       'filter.allUnits': 'All units',
       'filter.allPeriod': 'All time',
+      'filter.allUsers': 'All users',
+      'filter.allStatus': 'All statuses',
+      'filter.allYears': 'All years',
       'cat.seguranca': 'Safety',
       'cat.producao': 'Production',
       'cat.manutencao': 'Maintenance',
@@ -1029,7 +1165,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       'bib.officialRepo': 'Official Repository',
       'bib.heroDesc': 'All approved Kaizens across the organization. Browse, get inspired, and replicate improvements in your area.',
       'bib.unidade': 'Unit',
-      'bib.searchPlaceholder': 'Search by title, leader, ID or keyword...',
+      'bib.searchPlaceholder': 'Kaizen name...',
       'bib.showingCount': '31 approved Kaizens · Showing 6',
       'bib.loadMore': 'Load more',
       'bib.summaryTitle': 'Library Summary',
