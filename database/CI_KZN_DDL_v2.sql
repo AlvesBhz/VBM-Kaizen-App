@@ -364,6 +364,19 @@
        front ainda usam SG_STATUS (fila de aprovação, dashboard,
        listagens, POST /kaizens/:id/reprovar). Ajuste do app não foi
        feito nesta rodada.
+     - KZN_MOTIVO_REPROVACAO APOSENTADA (pedido do time, nesta rodada):
+       a tabela foi removida do schema e ID_MOTIVO (INT) em
+       CI.KZN_PEDRAVISAOCONSOLIDADA virou DS_MOTIVO VARCHAR(100) — a
+       justificativa da reprovação passa a ser gravada em texto na
+       própria linha do Kaizen. A migração (seção 17.2d) copia o TEXTO
+       REAL de KZN_MOTIVO_REPROVACAO.DS_MOTIVO (mesmo tipo e tamanho,
+       sem truncamento) antes de apagar qualquer coisa; como a tabela
+       guardava 1 linha por idioma com o mesmo texto, é usado o
+       português (ID_IDIOMA = 1) e, na falta dele, o menor ID_IDIOMA.
+       ALERTA: quebra a aplicação até o app ser ajustado — o server.js
+       tem a aba admin "Motivos de Reprovação" (rota /motivosreprovacao)
+       e o POST /kaizens/:id/reprovar, que hoje insere uma linha na
+       tabela aposentada. Ajuste do app não foi feito nesta rodada.
    ============================================================================== */
 
 SET NOCOUNT ON;
@@ -394,7 +407,6 @@ DROP TABLE IF EXISTS CI.KZN_LOG_PEDRAVISAOCONSOLIDADA;
 DROP SEQUENCE IF EXISTS CI.SEQ_KZN_LOG_PVC;
 DROP TABLE IF EXISTS CI.KZN_PEDRAVISAOCONSOLIDADA;
 DROP TABLE IF EXISTS CI.KZN_STATUS;
-DROP TABLE IF EXISTS CI.KZN_MOTIVO_REPROVACAO;
 DROP TABLE IF EXISTS CI.KZN_RESULTADOS;
 DROP TABLE IF EXISTS CI.KZN_TIPO_RESULTADO;
 DROP TABLE IF EXISTS CI.KZN_MOEDA;
@@ -729,33 +741,6 @@ END
 GO
 
 /* ==============================================================================
-   12. TABELA: CI.KZN_MOTIVO_REPROVACAO
-   ============================================================================== */
-IF OBJECT_ID('CI.KZN_MOTIVO_REPROVACAO', 'U') IS NULL
-BEGIN
-    CREATE TABLE CI.KZN_MOTIVO_REPROVACAO
-    (
-        ID_MOTIVO       INT                             NOT NULL,
-        ID_IDIOMA       INT                             NOT NULL,
-        NM_MOTIVO       VARCHAR(30)                     NOT NULL,
-        DS_MOTIVO       VARCHAR(100)                         NULL,
-        SG_ATIVO        VARCHAR(1)                      NOT NULL
-            CONSTRAINT DF_KZN_MOTIVO_REPROVACAO_SG_ATIVO DEFAULT ('S'), -- ASSUNÇÃO: 'S'/'N', ativo por padrão
-        ID_USUARIO      INT                                 NULL,   -- usuário (MDM) responsável/administrador do cadastro
-        DT_ATUALIZACAO  DATETIME2(3)                    NOT NULL
-            CONSTRAINT DF_KZN_MOTIVO_REPROVACAO_DT_ATUALIZACAO DEFAULT (SYSDATETIME()),
-
-        CONSTRAINT PK_KZN_MOTIVO_REPROVACAO          PRIMARY KEY CLUSTERED (ID_MOTIVO, ID_IDIOMA),
-        CONSTRAINT FK_KZN_MOTIVO_REPROVACAO_IDIOMA   FOREIGN KEY (ID_IDIOMA)
-            REFERENCES CI.KZN_IDIOMA (ID_IDIOMA),
-        CONSTRAINT FK_KZN_MOTIVO_REPROVACAO_USUARIO  FOREIGN KEY (ID_USUARIO)
-            REFERENCES CI.KZN_MDM_HIERARQUIA (ID_USUARIO),
-        CONSTRAINT UQ_KZN_MOTIVO_REPROVACAO_NM       UNIQUE (ID_IDIOMA, NM_MOTIVO)
-    );
-END
-GO
-
-/* ==============================================================================
    12b. TABELA: CI.KZN_STATUS  (pedido do time, nesta rodada)
    Cadastro de status, no MESMO molde das demais tabelas de domínio
    (KZN_CATEGORIA / KZN_REPLICACAO / KZN_MOEDA): 1 linha por idioma,
@@ -854,7 +839,7 @@ BEGIN
         DT_CRIACAO                 DATETIME2(3)                    NOT NULL
             CONSTRAINT DF_KZN_PVC_DT_CRIACAO DEFAULT (SYSDATETIME()),
         DT_CONCLUSAO               DATE                                NULL,
-        ID_MOTIVO                  INT                                 NULL,   -- justificativa da reprovação (CI.KZN_MOTIVO_REPROVACAO); inalterado nesta rodada
+        DS_MOTIVO                  VARCHAR(100)                        NULL,   -- justificativa da reprovação, em texto livre (antes era ID_MOTIVO -> CI.KZN_MOTIVO_REPROVACAO, tabela aposentada)
         DT_ATUALIZACAO             DATETIME2(3)                    NOT NULL
             CONSTRAINT DF_KZN_PVC_DT_ATUALIZACAO DEFAULT (SYSDATETIME()),
         ID_USUARIO_ATUALIZACAO     INT                             NOT NULL,   -- app envia a cada INSERT/UPDATE (quem está agindo)
@@ -866,7 +851,7 @@ BEGIN
             REFERENCES CI.KZN_MDM_HIERARQUIA (ID_USUARIO),
         CONSTRAINT FK_KZN_PVC_USUARIO_ATUALIZACAO  FOREIGN KEY (ID_USUARIO_ATUALIZACAO)
             REFERENCES CI.KZN_MDM_HIERARQUIA (ID_USUARIO),
-        -- ID_CATEGORIA, ID_REPLICACAO, ID_DESPERDICIO e ID_MOTIVO NÃO têm FK de banco:
+        -- ID_CATEGORIA, ID_REPLICACAO e ID_DESPERDICIO NÃO têm FK de banco:
         -- as tabelas de destino agora têm PK composta (ID_X, ID_IDIOMA) e o SQL Server não
         -- permite FK apontando para parte de uma chave composta; a integridade referencial
         -- dessas colunas fica sob responsabilidade da aplicação (decisão confirmada com o time)
@@ -1290,8 +1275,6 @@ BEGIN
         ALTER TABLE CI.KZN_TIPO_RESULTADO DROP CONSTRAINT FK_KZN_TIPO_RESULTADO_USUARIO;
     IF OBJECT_ID('CI.FK_KZN_RESULTADOS_USUARIO', 'F') IS NOT NULL
         ALTER TABLE CI.KZN_RESULTADOS DROP CONSTRAINT FK_KZN_RESULTADOS_USUARIO;
-    IF OBJECT_ID('CI.FK_KZN_MOTIVO_REPROVACAO_USUARIO', 'F') IS NOT NULL
-        ALTER TABLE CI.KZN_MOTIVO_REPROVACAO DROP CONSTRAINT FK_KZN_MOTIVO_REPROVACAO_USUARIO;
     IF OBJECT_ID('CI.FK_KZN_PVC_USUARIO_CADASTRO', 'F') IS NOT NULL
         ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA DROP CONSTRAINT FK_KZN_PVC_USUARIO_CADASTRO;
     IF OBJECT_ID('CI.FK_KZN_PVC_USUARIO_LIDER', 'F') IS NOT NULL
@@ -1417,8 +1400,6 @@ BEGIN
         ALTER TABLE CI.KZN_TIPO_RESULTADO ADD CONSTRAINT FK_KZN_TIPO_RESULTADO_USUARIO FOREIGN KEY (ID_USUARIO) REFERENCES CI.KZN_MDM_HIERARQUIA (ID_USUARIO);
     IF OBJECT_ID('CI.KZN_RESULTADOS', 'U') IS NOT NULL
         ALTER TABLE CI.KZN_RESULTADOS ADD CONSTRAINT FK_KZN_RESULTADOS_USUARIO FOREIGN KEY (ID_USUARIO) REFERENCES CI.KZN_MDM_HIERARQUIA (ID_USUARIO);
-    IF OBJECT_ID('CI.KZN_MOTIVO_REPROVACAO', 'U') IS NOT NULL
-        ALTER TABLE CI.KZN_MOTIVO_REPROVACAO ADD CONSTRAINT FK_KZN_MOTIVO_REPROVACAO_USUARIO FOREIGN KEY (ID_USUARIO) REFERENCES CI.KZN_MDM_HIERARQUIA (ID_USUARIO);
     IF OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA', 'U') IS NOT NULL
     BEGIN
         ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ADD CONSTRAINT FK_KZN_PVC_USUARIO_CADASTRO FOREIGN KEY (ID_USUARIO_CADASTRO) REFERENCES CI.KZN_MDM_HIERARQUIA (ID_USUARIO);
@@ -1521,6 +1502,86 @@ END
 GO
 
 /* ------------------------------------------------------------------------------
+   17.2d MIGRAÇÃO — ID_MOTIVO -> DS_MOTIVO e aposentadoria de
+   CI.KZN_MOTIVO_REPROVACAO (idempotente; pedido do time, nesta rodada)
+   A justificativa de reprovação deixa de ser uma FK lógica pra uma tabela
+   de cadastro e passa a ser gravada em texto na própria linha do Kaizen:
+   ID_MOTIVO (INT) vira DS_MOTIVO VARCHAR(100), com o TEXTO REAL migrado
+   de KZN_MOTIVO_REPROVACAO.DS_MOTIVO — os dois campos têm o mesmo tipo e
+   tamanho, então não há truncamento nem perda.
+
+   A tabela guarda 1 linha por idioma com o MESMO texto (o app grava
+   assim: texto livre não é traduzido), então a migração pega o idioma
+   português (ID_IDIOMA = 1) e, se não houver, o menor ID_IDIOMA
+   existente daquele motivo.
+
+   Roda ANTES da 17.3 de propósito: a 17.3 referencia DS_MOTIVO de forma
+   estática, então a coluna precisa existir antes. Todo acesso a
+   ID_MOTIVO/KZN_MOTIVO_REPROVACAO aqui é via sp_executesql — numa 2ª
+   execução eles não existem mais, e referência estática quebraria a
+   compilação do batch inteiro.
+
+   ATENÇÃO — QUEBRA A APLICAÇÃO: o server.js usa KZN_MOTIVO_REPROVACAO na
+   aba admin "Motivos de Reprovação" (rota /motivosreprovacao) e no
+   POST /kaizens/:id/reprovar, que hoje insere uma linha lá. Publicar o
+   ajuste do app junto com esta migração.
+   ------------------------------------------------------------------------------ */
+IF OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA', 'U') IS NOT NULL
+   AND EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA') AND name = 'ID_MOTIVO')
+BEGIN
+    PRINT 'Migrando CI.KZN_PEDRAVISAOCONSOLIDADA: ID_MOTIVO -> DS_MOTIVO...';
+
+    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA') AND name = 'DS_MOTIVO')
+        ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ADD DS_MOTIVO VARCHAR(100) NULL;
+
+    -- Copia o texto real da justificativa (só se a tabela de origem ainda existir)
+    IF OBJECT_ID('CI.KZN_MOTIVO_REPROVACAO', 'U') IS NOT NULL
+        EXEC sp_executesql N'
+            UPDATE p
+            SET    p.DS_MOTIVO = m.DS_MOTIVO
+            FROM   CI.KZN_PEDRAVISAOCONSOLIDADA p
+            CROSS APPLY (
+                SELECT TOP (1) x.DS_MOTIVO
+                FROM   CI.KZN_MOTIVO_REPROVACAO x
+                WHERE  x.ID_MOTIVO = p.ID_MOTIVO
+                ORDER BY CASE WHEN x.ID_IDIOMA = 1 THEN 0 ELSE 1 END, x.ID_IDIOMA
+            ) m
+            WHERE  p.ID_MOTIVO IS NOT NULL AND p.DS_MOTIVO IS NULL;';
+
+    -- Avisa (sem abortar) se algum Kaizen tinha ID_MOTIVO sem texto correspondente
+    IF OBJECT_ID('CI.KZN_MOTIVO_REPROVACAO', 'U') IS NOT NULL
+    BEGIN
+        DECLARE @orfaos INT;
+        EXEC sp_executesql N'SELECT @qt = COUNT(*) FROM CI.KZN_PEDRAVISAOCONSOLIDADA WHERE ID_MOTIVO IS NOT NULL AND DS_MOTIVO IS NULL',
+                           N'@qt INT OUTPUT', @qt = @orfaos OUTPUT;
+        IF @orfaos > 0
+            PRINT 'AVISO: ' + CAST(@orfaos AS VARCHAR(10)) + ' Kaizen(s) tinham ID_MOTIVO sem linha correspondente em KZN_MOTIVO_REPROVACAO — DS_MOTIVO ficou NULL nesses casos.';
+    END
+
+    EXEC sp_executesql N'ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA DROP COLUMN ID_MOTIVO;';
+
+    PRINT 'ID_MOTIVO removida; justificativa agora em DS_MOTIVO.';
+END
+GO
+
+-- Aposenta CI.KZN_MOTIVO_REPROVACAO (só depois do texto já migrado acima)
+IF OBJECT_ID('CI.KZN_MOTIVO_REPROVACAO', 'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA') AND name = 'ID_MOTIVO')
+BEGIN
+    DECLARE @sqlFk nvarchar(max) = N'';
+    SELECT @sqlFk = @sqlFk + N'ALTER TABLE ' + QUOTENAME(OBJECT_SCHEMA_NAME(fk.parent_object_id)) + N'.'
+                  + QUOTENAME(OBJECT_NAME(fk.parent_object_id)) + N' DROP CONSTRAINT ' + QUOTENAME(fk.name) + N';'
+    FROM   sys.foreign_keys fk
+    WHERE  fk.parent_object_id = OBJECT_ID('CI.KZN_MOTIVO_REPROVACAO')
+        OR fk.referenced_object_id = OBJECT_ID('CI.KZN_MOTIVO_REPROVACAO');
+    IF @sqlFk <> N'' EXEC sp_executesql @sqlFk;
+
+    DROP TABLE CI.KZN_MOTIVO_REPROVACAO;
+    PRINT 'CI.KZN_MOTIVO_REPROVACAO removida.';
+END
+GO
+
+/* ------------------------------------------------------------------------------
    17.3 MIGRAÇÃO — CI.KZN_PEDRAVISAOCONSOLIDADA (idempotente)
    Reorganiza a ordem física das colunas pra DT_CRIACAO ficar imediatamente
    antes de DT_CONCLUSAO. SQL Server não reordena coluna via ALTER TABLE — a
@@ -1577,7 +1638,7 @@ BEGIN
         DT_CRIACAO                 DATETIME2(3)                    NOT NULL
             CONSTRAINT DF_KZN_PVC_DT_CRIACAO_NEW DEFAULT (SYSDATETIME()),
         DT_CONCLUSAO               DATE                                NULL,
-        ID_MOTIVO                  INT                                 NULL,
+        DS_MOTIVO                  VARCHAR(100)                        NULL,
         DT_ATUALIZACAO             DATETIME2(3)                    NOT NULL
             CONSTRAINT DF_KZN_PVC_DT_ATUALIZACAO_NEW DEFAULT (SYSDATETIME()),
         ID_USUARIO_ATUALIZACAO     INT                             NOT NULL
@@ -1589,12 +1650,12 @@ BEGIN
      DS_PROBLEMA, DS_OBJETIVO, ID_STATUS, ID_APROVADOR, URL_IMG_ANTES, DS_ESTADO_ANTES,
      URL_IMG_DEPOIS, DS_ESTADO_DEPOIS, URL_REFERENCIA, ID_DESPERDICIO, DS_LICOES_APRENDIDAS,
      VL_RESULTADO_FINANCEIRO, ID_MOEDA, DS_RESULTADO_ESPERADO, DT_CRIACAO, DT_CONCLUSAO,
-     ID_MOTIVO, DT_ATUALIZACAO, ID_USUARIO_ATUALIZACAO)
+     DS_MOTIVO, DT_ATUALIZACAO, ID_USUARIO_ATUALIZACAO)
     SELECT ID_KAIZEN, ID_USUARIO_CADASTRO, ID_USUARIO_LIDER, NM_KAIZEN, ID_CATEGORIA, ID_REPLICACAO,
            DS_PROBLEMA, DS_OBJETIVO, ID_STATUS, ID_APROVADOR, URL_IMG_ANTES, DS_ESTADO_ANTES,
            URL_IMG_DEPOIS, DS_ESTADO_DEPOIS, URL_REFERENCIA, ID_DESPERDICIO, DS_LICOES_APRENDIDAS,
            VL_RESULTADO_FINANCEIRO, ID_MOEDA, DS_RESULTADO_ESPERADO, DT_CRIACAO, DT_CONCLUSAO,
-           ID_MOTIVO, DT_ATUALIZACAO, ID_USUARIO_ATUALIZACAO
+           DS_MOTIVO, DT_ATUALIZACAO, ID_USUARIO_ATUALIZACAO
     FROM CI.KZN_PEDRAVISAOCONSOLIDADA;
 
     -- 4) remove a antiga e promove a nova
@@ -1872,15 +1933,6 @@ BEGIN
 END
 GO
 
-CREATE OR ALTER TRIGGER CI.TR_KZN_MOTIVO_REPROVACAO_UPD ON CI.KZN_MOTIVO_REPROVACAO AFTER UPDATE AS
-BEGIN
-    SET NOCOUNT ON;
-    IF NOT UPDATE(DT_ATUALIZACAO)
-        UPDATE T SET DT_ATUALIZACAO = SYSDATETIME()
-        FROM CI.KZN_MOTIVO_REPROVACAO T JOIN inserted i ON i.ID_MOTIVO = T.ID_MOTIVO AND i.ID_IDIOMA = T.ID_IDIOMA;
-END
-GO
-
 CREATE OR ALTER TRIGGER CI.TR_KZN_MEMBROS_EQUIPE_UPD ON CI.KZN_MEMBROS_EQUIPE AFTER UPDATE AS
 BEGIN
     SET NOCOUNT ON;
@@ -2051,9 +2103,9 @@ BEGIN
         FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
         WHERE NOT (d.DT_CONCLUSAO = i.DT_CONCLUSAO OR (d.DT_CONCLUSAO IS NULL AND i.DT_CONCLUSAO IS NULL))
         UNION ALL
-        SELECT lm.ID_LOG, 'ID_MOTIVO', CONVERT(VARCHAR(200), d.ID_MOTIVO), CONVERT(VARCHAR(200), i.ID_MOTIVO)
+        SELECT lm.ID_LOG, 'DS_MOTIVO', CONVERT(VARCHAR(200), d.DS_MOTIVO), CONVERT(VARCHAR(200), i.DS_MOTIVO)
         FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
-        WHERE NOT (d.ID_MOTIVO = i.ID_MOTIVO OR (d.ID_MOTIVO IS NULL AND i.ID_MOTIVO IS NULL))
+        WHERE NOT (d.DS_MOTIVO = i.DS_MOTIVO OR (d.DS_MOTIVO IS NULL AND i.DS_MOTIVO IS NULL))
     ) x;
 END
 GO
@@ -2088,12 +2140,12 @@ USING (VALUES
     (1, 1, 'Aberto',        'Kaizen registrado, ainda não enviado para aprovação'),
     (2, 1, 'Em aprovação',  'Aguardando avaliação do aprovador'),
     (3, 1, 'Aprovado',      'Aprovado pelo aprovador responsável'),
-    (4, 1, 'Reprovado',     'Reprovado — a justificativa fica em KZN_MOTIVO_REPROVACAO'),
+    (4, 1, 'Reprovado',     'Reprovado — a justificativa fica em PVC.DS_MOTIVO'),
     (5, 1, 'Concluído',     'Kaizen finalizado'),
     (1, 2, 'Open',          'Kaizen registered, not yet submitted for approval'),
     (2, 2, 'In approval',   'Waiting for the approver review'),
     (3, 2, 'Approved',      'Approved by the responsible approver'),
-    (4, 2, 'Rejected',      'Rejected — justification is kept in KZN_MOTIVO_REPROVACAO'),
+    (4, 2, 'Rejected',      'Rejected — justification is kept in PVC.DS_MOTIVO'),
     (5, 2, 'Completed',     'Kaizen finished')
 ) AS S (ID_STATUS, ID_IDIOMA, NM_STATUS, DS_STATUS)
     ON T.ID_STATUS = S.ID_STATUS AND T.ID_IDIOMA = S.ID_IDIOMA
@@ -2182,13 +2234,6 @@ BEGIN
     ALTER TABLE CI.KZN_RESULTADOS ALTER COLUMN URL_ICONE    VARCHAR(200)     NULL;
     ALTER TABLE CI.KZN_RESULTADOS ALTER COLUMN NM_RESULTADO VARCHAR(30)  NOT NULL;
     ALTER TABLE CI.KZN_RESULTADOS ALTER COLUMN DS_RESULTADO VARCHAR(100)     NULL;
-END
-GO
-
-IF OBJECT_ID('CI.KZN_MOTIVO_REPROVACAO', 'U') IS NOT NULL
-BEGIN
-    ALTER TABLE CI.KZN_MOTIVO_REPROVACAO ALTER COLUMN NM_MOTIVO VARCHAR(30)  NOT NULL;
-    ALTER TABLE CI.KZN_MOTIVO_REPROVACAO ALTER COLUMN DS_MOTIVO VARCHAR(100)     NULL;
 END
 GO
 
