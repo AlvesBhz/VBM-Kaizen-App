@@ -712,7 +712,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="form-group">
             <label class="form-label" data-i18n="f.imageBefore">Imagem do Antes <span class="req">*</span></label>
             <div class="photo-upload-zone">
-              <input type="file" accept="image/*" id="imagem_antes" name="imagem_antes"/>
+              <input type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" id="imagem_antes" name="imagem_antes"/>
               <i class="fa-solid fa-camera photo-upload-icon"></i>
               <div class="photo-upload-text"><strong data-i18n="f.clickAddPhoto">Clique para adicionar foto</strong><br><span data-i18n="f.photoFormats">PNG, JPG, WEBP até 10MB</span></div>
             </div>
@@ -754,7 +754,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="form-group">
             <label class="form-label" data-i18n="f.imageAfter">Imagem do Depois <span class="req">*</span></label>
             <div class="photo-upload-zone">
-              <input type="file" accept="image/*" id="imagem_depois" name="imagem_depois"/>
+              <input type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" id="imagem_depois" name="imagem_depois"/>
               <i class="fa-solid fa-camera photo-upload-icon"></i>
               <div class="photo-upload-text"><strong data-i18n="f.clickAddPhoto">Clique para adicionar foto</strong><br><span data-i18n="f.photoFormats">PNG, JPG, WEBP até 10MB</span></div>
             </div>
@@ -1092,6 +1092,10 @@ function rotuloPessoa(p) {
       'f.imageBefore': 'Imagem do Antes',
       'f.clickAddPhoto': 'Clique para adicionar foto',
       'f.photoFormats': 'PNG, JPG, WEBP até 10MB',
+      'f.photoInvalidTitle': 'Formato não suportado',
+      'f.photoInvalidMsg': 'Envie a imagem em PNG, JPG ou WEBP.',
+      'f.photoTooBigTitle': 'Imagem muito grande',
+      'f.photoTooBigMsg': 'O tamanho máximo é 10MB.',
       'f.descriptionBefore': 'Descrição do Antes',
       'f.descriptionBeforePlaceholder': 'Descreva a situação e os problemas anteriores à melhoria...',
       'f.descriptionBeforeHelper': 'Inclua dados quantitativos, se disponíveis — facilita medir o ganho depois.',
@@ -1233,6 +1237,10 @@ function rotuloPessoa(p) {
       'f.imageBefore': 'Before Image',
       'f.clickAddPhoto': 'Click to add photo',
       'f.photoFormats': 'PNG, JPG, WEBP up to 10MB',
+      'f.photoInvalidTitle': 'Unsupported format',
+      'f.photoInvalidMsg': 'Upload the image as PNG, JPG or WEBP.',
+      'f.photoTooBigTitle': 'Image too large',
+      'f.photoTooBigMsg': 'The maximum size is 10MB.',
       'f.descriptionBefore': 'Description of Before',
       'f.descriptionBeforePlaceholder': 'Describe the situation and problems prior to the improvement...',
       'f.descriptionBeforeHelper': 'Include quantitative data, if available — makes it easier to measure the gain later.',
@@ -1831,6 +1839,67 @@ createTeamPicker({
 // formulário. A pré-visualização local continua funcionando sozinha
 // (initPhotoUpload, em vbm-app.js, lê o arquivo com FileReader — não
 // depende deste upload).
+// ─── Formatos aceitos nas fotos (Antes/Depois) ───
+// O accept dos inputs já filtra a janela de escolha, mas é só uma
+// sugestão: o navegador deixa trocar para "todos os arquivos" e o
+// usuário escolher um HEIC, um PDF ou um GIF. Aqui o arquivo é recusado
+// na hora, com a mesma lista que POST /api/kaizens/imagem aceita — em
+// vez de deixar a pessoa preencher o formulário inteiro e só descobrir
+// o problema no envio. O servidor continua validando de qualquer forma.
+(function () {
+  var TIPOS_OK = ['image/png', 'image/jpeg', 'image/webp'];
+  var EXT_OK = /\.(png|jpe?g|webp)$/i;
+  var MAX_BYTES = 10 * 1024 * 1024;   // mesmo limite do servidor
+
+  function txtFoto(chave, padrao) {
+    return (window.__i18n && window.__i18n[chave]) || padrao;
+  }
+
+  function limpar(input) {
+    input.value = '';
+    var zona = input.closest('.photo-upload-zone');
+    var preview = zona && zona.nextElementSibling;
+    if (preview && preview.classList.contains('photo-preview-img')) {
+      // Em edição existe uma foto gravada: a pré-visualização dela volta,
+      // e o campo continua valendo como preenchido.
+      var hidden = document.getElementById(input.id.replace('imagem_', 'url_imagem_'));
+      var gravada = hidden && hidden.value;
+      if (gravada) {
+        preview.src = '/api/kaizens/imagem?path=' + encodeURIComponent(gravada);
+        input.dataset.jaGravada = '1';
+      } else {
+        preview.removeAttribute('src');
+        preview.style.display = 'none';
+      }
+    }
+    if (zona) zona.style.display = '';
+  }
+
+  ['imagem_antes', 'imagem_depois'].forEach(function (id) {
+    var input = document.getElementById(id);
+    if (!input) return;
+    input.addEventListener('change', function () {
+      var arquivo = input.files && input.files[0];
+      if (!arquivo) return;
+      // Tipo E extensão: alguns navegadores não preenchem o type, e um
+      // arquivo renomeado não pode passar só pela extensão.
+      var tipoOk = TIPOS_OK.indexOf(arquivo.type) !== -1;
+      var extOk = EXT_OK.test(arquivo.name || '');
+      if (!tipoOk || !extOk) {
+        limpar(input);
+        showToast('error', txtFoto('f.photoInvalidTitle', 'Formato não suportado'),
+          txtFoto('f.photoInvalidMsg', 'Envie a imagem em PNG, JPG ou WEBP.'), 5000);
+        return;
+      }
+      if (arquivo.size > MAX_BYTES) {
+        limpar(input);
+        showToast('error', txtFoto('f.photoTooBigTitle', 'Imagem muito grande'),
+          txtFoto('f.photoTooBigMsg', 'O tamanho máximo é 10MB.'), 5000);
+      }
+    });
+  });
+})();
+
 function uploadImagemSeSelecionada(inputId, hiddenId, tipo) {
   var input = document.getElementById(inputId);
   var hidden = document.getElementById(hiddenId);
