@@ -618,6 +618,13 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
             <div class="form-group">
               <label class="form-label" data-i18n="f.kaizenTitle">Título do Kaizen <span class="req">*</span></label>
               <input type="text" class="form-control" id="titulo_kaizen" name="titulo_kaizen" maxlength="30" placeholder="Ex.: Redução do tempo de setup" data-i18n-placeholder="f.kaizenTitlePlaceholder" required/>
+              <!-- ID_KAIZEN do registro em edição. Vazio = cadastro novo.
+                   É o que diferencia "o Kaizen mantendo o próprio título"
+                   de "outro Kaizen com o mesmo título": as duas checagens
+                   de duplicidade (a da Etapa 1 e a da gravação) mandam
+                   este valor para o servidor excluir o próprio registro
+                   da busca. Preenchido só pela carga da edição. -->
+              <input type="hidden" id="id_kaizen" name="id_kaizen" value=""/>
               <div class="form-helper" data-i18n="f.kaizenTitleHelper">Seja claro e objetivo. Máximo de 30 caracteres.</div>
             </div>
 
@@ -1888,7 +1895,12 @@ function uploadImagemSeSelecionada(inputId, hiddenId, tipo) {
   // (sem acentuar diferença de caixa, sem espaço nas pontas) é feita no
   // banco — ver GET /api/kaizens/titulo-existe em server.js.
   function tituloDuplicado(titulo) {
-    return fetch('/api/kaizens/titulo-existe?titulo=' + encodeURIComponent(titulo),
+    // Em edição o próprio registro não conta como duplicata — sem o id
+    // aqui, o Kaizen era barrado pelo seu próprio título ao passar da
+    // Etapa 1 para a Etapa 2.
+    var idAtual = valor('id_kaizen');
+    return fetch('/api/kaizens/titulo-existe?titulo=' + encodeURIComponent(titulo) +
+                 (idAtual ? '&id=' + encodeURIComponent(idAtual) : ''),
                  { headers: { Accept: 'application/json' } })
       .then(function (r) {
         if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -2427,10 +2439,10 @@ window.validacaoWizard = (function () {
         // atualizar é a URL, e o servidor confere permissão de novo.
         // O carimbo da última gravação viaja junto para o servidor
         // recusar sobrescrever alteração de outra pessoa.
-        var edicao = window.VBMEdicao;
-        if (edicao && edicao.id) {
-          payload.DT_ATUALIZACAO = edicao.dtAtualizacao || '';
-          return fetch('/api/kaizens/' + encodeURIComponent(edicao.id), {
+        var idEdicao = valor('id_kaizen');
+        if (idEdicao) {
+          payload.DT_ATUALIZACAO = (window.VBMEdicao && window.VBMEdicao.dtAtualizacao) || '';
+          return fetch('/api/kaizens/' + encodeURIComponent(idEdicao), {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
@@ -2445,7 +2457,7 @@ window.validacaoWizard = (function () {
       .then(function (r) { return r.json().then(function (corpo) { return { ok: r.ok, corpo: corpo }; }); })
       .then(function (resultado) {
         if (!resultado.ok) throw new Error((resultado.corpo && resultado.corpo.error) || 'Falha ao enviar o Kaizen.');
-        var ehEdicao = !!(window.VBMEdicao && window.VBMEdicao.id);
+        var ehEdicao = !!valor('id_kaizen');
         showToast('success',
           ehEdicao ? txtEdicao('edit.savedTitle', 'Kaizen atualizado!') : 'Kaizen enviado!',
           ehEdicao
@@ -2513,6 +2525,7 @@ function txtEdicao(chave, padrao) {
       // Só depois de o servidor autorizar é que a página entra em modo
       // de edição — antes disso ela continua sendo um cadastro novo.
       window.VBMEdicao = { id: k.ID_KAIZEN, dtAtualizacao: k.DT_ATUALIZACAO };
+      texto('id_kaizen', k.ID_KAIZEN);
 
       texto('titulo_kaizen', k.titulo);
       texto('declaracao_problema', k.declaracao_problema);
