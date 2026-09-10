@@ -84,13 +84,28 @@
        trocar pra NOT NULL se a aplicação sempre tiver esse valor.
        KZN_APROVADOR e KZN_ADMIN recebem ID_USUARIO como FK (não como
        segunda coluna com mesmo nome) — nenhuma duplicação de coluna.
-     - Reordenação de KZN_PEDRAVISAOCONSOLIDADA (pedido do time, nesta rodada):
-       DT_CRIACAO passou a ficar imediatamente antes de DT_CONCLUSAO. SQL
-       Server não tem comando de ALTER pra reordenar coluna fisicamente — a
-       única forma de mudar a ordem sem perder dado é recriar a tabela e
-       migrar as linhas; a seção 17.3 faz isso de forma idempotente (só roda
-       se a tabela já existir com a ordem antiga; bancos novos já nascem
-       certos pelo CREATE TABLE da seção 13).
+     - KZN_PEDRAVISAOCONSOLIDADA (pedido do time, nesta rodada): a coluna
+       DT_CRIACAO foi REMOVIDA — a tabela passou de 25 pra 24 colunas. A data
+       de criação do Kaizen não se perdeu: ela passou a viver na linha 'C' de
+       KZN_LOG_PEDRAVISAOCONSOLIDADA (DT_OPERACAO), gravada pelo trigger
+       TR_KZN_PVC_INS. Para lê-la, junte com o log:
+           LEFT JOIN CI.KZN_LOG_PEDRAVISAOCONSOLIDADA l
+                  ON l.ID_KAIZEN = p.ID_KAIZEN AND l.TP_OPERACAO = 'C'
+       A seção 17.3 migra bancos existentes de forma idempotente, preservando
+       a data no log ANTES de remover a coluna; bancos novos já nascem sem ela
+       pelo CREATE TABLE da seção 13.
+       ALERTA: server.js e front-end ainda leem DT_CRIACAO em 17 pontos (entre
+       eles rotuloIdKaizen(), filtro/agrupamento por ano e a ordenação da
+       Biblioteca) e precisam passar a ler a data do log.
+     - KZN_PEDRAVISAOCONSOLIDADA.NM_KAIZEN (pedido do time, nesta rodada):
+       ampliado de VARCHAR(30) pra VARCHAR(100). Só ampliação — nenhum título
+       existente é truncado. A seção 21 aplica a mudança em bancos já criados,
+       de forma idempotente; há também o script avulso
+       database/ampliar_nm_kaizen_100.sql.
+       ALERTA: ampliar a coluna não libera títulos maiores sozinho. O
+       server.js valida antes do banco com PVC_LIMITES.NM_KAIZEN = 30 (e usa
+       sql.NVarChar(30) no INSERT, que trunca o parâmetro); enquanto esse
+       limite não virar 100, a coluna maior fica sem efeito prático.
      - KZN_MDM_HIERARQUIA (pedido do time, nesta rodada): DS_EMAIL renomeado
        pra CD_EMAIL; novos campos de perfil (NM_SITUACAO, SG_ATIVO, NM_POSICAO,
        NM_PAIS, SG_ESTADO, NM_CIDADE, NM_SITE) inseridos logo após CD_EMAIL;
@@ -833,7 +848,7 @@ BEGIN
         ID_KAIZEN                  INT                             NOT NULL,
         ID_USUARIO_CADASTRO        INT                             NOT NULL,   -- FK -> MDM: quem registrou
         ID_USUARIO_LIDER           INT                             NOT NULL,   -- FK -> MDM: líder do Kaizen  -- ASSUNÇÃO: NOT NULL
-        NM_KAIZEN                  VARCHAR(30)                     NOT NULL,
+        NM_KAIZEN                  VARCHAR(100)                    NOT NULL,
         ID_CATEGORIA               INT                             NOT NULL,
         ID_REPLICACAO              INT                                 NULL,   -- ASSUNÇÃO: opcional
         DS_PROBLEMA                VARCHAR(300)                        NULL,
@@ -850,8 +865,12 @@ BEGIN
         VL_RESULTADO_FINANCEIRO    DECIMAL(18,2)                      NULL,
         ID_MOEDA                   INT                                 NULL,
         DS_RESULTADO_ESPERADO      VARCHAR(300)                        NULL,
-        DT_CRIACAO                 DATETIME2(3)                    NOT NULL
-            CONSTRAINT DF_KZN_PVC_DT_CRIACAO DEFAULT (SYSDATETIME()),
+        -- DT_CRIACAO foi REMOVIDA (pedido do time, nesta rodada). A data de
+        -- criação do Kaizen passou a viver exclusivamente na linha 'C' de
+        -- CI.KZN_LOG_PEDRAVISAOCONSOLIDADA (DT_OPERACAO), gravada pelo
+        -- trigger TR_KZN_PVC_INS — ver seções 14 e 19. Para lê-la:
+        --   LEFT JOIN CI.KZN_LOG_PEDRAVISAOCONSOLIDADA l
+        --          ON l.ID_KAIZEN = p.ID_KAIZEN AND l.TP_OPERACAO = 'C'
         DT_CONCLUSAO               DATE                                NULL,
         DS_MOTIVO                  VARCHAR(300)                        NULL,   -- justificativa da reprovação, em texto livre (antes era ID_MOTIVO -> CI.KZN_MOTIVO_REPROVACAO, tabela aposentada)
         DT_ATUALIZACAO             DATETIME2(3)                    NOT NULL
@@ -1596,108 +1615,77 @@ END
 GO
 
 /* ------------------------------------------------------------------------------
-   17.3 MIGRAÇÃO — CI.KZN_PEDRAVISAOCONSOLIDADA (idempotente)
-   Reorganiza a ordem física das colunas pra DT_CRIACAO ficar imediatamente
-   antes de DT_CONCLUSAO. SQL Server não reordena coluna via ALTER TABLE — a
-   forma segura de mudar a ordem física sem perder dado é recriar a tabela e
-   migrar os dados. Só executa se a tabela já existir E a ordem atual ainda
-   não estiver correta (senão, já nasceu certa pelo CREATE TABLE da seção 13,
-   ou já rodou nesta base antes).
+   17.3 MIGRAÇÃO — remoção de DT_CRIACAO em CI.KZN_PEDRAVISAOCONSOLIDADA
+   (idempotente)
+
+   Esta seção SUBSTITUI a antiga 17.3, que reordenava DT_CRIACAO pra ficar
+   imediatamente antes de DT_CONCLUSAO. Com a coluna removida (pedido do time,
+   nesta rodada), aquela migração perdeu o objeto e foi aposentada.
+
+   A data de criação NÃO se perde: ela passa a viver na linha 'C' de
+   CI.KZN_LOG_PEDRAVISAOCONSOLIDADA (DT_OPERACAO). O passo 1 abaixo garante
+   que toda linha exista ANTES de a coluna ser removida.
+
+   Só executa se a coluna ainda existir. Tudo em SQL dinâmico: uma referência
+   estática a DT_CRIACAO quebraria a compilação do batch inteiro nos bancos
+   onde a coluna já não existe (T-SQL não faz resolução de nomes adiada em
+   batch avulso).
+
+   Para bancos já em uso há o script equivalente e mais detalhado em
+   database/remover_dt_criacao_pvc.sql, que audita cada passo.
    ------------------------------------------------------------------------------ */
 IF OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA', 'U') IS NOT NULL
-   AND EXISTS (
-        SELECT 1
-        FROM sys.columns c1
-        JOIN sys.columns c2 ON c1.object_id = c2.object_id
-        WHERE c1.object_id = OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA')
-          AND c1.name = 'DT_CRIACAO' AND c2.name = 'DT_CONCLUSAO'
-          AND c1.column_id <> c2.column_id - 1
-   )
+   AND EXISTS (SELECT 1 FROM sys.columns
+               WHERE object_id = OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA') AND name = 'DT_CRIACAO')
 BEGIN
-    PRINT 'Migrando CI.KZN_PEDRAVISAOCONSOLIDADA (DT_CRIACAO antes de DT_CONCLUSAO)...';
+    DECLARE @semLogCriacao INT, @nomeDf SYSNAME, @sqlDf NVARCHAR(MAX);
 
-    -- 1) remove FKs de tabelas filhas que apontam pra ID_KAIZEN (recriadas ao final)
-    IF OBJECT_ID('CI.FK_KZN_LOG_PVC_KAIZEN', 'F') IS NOT NULL
-        ALTER TABLE CI.KZN_LOG_PEDRAVISAOCONSOLIDADA DROP CONSTRAINT FK_KZN_LOG_PVC_KAIZEN;
-    IF OBJECT_ID('CI.FK_KZN_MEMBROS_EQUIPE_KAIZEN', 'F') IS NOT NULL
-        ALTER TABLE CI.KZN_MEMBROS_EQUIPE DROP CONSTRAINT FK_KZN_MEMBROS_EQUIPE_KAIZEN;
-    IF OBJECT_ID('CI.FK_KZN_RESULTADO_KAIZEN_KAIZEN', 'F') IS NOT NULL
-        ALTER TABLE CI.KZN_RESULTADO_KAIZEN DROP CONSTRAINT FK_KZN_RESULTADO_KAIZEN_KAIZEN;
-    IF OBJECT_ID('CI.FK_KZN_KAIZEN_HIERARQUIA_KAIZEN', 'F') IS NOT NULL
-        ALTER TABLE CI.KZN_KAIZEN_HIERARQUIA DROP CONSTRAINT FK_KZN_KAIZEN_HIERARQUIA_KAIZEN;
+    IF OBJECT_ID('CI.KZN_LOG_PEDRAVISAOCONSOLIDADA', 'U') IS NULL
+        OR OBJECT_ID('CI.SEQ_KZN_LOG_PVC', 'SO') IS NULL
+    BEGIN
+        RAISERROR('17.3 NÃO EXECUTADA: falta CI.KZN_LOG_PEDRAVISAOCONSOLIDADA ou CI.SEQ_KZN_LOG_PVC. DT_CRIACAO foi PRESERVADA — removê-la agora destruiria a data de criação sem backup.', 16, 1);
+    END
+    ELSE
+    BEGIN
+        PRINT 'Migrando CI.KZN_PEDRAVISAOCONSOLIDADA (removendo DT_CRIACAO)...';
 
-    -- 2) cria a tabela nova já na ordem final
-    CREATE TABLE CI.KZN_PEDRAVISAOCONSOLIDADA_NEW
-    (
-        ID_KAIZEN                  INT                             NOT NULL,
-        ID_USUARIO_CADASTRO        INT                             NOT NULL,
-        ID_USUARIO_LIDER           INT                             NOT NULL,
-        NM_KAIZEN                  VARCHAR(30)                     NOT NULL,
-        ID_CATEGORIA               INT                             NOT NULL,
-        ID_REPLICACAO              INT                                 NULL,
-        DS_PROBLEMA                VARCHAR(300)                        NULL,
-        DS_OBJETIVO                VARCHAR(300)                        NULL,
-        ID_STATUS                  INT                                 NULL,
-        ID_APROVADOR               INT                                 NULL,
-        URL_IMG_ANTES               VARCHAR(300)                       NULL,
-        DS_ESTADO_ANTES            VARCHAR(300)                        NULL,
-        URL_IMG_DEPOIS              VARCHAR(300)                       NULL,
-        DS_ESTADO_DEPOIS           VARCHAR(300)                        NULL,
-        URL_REFERENCIA             VARCHAR(300)                       NULL,
-        ID_DESPERDICIO             INT                                 NULL,
-        DS_LICOES_APRENDIDAS       VARCHAR(300)                        NULL,
-        VL_RESULTADO_FINANCEIRO    DECIMAL(18,2)                      NULL,
-        ID_MOEDA                   INT                                 NULL,
-        DS_RESULTADO_ESPERADO      VARCHAR(300)                        NULL,
-        DT_CRIACAO                 DATETIME2(3)                    NOT NULL
-            CONSTRAINT DF_KZN_PVC_DT_CRIACAO_NEW DEFAULT (SYSDATETIME()),
-        DT_CONCLUSAO               DATE                                NULL,
-        DS_MOTIVO                  VARCHAR(300)                        NULL,
-        DT_ATUALIZACAO             DATETIME2(3)                    NOT NULL
-            CONSTRAINT DF_KZN_PVC_DT_ATUALIZACAO_NEW DEFAULT (SYSDATETIME()),
-        ID_USUARIO_ATUALIZACAO     INT                             NOT NULL
-    );
+        -- 1) preserva a data de criação no log, para os Kaizens que ainda
+        --    não tenham a linha 'C' (Kaizens que já a têm não são tocados:
+        --    o log registra o que de fato aconteceu e não se reescreve)
+        EXEC sp_executesql N'
+            INSERT INTO CI.KZN_LOG_PEDRAVISAOCONSOLIDADA (ID_LOG, ID_KAIZEN, TP_OPERACAO, DT_OPERACAO, ID_USUARIO_OPERACAO)
+            SELECT NEXT VALUE FOR CI.SEQ_KZN_LOG_PVC, p.ID_KAIZEN, ''C'', p.DT_CRIACAO, p.ID_USUARIO_CADASTRO
+            FROM   CI.KZN_PEDRAVISAOCONSOLIDADA p
+            WHERE  NOT EXISTS (SELECT 1 FROM CI.KZN_LOG_PEDRAVISAOCONSOLIDADA l
+                               WHERE l.ID_KAIZEN = p.ID_KAIZEN AND l.TP_OPERACAO = ''C'');';
 
-    -- 3) copia os dados na ordem/colunas novas
-    INSERT INTO CI.KZN_PEDRAVISAOCONSOLIDADA_NEW
-    (ID_KAIZEN, ID_USUARIO_CADASTRO, ID_USUARIO_LIDER, NM_KAIZEN, ID_CATEGORIA, ID_REPLICACAO,
-     DS_PROBLEMA, DS_OBJETIVO, ID_STATUS, ID_APROVADOR, URL_IMG_ANTES, DS_ESTADO_ANTES,
-     URL_IMG_DEPOIS, DS_ESTADO_DEPOIS, URL_REFERENCIA, ID_DESPERDICIO, DS_LICOES_APRENDIDAS,
-     VL_RESULTADO_FINANCEIRO, ID_MOEDA, DS_RESULTADO_ESPERADO, DT_CRIACAO, DT_CONCLUSAO,
-     DS_MOTIVO, DT_ATUALIZACAO, ID_USUARIO_ATUALIZACAO)
-    SELECT ID_KAIZEN, ID_USUARIO_CADASTRO, ID_USUARIO_LIDER, NM_KAIZEN, ID_CATEGORIA, ID_REPLICACAO,
-           DS_PROBLEMA, DS_OBJETIVO, ID_STATUS, ID_APROVADOR, URL_IMG_ANTES, DS_ESTADO_ANTES,
-           URL_IMG_DEPOIS, DS_ESTADO_DEPOIS, URL_REFERENCIA, ID_DESPERDICIO, DS_LICOES_APRENDIDAS,
-           VL_RESULTADO_FINANCEIRO, ID_MOEDA, DS_RESULTADO_ESPERADO, DT_CRIACAO, DT_CONCLUSAO,
-           DS_MOTIVO, DT_ATUALIZACAO, ID_USUARIO_ATUALIZACAO
-    FROM CI.KZN_PEDRAVISAOCONSOLIDADA;
+        SELECT @semLogCriacao = COUNT(*)
+        FROM   CI.KZN_PEDRAVISAOCONSOLIDADA p
+        WHERE  NOT EXISTS (SELECT 1 FROM CI.KZN_LOG_PEDRAVISAOCONSOLIDADA l
+                           WHERE l.ID_KAIZEN = p.ID_KAIZEN AND l.TP_OPERACAO = 'C');
 
-    -- 4) remove a antiga e promove a nova
-    DROP TABLE CI.KZN_PEDRAVISAOCONSOLIDADA;
-    EXEC sp_rename 'CI.KZN_PEDRAVISAOCONSOLIDADA_NEW', 'KZN_PEDRAVISAOCONSOLIDADA';
-    EXEC sp_rename 'CI.DF_KZN_PVC_STATUS_NEW', 'DF_KZN_PVC_STATUS', 'OBJECT';
-    EXEC sp_rename 'CI.DF_KZN_PVC_DT_CRIACAO_NEW', 'DF_KZN_PVC_DT_CRIACAO', 'OBJECT';
-    EXEC sp_rename 'CI.DF_KZN_PVC_DT_ATUALIZACAO_NEW', 'DF_KZN_PVC_DT_ATUALIZACAO', 'OBJECT';
+        IF @semLogCriacao > 0
+            RAISERROR('17.3 NÃO EXECUTADA: %d Kaizen(s) sem linha de criação no log. DT_CRIACAO foi PRESERVADA.', 16, 1, @semLogCriacao);
+        ELSE
+        BEGIN
+            -- 2) DEFAULT da coluna (nome descoberto por metadados: em bancos
+            --    migrados ele pode não se chamar DF_KZN_PVC_DT_CRIACAO)
+            SELECT @nomeDf = dc.name
+            FROM   sys.default_constraints dc
+            WHERE  dc.parent_object_id = OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA')
+              AND  dc.parent_column_id = COLUMNPROPERTY(OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA'), 'DT_CRIACAO', 'ColumnId');
 
-    -- 5) recria PK, FKs próprias, CHECK e índices
-    ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ADD CONSTRAINT PK_KZN_PVC PRIMARY KEY CLUSTERED (ID_KAIZEN);
-    ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ADD CONSTRAINT FK_KZN_PVC_USUARIO_CADASTRO FOREIGN KEY (ID_USUARIO_CADASTRO) REFERENCES CI.KZN_MDM_HIERARQUIA (ID_USUARIO);
-    ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ADD CONSTRAINT FK_KZN_PVC_USUARIO_LIDER FOREIGN KEY (ID_USUARIO_LIDER) REFERENCES CI.KZN_MDM_HIERARQUIA (ID_USUARIO);
-    ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ADD CONSTRAINT FK_KZN_PVC_USUARIO_ATUALIZACAO FOREIGN KEY (ID_USUARIO_ATUALIZACAO) REFERENCES CI.KZN_MDM_HIERARQUIA (ID_USUARIO);
-    ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ADD CONSTRAINT FK_KZN_PVC_APROVADOR FOREIGN KEY (ID_APROVADOR) REFERENCES CI.KZN_APROVADOR (ID_APROVADOR);
-    ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ADD CONSTRAINT FK_KZN_PVC_MOEDA FOREIGN KEY (ID_MOEDA) REFERENCES CI.KZN_MOEDA (ID_MOEDA);
+            IF @nomeDf IS NOT NULL
+            BEGIN
+                SET @sqlDf = N'ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA DROP CONSTRAINT ' + QUOTENAME(@nomeDf) + N';';
+                EXEC sp_executesql @sqlDf;
+            END
 
-    CREATE NONCLUSTERED INDEX IX_KZN_PVC_STATUS        ON CI.KZN_PEDRAVISAOCONSOLIDADA (ID_STATUS);
-    CREATE NONCLUSTERED INDEX IX_KZN_PVC_CATEGORIA     ON CI.KZN_PEDRAVISAOCONSOLIDADA (ID_CATEGORIA);
-    CREATE NONCLUSTERED INDEX IX_KZN_PVC_USUARIO_LIDER ON CI.KZN_PEDRAVISAOCONSOLIDADA (ID_USUARIO_LIDER);
-
-    -- 6) recria as FKs das tabelas filhas removidas no passo 1
-    ALTER TABLE CI.KZN_LOG_PEDRAVISAOCONSOLIDADA ADD CONSTRAINT FK_KZN_LOG_PVC_KAIZEN FOREIGN KEY (ID_KAIZEN) REFERENCES CI.KZN_PEDRAVISAOCONSOLIDADA (ID_KAIZEN);
-    ALTER TABLE CI.KZN_MEMBROS_EQUIPE ADD CONSTRAINT FK_KZN_MEMBROS_EQUIPE_KAIZEN FOREIGN KEY (ID_KAIZEN) REFERENCES CI.KZN_PEDRAVISAOCONSOLIDADA (ID_KAIZEN);
-    ALTER TABLE CI.KZN_RESULTADO_KAIZEN ADD CONSTRAINT FK_KZN_RESULTADO_KAIZEN_KAIZEN FOREIGN KEY (ID_KAIZEN) REFERENCES CI.KZN_PEDRAVISAOCONSOLIDADA (ID_KAIZEN);
-    ALTER TABLE CI.KZN_KAIZEN_HIERARQUIA ADD CONSTRAINT FK_KZN_KAIZEN_HIERARQUIA_KAIZEN FOREIGN KEY (ID_KAIZEN) REFERENCES CI.KZN_PEDRAVISAOCONSOLIDADA (ID_KAIZEN);
-
-    PRINT 'Migração de CI.KZN_PEDRAVISAOCONSOLIDADA concluída.';
+            -- 3) a coluna
+            EXEC sp_executesql N'ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA DROP COLUMN DT_CRIACAO;';
+            PRINT 'Migração concluída: DT_CRIACAO removida; a data de criação está no log (TP_OPERACAO = ''C'').';
+        END
+    END
 END
 GO
 
@@ -1996,9 +1984,11 @@ CREATE OR ALTER TRIGGER CI.TR_KZN_PVC_INS ON CI.KZN_PEDRAVISAOCONSOLIDADA AFTER 
 BEGIN
     SET NOCOUNT ON;
     INSERT INTO CI.KZN_LOG_PEDRAVISAOCONSOLIDADA (ID_LOG, ID_KAIZEN, TP_OPERACAO, DT_OPERACAO, ID_USUARIO_OPERACAO)
-    SELECT NEXT VALUE FOR CI.SEQ_KZN_LOG_PVC, ID_KAIZEN, 'C', DT_CRIACAO, ID_USUARIO_CADASTRO
+    SELECT NEXT VALUE FOR CI.SEQ_KZN_LOG_PVC, ID_KAIZEN, 'C', SYSDATETIME(), ID_USUARIO_CADASTRO
     FROM inserted;
     -- Sem linha de detalhe aqui: criação não tem "valor anterior" a comparar.
+    -- Esta linha 'C' é o ÚNICO registro da data de criação do Kaizen desde
+    -- que a coluna DT_CRIACAO foi removida da tabela principal.
 END
 GO
 
@@ -2108,10 +2098,6 @@ BEGIN
         SELECT lm.ID_LOG, 'DS_RESULTADO_ESPERADO', CONVERT(VARCHAR(300), d.DS_RESULTADO_ESPERADO), CONVERT(VARCHAR(300), i.DS_RESULTADO_ESPERADO)
         FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
         WHERE NOT (d.DS_RESULTADO_ESPERADO = i.DS_RESULTADO_ESPERADO OR (d.DS_RESULTADO_ESPERADO IS NULL AND i.DS_RESULTADO_ESPERADO IS NULL))
-        UNION ALL
-        SELECT lm.ID_LOG, 'DT_CRIACAO', CONVERT(VARCHAR(300), d.DT_CRIACAO, 120), CONVERT(VARCHAR(300), i.DT_CRIACAO, 120)
-        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
-        WHERE NOT (d.DT_CRIACAO = i.DT_CRIACAO OR (d.DT_CRIACAO IS NULL AND i.DT_CRIACAO IS NULL))
         UNION ALL
         SELECT lm.ID_LOG, 'DT_CONCLUSAO', CONVERT(VARCHAR(300), d.DT_CONCLUSAO, 23), CONVERT(VARCHAR(300), i.DT_CONCLUSAO, 23)
         FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
@@ -2253,7 +2239,7 @@ GO
 
 IF OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA', 'U') IS NOT NULL
 BEGIN
-    ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ALTER COLUMN NM_KAIZEN               VARCHAR(30)  NOT NULL;
+    ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ALTER COLUMN NM_KAIZEN               VARCHAR(100) NOT NULL;
     ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ALTER COLUMN DS_PROBLEMA             VARCHAR(300)     NULL;
     ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ALTER COLUMN DS_OBJETIVO             VARCHAR(300)     NULL;
     ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ALTER COLUMN URL_IMG_ANTES           VARCHAR(300)     NULL;

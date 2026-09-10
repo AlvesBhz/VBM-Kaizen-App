@@ -97,6 +97,15 @@
        ALERTA: server.js e front-end ainda leem DT_CRIACAO em 17 pontos (entre
        eles rotuloIdKaizen(), filtro/agrupamento por ano e a ordenação da
        Biblioteca) e precisam passar a ler a data do log.
+     - KZN_PEDRAVISAOCONSOLIDADA.NM_KAIZEN (pedido do time, nesta rodada):
+       ampliado de VARCHAR(30) pra VARCHAR(100). Só ampliação — nenhum título
+       existente é truncado. A seção 21 aplica a mudança em bancos já criados,
+       de forma idempotente; há também o script avulso
+       database/ampliar_nm_kaizen_100.sql.
+       ALERTA: ampliar a coluna não libera títulos maiores sozinho. O
+       server.js valida antes do banco com PVC_LIMITES.NM_KAIZEN = 30 (e usa
+       sql.NVarChar(30) no INSERT, que trunca o parâmetro); enquanto esse
+       limite não virar 100, a coluna maior fica sem efeito prático.
      - KZN_MDM_HIERARQUIA (pedido do time, nesta rodada): DS_EMAIL renomeado
        pra CD_EMAIL; novos campos de perfil (NM_SITUACAO, SG_ATIVO, NM_POSICAO,
        NM_PAIS, SG_ESTADO, NM_CIDADE, NM_SITE) inseridos logo após CD_EMAIL;
@@ -839,7 +848,7 @@ BEGIN
         ID_KAIZEN                  INT                             NOT NULL,
         ID_USUARIO_CADASTRO        INT                             NOT NULL,   -- FK -> MDM: quem registrou
         ID_USUARIO_LIDER           INT                             NOT NULL,   -- FK -> MDM: líder do Kaizen  -- ASSUNÇÃO: NOT NULL
-        NM_KAIZEN                  VARCHAR(30)                     NOT NULL,
+        NM_KAIZEN                  VARCHAR(100)                    NOT NULL,
         ID_CATEGORIA               INT                             NOT NULL,
         ID_REPLICACAO              INT                                 NULL,   -- ASSUNÇÃO: opcional
         DS_PROBLEMA                VARCHAR(300)                        NULL,
@@ -2230,7 +2239,7 @@ GO
 
 IF OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA', 'U') IS NOT NULL
 BEGIN
-    ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ALTER COLUMN NM_KAIZEN               VARCHAR(30)  NOT NULL;
+    ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ALTER COLUMN NM_KAIZEN               VARCHAR(100) NOT NULL;
     ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ALTER COLUMN DS_PROBLEMA             VARCHAR(300)     NULL;
     ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ALTER COLUMN DS_OBJETIVO             VARCHAR(300)     NULL;
     ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA ALTER COLUMN URL_IMG_ANTES           VARCHAR(300)     NULL;
