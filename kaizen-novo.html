@@ -1150,6 +1150,11 @@ function rotuloPessoa(p) {
       'wiz.stepOf3': 'Etapa 3 de 4',
       'wiz.stepOf4': 'Etapa 4 de 4',
       'wiz.submitForApproval': 'Enviar para Aprovação',
+      'edit.pageTitle': 'Editar Kaizen',
+      'edit.submit': 'Salvar revisão',
+      'edit.savedTitle': 'Kaizen atualizado!',
+      'edit.savedMsg': 'Kaizen #{id} revisado e reenviado para aprovação.',
+      'edit.blockedTitle': 'Edição não permitida',
       'wiz.confirmSubmit': 'Confirmo que as informações são precisas e que estou ciente que este Kaizen será enviado para aprovação pelo aprovador responsável da minha unidade.'
     },
     'en': {
@@ -1284,6 +1289,11 @@ function rotuloPessoa(p) {
       'wiz.stepOf3': 'Step 3 of 4',
       'wiz.stepOf4': 'Step 4 of 4',
       'wiz.submitForApproval': 'Submit for Approval',
+      'edit.pageTitle': 'Edit Kaizen',
+      'edit.submit': 'Save revision',
+      'edit.savedTitle': 'Kaizen updated!',
+      'edit.savedMsg': 'Kaizen #{id} revised and resubmitted for approval.',
+      'edit.blockedTitle': 'Editing not allowed',
       'wiz.confirmSubmit': "I confirm the information is accurate and I understand this Kaizen will be sent for approval to my unit's responsible approver."
     }
   };
@@ -1490,6 +1500,11 @@ function createTeamPicker(opts) {
 
   wrap.querySelectorAll('.team-slot').forEach(renderSlot);
   sync();
+
+  // O modo de edição precisa recolocar os membros já gravados. Em vez de
+  // mexer nos slots por fora (e ter de repetir renderSlot/sync), o
+  // picker devolve a MESMA função que a busca usa para preencher.
+  wrap.__preencher = preencherVaga;
 
   wrap.addEventListener('click', function (e) {
     var removeBtn = e.target.closest('.team-slot-remove');
@@ -1698,6 +1713,13 @@ createTeamPicker({
       select.appendChild(opt);
     });
     if (valorAtual != null) select.value = valorAtual;
+    // Modo de edição: o valor do registro é pedido ANTES de as opções
+    // existirem (a lista vem por fetch). Guardado no dataset, ele é
+    // aplicado assim que a lista chega — e continua valendo quando a
+    // lista é recarregada na troca de idioma.
+    if (!select.value && select.dataset.valorDesejado) {
+      select.value = select.dataset.valorDesejado;
+    }
   }
 
   function carregarBilingue(url, select, montarLabel) {
@@ -1729,6 +1751,11 @@ createTeamPicker({
     var grid = document.getElementById('wasteTagsGrid');
     if (!grid) return;
     var marcados = new Set(Array.prototype.map.call(grid.querySelectorAll('input:checked'), function (el) { return el.value; }));
+    // Modo de edição: os desperdícios do registro entram na primeira
+    // montagem da grade, que só acontece depois do fetch.
+    if (!marcados.size && grid.dataset.desejados) {
+      grid.dataset.desejados.split(',').filter(Boolean).forEach(function (v) { marcados.add(v); });
+    }
     var idioma = (window.__i18nLang === 'en') ? 'en' : 'pt-BR';
     fetch('/api/desperdicios?idioma=' + encodeURIComponent(idioma), { headers: { Accept: 'application/json' } })
       .then(function (r) { return r.ok ? r.json() : []; })
@@ -2307,7 +2334,14 @@ window.validacaoWizard = (function () {
       { id: 'imagem_depois', etapa: 2, chave: 'f.imageAfter', padrao: 'Imagem do Depois' },
       { id: 'descricao_depois', etapa: 2, chave: 'f.descriptionAfter', padrao: 'Descrição do Depois' },
     ];
-    var faltandoAntes = camposObrigatorios.filter(function (c) { return !valor(c.id); });
+    var faltandoAntes = camposObrigatorios.filter(function (c) {
+      // Na EDIÇÃO, foto já gravada conta como preenchida: exigir um novo
+      // upload para corrigir um texto obrigaria a refazer o "Antes", que
+      // muitas vezes não existe mais para ser fotografado de novo.
+      var campo = document.getElementById(c.id);
+      if (campo && campo.dataset && campo.dataset.jaGravada === '1') return false;
+      return !valor(c.id);
+    });
     if (faltandoAntes.length) {
       irParaEtapa(faltandoAntes[0].etapa);
       validacaoWizard.abrirLista(faltandoAntes, function () {
@@ -2380,6 +2414,20 @@ window.validacaoWizard = (function () {
         payload.url_imagem_antes = valor('url_imagem_antes');
         payload.url_imagem_depois = valor('url_imagem_depois');
         submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Enviando...</span>';
+        // Modo de edição: PUT no próprio registro. O ID vem da navegação
+        // (kaizen-novo.html?id=), nunca do corpo — quem decide o que
+        // atualizar é a URL, e o servidor confere permissão de novo.
+        // O carimbo da última gravação viaja junto para o servidor
+        // recusar sobrescrever alteração de outra pessoa.
+        var edicao = window.VBMEdicao;
+        if (edicao && edicao.id) {
+          payload.DT_ATUALIZACAO = edicao.dtAtualizacao || '';
+          return fetch('/api/kaizens/' + encodeURIComponent(edicao.id), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+        }
         return fetch('/api/kaizens', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -2389,7 +2437,12 @@ window.validacaoWizard = (function () {
       .then(function (r) { return r.json().then(function (corpo) { return { ok: r.ok, corpo: corpo }; }); })
       .then(function (resultado) {
         if (!resultado.ok) throw new Error((resultado.corpo && resultado.corpo.error) || 'Falha ao enviar o Kaizen.');
-        showToast('success', 'Kaizen enviado!', 'Kaizen #' + resultado.corpo.ID_KAIZEN + ' enviado para aprovação.');
+        var ehEdicao = !!(window.VBMEdicao && window.VBMEdicao.id);
+        showToast('success',
+          ehEdicao ? txtEdicao('edit.savedTitle', 'Kaizen atualizado!') : 'Kaizen enviado!',
+          ehEdicao
+            ? txtEdicao('edit.savedMsg', 'Kaizen #{id} revisado e reenviado para aprovação.').replace('{id}', resultado.corpo.ID_KAIZEN)
+            : 'Kaizen #' + resultado.corpo.ID_KAIZEN + ' enviado para aprovação.');
         // Os comunicados (equipe e aprovador) saem ANTES de trocar de
         // página: o envio acontece aqui no navegador, e navegar no meio
         // dele cancelaria a requisição — inclusive o popup de
@@ -2409,6 +2462,149 @@ window.validacaoWizard = (function () {
         submitBtn.innerHTML = textoOriginal;
       });
   });
+})();
+</script>
+
+<!-- ═══════════════════════════════════════════════
+     MODO DE EDIÇÃO — kaizen-novo.html?id=<ID_KAIZEN>
+     A MESMA página de cadastro. Sem duplicar tela: o que muda é que os
+     campos nascem preenchidos e o envio vira PUT no próprio registro.
+     Pela navegação viaja SÓ o ID; todo o conteúdo vem do servidor, que
+     confere a permissão antes de devolver qualquer dado.
+════════════════════════════════════════════════ -->
+<script>
+function txtEdicao(chave, padrao) {
+  return (window.__i18n && window.__i18n[chave]) || padrao;
+}
+
+(function () {
+  'use strict';
+
+  var idKaizen = parseInt(new URLSearchParams(window.location.search).get('id'), 10);
+  if (!Number.isInteger(idKaizen) || idKaizen <= 0) return;   // cadastro normal
+
+  function el(id) { return document.getElementById(id); }
+  function texto(id, valor) { var e = el(id); if (e && valor != null) e.value = valor; }
+  function selecionar(id, valor) {
+    var e = el(id);
+    if (!e || valor == null || valor === '') return;
+    // A lista do select chega por fetch; o valor fica no dataset e é
+    // aplicado assim que ela chega (ver preencherSelect).
+    e.dataset.valorDesejado = String(valor);
+    e.value = String(valor);
+  }
+
+  fetch('/api/kaizens/' + idKaizen + '/edicao', { headers: { Accept: 'application/json' } })
+    .then(function (r) {
+      return r.json().then(function (c) {
+        if (!r.ok) throw new Error((c && c.error) || 'Não foi possível abrir o Kaizen para edição.');
+        return c;
+      });
+    })
+    .then(function (k) {
+      // Só depois de o servidor autorizar é que a página entra em modo
+      // de edição — antes disso ela continua sendo um cadastro novo.
+      window.VBMEdicao = { id: k.ID_KAIZEN, dtAtualizacao: k.DT_ATUALIZACAO };
+
+      texto('titulo_kaizen', k.titulo);
+      texto('declaracao_problema', k.declaracao_problema);
+      texto('meta_objetivo', k.meta_objetivo);
+      texto('descricao_antes', k.descricao_antes);
+      texto('descricao_depois', k.descricao_depois);
+      texto('links_documentos', k.links_documentos);
+      texto('licoes_aprendidas', k.licoes_aprendidas);
+      texto('comparacao_meta_inicial', k.comparacao_meta_inicial);
+      selecionar('id_categoria', k.id_categoria);
+      selecionar('id_replicacao_potencial', k.id_replicacao);
+      selecionar('id_aprovador', k.id_usuario_aprovador);
+
+      // Líder: o hidden guarda o ID e o campo visível mostra o nome —
+      // mesmo par que a busca do líder já usa.
+      if (k.id_usuario_lider) {
+        texto('id_usuario_lider', k.id_usuario_lider);
+        texto('id_lider_projeto', k.NM_LIDER || '');
+      }
+
+      // Imagens já gravadas: os hidden apontam para o arquivo no volume.
+      // Enquanto ninguém escolher outro arquivo, eles vão vazios no
+      // envio e o servidor NÃO toca nas colunas — a foto antiga fica.
+      if (k.url_imagem_antes) mostrarImagemAtual('imagem_antes', k.url_imagem_antes);
+      if (k.url_imagem_depois) mostrarImagemAtual('imagem_depois', k.url_imagem_depois);
+
+      // Desperdícios: a grade é montada por fetch; o dataset marca as
+      // caixas assim que ela chega.
+      var grade = el('wasteTagsGrid');
+      if (grade && Array.isArray(k.ids_desperdicio)) {
+        grade.dataset.desejados = k.ids_desperdicio.join(',');
+        k.ids_desperdicio.forEach(function (id) {
+          var c = grade.querySelector('input[value="' + id + '"]');
+          if (c) c.checked = true;
+        });
+      }
+
+      // Resultado financeiro: aciona o MESMO toggle da tela, em vez de
+      // habilitar os campos por fora e arriscar divergir dele.
+      if (k.valor_resultado_financeiro != null || k.id_moeda != null) {
+        var tg = el('tipoResultadoFinanceiro');
+        if (tg && !tg.classList.contains('is-bloqueado') && el('fl_resultado_financeiro').value !== 'true') tg.click();
+        selecionar('moeda_resultado_financeiro', k.id_moeda);
+        texto('valor_resultado_financeiro', k.valor_resultado_financeiro);
+      }
+
+      // Equipe: cada membro volta para o picker de onde saiu — tipo 2 é
+      // terceiro (Membros Externos), o resto é Equipe Vale.
+      (k.MEMBROS || []).forEach(function (m) {
+        var wrapId = m.ID_TIPO_USUARIO === 2 ? 'teamSlotsExterno' : 'teamSlotsVale';
+        var wrap = el(wrapId);
+        if (wrap && wrap.__preencher) wrap.__preencher(m);
+      });
+
+      marcarTelaComoEdicao(k);
+    })
+    .catch(function (err) {
+      // Sem permissão, Kaizen inexistente ou falha de rede: a página
+      // NÃO vira um cadastro novo disfarçado — avisa e volta.
+      showToast('error', txtEdicao('edit.blockedTitle', 'Edição não permitida'), err.message, 5000);
+      setTimeout(function () { window.location.href = 'biblioteca.html'; }, 2200);
+    });
+
+  /** Deixa claro que se está editando, sem trocar o layout: só o rótulo
+   *  do cabeçalho e o do botão de envio. */
+  function marcarTelaComoEdicao(k) {
+    var titulo = document.querySelector('[data-i18n="page.newKaizenTitle"], .page-title');
+    if (titulo) {
+      titulo.textContent = txtEdicao('edit.pageTitle', 'Editar Kaizen') + ' · ' + (k.ROTULO || '');
+      titulo.removeAttribute('data-i18n');
+    }
+    var envio = document.querySelector('[data-wizard-submit] span');
+    if (envio) {
+      envio.textContent = txtEdicao('edit.submit', 'Salvar revisão');
+      envio.removeAttribute('data-i18n');
+    }
+  }
+
+  /** Mostra a imagem já gravada na área de upload, reusando a mesma
+   *  pré-visualização do componente de foto. */
+  function mostrarImagemAtual(inputId, caminho) {
+    var input = el(inputId);
+    if (!input) return;
+    var area = input.closest('.photo-upload') || input.parentElement;
+    if (!area) return;
+    // Marca o campo como já atendido: a validação do envio aceita a foto
+    // que veio do banco enquanto nenhum arquivo novo for escolhido.
+    input.dataset.jaGravada = '1';
+    input.addEventListener('change', function () {
+      if (input.files && input.files.length) delete input.dataset.jaGravada;
+    });
+    var img = area.querySelector('img');
+    var url = '/api/kaizens/imagem?path=' + encodeURIComponent(caminho);
+    if (img) { img.src = url; img.style.display = ''; return; }
+    var nova = document.createElement('img');
+    nova.src = url;
+    nova.alt = '';
+    nova.style.cssText = 'max-width:100%;border-radius:.5rem;margin-top:.5rem;';
+    area.appendChild(nova);
+  }
 })();
 </script>
 </body>

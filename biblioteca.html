@@ -808,6 +808,18 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
   loadMoreBtn.addEventListener('click', function () { visiveis += PAGE_SIZE; render(); });
 
+  /* Clique no lápis: abre a MESMA página de cadastro em modo de edição,
+     levando só o ID_KAIZEN na navegação. Nada do conteúdo vai na URL —
+     o formulário busca o registro no servidor, que confere a permissão
+     de novo antes de devolver qualquer campo. Delegado no container
+     porque os cards são remontados a cada filtro. */
+  bibList.addEventListener('click', function (e) {
+    var botao = e.target.closest('[data-editar-kaizen]');
+    if (!botao) return;
+    e.preventDefault();
+    window.location.href = 'kaizen-novo.html?id=' + encodeURIComponent(botao.dataset.editarKaizen);
+  });
+
   // Ano da CRIAÇÃO do Kaizen. A data chega da API como "2026-09-09T14:30:00"
   // (relógio, sem fuso — ver relogioLocal em server.js), então os 4
   // primeiros caracteres já são o ano: ler assim evita depender do fuso

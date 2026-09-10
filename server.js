@@ -2220,8 +2220,66 @@ async function limiteDsMotivo() {
   return limiteMotivoCache;
 }
 
-apiRouter.post("/kaizens", async (req, res) => {
-  const b = req.body || {};
+/** ID_STATUS do "Revisado", conferido no banco antes de ser usado.
+ *
+ *  O número 5 vem da regra de negócio, mas não é confiado de olho
+ *  fechado: a linha tem de existir, estar ATIVA e ter o nome de
+ *  "Revisado" em algum idioma. Assim, se alguém desativar ou renomear
+ *  esse status no cadastro, a edição recusa com mensagem clara em vez
+ *  de carimbar um status que não significa mais o que se espera.
+ *
+ *  Nunca vem do navegador — o front não manda ID_STATUS. */
+const ID_STATUS_REVISADO = 5;
+const NOMES_REVISADO = ["Revisado", "Revisada", "Em revisão", "Reviewed", "Revised"];
+
+async function idStatusRevisado() {
+  const r = await runQuery(
+    `SELECT ID_STATUS, NM_STATUS, SG_ATIVO FROM ${FULL_STATUS_TABLE}
+      WHERE ID_STATUS = @id`,
+    [["id", sql.Int, ID_STATUS_REVISADO]]
+  );
+  if (!r.recordset.length) {
+    return { erro: `Status ${ID_STATUS_REVISADO} ("Revisado") não está cadastrado em Administração > Status Kaizen.` };
+  }
+  const ativos = r.recordset.filter((x) => String(x.SG_ATIVO || "").toUpperCase() === "S");
+  if (!ativos.length) {
+    return { erro: `Status ${ID_STATUS_REVISADO} ("Revisado") está inativo em Administração > Status Kaizen.` };
+  }
+  const alvo = NOMES_REVISADO.map(semAcento);
+  if (!ativos.some((x) => alvo.includes(semAcento(x.NM_STATUS)))) {
+    return {
+      erro: `Status ${ID_STATUS_REVISADO} existe, mas está cadastrado como "${ativos[0].NM_STATUS}" — esperado "Revisado".`,
+    };
+  }
+  return { id: ID_STATUS_REVISADO };
+}
+
+/** Já existe OUTRO Kaizen com este nome?
+ *
+ *  Compara sem maiúsculas, sem acento e sem espaço sobrando — a mesma
+ *  normalização que a busca da Biblioteca usa, para "Reduzir  Setup" e
+ *  "reduzir setup" não virarem dois cadastros.
+ *
+ *  `idIgnorar` existe para a EDIÇÃO: ao atualizar, o próprio registro
+ *  não pode ser tratado como duplicata de si mesmo. */
+async function existeKaizenComMesmoNome(nome, idIgnorar) {
+  const alvo = semAcento(nome).replace(/\s+/g, " ");
+  if (!alvo) return false;
+  const r = await runQuery(
+    `SELECT ID_KAIZEN, NM_KAIZEN FROM ${FULL_PVC_TABLE}
+      WHERE (@idIgnorar IS NULL OR ID_KAIZEN <> @idIgnorar)`,
+    [["idIgnorar", sql.Int, Number.isInteger(idIgnorar) ? idIgnorar : null]]
+  );
+  return r.recordset.some((x) => semAcento(x.NM_KAIZEN).replace(/\s+/g, " ") === alvo);
+}
+
+/** Leitura e validação do corpo do formulário de Kaizen.
+ *
+ *  Estava dentro do POST /kaizens. Virou função porque a edição (PUT)
+ *  precisa das MESMAS regras: se cada rota lesse o corpo do seu jeito,
+ *  um limite corrigido em uma delas passaria batido na outra.
+ *  Não decide nada de permissão nem toca no banco — só lê e valida. */
+function lerKaizenDoCorpo(b) {
 
   const obrigatorio = (valor, rotulo) =>
     valor == null || String(valor).trim() === "" ? `${rotulo} é obrigatório.` : null;
@@ -2302,11 +2360,25 @@ apiRouter.post("/kaizens", async (req, res) => {
     geraResultadoOutros && !descricaoResultadoOutros ? "Descrição dos Resultados Alcançados é obrigatória quando \"Outros\" está ativo." : null,
     maxLen(descricaoResultadoOutros, 100, "Descrição dos Resultados Alcançados"),
   ].filter(Boolean);
+  return { erros, dados: { titulo, declaracaoProblema, metaObjetivo, descricaoAntes, descricaoDepois, idCategoria, idReplicacao, idUsuarioAprovador, idUsuarioLider, idsDesperdicio, urlImgAntes, urlImgDepois, urlReferencia, licoesAprendidas, comparacaoMeta, geraResultadoFinanceiro, idMoeda, valorResultadoFinanceiro, geraResultadoOutros, idTipoResultadoOutros, descricaoResultadoOutros, membros } };
+}
+
+apiRouter.post("/kaizens", async (req, res) => {
+  const b = req.body || {};
+  const { erros, dados } = lerKaizenDoCorpo(b);
   if (erros.length) return res.status(400).json({ error: erros[0], erros });
+  const { titulo, declaracaoProblema, metaObjetivo, descricaoAntes, descricaoDepois, idCategoria, idReplicacao, idUsuarioAprovador, idUsuarioLider, idsDesperdicio, urlImgAntes, urlImgDepois, urlReferencia, licoesAprendidas, comparacaoMeta, geraResultadoFinanceiro, idMoeda, valorResultadoFinanceiro, geraResultadoOutros, idTipoResultadoOutros, descricaoResultadoOutros, membros } = dados;
 
   try {
     // Quem está criando, sempre pelo servidor (X-Forwarded-Email) —
     // nunca aceito do corpo da requisição (ver idUsuarioLogado acima).
+    // Duplicidade pelo NOME — só no cadastro novo. Na edição o próprio
+    // registro seria a "duplicata", e bloquear a atualização por causa
+    // disso é justamente o que não pode acontecer (ver PUT abaixo).
+    if (await existeKaizenComMesmoNome(titulo, null)) {
+      return res.status(409).json({ error: "Já existe um Kaizen cadastrado com este nome." });
+    }
+
     const idUsuarioCadastro = await idUsuarioLogado(req);
     const idLider = idUsuarioLider || idUsuarioCadastro;
     if (!idLider) {
@@ -2992,6 +3064,21 @@ async function avisosDaDecisao(momento, idKaizen, idUsuario) {
   }
 }
 
+/** Comunicado da REVISÃO: o aprovador designado é avisado de que o
+ *  Kaizen voltou revisado. Reusa o mesmo template do cadastro — para
+ *  quem aprova, a ação pedida é a mesma: analisar o Kaizen. */
+async function avisosDaRevisao(idKaizen, idUsuario) {
+  try {
+    const c = await dadosDoComunicado(idKaizen, idUsuario);
+    if (!c) return [{ erro: "Kaizen não encontrado" }];
+    const dados = { ...c.dados, nomeAprovador: c.dados.nomeAprovadorDesignado };
+    return [montarAviso("pendenteAprovacao", [c.emailAprovador], dados)];
+  } catch (err) {
+    console.error(`[email] falha ao montar o aviso da revisão de ID_KAIZEN=${idKaizen}: ${err.message}`);
+    return [{ erro: err.message }];
+  }
+}
+
 /** Comunicados do CADASTRO: um para o dono e os participantes, outro
  *  para quem vai aprovar — com o link da fila. São dois e-mails porque
  *  são dois públicos com pedidos diferentes. */
@@ -3127,6 +3214,159 @@ apiRouter.post("/kaizens/:id/solicitar-alteracao", (req, res) =>
     erroMotivo: "Descreva o que precisa ser corrigido.",
   }));
 
+// PUT /kaizens/:id — EDIÇÃO. Nunca cria: quem tem ID entra por aqui e
+// sai por aqui, com UPDATE pela chave única. O ID_KAIZEN e o código
+// (derivado dele) ficam intocados, e o status vira "Revisado" — decidido
+// no servidor, nunca aceito do corpo da requisição.
+apiRouter.put("/kaizens/:id", async (req, res) => {
+  const idKaizen = parseInt(req.params.id, 10);
+  if (!Number.isInteger(idKaizen) || idKaizen <= 0) {
+    return res.status(400).json({ error: "Kaizen inválido." });
+  }
+  const b = req.body || {};
+  const { erros, dados } = lerKaizenDoCorpo(b);
+  if (erros.length) return res.status(400).json({ error: erros[0], erros });
+
+  try {
+    // 1. registro existe?  2. este usuário pode editar?  Nesta ordem, e
+    // antes de qualquer gravação.
+    const autoriz = await podeEditarKaizen(req, idKaizen);
+    if (!autoriz.existe) return res.status(404).json({ error: "Kaizen não encontrado." });
+    if (!autoriz.pode) {
+      console.warn(`[edicao] usuário ${autoriz.idUsuario} sem permissão para gravar ID_KAIZEN=${idKaizen}`);
+      return res.status(403).json({ error: "Usuário não autorizado a editar este Kaizen." });
+    }
+    const idUsuario = autoriz.idUsuario;
+    if (!idUsuario) return res.status(401).json({ error: "Não foi possível identificar o usuário logado." });
+
+    // O nome NÃO pode barrar a atualização do próprio registro: a busca
+    // ignora o ID que está sendo editado.
+    if (await existeKaizenComMesmoNome(dados.titulo, idKaizen)) {
+      return res.status(409).json({ error: "Já existe outro Kaizen cadastrado com este nome." });
+    }
+
+    const revisado = await idStatusRevisado();
+    if (revisado.erro) return res.status(503).json({ error: revisado.erro });
+
+    const idAprovador = await idAprovadorPorUsuario(dados.idUsuarioAprovador);
+    if (idAprovador == null) {
+      return res.status(400).json({ error: "O usuário escolhido como aprovador não está ativo em kzn_aprovador." });
+    }
+
+    const pool = await getPool();
+    const tx = new sql.Transaction(pool);
+    await tx.begin();
+    try {
+      const r = new sql.Request(tx);
+      r.input("idKaizen", sql.Int, idKaizen);
+      r.input("idStatus", sql.Int, revisado.id);
+      r.input("idUsuario", sql.Int, idUsuario);
+      r.input("nmKaizen", sql.NVarChar(PVC_LIMITES.NM_KAIZEN), dados.titulo);
+      r.input("idCategoria", sql.Int, dados.idCategoria);
+      r.input("idReplicacao", sql.Int, dados.idReplicacao);
+      r.input("idAprovador", sql.Int, idAprovador);
+      r.input("idUsuarioLider", sql.Int, dados.idUsuarioLider || idUsuario);
+      r.input("dsProblema", sql.NVarChar(PVC_LIMITES.DS_PROBLEMA), dados.declaracaoProblema);
+      r.input("dsObjetivo", sql.NVarChar(PVC_LIMITES.DS_OBJETIVO), dados.metaObjetivo);
+      r.input("dsEstadoAntes", sql.NVarChar(PVC_LIMITES.DS_ESTADO_ANTES), dados.descricaoAntes);
+      r.input("dsEstadoDepois", sql.NVarChar(PVC_LIMITES.DS_ESTADO_DEPOIS), dados.descricaoDepois);
+      r.input("urlReferencia", sql.NVarChar(PVC_LIMITES.URL_REFERENCIA), dados.urlReferencia);
+      r.input("dsLicoes", sql.NVarChar(PVC_LIMITES.DS_LICOES_APRENDIDAS), dados.licoesAprendidas);
+      r.input("dsResultadoEsperado", sql.NVarChar(PVC_LIMITES.DS_RESULTADO_ESPERADO), dados.comparacaoMeta);
+      r.input("vlResultado", sql.Decimal(18, 2), dados.valorResultadoFinanceiro);
+      r.input("idMoeda", sql.Int, dados.idMoeda);
+      // Imagem só é trocada quando veio URL nova. Sem arquivo novo, a
+      // coluna nem entra no SET: apagar a foto de quem só corrigiu um
+      // texto seria perder o "antes" que ninguém consegue refazer.
+      const trocaAntes = dados.urlImgAntes != null;
+      const trocaDepois = dados.urlImgDepois != null;
+      if (trocaAntes) r.input("urlImgAntes", sql.NVarChar(PVC_LIMITES.URL_IMG), dados.urlImgAntes);
+      if (trocaDepois) r.input("urlImgDepois", sql.NVarChar(PVC_LIMITES.URL_IMG), dados.urlImgDepois);
+      // Carimbo que a tela recebeu ao abrir. Se a linha mudou desde
+      // então, outra pessoa gravou no meio e este UPDATE não acha nada.
+      const carimbo = String(b.DT_ATUALIZACAO || "").trim();
+      if (carimbo) r.input("carimbo", sql.NVarChar(40), carimbo);
+
+      const gravacao = await r.query(
+        `UPDATE ${FULL_PVC_TABLE}
+            SET NM_KAIZEN = @nmKaizen,
+                ID_CATEGORIA = @idCategoria,
+                ID_REPLICACAO = @idReplicacao,
+                ID_APROVADOR = @idAprovador,
+                ID_USUARIO_LIDER = @idUsuarioLider,
+                DS_PROBLEMA = @dsProblema,
+                DS_OBJETIVO = @dsObjetivo,
+                DS_ESTADO_ANTES = @dsEstadoAntes,
+                DS_ESTADO_DEPOIS = @dsEstadoDepois,
+                URL_REFERENCIA = @urlReferencia,
+                DS_LICOES_APRENDIDAS = @dsLicoes,
+                DS_RESULTADO_ESPERADO = @dsResultadoEsperado,
+                VL_RESULTADO_FINANCEIRO = @vlResultado,
+                ID_MOEDA = @idMoeda,${trocaAntes ? "\n                URL_IMG_ANTES = @urlImgAntes," : ""}${trocaDepois ? "\n                URL_IMG_DEPOIS = @urlImgDepois," : ""}
+                ID_STATUS = @idStatus,
+                DT_ATUALIZACAO = ${AGORA_BRASILIA},
+                ID_USUARIO_ATUALIZACAO = @idUsuario
+          WHERE ID_KAIZEN = @idKaizen${carimbo ? `\n            AND CONVERT(VARCHAR(19), DT_ATUALIZACAO, 126) = @carimbo` : ""}`
+      );
+
+      const linhas = gravacao.rowsAffected ? gravacao.rowsAffected[0] : 0;
+      // Exatamente UMA linha. Zero = alguém gravou antes (ou o Kaizen
+      // sumiu); mais de uma seria WHERE errado e não pode passar.
+      if (linhas !== 1) {
+        await tx.rollback().catch(() => {});
+        console.warn(`[edicao] ID_KAIZEN=${idKaizen}: ${linhas} linha(s) afetada(s) — nada gravado.`);
+        return res.status(409).json({
+          error: linhas === 0
+            ? "Este Kaizen foi alterado por outra pessoa depois que você abriu a tela. Recarregue e refaça a edição."
+            : "A atualização atingiria mais de um registro e foi cancelada.",
+        });
+      }
+
+      // Equipe e desperdícios: listas de junção, trocadas por completo
+      // dentro da MESMA transação — some tudo, entra o que veio da tela.
+      const reqDelM = new sql.Request(tx);
+      reqDelM.input("idKaizen", sql.Int, idKaizen);
+      await reqDelM.query(`DELETE FROM ${FULL_MEMBROS_TABLE} WHERE ID_KAIZEN = @idKaizen`);
+      for (const idMembro of dados.membros) {
+        const reqM = new sql.Request(tx);
+        reqM.input("idKaizen", sql.Int, idKaizen);
+        reqM.input("idUsuario", sql.Int, idMembro);
+        await reqM.query(
+          `INSERT INTO ${FULL_MEMBROS_TABLE} (ID_KAIZEN, ID_USUARIO, DT_ATUALIZACAO)
+           VALUES (@idKaizen, @idUsuario, ${AGORA_BRASILIA})`
+        );
+      }
+
+      const reqDelD = new sql.Request(tx);
+      reqDelD.input("idKaizen", sql.Int, idKaizen);
+      await reqDelD.query(`DELETE FROM ${FULL_KZ_DESPERDICIO_TABLE} WHERE ID_KAIZEN = @idKaizen`);
+      for (const idDesp of dados.idsDesperdicio) {
+        const reqD = new sql.Request(tx);
+        reqD.input("idKaizen", sql.Int, idKaizen);
+        reqD.input("idDesperdicio", sql.Int, idDesp);
+        await reqD.query(
+          `INSERT INTO ${FULL_KZ_DESPERDICIO_TABLE} (ID_KAIZEN, ID_DESPERDICIO, DT_ATUALIZACAO)
+           VALUES (@idKaizen, @idDesperdicio, ${AGORA_BRASILIA})`
+        );
+      }
+
+      await tx.commit();
+      console.log(`[edicao] ID_KAIZEN=${idKaizen} atualizado por ${idUsuario}; ID_STATUS=${revisado.id}.`);
+
+      // Reencaminha ao fluxo: o aprovador designado é avisado de novo,
+      // pelo mesmo caminho do cadastro.
+      const avisos = await avisosDaRevisao(idKaizen, idUsuario);
+      res.json({ ok: true, ID_KAIZEN: idKaizen, ID_STATUS: revisado.id, AVISOS: avisos });
+    } catch (errTx) {
+      await tx.rollback().catch(() => {});
+      throw errTx;
+    }
+  } catch (err) {
+    console.error(`[edicao] erro ao atualizar ID_KAIZEN=${idKaizen}:`, err.message);
+    res.status(err.number === 547 ? 409 : 500).json({ error: "Erro ao atualizar o Kaizen: " + err.message });
+  }
+});
+
 // GET /kaizens/:id/edicao — o registro completo para PREENCHER o
 // formulário de cadastro em modo de edição. Rota separada da /kaizens/:id
 // (que serve o detalhe de leitura) porque esta exige autorização de
@@ -3159,7 +3399,7 @@ apiRouter.get("/kaizens/:id/edicao", async (req, res) => {
         [["idKaizen", sql.Int, idKaizen], ["idIdioma", sql.Int, idIdioma]]
       ),
       runQuery(
-        `SELECT me.ID_USUARIO, m.NM_USUARIO, m.CD_MATRICULA
+        `SELECT me.ID_USUARIO, m.NM_USUARIO, m.CD_MATRICULA, m.ID_TIPO_USUARIO
            FROM ${FULL_MEMBROS_TABLE} me
            LEFT JOIN ${FULL_MDM_TABLE} m ON m.ID_USUARIO = me.ID_USUARIO
           WHERE me.ID_KAIZEN = @idKaizen`,
