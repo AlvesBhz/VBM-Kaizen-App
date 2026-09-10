@@ -741,6 +741,19 @@ function atualizarContador() {
     document.getElementById('kdImgDepois').src = k.URL_IMG_DEPOIS ? '/api/kaizens/imagem?path=' + encodeURIComponent(k.URL_IMG_DEPOIS) : '';
     setText('kdDescDepois', k.DS_ESTADO_DEPOIS);
 
+    // A fila agora tem dois status (Aguardando aprovação e Revisado), e
+    // o selo do cabeçalho era fixo em "Aguardando" — mostrava o rótulo
+    // errado para um Kaizen revisado. Passa a vir do banco, no idioma
+    // da tela, com a mesma cor por nome usada no resumo do hero.
+    var selo = document.querySelector('#kaizenDetalhe .badge, .kd-header .badge')
+            || document.querySelector('[data-i18n="badge.aguardando"]');
+    if (selo && k.NM_STATUS) {
+      selo.textContent = k.NM_STATUS;
+      selo.removeAttribute('data-i18n');
+      var cor = COR_STATUS[semAcento(k.NM_STATUS)];
+      if (cor) { selo.style.background = 'transparent'; selo.style.color = cor; selo.style.border = '1px solid ' + cor; }
+    }
+
     var boxes = [];
     if (k.VL_RESULTADO_FINANCEIRO != null) {
       boxes.push('<div style="background:var(--vbm-off-white);border-radius:.5rem;padding:.75rem;border-left:3px solid #16a34a;">' +
@@ -789,7 +802,8 @@ function atualizarContador() {
           return '<div class="approval-item' + (i === 0 ? ' selected' : '') + '" data-kaizen="' + k.ID_KAIZEN + '">' +
             '<div class="approval-icon"><i class="fa-solid fa-clipboard-list"></i></div>' +
             '<div class="approval-info"><div class="approval-title">' + k.NM_KAIZEN + '</div>' +
-            '<div class="approval-meta">' + (k.NM_LIDER || '—') + ' · ' + k.ROTULO + '</div></div>' +
+            '<div class="approval-meta">' + (k.NM_LIDER || '—') + ' · ' + k.ROTULO +
+              (k.NM_STATUS ? ' · ' + escaparHtml(k.NM_STATUS) : '') + '</div></div>' +
             '<i class="fa-solid fa-chevron-right approval-chevron"></i></div>';
         }).join('');
         selecionar(itens[0].ID_KAIZEN, fila.querySelector('.approval-item'));
@@ -814,6 +828,7 @@ function atualizarContador() {
     'reprovado': '#dc2626', 'rejeitado': '#dc2626', 'reject': '#dc2626', 'rejected': '#dc2626',
     'aguardando aprovacao': '#c2770e', 'awaiting approval': '#c2770e',
     'em aprovacao': '#c2770e', 'aguardando': '#c2770e',
+    'revisado': '#7c3aed', 'reviewed': '#7c3aed',
     'solicitado alteracoes': '#3cb5e5', 'solicitado alteracao': '#3cb5e5',
     'solicitar alteracoes': '#3cb5e5', 'solicitar alteracao': '#3cb5e5',
     'request changes': '#3cb5e5',

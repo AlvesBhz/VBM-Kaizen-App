@@ -2123,16 +2123,29 @@ apiRouter.post("/kaizens/imagem", receberImagemUnica, async (req, res) => {
 // inteiro, em qualquer idioma: "Aguardando aprovação" e "Awaiting
 // approval" são a mesma linha lógica e devolvem o mesmo ID_STATUS.
 // Só entram linhas com SG_ATIVO = 'S'.
-/** Acrescenta @idStatusPendente aos parâmetros só quando o filtro de
- *  "pendente" cita esse parâmetro — sem catálogo o WHERE usa
- *  "ID_STATUS IS NULL" e mandar o parâmetro sobrando quebraria. */
-function filtroPendente(idPendente) {
-  return idPendente != null ? "p.ID_STATUS = @idStatusPendente" : "p.ID_STATUS IS NULL";
+/** Status que colocam o Kaizen na FILA DE APROVAÇÃO: "Aguardando
+ *  aprovação" e "Revisado". O revisado volta para a fila porque, tendo
+ *  sido ajustado pelo autor, precisa de nova validação — não é uma
+ *  decisão já tomada.
+ *
+ *  Os dois saem de idDoStatus(), como todo ID de status do sistema.
+ *  Sem catálogo resolvido, a fila cai no comportamento antigo
+ *  ("ID_STATUS IS NULL"), em vez de listar tudo. */
+async function idsNaFilaDeAprovacao() {
+  const ids = await Promise.all([idDoStatus("emAprovacao"), idDoStatus("revisado")]);
+  return ids.filter((x) => Number.isInteger(x));
 }
-function paramsComPendente(params, idPendente) {
-  return idPendente != null
-    ? params.concat([["idStatusPendente", sql.Int, idPendente]])
-    : params;
+
+/** Os parâmetros são numerados (@idFila0, @idFila1...) e criados só para
+ *  os IDs que existem — mandar parâmetro sobrando quebraria o comando. */
+function filtroPendente(idsFila) {
+  const lista = Array.isArray(idsFila) ? idsFila : (idsFila != null ? [idsFila] : []);
+  if (!lista.length) return "p.ID_STATUS IS NULL";
+  return `p.ID_STATUS IN (${lista.map((_, i) => `@idFila${i}`).join(", ")})`;
+}
+function paramsComPendente(params, idsFila) {
+  const lista = Array.isArray(idsFila) ? idsFila : (idsFila != null ? [idsFila] : []);
+  return params.concat(lista.map((id, i) => [`idFila${i}`, sql.Int, id]));
 }
 
 /** Nomes cadastrados que identificam cada momento do ciclo, nos dois
@@ -2147,6 +2160,7 @@ const NOMES_DO_STATUS = {
                 "Awaiting approval", "Pending approval", "Waiting approval"],
   aprovado: ["Aprovado", "Aprovada", "Concluído", "Approved", "Approve"],
   reprovado: ["Reprovado", "Rejeitado", "Reprovada", "Rejected", "Reject"],
+  revisado: ["Revisado", "Revisada", "Em revisão", "Reviewed", "Revised"],
   alteracao: ["Solicitado alterações", "Solicitado alteração", "Solicitar alterações",
               "Solicitar alteração", "Em alteração", "Ajuste solicitado",
               "Request changes", "Requested changes", "Change requested"],
@@ -2892,12 +2906,12 @@ apiRouter.get("/aprovacoes/contagem", async (req, res) => {
   try {
     const idUsuario = await idUsuarioLogado(req);
     if (!idUsuario) return res.json({ qtd: 0 });
-    const idPendente = await idDoStatus("emAprovacao");
+    const idsFila = await idsNaFilaDeAprovacao();
     const r = await runQuery(
       `SELECT COUNT(*) AS QTD FROM ${FULL_PVC_TABLE} p
        JOIN ${FULL_TABLE_NAME} a ON a.ID_APROVADOR = p.ID_APROVADOR AND a.ID_USUARIO = @idUsuario
-       WHERE ${filtroPendente(idPendente)}`,
-      paramsComPendente([["idUsuario", sql.Int, idUsuario]], idPendente)
+       WHERE ${filtroPendente(idsFila)}`,
+      paramsComPendente([["idUsuario", sql.Int, idUsuario]], idsFila)
     );
     res.json({ qtd: r.recordset[0].QTD });
   } catch (err) {
@@ -2911,18 +2925,20 @@ apiRouter.get("/aprovacoes", async (req, res) => {
     const idUsuario = await idUsuarioLogado(req);
     if (!idUsuario) return res.status(401).json({ error: "Não foi possível identificar o usuário logado." });
     const idIdioma = idIdiomaDaRequisicao(req);
-    const idPendente = await idDoStatus("emAprovacao");
+    const idsFila = await idsNaFilaDeAprovacao();
 
     const result = await runQuery(
       `SELECT p.ID_KAIZEN, p.NM_KAIZEN, p.DT_ATUALIZACAO AS DT_CRIACAO, cat.NM_CATEGORIA,
-              lider.NM_USUARIO AS NM_LIDER, lider.NM_ESTADO, lider.NM_CIDADE
+              lider.NM_USUARIO AS NM_LIDER, lider.NM_ESTADO, lider.NM_CIDADE,
+              p.ID_STATUS, st.NM_STATUS
        FROM ${FULL_PVC_TABLE} p
+       LEFT JOIN ${FULL_STATUS_TABLE} st ON st.ID_STATUS = p.ID_STATUS AND st.ID_IDIOMA = @idIdioma
        JOIN ${FULL_TABLE_NAME} a ON a.ID_APROVADOR = p.ID_APROVADOR AND a.ID_USUARIO = @idUsuario
        LEFT JOIN ${FULL_CATEGORIA_TABLE} cat ON cat.ID_CATEGORIA = p.ID_CATEGORIA AND cat.ID_IDIOMA = @idIdioma
        LEFT JOIN ${FULL_MDM_TABLE} lider ON lider.ID_USUARIO = p.ID_USUARIO_LIDER
-       WHERE ${filtroPendente(idPendente)}
+       WHERE ${filtroPendente(idsFila)}
        ORDER BY p.DT_ATUALIZACAO ASC`,
-      paramsComPendente([["idUsuario", sql.Int, idUsuario], ["idIdioma", sql.Int, idIdioma]], idPendente)
+      paramsComPendente([["idUsuario", sql.Int, idUsuario], ["idIdioma", sql.Int, idIdioma]], idsFila)
     );
     res.json(result.recordset.map((r) => ({
       ID_KAIZEN: r.ID_KAIZEN,
@@ -2933,6 +2949,10 @@ apiRouter.get("/aprovacoes", async (req, res) => {
       NM_LIDER: r.NM_LIDER,
       NM_ESTADO: r.NM_ESTADO,
       NM_CIDADE: r.NM_CIDADE,
+      // A fila tem dois status agora; a tela precisa distinguir o
+      // Kaizen novo do que voltou revisado.
+      ID_STATUS: r.ID_STATUS,
+      NM_STATUS: r.NM_STATUS,
     })));
   } catch (err) {
     console.error("[aprovacoes] erro ao listar:", err.message);
@@ -2956,7 +2976,7 @@ apiRouter.get("/aprovacoes", async (req, res) => {
  *  decidido, sem um segundo critério para divergir. Admin não entra —
  *  só o aprovador designado decide. */
 async function situacaoDaDecisao(idKaizen, idUsuario) {
-  const idPendente = await idDoStatus("emAprovacao");
+  const idsFila = await idsNaFilaDeAprovacao();
   const r = await runQuery(
     `SELECT p.ID_STATUS,
             EH_APROVADOR = CASE WHEN EXISTS (
@@ -2969,9 +2989,10 @@ async function situacaoDaDecisao(idKaizen, idUsuario) {
   );
   const linha = r.recordset[0];
   if (!linha) return { existe: false, autorizado: false, pendente: false, idStatus: null };
-  // Mesma regra de "pendente" da fila: com catálogo, é o ID do status
-  // de aguardando; sem catálogo, é a linha ainda sem status.
-  const pendente = idPendente != null ? linha.ID_STATUS === idPendente : linha.ID_STATUS == null;
+  // Mesma regra da fila: aguardando aprovação OU revisado. Se aparece
+  // na fila, tem de poder ser decidido — um segundo critério aqui faria
+  // o aprovador ver um Kaizen que não consegue aprovar.
+  const pendente = idsFila.length ? idsFila.includes(linha.ID_STATUS) : linha.ID_STATUS == null;
   return {
     existe: true,
     autorizado: linha.EH_APROVADOR === 1,
