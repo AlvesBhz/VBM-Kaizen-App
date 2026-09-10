@@ -516,8 +516,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
           <input type="text" id="bibFiltroNome" placeholder="Nome do Kaizen..." data-i18n-placeholder="bib.searchPlaceholder"/>
         </div>
         <!-- Mesmo comportamento do campo de Nome do Kaizen, mas sobre o
-             nome do líder. Vem preenchido com o usuário logado ao abrir a
-             página (ver window.VBMUsuario, já usado pelo cabeçalho). -->
+             nome do líder: nasce vazio e filtra a cada tecla. -->
         <div class="filter-search">
           <i class="fa-solid fa-user"></i>
           <input type="text" id="bibFiltroUsuario" placeholder="Nome do usuário..." data-i18n-placeholder="bib.userPlaceholder"/>
@@ -798,13 +797,15 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     selStatus.value = statusAtual;
   }
 
-  // Nome do líder de cada Kaizen, para o filtro de usuário. NM_LIDER e o
-  // "nome" de /api/me saem da MESMA coluna (kzn_mdm_hierarquia.NM_USUARIO),
-  // então a comparação é exata, não uma heurística de nome.
-  // Normalização usada pelo filtro de nome: sem maiúsculas, sem espaços
-  // nas pontas e sem espaço repetido no meio.
+  // Normalização usada pelos DOIS campos de busca (Nome do Kaizen e Nome
+  // do usuário), para os dois responderem igual ao que se digita: sem
+  // maiúsculas, sem acento, sem espaço nas pontas e sem espaço repetido
+  // no meio. Sem tirar o acento, "joao" não acharia "JOÃO" — e nome de
+  // pessoa é justamente onde isso mais aparece.
   function normalizar(texto) {
-    return String(texto || '').toLowerCase().trim().replace(/\s+/g, ' ');
+    return String(texto || '').toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .trim().replace(/\s+/g, ' ');
   }
 
   /** Aplica TODOS os filtros de uma vez, em memória, sobre "todos". */
@@ -851,7 +852,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       .then(function (itens) {
         todos = itens || [];
         popularOpcoesDinamicas();
-        aplicarUsuarioLogado();
         aplicarFiltros();
       })
       .catch(function () {
@@ -866,37 +866,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   selUsuario.addEventListener('input', aplicarFiltros);
   inputNome.addEventListener('input', aplicarFiltros);
 
-  /* Filtro de usuário preenchido com quem está logado, reaproveitando o
-     window.VBMUsuario que o cabeçalho já carrega — sem chamada nova.
-
-     O perfil e a lista chegam por caminhos independentes e em qualquer
-     ordem, então quem chegar depois chama aplicarUsuarioLogado(): ela é
-     idempotente e só age quando as duas pontas já existem. Sem isso, o
-     perfil chegando primeiro encontraria o select ainda vazio e a
-     seleção se perderia em silêncio.
-
-     Só marca se a pessoa for líder de algum Kaizen. Senão a tela abriria
-     sem nenhum resultado e pareceria falha de carregamento. */
-  var nomeUsuarioLogado = null;
-  var usuarioJaAplicado = false;
-
-  function aplicarUsuarioLogado() {
-    if (usuarioJaAplicado || !nomeUsuarioLogado) return;
-    usuarioJaAplicado = true;
-    selUsuario.value = nomeUsuarioLogado;
-  }
-
-  if (window.VBMUsuario) {
-    window.VBMUsuario.aoCarregar(function (perfil) {
-      // O perfil segue o formato do Graph: o nome está em displayName,
-      // inclusive quando vem do /api/me (carregarDoDatabricks, em
-      // js/usuario-graph.js, adapta a resposta para esse formato).
-      nomeUsuarioLogado = (perfil && perfil.displayName) || null;
-      if (usuarioJaAplicado) return;
-      aplicarUsuarioLogado();
-      if (usuarioJaAplicado) aplicarFiltros();
-    });
-  }
+  /* O campo de usuário NÃO nasce preenchido. Ele antes recebia o nome de
+     quem estava logado, e isso o fazia agir diferente do campo de Nome do
+     Kaizen: a Biblioteca abria já filtrada e, quando a pessoa não era
+     líder de nenhum Kaizen, abria sem nenhum resultado — parecendo falha
+     de carregamento. Os dois campos agora fazem a mesma coisa: começam
+     vazios e filtram pelo que for digitado. */
 
   // Categoria (única lista bilíngue do filtro): populada à parte, não
   // depende dos resultados já carregados, senão só mostraria categorias
