@@ -549,18 +549,20 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
             <!-- Uma linha por ano, montada em carregarResumo(). -->
             <div id="bibResumoAnos" style="display:flex;flex-direction:column;gap:.55rem;"></div>
             <div style="height:1px;background:rgba(255,255,255,.1);"></div>
-            <!-- Só rótulo e número: os marcadores coloridos saíram para o
-                 painel ficar igual ao Resumo da Aprovação. -->
+            <!-- Ponto colorido antes do nome, igual às linhas de status do
+                 Resumo da Aprovação; as cores são as mesmas do COR_STATUS
+                 daquela tela. As linhas de total por ano não levam ponto:
+                 ano não é status. -->
             <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
-              <span style="font-size:.72rem;color:rgba(255,255,255,.55);" data-i18n="badge.aprovados">Aprovados</span>
+              <span style="font-size:.72rem;color:rgba(255,255,255,.55);display:flex;align-items:center;gap:.4rem;"><span style="width:7px;height:7px;border-radius:50%;background:#16a34a;display:inline-block;"></span> <span data-i18n="badge.aprovados">Aprovados</span></span>
               <span style="font-family:'Poppins', sans-serif;font-weight:700;font-size:.85rem;color:#fff;" id="bibQtdAprovado">—</span>
             </div>
             <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
-              <span style="font-size:.72rem;color:rgba(255,255,255,.55);" data-i18n="badge.reprovados">Reprovados</span>
+              <span style="font-size:.72rem;color:rgba(255,255,255,.55);display:flex;align-items:center;gap:.4rem;"><span style="width:7px;height:7px;border-radius:50%;background:#dc2626;display:inline-block;"></span> <span data-i18n="badge.reprovados">Reprovados</span></span>
               <span style="font-family:'Poppins', sans-serif;font-weight:700;font-size:.85rem;color:#fff;" id="bibQtdReprovado">—</span>
             </div>
             <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
-              <span style="font-size:.72rem;color:rgba(255,255,255,.55);" data-i18n="badge.aguardando">Aguardando</span>
+              <span style="font-size:.72rem;color:rgba(255,255,255,.55);display:flex;align-items:center;gap:.4rem;"><span style="width:7px;height:7px;border-radius:50%;background:#c2770e;display:inline-block;"></span> <span data-i18n="badge.aguardando">Aguardando</span></span>
               <span style="font-family:'Poppins', sans-serif;font-weight:700;font-size:.85rem;color:#fff;" id="bibQtdAguardando">—</span>
             </div>
           </div>
