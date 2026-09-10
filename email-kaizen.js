@@ -178,6 +178,39 @@ const TEMPLATES = {
       ],
     }),
   },
+
+  // Único fluxo com o link da Biblioteca: é lá que o autor corrige o
+  // Kaizen e o reenvia. Os outros dois não pedem ação de edição.
+  alteracao: {
+    pt: (d) => ({
+      assunto: "[Kaizen] Ajustes solicitados em sua iniciativa",
+      linhas: [
+        `Olá, ${d.nomeAutor}.`,
+        "Seu Kaizen foi analisado e necessita de ajustes antes de uma nova avaliação.",
+        { campos: [["codigo", d.codigo], ["titulo", d.titulo], ["site", d.site],
+                   ["aprovador", d.nomeAprovador], ["data", d.dataPt]] },
+        "Comentários do aprovador:",
+        { destaque: d.motivo },
+        "Para realizar as correções, acesse a Biblioteca Kaizen:",
+        { link: URL_BIBLIOTECA },
+        "Após atualizar as informações necessárias, envie novamente para aprovação.",
+      ],
+    }),
+    en: (d) => ({
+      assunto: "[Kaizen] Changes requested in your initiative",
+      linhas: [
+        `Hello, ${d.nomeAutor}.`,
+        "Your Kaizen has been reviewed and needs changes before a new evaluation.",
+        { campos: [["codigo", d.codigo], ["titulo", d.titulo], ["site", d.site],
+                   ["aprovador", d.nomeAprovador], ["data", d.dataEn]] },
+        "Approver comments:",
+        { destaque: d.motivo },
+        "To make the corrections, access the Kaizen Library:",
+        { link: URL_BIBLIOTECA },
+        "After updating the required information, submit it for approval again.",
+      ],
+    }),
+  },
 };
 
 /** Monta o HTML de um idioma. Mesmo desenho para os três momentos: sem
