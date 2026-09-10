@@ -1832,7 +1832,11 @@ function uploadImagemSeSelecionada(inputId, hiddenId, tipo) {
 
   var dados = new FormData();
   dados.append('imagem', arquivo);
-  return fetch('/api/kaizens/imagem?tipo=' + tipo, { method: 'POST', body: dados })
+  // ?id= só existe na edição; no cadastro novo o ID ainda não foi
+  // gerado, e o servidor nomeia o arquivo com o prefixo NOVO.
+  var idKaizen = (window.VBMEdicao && window.VBMEdicao.id) || '';
+  return fetch('/api/kaizens/imagem?tipo=' + tipo + (idKaizen ? '&id=' + encodeURIComponent(idKaizen) : ''),
+               { method: 'POST', body: dados })
     .then(function (r) { return r.json().then(function (corpo) { return { ok: r.ok, corpo: corpo }; }); })
     .then(function (resultado) {
       if (!resultado.ok) throw new Error((resultado.corpo && resultado.corpo.error) || ('Falha ao enviar a imagem (' + tipo + ').'));
@@ -2539,8 +2543,8 @@ function txtEdicao(chave, padrao) {
       // Imagens já gravadas: os hidden apontam para o arquivo no volume.
       // Enquanto ninguém escolher outro arquivo, eles vão vazios no
       // envio e o servidor NÃO toca nas colunas — a foto antiga fica.
-      if (k.url_imagem_antes) mostrarImagemAtual('imagem_antes', k.url_imagem_antes);
-      if (k.url_imagem_depois) mostrarImagemAtual('imagem_depois', k.url_imagem_depois);
+      mostrarImagemAtual('imagem_antes', 'url_imagem_antes', k.url_imagem_antes);
+      mostrarImagemAtual('imagem_depois', 'url_imagem_depois', k.url_imagem_depois);
 
       // Desperdícios: a grade é montada por fetch; o dataset marca as
       // caixas assim que ela chega.
@@ -2594,27 +2598,39 @@ function txtEdicao(chave, padrao) {
     }
   }
 
-  /** Mostra a imagem já gravada na área de upload, reusando a mesma
-   *  pré-visualização do componente de foto. */
-  function mostrarImagemAtual(inputId, caminho) {
+  /** Mostra a imagem JÁ GRAVADA usando a mesma pré-visualização do
+   *  componente de foto (.photo-preview-img), e marca o campo como
+   *  atendido de duas formas, porque são duas validações diferentes:
+   *
+   *    · o hidden url_imagem_* recebe o caminho do arquivo — é o que
+   *      imagemAntesValida()/imagemDepoisValida() conferem no "Próximo"
+   *      de cada etapa, e é a referência que vai no envio (se nenhum
+   *      arquivo novo for escolhido, o servidor recebe o caminho antigo
+   *      e a foto continua a mesma);
+   *    · o input de arquivo ganha jaGravada, que é o que a conferência
+   *      final do envio olha.
+   *
+   *  A zona de upload continua VISÍVEL: é por ela que se troca a foto.
+   *  Escolhido um arquivo novo, jaGravada sai e o hidden só é
+   *  sobrescrito depois de o upload terminar com sucesso — falha de
+   *  upload não apaga a referência anterior. */
+  function mostrarImagemAtual(inputId, hiddenId, caminho) {
     var input = el(inputId);
-    if (!input) return;
-    var area = input.closest('.photo-upload') || input.parentElement;
-    if (!area) return;
-    // Marca o campo como já atendido: a validação do envio aceita a foto
-    // que veio do banco enquanto nenhum arquivo novo for escolhido.
+    var hidden = el(hiddenId);
+    if (!input || !hidden || !caminho) return;
+
+    hidden.value = caminho;
     input.dataset.jaGravada = '1';
     input.addEventListener('change', function () {
       if (input.files && input.files.length) delete input.dataset.jaGravada;
     });
-    var img = area.querySelector('img');
-    var url = '/api/kaizens/imagem?path=' + encodeURIComponent(caminho);
-    if (img) { img.src = url; img.style.display = ''; return; }
-    var nova = document.createElement('img');
-    nova.src = url;
-    nova.alt = '';
-    nova.style.cssText = 'max-width:100%;border-radius:.5rem;margin-top:.5rem;';
-    area.appendChild(nova);
+
+    var zona = input.closest('.photo-upload-zone');
+    var preview = zona && zona.nextElementSibling;
+    if (preview && preview.classList.contains('photo-preview-img')) {
+      preview.src = '/api/kaizens/imagem?path=' + encodeURIComponent(caminho);
+      preview.style.display = 'block';
+    }
   }
 })();
 </script>

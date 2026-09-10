@@ -2046,9 +2046,17 @@ const PASTA_POR_TIPO_IMG = { antes: "before", depois: "after" };
 // colisão entre pessoas diferentes enviando "foto.jpg" ao mesmo tempo e
 // evita qualquer caractere problemático vindo do sistema de arquivos de
 // quem enviou.
-function nomeArquivoImagem(mimetype) {
+function nomeArquivoImagem(mimetype, idKaizen, tipo) {
   const ext = IMG_EXT_POR_MIME[mimetype] || ".jpg";
-  return Date.now() + "_" + Math.random().toString(36).slice(2, 10) + ext;
+  // ID do Kaizen + ANTES/DEPOIS no nome: identifica o arquivo sem
+  // consultar o banco e deixa impossível confundir as duas fotos. No
+  // cadastro novo o ID ainda não existe (o upload acontece antes do
+  // INSERT), então entra "NOVO". O sufixo aleatório continua: dois
+  // uploads do mesmo Kaizen não podem colidir, e o nome novo derruba o
+  // cache do navegador na troca da foto.
+  const prefixo = Number.isInteger(idKaizen) && idKaizen > 0 ? String(idKaizen) : "NOVO";
+  const marca = tipo === "depois" ? "DEPOIS" : "ANTES";
+  return `${prefixo}_${marca}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}${ext}`;
 }
 
 // GET /kaizens/imagem?path=... — serve de volta uma imagem já salva no
@@ -2081,7 +2089,14 @@ apiRouter.post("/kaizens/imagem", receberImagemUnica, async (req, res) => {
       return res.status(400).json({ error: "Formato não suportado. Envie PNG, JPG ou WEBP." });
     }
 
-    const caminhoVolume = `${VOLUME_BASE_IMGS}/${pasta}/${nomeArquivoImagem(req.file.mimetype)}`;
+    // O ID vem da querystring só para NOMEAR o arquivo. Não é usado
+    // para gravar nada: quem pode editar o Kaizen é decidido no PUT,
+    // com a mesma regra do resto. Aqui ele passa por parseInt e é
+    // descartado se não for inteiro positivo — nada dele vai para o
+    // caminho sem passar por isso.
+    const idKaizenArquivo = parseInt(req.query.id, 10);
+    const caminhoVolume =
+      `${VOLUME_BASE_IMGS}/${pasta}/${nomeArquivoImagem(req.file.mimetype, idKaizenArquivo, tipo)}`;
     await enviarArquivoParaVolume(caminhoVolume, req.file.buffer, req.file.mimetype);
 
     res.json({ ok: true, url: caminhoVolume });
