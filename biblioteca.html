@@ -291,20 +291,9 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
   filter: saturate(1.15);
 }
 
-/* Editar, no canto superior direito do card. Fica aqui, e não no
-   vbm-app.css, por dois motivos: o botão só existe na Biblioteca, e o
-   .btn-icon desta página (acima) redefine position — uma regra no
-   arquivo compartilhado seria sobrescrita por ela.
-   Sobreposto ao card, não dentro do corpo: assim não empurra nada nem
-   entra na coluna do texto. O respiro à direita do corpo é o que impede
-   o botão de cobrir o código e o título. */
-.kaizen-card { position: relative; }
-.kaizen-card-edit.btn-icon {
-  position: absolute; top: .7rem; right: .7rem;
-  width: 30px; height: 30px; font-size: .7rem;
-  z-index: 2;
-}
-.kaizen-card.tem-editar > .kaizen-card-body { padding-right: 3.1rem; }
+/* Editar: terceiro botão da linha de ações. Só o foco visível é
+   acrescentado — tamanho, cor e hover são os do .btn-icon que Visualizar
+   e Imprimir já usam. */
 .kaizen-card-edit.btn-icon:focus-visible {
   outline: 2px solid var(--vbm-blue);
   outline-offset: 2px;
@@ -732,10 +721,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   var PAGE_SIZE = 6;
   var detalheCache = {};
 
-  /* Ícone de edição no canto superior direito do card. Fica FORA do
-     .kaizen-card-body, posicionado sobre o card, e o body ganha um
-     respiro à direita (.kaizen-card.tem-editar) para o botão não cobrir
-     o código nem o título. Mesmo .btn-icon dos outros ícones da tela. */
+  /* Terceiro botão da linha de ações do card, depois de Visualizar e
+     Imprimir. Mesmo .btn-icon dos outros dois, então dimensões, hover e
+     foco vêm do mesmo lugar — não há estilo próprio para manter. */
   function botaoEditarHtml(k) {
     // Quem decide é o servidor: PODE_EDITAR vem calculado por linha em
     // GET /api/kaizens (autor OU aprovador designado OU admin). Esconder
@@ -759,9 +747,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     var info = statusInfo(k);
     var tags = (k.TAGS || []).map(function (t) { return '<span class="kaizen-tag">' + t + '</span>'; }).join('');
     return (
-      '<div class="kaizen-card' + (k.PODE_EDITAR ? ' tem-editar' : '') + '" data-filter-item>' +
+      '<div class="kaizen-card" data-filter-item>' +
       '<div class="kaizen-card-accent accent-green"></div>' +
-      botaoEditarHtml(k) +
       '<div class="kaizen-card-body" style="display:flex;flex-direction:column;padding-bottom:.4rem;">' +
       '<div class="kaizen-card-id">' + k.ROTULO + (k.NM_SITE ? ' · ' + k.NM_SITE : '') + '</div>' +
       '<div class="kaizen-card-title" style="font-weight:600;font-size:.76rem;">' + k.NM_KAIZEN + '</div>' +
@@ -775,6 +762,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       '<div class="kaizen-card-actions">' +
       '<button class="btn-icon btn-icon-blue" title="Ver detalhe" data-ver-detalhe="' + k.ID_KAIZEN + '"><i class="fa-solid fa-eye"></i></button>' +
       '<button class="btn-icon" title="Imprimir A4" onclick="printKaizen(\'bibPrint\')"><i class="fa-solid fa-print"></i></button>' +
+      botaoEditarHtml(k) +
       '</div></div></div>'
     );
   }
@@ -817,6 +805,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     var botao = e.target.closest('[data-editar-kaizen]');
     if (!botao) return;
     e.preventDefault();
+    e.stopPropagation();
     window.location.href = 'kaizen-novo.html?id=' + encodeURIComponent(botao.dataset.editarKaizen);
   });
 
