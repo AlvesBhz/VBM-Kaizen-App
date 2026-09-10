@@ -2106,9 +2106,12 @@ const STATUS_IDS = {
 /** Acrescenta @idStatusPendente aos parâmetros só quando o filtro de
  *  "pendente" cita esse parâmetro — sem catálogo o WHERE usa
  *  "ID_STATUS IS NULL" e mandar o parâmetro sobrando quebraria. */
-function paramsComPendente(params) {
-  return STATUS_IDS.emAprovacao != null
-    ? params.concat([["idStatusPendente", sql.Int, STATUS_IDS.emAprovacao]])
+function filtroPendente(idPendente) {
+  return idPendente != null ? "p.ID_STATUS = @idStatusPendente" : "p.ID_STATUS IS NULL";
+}
+function paramsComPendente(params, idPendente) {
+  return idPendente != null
+    ? params.concat([["idStatusPendente", sql.Int, idPendente]])
     : params;
 }
 
@@ -2148,6 +2151,21 @@ async function idStatusPorNome(nomes) {
 
 // Nomes aceitos para "aguardando aprovação" — o Kaizen nasce com este.
 const NOMES_EM_APROVACAO = ["Aguardando aprovação", "Em aprovação", "Aguardando", "Em análise"];
+const NOMES_APROVADO = ["Aprovado", "Aprovada", "Concluído"];
+const NOMES_REPROVADO = ["Reprovado", "Rejeitado", "Reprovada"];
+
+/** ID de cada momento do ciclo: variável de ambiente primeiro, nome no
+ *  cadastro depois. TODO ponto que precisa de um ID_STATUS passa por
+ *  aqui — senão um caminho resolve pelo nome e o outro não, e o Kaizen
+ *  criado some da fila de aprovação. */
+async function idDoStatus(momento) {
+  const daEnv = STATUS_IDS[momento];
+  if (daEnv != null) return daEnv;
+  const nomes = momento === "aprovado" ? NOMES_APROVADO
+              : momento === "reprovado" ? NOMES_REPROVADO
+              : NOMES_EM_APROVACAO;
+  return idStatusPorNome(nomes);
+}
 
 const ERRO_STATUS_NAO_CONFIGURADO =
   "Catálogo de status não configurado. Cadastre os status na aba " +
@@ -2301,9 +2319,7 @@ apiRouter.post("/kaizens", async (req, res) => {
       // de com um número inventado.
       // Prioridade: a variável de ambiente; sem ela, busca pelo nome no
       // cadastro. Só fica sem status se nem o nome existir em kzn_status.
-      const idStatusNovo = STATUS_IDS.emAprovacao != null
-        ? STATUS_IDS.emAprovacao
-        : await idStatusPorNome(NOMES_EM_APROVACAO);
+      const idStatusNovo = await idDoStatus("emAprovacao");
       const gravaStatus = idStatusNovo != null;
       if (gravaStatus) reqInsert.input("idStatus", sql.Int, idStatusNovo);
       reqInsert.input("idAprovador", sql.Int, idAprovador);
@@ -2656,11 +2672,12 @@ apiRouter.get("/aprovacoes/contagem", async (req, res) => {
   try {
     const idUsuario = await idUsuarioLogado(req);
     if (!idUsuario) return res.json({ qtd: 0 });
+    const idPendente = await idDoStatus("emAprovacao");
     const r = await runQuery(
       `SELECT COUNT(*) AS QTD FROM ${FULL_PVC_TABLE} p
        JOIN ${FULL_TABLE_NAME} a ON a.ID_APROVADOR = p.ID_APROVADOR AND a.ID_USUARIO = @idUsuario
-       WHERE ${STATUS_IDS.emAprovacao != null ? "p.ID_STATUS = @idStatusPendente" : "p.ID_STATUS IS NULL"}`,
-      paramsComPendente([["idUsuario", sql.Int, idUsuario]])
+       WHERE ${filtroPendente(idPendente)}`,
+      paramsComPendente([["idUsuario", sql.Int, idUsuario]], idPendente)
     );
     res.json({ qtd: r.recordset[0].QTD });
   } catch (err) {
@@ -2674,6 +2691,7 @@ apiRouter.get("/aprovacoes", async (req, res) => {
     const idUsuario = await idUsuarioLogado(req);
     if (!idUsuario) return res.status(401).json({ error: "Não foi possível identificar o usuário logado." });
     const idIdioma = idIdiomaDaRequisicao(req);
+    const idPendente = await idDoStatus("emAprovacao");
 
     const result = await runQuery(
       `SELECT p.ID_KAIZEN, p.NM_KAIZEN, p.DT_ATUALIZACAO AS DT_CRIACAO, cat.NM_CATEGORIA,
@@ -2682,9 +2700,9 @@ apiRouter.get("/aprovacoes", async (req, res) => {
        JOIN ${FULL_TABLE_NAME} a ON a.ID_APROVADOR = p.ID_APROVADOR AND a.ID_USUARIO = @idUsuario
        LEFT JOIN ${FULL_CATEGORIA_TABLE} cat ON cat.ID_CATEGORIA = p.ID_CATEGORIA AND cat.ID_IDIOMA = @idIdioma
        LEFT JOIN ${FULL_MDM_TABLE} lider ON lider.ID_USUARIO = p.ID_USUARIO_LIDER
-       WHERE ${STATUS_IDS.emAprovacao != null ? "p.ID_STATUS = @idStatusPendente" : "p.ID_STATUS IS NULL"}
+       WHERE ${filtroPendente(idPendente)}
        ORDER BY p.DT_ATUALIZACAO ASC`,
-      paramsComPendente([["idUsuario", sql.Int, idUsuario], ["idIdioma", sql.Int, idIdioma]])
+      paramsComPendente([["idUsuario", sql.Int, idUsuario], ["idIdioma", sql.Int, idIdioma]], idPendente)
     );
     res.json(result.recordset.map((r) => ({
       ID_KAIZEN: r.ID_KAIZEN,
@@ -2706,14 +2724,12 @@ apiRouter.get("/aprovacoes", async (req, res) => {
 // por aprovar/reprovar — nenhum dos dois aceita "eu sou admin", só o
 // aprovador designado (kzn_aprovador.ID_USUARIO), como pedido.
 async function souOAprovadorDoKaizen(idKaizen, idUsuario) {
+  const idPendente = await idDoStatus("emAprovacao");
   const r = await runQuery(
     `SELECT p.ID_KAIZEN FROM ${FULL_PVC_TABLE} p
      JOIN ${FULL_TABLE_NAME} a ON a.ID_APROVADOR = p.ID_APROVADOR
-     WHERE p.ID_KAIZEN = @idKaizen AND a.ID_USUARIO = @idUsuario AND ${STATUS_IDS.emAprovacao != null ? "p.ID_STATUS = @idStatusPendente" : "p.ID_STATUS IS NULL"}`,
-    STATUS_IDS.emAprovacao != null
-      ? [["idKaizen", sql.Int, idKaizen], ["idUsuario", sql.Int, idUsuario],
-         ["idStatusPendente", sql.Int, STATUS_IDS.emAprovacao]]
-      : [["idKaizen", sql.Int, idKaizen], ["idUsuario", sql.Int, idUsuario]]
+     WHERE p.ID_KAIZEN = @idKaizen AND a.ID_USUARIO = @idUsuario AND ${filtroPendente(idPendente)}`,
+    paramsComPendente([["idKaizen", sql.Int, idKaizen], ["idUsuario", sql.Int, idUsuario]], idPendente)
   );
   return r.recordset.length > 0;
 }
@@ -2728,13 +2744,14 @@ apiRouter.post("/kaizens/:id/aprovar", async (req, res) => {
     }
     // Sem catálogo não há como registrar QUAL foi a decisão: recusa em
     // vez de marcar o Kaizen como decidido sem dizer como.
-    if (STATUS_IDS.aprovado == null) return res.status(503).json({ error: ERRO_STATUS_NAO_CONFIGURADO });
+    const idAprovado = await idDoStatus("aprovado");
+    if (idAprovado == null) return res.status(503).json({ error: ERRO_STATUS_NAO_CONFIGURADO });
     await runQuery(
       `UPDATE ${FULL_PVC_TABLE}
        SET ID_STATUS = @idStatus, DT_CONCLUSAO = ${AGORA_BRASILIA}, DT_ATUALIZACAO = ${AGORA_BRASILIA}, ID_USUARIO_ATUALIZACAO = @idUsuario
        WHERE ID_KAIZEN = @idKaizen`,
       [["idKaizen", sql.Int, idKaizen], ["idUsuario", sql.Int, idUsuario],
-       ["idStatus", sql.Int, STATUS_IDS.aprovado]]
+       ["idStatus", sql.Int, idAprovado]]
     );
     res.json({ ok: true });
   } catch (err) {
@@ -2765,7 +2782,8 @@ apiRouter.post("/kaizens/:id/reprovar", async (req, res) => {
     if (!(await souOAprovadorDoKaizen(idKaizen, idUsuario))) {
       return res.status(403).json({ error: "Você não é o aprovador designado deste Kaizen (ou ele já foi decidido)." });
     }
-    if (STATUS_IDS.reprovado == null) return res.status(503).json({ error: ERRO_STATUS_NAO_CONFIGURADO });
+    const idReprovado = await idDoStatus("reprovado");
+    if (idReprovado == null) return res.status(503).json({ error: ERRO_STATUS_NAO_CONFIGURADO });
 
     await runQuery(
       `UPDATE ${FULL_PVC_TABLE}
@@ -2773,7 +2791,7 @@ apiRouter.post("/kaizens/:id/reprovar", async (req, res) => {
            DT_ATUALIZACAO = ${AGORA_BRASILIA}, ID_USUARIO_ATUALIZACAO = @idUsuario
        WHERE ID_KAIZEN = @idKaizen`,
       [["idKaizen", sql.Int, idKaizen], ["idUsuario", sql.Int, idUsuario],
-       ["idStatus", sql.Int, STATUS_IDS.reprovado],
+       ["idStatus", sql.Int, idReprovado],
        ["motivo", sql.NVarChar(PVC_LIMITES.DS_MOTIVO), motivo]]
     );
     res.json({ ok: true });
