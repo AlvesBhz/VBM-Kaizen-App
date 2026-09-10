@@ -618,6 +618,10 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 <!-- Dados do usuário logado (Microsoft Graph) — reaproveita o token do
      login já existente; sem MSAL próprio, sem alterar o fluxo de auth. -->
 <script src="js/usuario-graph.js?v=20260817-1"></script>
+<!-- Aviso da decisão por e-mail: o servidor devolve a mensagem pronta e
+     estes dois enviam pelo Graph com o token do aprovador logado. -->
+<script src="js/msal-config.js?v=20260910-1"></script>
+<script src="js/envio-email.js?v=20260910-1"></script>
 <script>
 // ─── Aprovação: fila + decisão, ligado ao banco (era mock) ───
 var kaizenSelecionadoId = null;
@@ -670,6 +674,7 @@ function decidir(tipo) {
   }
 
   travarDecisao(true);
+  var idDecidido = kaizenSelecionadoId;   // a fila recarrega e troca a seleção
   fetch('/api/kaizens/' + kaizenSelecionadoId + '/' + cfg.rota, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ motivo: motivo }),
@@ -688,6 +693,11 @@ function decidir(tipo) {
         throw new Error((res.c && res.c.error) || txt('ap.decisionFailed', 'Falha ao registrar a decisão.'));
       }
       showToast(cfg.tom, txt(cfg.chave, 'Decisão registrada'), txt('ap.authorNotified', 'O autor será notificado.'));
+      // Aviso ao autor: a mensagem vem montada do servidor (dados já
+      // gravados) e sai pela caixa do PCI com o perfil de quem aprovou.
+      // Não entra no encadeamento: a decisão está registrada, e um
+      // problema de e-mail não pode virar erro de decisão na tela.
+      if (window.VBMEmail) window.VBMEmail.enviar(res.c && res.c.AVISO, idDecidido);
       campo.value = '';
       atualizarContador();
       // Decidido pelo pop-up, o Kaizen sai da fila: manter a janela

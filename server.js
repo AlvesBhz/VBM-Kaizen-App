@@ -27,7 +27,7 @@ const compression = require("compression");
 const sql = require("mssql");
 const multer = require("multer");
 const { enviarArquivoParaVolume, baixarArquivoDoVolume } = require("./databricks-fs");
-const { enviarEmailDecisao } = require("./email-kaizen");
+const { montarAvisoDecisao } = require("./email-kaizen");
 
 const app = express();
 
@@ -2859,9 +2859,9 @@ async function avisarAutorDaDecisao(momento, idKaizen, idUsuario, idStatus) {
     const k = r.recordset[0];
     if (!k) {
       console.warn(`[email] ID_KAIZEN=${idKaizen} não encontrado para montar o aviso.`);
-      return { enviado: false, motivo: "Kaizen não encontrado" };
+      return { erro: "Kaizen não encontrado" };
     }
-    return enviarEmailDecisao(momento, {
+    return montarAvisoDecisao(momento, {
       idKaizen: k.ID_KAIZEN,
       idStatus: k.ID_STATUS,
       codigo: rotuloIdKaizen(k.ID_KAIZEN, k.DT_ATUALIZACAO),
@@ -2877,7 +2877,7 @@ async function avisarAutorDaDecisao(momento, idKaizen, idUsuario, idStatus) {
     });
   } catch (err) {
     console.error(`[email] falha ao montar o aviso de ID_KAIZEN=${idKaizen}: ${err.message}`);
-    return { enviado: false, motivo: err.message };
+    return { erro: err.message };
   }
 }
 
@@ -2960,10 +2960,12 @@ async function registrarDecisao(req, res, opcoes) {
 
     // Só aqui: a gravação terminou e afetou a linha. Antes disso não há
     // decisão para avisar, e um erro no caminho acima devolve sem
-    // chegar nesta linha. O envio nunca derruba a decisão (o módulo já
-    // devolve o resultado em vez de lançar).
+    // chegar nesta linha. O aviso vai MONTADO na resposta; quem entrega
+    // ao Graph é a tela, com o token do aprovador logado (ver
+    // js/envio-email.js). Montar aqui mantém o conteúdo preso ao que
+    // está gravado no banco.
     const aviso = await avisarAutorDaDecisao(opcoes.momento, idKaizen, idUsuario, idStatus);
-    res.json({ ok: true, ID_STATUS: idStatus, EMAIL_ENVIADO: aviso.enviado });
+    res.json({ ok: true, ID_STATUS: idStatus, AVISO: aviso });
   } catch (err) {
     console.error(`[${opcoes.momento}] erro:`, err.message);
     res.status(500).json({ error: "Erro ao registrar a decisão: " + err.message });
@@ -2991,6 +2993,24 @@ apiRouter.post("/kaizens/:id/solicitar-alteracao", (req, res) =>
     momento: "alteracao", motivoObrigatorio: true, conclui: false,
     erroMotivo: "Descreva o que precisa ser corrigido.",
   }));
+
+// Resultado do envio do aviso, informado pela tela depois de entregar a
+// mensagem ao Graph. Existe só para o log ficar no servidor, junto com
+// o das demais etapas — o envio em si acontece no navegador, com o
+// token do aprovador (ver js/envio-email.js). Não grava nada e não
+// muda a decisão, que a esta altura já está persistida.
+apiRouter.post("/kaizens/:id/aviso", (req, res) => {
+  const idKaizen = parseInt(req.params.id, 10);
+  const chave = String((req.body && req.body.chave) || "").slice(0, 60);
+  const enviado = !!(req.body && req.body.enviado);
+  const motivo = String((req.body && req.body.motivo) || "").slice(0, 300);
+  if (enviado) {
+    console.log(`[email] ${chave || idKaizen}: enviado pela tela (perfil do aprovador).`);
+  } else {
+    console.error(`[email] ${chave || idKaizen}: NAO enviado — ${motivo || "sem detalhe"}`);
+  }
+  res.json({ ok: true });
+});
 
 app.use("/api", apiRouter);
 

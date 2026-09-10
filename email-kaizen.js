@@ -5,30 +5,22 @@
  * gravada: aprovar, reprovar e solicitar alteração avisam o autor da
  * iniciativa por e-mail.
  *
- * ENVIO
- *   Microsoft Graph, app-only (client credentials), sem dependência
- *   nova — o fetch é o nativo do Node. Mesmo desenho de token do
- *   databricks-fs.js: troca client_id + client_secret por um access
- *   token e guarda em memória até pouco antes de expirar.
+ * O QUE ESTE MÓDULO FAZ (e o que não faz)
+ *   Aqui ficam só os TEMPLATES e a montagem da mensagem com os dados
+ *   reais lidos do banco. O envio em si acontece no navegador
+ *   (js/envio-email.js), com o token DELEGADO do aprovador logado —
+ *   é o perfil dele que autentica no Microsoft Graph, não uma
+ *   identidade de aplicação. Por isso não há client secret aqui.
  *
- *     POST https://graph.microsoft.com/v1.0/users/{remetente}/sendMail
+ *   Montar no servidor e enviar no navegador mantém o conteúdo fora do
+ *   alcance da tela: o corpo do e-mail é gerado a partir da linha do
+ *   banco, não do que foi digitado.
  *
- *   Variáveis (app.yaml):
- *     AZURE_TENANT_ID          tenant do Entra ID
- *     AZURE_CLIENT_ID          app registration com Mail.Send
- *     AZURE_CLIENT_SECRET      segredo desse app registration
- *     KAIZEN_EMAIL_REMETENTE   caixa remetente (padrão abaixo)
- *     KAIZEN_APP_URL           endereço do app (padrão abaixo)
- *
- *   PERMISSÃO NECESSÁRIA: permissão de APLICATIVO Mail.Send, com
- *   consentimento do administrador, e — porque Mail.Send de aplicativo
- *   dá acesso a todas as caixas do tenant — uma Application Access
- *   Policy restringindo esse app à caixa PCI.Base.Metals@Vale.com. Sem
- *   isso o Graph responde 403 mesmo com o token válido.
- *
- *   Sem as três variáveis o módulo NÃO quebra a decisão: registra um
- *   aviso no log e devolve { enviado: false, motivo: "..." }. Gravar a
- *   decisão é o que não pode falhar; o aviso é consequência dela.
+ * CAIXA REMETENTE
+ *   PCI.Base.Metals@Vale.com (KAIZEN_EMAIL_REMETENTE sobrescreve). Quem
+ *   decide precisa ter "Enviar Como" (ou "Enviar em Nome De") nessa
+ *   caixa compartilhada, e o app registration do MSAL precisa do escopo
+ *   delegado Mail.Send.Shared — ver js/msal-config.js.
  *
  * IDIOMA
  *   Não existe idioma cadastrado por pessoa: kzn_mdm_hierarquia não tem
@@ -39,44 +31,12 @@
  *   kzn_status nos dois idiomas (ID_IDIOMA 1 e 2), não de texto fixo.
  */
 
-const GRAPH = "https://graph.microsoft.com";
-const TENANT_ID = process.env.AZURE_TENANT_ID || "";
-const CLIENT_ID = process.env.AZURE_CLIENT_ID || "";
-const CLIENT_SECRET = process.env.AZURE_CLIENT_SECRET || "";
 const REMETENTE = process.env.KAIZEN_EMAIL_REMETENTE || "PCI.Base.Metals@Vale.com";
 const APP_URL = (process.env.KAIZEN_APP_URL ||
   "https://kaizen-7405608945147182.2.azure.databricksapps.com").replace(/\/+$/, "");
 
 const URL_APROVACAO = `${APP_URL}/aprovacao.html`;
 const URL_BIBLIOTECA = `${APP_URL}/biblioteca.html`;
-
-let tokenCache = null;
-
-async function tokenDoGraph() {
-  if (tokenCache && tokenCache.expiraEm > Date.now() + 60_000) return tokenCache.token;
-
-  const corpo = new URLSearchParams({
-    grant_type: "client_credentials",
-    client_id: CLIENT_ID,
-    client_secret: CLIENT_SECRET,
-    scope: `${GRAPH}/.default`,
-  });
-  const resp = await fetch(`https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: corpo.toString(),
-  });
-  if (!resp.ok) {
-    const texto = await resp.text().catch(() => "");
-    throw new Error(`Falha ao obter token do Graph (HTTP ${resp.status}): ${texto}`);
-  }
-  const dados = await resp.json();
-  tokenCache = {
-    token: dados.access_token,
-    expiraEm: Date.now() + (dados.expires_in || 3600) * 1000,
-  };
-  return tokenCache.token;
-}
 
 // ------------------------------------------------------------------
 // Templates — centralizados aqui de propósito: mudar o texto de um
@@ -265,78 +225,37 @@ function montarMensagem(momento, dados) {
 }
 
 // ------------------------------------------------------------------
-// Envio
+// Montagem do aviso
 // ------------------------------------------------------------------
 
-/** Uma decisão = um e-mail. A trava de status em server.js já recusa a
- *  segunda decisão do mesmo Kaizen; esta chave cobre o caso de a mesma
- *  decisão ser reprocessada dentro do processo (retry, clique duplo que
- *  passe pelas duas travas de tela). */
-const jaEnviados = new Set();
-
 /**
- * Envia o aviso da decisão ao autor da iniciativa.
+ * Monta o aviso da decisão para o autor da iniciativa.
  *
  * @param {string} momento   "aprovado" | "reprovado" | "alteracao"
  * @param {object} dados     dados REAIS do Kaizen, lidos do banco:
  *   idKaizen, idStatus, codigo, titulo, site, nomeAutor, emailAutor,
  *   nomeAprovador, statusPt, statusEn, dataDecisao, motivo
- * @returns {Promise<{enviado: boolean, motivo?: string}>} nunca lança:
- *   o e-mail é consequência da decisão, não pode derrubá-la.
+ * @returns {{chave, de, para, assunto, html}|{erro}} o objeto que a tela
+ *   entrega ao Graph; `erro` quando não há a quem enviar.
  */
-async function enviarEmailDecisao(momento, dados) {
-  const chave = `${dados.idKaizen}:${dados.idStatus}:${momento}`;
-  try {
-    if (!dados.emailAutor) {
-      console.warn(`[email] ${chave}: autor sem CD_EMAIL no MDM — nada enviado.`);
-      return { enviado: false, motivo: "autor sem e-mail cadastrado" };
-    }
-    if (jaEnviados.has(chave)) {
-      console.warn(`[email] ${chave}: já enviado nesta execução — ignorado.`);
-      return { enviado: false, motivo: "já enviado" };
-    }
-    if (!TENANT_ID || !CLIENT_ID || !CLIENT_SECRET) {
-      console.warn(
-        `[email] ${chave}: envio não configurado — informe AZURE_TENANT_ID, ` +
-        `AZURE_CLIENT_ID e AZURE_CLIENT_SECRET no app.yaml (permissão de ` +
-        `aplicativo Mail.Send para ${REMETENTE}).`
-      );
-      return { enviado: false, motivo: "envio de e-mail não configurado" };
-    }
-
-    const { assunto, html } = montarMensagem(momento, {
-      ...dados,
-      dataPt: formatarData(dados.dataDecisao, "pt"),
-      dataEn: formatarData(dados.dataDecisao, "en"),
-    });
-
-    const token = await tokenDoGraph();
-    const resp = await fetch(`${GRAPH}/v1.0/users/${encodeURIComponent(REMETENTE)}/sendMail`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message: {
-          subject: assunto,
-          body: { contentType: "HTML", content: html },
-          toRecipients: [{ emailAddress: { address: dados.emailAutor } }],
-        },
-        saveToSentItems: true,
-      }),
-    });
-    if (!resp.ok) {
-      const texto = await resp.text().catch(() => "");
-      throw new Error(`Graph respondeu HTTP ${resp.status}: ${texto.slice(0, 300)}`);
-    }
-
-    jaEnviados.add(chave);
-    console.log(`[email] ${chave}: enviado para ${dados.emailAutor} (${momento}).`);
-    return { enviado: true };
-  } catch (err) {
-    // A decisão já está gravada: falha de e-mail vira log, nunca erro
-    // de API — senão o aprovador refaria uma decisão que já valeu.
-    console.error(`[email] ${chave}: falha no envio — ${err.message}`);
-    return { enviado: false, motivo: err.message };
+function montarAvisoDecisao(momento, dados) {
+  if (!dados.emailAutor) {
+    return { erro: "autor sem e-mail cadastrado no MDM" };
   }
+  const { assunto, html } = montarMensagem(momento, {
+    ...dados,
+    dataPt: formatarData(dados.dataDecisao, "pt"),
+    dataEn: formatarData(dados.dataDecisao, "en"),
+  });
+  return {
+    // Identifica a decisão: a tela usa para não enviar duas vezes o
+    // mesmo aviso e o servidor usa no log.
+    chave: `${dados.idKaizen}:${dados.idStatus}:${momento}`,
+    de: REMETENTE,
+    para: dados.emailAutor,
+    assunto,
+    html,
+  };
 }
 
-module.exports = { enviarEmailDecisao, TEMPLATES, montarMensagem, formatarData };
+module.exports = { montarAvisoDecisao, TEMPLATES, montarMensagem, formatarData, REMETENTE };

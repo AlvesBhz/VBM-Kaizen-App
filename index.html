@@ -720,6 +720,9 @@ body[data-bg="dark"] {
 <!-- Dados do usuário logado (Microsoft Graph) — reaproveita o token do
      login já existente; sem MSAL próprio, sem alterar o fluxo de auth. -->
 <script src="js/usuario-graph.js?v=20260817-1"></script>
+<!-- clientId/authority do Entra ID: fonte única, usada também pela tela
+     de Aprovação para enviar o aviso da decisão. -->
+<script src="js/msal-config.js?v=20260910-1"></script>
 <script>
 // ─── Login com conta Microsoft (MSAL.js / Azure AD - Entra ID) ───
 // PENDENTE DE CONFIGURAÇÃO: preencha clientId e authority abaixo com os
@@ -738,16 +741,15 @@ body[data-bg="dark"] {
 // real: js/usuario-graph.js usa a identidade que o proxy do Databricks
 // Apps já repassa (ver GET /api/me em server.js), sem depender do MSAL.
 (function () {
+  // clientId e authority moram em js/msal-config.js — um lugar só para
+  // preencher, agora que a tela de Aprovação também precisa deles.
+  if (!window.VBMMsal || !window.VBMMsal.estaConfigurado()) return;
   var MSAL_CONFIG = {
-    clientId: 'SEU_CLIENT_ID_AQUI',
-    authority: 'https://login.microsoftonline.com/SEU_TENANT_ID_AQUI',
+    clientId: window.VBMMsal.config.clientId,
+    authority: window.VBMMsal.config.authority,
     redirectUri: window.location.href
   };
   var LOGIN_SCOPES = ['User.Read'];
-
-  var isConfigured = MSAL_CONFIG.clientId !== 'SEU_CLIENT_ID_AQUI'
-    && MSAL_CONFIG.authority.indexOf('SEU_TENANT_ID_AQUI') === -1;
-  if (!isConfigured) return;
 
   // A msal-browser.min.js (~200 KB, CDN externo) só é baixada a partir
   // daqui — ou seja, apenas quando o login está de fato configurado.
