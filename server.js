@@ -3287,9 +3287,21 @@ async function registrarDecisao(req, res, opcoes) {
     const idStatus = await idDoStatus(opcoes.momento);
     if (idStatus == null) return res.status(503).json({ error: ERRO_STATUS_NAO_CONFIGURADO });
 
-    // DS_MOTIVO só entra no comando quando há texto: aprovar sem
-    // comentário não deve apagar nada nem gravar string vazia.
+    // DS_MOTIVO:
+    //   · com texto  -> grava o texto (parametrizado);
+    //   · APROVADO sem texto -> grava NULL, limpando o motivo de uma
+    //     decisão anterior (reprovação ou pedido de alteração) que não
+    //     vale mais depois da aprovação. NULL literal no comando, não
+    //     parâmetro vazio: string vazia e espaço em branco não podem
+    //     chegar à coluna;
+    //   · demais momentos sem texto -> a coluna nem entra no SET (na
+    //     prática não acontece: reprovar e solicitar alteração exigem
+    //     motivo antes de chegar aqui).
+    //
+    // `motivo` já veio com trim, então "   " conta como vazio.
     const gravaMotivo = motivo.length > 0;
+    const limpaMotivo = !gravaMotivo && opcoes.momento === "aprovado";
+    const setMotivo = gravaMotivo ? ", DS_MOTIVO = @motivo" : (limpaMotivo ? ", DS_MOTIVO = NULL" : "");
     const params = [
       ["idKaizen", sql.Int, idKaizen], ["idUsuario", sql.Int, idUsuario],
       ["idStatus", sql.Int, idStatus],
@@ -3303,7 +3315,7 @@ async function registrarDecisao(req, res, opcoes) {
     // comandos é que exigiria transação explícita.
     const gravacao = await runQuery(
       `UPDATE ${FULL_PVC_TABLE}
-       SET ID_STATUS = @idStatus${gravaMotivo ? ", DS_MOTIVO = @motivo" : ""}${opcoes.conclui ? `, DT_CONCLUSAO = ${AGORA_BRASILIA}` : ""},
+       SET ID_STATUS = @idStatus${setMotivo}${opcoes.conclui ? `, DT_CONCLUSAO = ${AGORA_BRASILIA}` : ""},
            DT_ATUALIZACAO = ${AGORA_BRASILIA}, ID_USUARIO_ATUALIZACAO = @idUsuario
        WHERE ID_KAIZEN = @idKaizen`,
       params
