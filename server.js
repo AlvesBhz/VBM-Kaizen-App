@@ -2490,7 +2490,10 @@ apiRouter.get("/kaizens", async (req, res) => {
     const ano = intOuNuloGlobal(req.query.ano);
     const q = textoOuNuloGlobal(req.query.q);
 
-    const params = [["idIdioma", sql.Int, idIdioma]];
+    // Autorização por linha: a Biblioteca só mostra o lápis onde este
+    // usuário pode mesmo editar. É a MESMA regra que a gravação aplica.
+    const ctx = await contextoDeEdicao(req);
+    const params = [["idIdioma", sql.Int, idIdioma], ...ctx.params];
     // "1 = 1" é a base para o WHERE nunca ficar vazio quando nenhum
     // filtro vier — o resto do comando segue exatamente igual.
     const filtros = ["1 = 1"];
@@ -2514,7 +2517,8 @@ apiRouter.get("/kaizens", async (req, res) => {
               (SELECT TOP (1) d.NM_DESPERDICIO
                  FROM ${FULL_KZ_DESPERDICIO_TABLE} kd
                  JOIN ${FULL_DESPERDICIO_TABLE} d ON d.ID_DESPERDICIO = kd.ID_DESPERDICIO AND d.ID_IDIOMA = @idIdioma
-                WHERE kd.ID_KAIZEN = p.ID_KAIZEN) AS NM_DESPERDICIO_1
+                WHERE kd.ID_KAIZEN = p.ID_KAIZEN) AS NM_DESPERDICIO_1,
+              PODE_EDITAR = ${SQL_PODE_EDITAR("p")}
        FROM ${FULL_PVC_TABLE} p
        LEFT JOIN ${FULL_CATEGORIA_TABLE} cat ON cat.ID_CATEGORIA = p.ID_CATEGORIA AND cat.ID_IDIOMA = @idIdioma
        LEFT JOIN ${FULL_STATUS_TABLE} st ON st.ID_STATUS = p.ID_STATUS AND st.ID_IDIOMA = @idIdioma
@@ -2527,6 +2531,7 @@ apiRouter.get("/kaizens", async (req, res) => {
     res.json(
       result.recordset.map((r) => ({
         ID_KAIZEN: r.ID_KAIZEN,
+        PODE_EDITAR: r.PODE_EDITAR === 1,
         ROTULO: rotuloIdKaizen(r.ID_KAIZEN, r.DT_CRIACAO),
         NM_KAIZEN: r.NM_KAIZEN,
         // O rótulo do status vem do cadastro (kzn_status), no idioma
@@ -2826,6 +2831,68 @@ async function situacaoDaDecisao(idKaizen, idUsuario) {
   };
 }
 
+/** REGRA ÚNICA de quem pode editar um Kaizen:
+ *
+ *      podeEditar = autor OU aprovador designado OU administrador
+ *
+ *  Um lugar só, usado pela listagem (para a Biblioteca decidir se mostra
+ *  o ícone), pela carga do formulário e pela gravação. Front escondendo
+ *  o ícone não é controle: o navegador manda o que quiser, então TODA
+ *  rota de edição chama esta função antes de ler ou gravar.
+ *
+ *  Nada de comparar nome. As chaves são as oficiais:
+ *    · autor      → ID_USUARIO_CADASTRO (líder como reserva nos Kaizens
+ *                   antigos, quando a coluna está nula);
+ *    · aprovador  → kzn_aprovador.CD_MATRICULA, comparada pela mesma
+ *                   MATRICULA_IGUAL do resto do sistema (cobre matrícula
+ *                   numérica x texto, com zero à esquerda ou letra);
+ *    · admin      → perfilDeAcesso(req), a mesma verificação de kzn_admin
+ *                   já usada pelo gate da API.
+ *
+ *  O SQL abaixo é o mesmo usado na listagem, para a decisão da tela e a
+ *  do servidor não poderem divergir. */
+const SQL_PODE_EDITAR = (aliasPvc) => `
+  CASE WHEN @ehAdmin = 1
+         OR ISNULL(${aliasPvc}.ID_USUARIO_CADASTRO, ${aliasPvc}.ID_USUARIO_LIDER) = @idUsuarioLogado
+         OR EXISTS (
+              SELECT 1 FROM ${FULL_TABLE_NAME} ae
+               WHERE ae.ID_APROVADOR = ${aliasPvc}.ID_APROVADOR
+                 AND ae.SG_ATIVO = 'S'
+                 AND EXISTS (SELECT 1 FROM ${FULL_MDM_TABLE} me
+                              WHERE me.ID_USUARIO = @idUsuarioLogado
+                                AND ${MATRICULA_IGUAL("me.CD_MATRICULA", "ae.CD_MATRICULA")})
+            )
+       THEN 1 ELSE 0 END`;
+
+/** Contexto de autorização do usuário logado: os dois parâmetros que o
+ *  SQL_PODE_EDITAR precisa. Resolvido no servidor, nunca recebido do
+ *  navegador. */
+async function contextoDeEdicao(req) {
+  const perfil = await perfilDeAcesso(req);
+  const idUsuario = await idUsuarioLogado(req);
+  return {
+    idUsuario,
+    admin: !!perfil.admin,
+    params: [
+      ["ehAdmin", sql.Bit, perfil.admin ? 1 : 0],
+      ["idUsuarioLogado", sql.Int, idUsuario ?? -1],
+    ],
+  };
+}
+
+/** Resposta direta para UM Kaizen: existe? e este usuário pode editar? */
+async function podeEditarKaizen(req, idKaizen) {
+  const ctx = await contextoDeEdicao(req);
+  const r = await runQuery(
+    `SELECT PODE_EDITAR = ${SQL_PODE_EDITAR("p")}
+       FROM ${FULL_PVC_TABLE} p WHERE p.ID_KAIZEN = @idKaizen`,
+    ctx.params.concat([["idKaizen", sql.Int, idKaizen]])
+  );
+  const linha = r.recordset[0];
+  if (!linha) return { existe: false, pode: false, idUsuario: ctx.idUsuario };
+  return { existe: true, pode: linha.PODE_EDITAR === 1, idUsuario: ctx.idUsuario };
+}
+
 /** Dados do Kaizen + destinatários, do jeito que os comunicados pedem.
  *
  *  Relê a linha do banco em vez de reaproveitar o que veio da tela: o
@@ -3059,6 +3126,96 @@ apiRouter.post("/kaizens/:id/solicitar-alteracao", (req, res) =>
     momento: "alteracao", motivoObrigatorio: true, conclui: false,
     erroMotivo: "Descreva o que precisa ser corrigido.",
   }));
+
+// GET /kaizens/:id/edicao — o registro completo para PREENCHER o
+// formulário de cadastro em modo de edição. Rota separada da /kaizens/:id
+// (que serve o detalhe de leitura) porque esta exige autorização de
+// edição: é aqui que o acesso direto pela URL é barrado, não no front.
+apiRouter.get("/kaizens/:id/edicao", async (req, res) => {
+  try {
+    const idKaizen = parseInt(req.params.id, 10);
+    if (!Number.isInteger(idKaizen) || idKaizen <= 0) {
+      return res.status(400).json({ error: "Kaizen inválido." });
+    }
+    const autoriz = await podeEditarKaizen(req, idKaizen);
+    if (!autoriz.existe) return res.status(404).json({ error: "Kaizen não encontrado." });
+    if (!autoriz.pode) {
+      console.warn(`[edicao] usuário ${autoriz.idUsuario} sem permissão para editar ID_KAIZEN=${idKaizen}`);
+      return res.status(403).json({ error: "Usuário não autorizado a editar este Kaizen." });
+    }
+
+    const idIdioma = idIdiomaDaRequisicao(req);
+    const [principal, membros, desperdicios, resultados] = await Promise.all([
+      runQuery(
+        `SELECT p.*, p.DT_ATUALIZACAO AS DT_CRIACAO,
+                lider.NM_USUARIO AS NM_LIDER, lider.NM_SITE, lider.NM_ESTADO, lider.NM_CIDADE,
+                autor.NM_USUARIO AS NM_AUTOR,
+                st.NM_STATUS
+           FROM ${FULL_PVC_TABLE} p
+           LEFT JOIN ${FULL_MDM_TABLE} lider ON lider.ID_USUARIO = p.ID_USUARIO_LIDER
+           LEFT JOIN ${FULL_MDM_TABLE} autor ON autor.ID_USUARIO = p.ID_USUARIO_CADASTRO
+           LEFT JOIN ${FULL_STATUS_TABLE} st ON st.ID_STATUS = p.ID_STATUS AND st.ID_IDIOMA = @idIdioma
+          WHERE p.ID_KAIZEN = @idKaizen`,
+        [["idKaizen", sql.Int, idKaizen], ["idIdioma", sql.Int, idIdioma]]
+      ),
+      runQuery(
+        `SELECT me.ID_USUARIO, m.NM_USUARIO, m.CD_MATRICULA
+           FROM ${FULL_MEMBROS_TABLE} me
+           LEFT JOIN ${FULL_MDM_TABLE} m ON m.ID_USUARIO = me.ID_USUARIO
+          WHERE me.ID_KAIZEN = @idKaizen`,
+        [["idKaizen", sql.Int, idKaizen]]
+      ),
+      runQuery(
+        `SELECT ID_DESPERDICIO FROM ${FULL_KZ_DESPERDICIO_TABLE} WHERE ID_KAIZEN = @idKaizen`,
+        [["idKaizen", sql.Int, idKaizen]]
+      ),
+      runQuery(
+        `SELECT rk.ID_RESULTADO, r.NM_RESULTADO, r.DS_RESULTADO, r.ID_TIPO_RESULTADO
+           FROM ${FULL_RESULTADO_KAIZEN_TABLE} rk
+           LEFT JOIN ${FULL_RESULTADOS_TABLE} r ON r.ID_RESULTADO = rk.ID_RESULTADO AND r.ID_IDIOMA = @idIdioma
+          WHERE rk.ID_KAIZEN = @idKaizen`,
+        [["idKaizen", sql.Int, idKaizen], ["idIdioma", sql.Int, idIdioma]]
+      ),
+    ]);
+
+    const k = principal.recordset[0];
+    res.json({
+      ID_KAIZEN: k.ID_KAIZEN,
+      ROTULO: rotuloIdKaizen(k.ID_KAIZEN, k.DT_CRIACAO),
+      titulo: k.NM_KAIZEN,
+      NM_AUTOR: k.NM_AUTOR,
+      NM_LIDER: k.NM_LIDER,
+      NM_SITE: k.NM_SITE, NM_ESTADO: k.NM_ESTADO, NM_CIDADE: k.NM_CIDADE,
+      id_usuario_lider: k.ID_USUARIO_LIDER,
+      id_categoria: k.ID_CATEGORIA,
+      id_replicacao: k.ID_REPLICACAO,
+      id_usuario_aprovador: k.ID_APROVADOR,
+      declaracao_problema: k.DS_PROBLEMA,
+      meta_objetivo: k.DS_OBJETIVO,
+      descricao_antes: k.DS_ESTADO_ANTES,
+      descricao_depois: k.DS_ESTADO_DEPOIS,
+      url_imagem_antes: k.URL_IMG_ANTES,
+      url_imagem_depois: k.URL_IMG_DEPOIS,
+      links_documentos: k.URL_REFERENCIA,
+      licoes_aprendidas: k.DS_LICOES_APRENDIDAS,
+      comparacao_meta_inicial: k.DS_RESULTADO_ESPERADO,
+      valor_resultado_financeiro: k.VL_RESULTADO_FINANCEIRO,
+      id_moeda: k.ID_MOEDA,
+      ID_STATUS: k.ID_STATUS,
+      NM_STATUS: k.NM_STATUS,
+      // Carimbo da última gravação: volta no salvamento para o servidor
+      // recusar sobrescrever alteração feita por outra pessoa no meio.
+      DT_ATUALIZACAO: relogioLocal(k.DT_ATUALIZACAO),
+      membros: membros.recordset.map((m) => m.ID_USUARIO),
+      MEMBROS: membros.recordset,
+      ids_desperdicio: desperdicios.recordset.map((d) => d.ID_DESPERDICIO),
+      RESULTADOS: resultados.recordset,
+    });
+  } catch (err) {
+    console.error("[edicao] erro ao carregar:", err.message);
+    res.status(500).json({ error: "Erro ao carregar o Kaizen: " + err.message });
+  }
+});
 
 // Resultado do envio do aviso, informado pela tela depois de entregar a
 // mensagem ao Graph. Existe só para o log ficar no servidor, junto com

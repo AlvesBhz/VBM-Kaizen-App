@@ -737,6 +737,10 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
      respiro à direita (.kaizen-card.tem-editar) para o botão não cobrir
      o código nem o título. Mesmo .btn-icon dos outros ícones da tela. */
   function botaoEditarHtml(k) {
+    // Quem decide é o servidor: PODE_EDITAR vem calculado por linha em
+    // GET /api/kaizens (autor OU aprovador designado OU admin). Esconder
+    // aqui é conveniência de tela — a rota de edição refaz a checagem.
+    if (!k.PODE_EDITAR) return '';
     var rotulo = txtI18n('bib.editKaizen', 'Editar Kaizen');
     return '<button type="button" class="btn-icon btn-icon-blue kaizen-card-edit"' +
       ' data-editar-kaizen="' + k.ID_KAIZEN + '"' +
@@ -755,7 +759,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     var info = statusInfo(k);
     var tags = (k.TAGS || []).map(function (t) { return '<span class="kaizen-tag">' + t + '</span>'; }).join('');
     return (
-      '<div class="kaizen-card tem-editar" data-filter-item>' +
+      '<div class="kaizen-card' + (k.PODE_EDITAR ? ' tem-editar' : '') + '" data-filter-item>' +
       '<div class="kaizen-card-accent accent-green"></div>' +
       botaoEditarHtml(k) +
       '<div class="kaizen-card-body" style="display:flex;flex-direction:column;padding-bottom:.4rem;">' +
