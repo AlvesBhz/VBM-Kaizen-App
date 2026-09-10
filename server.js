@@ -2535,9 +2535,42 @@ apiRouter.get("/kaizens/resumo", async (req, res) => {
          LEFT JOIN ${FULL_STATUS_TABLE} st ON st.ID_STATUS = p.ID_STATUS AND st.ID_IDIOMA = @idIdiomaBase
         GROUP BY st.NM_STATUS`, [["idIdiomaBase", sql.Int, ID_IDIOMA_PT]]
     );
+    // Um item por status CADASTRADO, no idioma pedido, com a contagem do
+    // ano — inclusive os que ficaram em zero, para o painel não esconder
+    // um status só porque ninguém o usou ainda. LEFT JOIN a partir de
+    // kzn_status, não da PVC, é o que garante isso.
+    const idIdioma = idIdiomaDaRequisicao(req);
+    const ano = intOuNuloGlobal(req.query.ano) ?? new Date().getUTCFullYear();
+    const statusAno = await runQuery(
+      `SELECT st.ID_STATUS, st.NM_STATUS,
+              QTD = (SELECT COUNT(*) FROM ${FULL_PVC_TABLE} p
+                      WHERE p.ID_STATUS = st.ID_STATUS
+                        AND YEAR(p.DT_ATUALIZACAO) = @ano)
+         FROM ${FULL_STATUS_TABLE} st
+        WHERE st.ID_IDIOMA = @idIdioma AND st.SG_ATIVO = 'S'
+        ORDER BY st.ID_STATUS`,
+      [["idIdioma", sql.Int, idIdioma], ["ano", sql.Int, ano]]
+    );
+
+    // Taxa = aprovados / (aprovados + reprovados) do ano. Os dois IDs
+    // saem do mesmo idDoStatus() do resto do sistema — nada fixo aqui.
+    // Sem nenhum dos dois no ano, devolve null: dividir por zero daria
+    // NaN, e "não há o que medir" não é 0%.
+    const porId = new Map(statusAno.recordset.map((r) => [r.ID_STATUS, r.QTD]));
+    const idAprovado = await idDoStatus("aprovado");
+    const idReprovado = await idDoStatus("reprovado");
+    const qtdAprovados = idAprovado != null ? porId.get(idAprovado) || 0 : 0;
+    const qtdReprovados = idReprovado != null ? porId.get(idReprovado) || 0 : 0;
+    const decididos = qtdAprovados + qtdReprovados;
+
     res.json({
       porAno: Object.fromEntries(porAno.recordset.map((r) => [r.ANO, r.QTD])),
       porStatus: Object.fromEntries(porStatus.recordset.map((r) => [r.NM_STATUS || "(sem status)", r.QTD])),
+      ano,
+      statusAno: statusAno.recordset.map((r) => ({
+        ID_STATUS: r.ID_STATUS, NM_STATUS: r.NM_STATUS, QTD: r.QTD,
+      })),
+      taxaAprovacao: decididos > 0 ? Math.round((qtdAprovados / decididos) * 100) : null,
     });
   } catch (err) {
     console.error("[kaizens/resumo] erro:", err.message);

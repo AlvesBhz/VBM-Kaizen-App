@@ -417,24 +417,14 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <p style="font-size:.82rem;color:rgba(255,255,255,.5);max-width:440px;line-height:1.6;" data-i18n="ap.subtitle">Revise, aprove ou devolva os Kaizens submetidos da sua unidade.</p>
         </div>
         <div style="background:rgba(255,255,255,.08);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.14);border-radius:.9rem;padding:1.1rem 1.4rem;min-width:220px;box-shadow:0 8px 32px rgba(0,0,0,.18);">
-          <div style="font-size:.58rem;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:.75rem;" data-i18n="ap.summaryTitle">Resumo de Aprovação</div>
+          <div style="font-size:.58rem;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:.75rem;" data-i18n="ap.summaryTitle">Resumo 2026</div>
           <div style="display:flex;flex-direction:column;gap:.55rem;">
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
-              <span style="font-size:.72rem;color:rgba(255,255,255,.55);display:flex;align-items:center;gap:.4rem;"><span style="width:7px;height:7px;border-radius:50%;background:#c2770e;display:inline-block;"></span> <span data-i18n="ap.pendentes">Pendentes</span></span>
-              <span style="font-family:'Poppins', sans-serif;font-weight:700;font-size:.85rem;color:#fff;" id="apQtdPendentes">—</span>
-            </div>
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
-              <span style="font-size:.72rem;color:rgba(255,255,255,.55);display:flex;align-items:center;gap:.4rem;"><span style="width:7px;height:7px;border-radius:50%;background:#16a34a;display:inline-block;"></span> <span data-i18n="ap.aprovados2026">Aprovados (2026)</span></span>
-              <span style="font-family:'Poppins', sans-serif;font-weight:700;font-size:.85rem;color:#fff;">28</span>
-            </div>
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
-              <span style="font-size:.72rem;color:rgba(255,255,255,.55);display:flex;align-items:center;gap:.4rem;"><span style="width:7px;height:7px;border-radius:50%;background:#dc2626;display:inline-block;"></span> <span data-i18n="ap.reprovados2026">Reprovados (2026)</span></span>
-              <span style="font-family:'Poppins', sans-serif;font-weight:700;font-size:.85rem;color:#fff;">4</span>
-            </div>
+            <!-- Uma linha por status de kzn_status, montada em carregarResumo(). -->
+            <div id="apResumoStatus" style="display:flex;flex-direction:column;gap:.55rem;"></div>
             <div style="height:1px;background:rgba(255,255,255,.1);"></div>
             <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
               <span style="font-size:.72rem;color:rgba(255,255,255,.55);" data-i18n="ap.approvalRate">Taxa de aprovação</span>
-              <span style="font-family:'Poppins', sans-serif;font-weight:700;font-size:.85rem;color:#fff;">87%</span>
+              <span style="font-family:'Poppins', sans-serif;font-weight:700;font-size:.85rem;color:#fff;" id="apTaxa">—</span>
             </div>
           </div>
         </div>
@@ -712,7 +702,65 @@ function removerDaFila(id) {
       .catch(function () { fila.innerHTML = '<p style="padding:1rem;color:#dc2626;font-size:.8rem;">Erro ao carregar a fila.</p>'; });
   }
 
+  // ─── Resumo do ano (hero) ───
+  // Uma linha por status de kzn_status, com a contagem real do ano
+  // vinda de kzn_pedravisaoconsolidada. Nada de nome, ID ou quantidade
+  // fixos aqui: o painel mostra o que estiver cadastrado.
+  function idiomaDaTela() {
+    var sel = document.getElementById('langSelect');
+    return (sel && sel.value) || 'pt-BR';
+  }
+  // A cor do ponto casa pelo nome sem acento — kzn_status não tem
+  // coluna de cor. Status novo cai no neutro, sem quebrar.
+  var COR_STATUS = {
+    'aprovado': '#16a34a', 'concluido': '#16a34a',
+    'reprovado': '#dc2626', 'rejeitado': '#dc2626',
+    'aguardando aprovacao': '#c2770e', 'em aprovacao': '#c2770e', 'aguardando': '#c2770e',
+    'solicitar alteracoes': '#3cb5e5', 'solicitar alteracao': '#3cb5e5',
+  };
+  function semAcento(x) {
+    return String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  }
+
+  function carregarResumo() {
+    var alvo = document.getElementById('apResumoStatus');
+    var elTaxa = document.getElementById('apTaxa');
+    if (!alvo) return;
+    fetch('/api/kaizens/resumo?idioma=' + encodeURIComponent(idiomaDaTela()),
+          { headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (resumo) {
+        if (!resumo) return;
+        var titulo = document.querySelector('[data-i18n="ap.summaryTitle"]');
+        if (titulo && resumo.ano) {
+          var molde = (window.__i18n && window.__i18n['ap.summaryTitle']) || 'Resumo {ano}';
+          titulo.textContent = molde.indexOf('{ano}') !== -1
+            ? molde.replace('{ano}', resumo.ano) : molde;
+        }
+        alvo.innerHTML = (resumo.statusAno || []).map(function (st) {
+          var cor = COR_STATUS[semAcento(st.NM_STATUS)] || 'rgba(255,255,255,.45)';
+          return '<div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">' +
+            '<span style="font-size:.72rem;color:rgba(255,255,255,.55);display:flex;align-items:center;gap:.4rem;">' +
+              '<span style="width:7px;height:7px;border-radius:50%;background:' + cor + ';display:inline-block;"></span> ' +
+              escaparHtml(st.NM_STATUS) + '</span>' +
+            '<span style="font-family:\'Poppins\', sans-serif;font-weight:700;font-size:.85rem;color:#fff;">' + st.QTD + '</span>' +
+          '</div>';
+        }).join('');
+        // null = nenhum Kaizen decidido no ano; "—" em vez de 0%.
+        if (elTaxa) elTaxa.textContent = resumo.taxaAprovacao == null ? '—' : resumo.taxaAprovacao + '%';
+      })
+      .catch(function () { /* o painel fica como está; a fila não depende dele */ });
+  }
+
+  function escaparHtml(txt) {
+    var d = document.createElement('div');
+    d.textContent = txt == null ? '' : String(txt);
+    return d.innerHTML;
+  }
+
   carregarFila();
+  carregarResumo();
+  window.addEventListener('vbm:idioma', carregarResumo);
 })();
 
 (function(){
@@ -843,7 +891,7 @@ function removerDaFila(id) {
       'kd.resultsAchieved': 'Resultados Alcançados',
       'ap.eyebrow': 'Autoridade de Aprovação',
       'ap.heroTitle': 'APROVAÇÃO',
-      'ap.summaryTitle': 'Resumo de Aprovação'
+      'ap.summaryTitle': 'Resumo {ano}'
     },
     'en': {
       'settings.btnTitle': 'Settings',
@@ -890,7 +938,7 @@ function removerDaFila(id) {
       'kd.resultsAchieved': 'Results Achieved',
       'ap.eyebrow': 'Approval Authority',
       'ap.heroTitle': 'APPROVAL',
-      'ap.summaryTitle': 'Approval Summary'
+      'ap.summaryTitle': 'Summary {ano}'
     }
   };
 
@@ -929,6 +977,7 @@ function removerDaFila(id) {
     if (!I18N[lang]) lang = 'pt-BR';
     select.value = lang;
     translatePanel(lang);
+    window.__i18n = I18N[lang] || I18N['pt-BR'];
     try { localStorage.setItem('vdt-lang', lang); } catch (e) {}
     // Avisa quem mostra dados do banco (listas bilíngues) para
     // reconsultar no novo idioma — ver window.VBMIdioma em vbm-app.js.
