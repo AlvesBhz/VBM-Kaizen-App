@@ -656,11 +656,18 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   // pedido) — a tela não decide mais o rótulo. A COR continua aqui: o
   // cadastro não tem coluna de cor, e o casamento é pelo nome em
   // português, com queda para o azul neutro em qualquer status novo.
+  // Nomes como estão em kzn_status, nos dois idiomas — a lista mostra
+  // NM_STATUS no idioma da tela, então a chave precisa existir nos dois.
   var CLASSE_POR_NOME = {
     'aprovado': 'badge-aprovado',
+    'approved': 'badge-aprovado',
     'concluido': 'badge-aprovado',
     'reprovado': 'badge-reprovado',
     'rejeitado': 'badge-reprovado',
+    'reject': 'badge-reprovado',
+    'rejected': 'badge-reprovado',
+    'aguardando aprovacao': 'badge-aguardando',
+    'awaiting approval': 'badge-aguardando',
     'em aprovacao': 'badge-aguardando',
     'aguardando': 'badge-aguardando',
     'rascunho': 'badge-rascunho',

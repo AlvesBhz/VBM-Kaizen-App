@@ -2779,18 +2779,44 @@ apiRouter.get("/aprovacoes", async (req, res) => {
   }
 });
 
-// Confere se o usuário logado é o ID_APROVADOR deste Kaizen. Reaproveitado
-// por aprovar/reprovar — nenhum dos dois aceita "eu sou admin", só o
-// aprovador designado (kzn_aprovador.ID_USUARIO), como pedido.
-async function souOAprovadorDoKaizen(idKaizen, idUsuario) {
+/** Situação do Kaizen diante de quem está tentando decidir.
+ *
+ *  Antes isto era um booleano ("sou o aprovador?"), e três situações
+ *  MUITO diferentes caíam na mesma resposta: o Kaizen não existe, a
+ *  pessoa não é a aprovadora dele, ou ele já foi decidido. O aprovador
+ *  legítimo que clicava duas vezes lia "você não é o aprovador
+ *  designado" — mensagem errada, que manda investigar permissão quando
+ *  o problema é que a decisão já está gravada.
+ *
+ *  Uma consulta só, pela chave única, devolvendo os três fatos: existe,
+ *  é o aprovador designado, e em que status está. O critério de "é o
+ *  aprovador" é IDÊNTICO ao da fila (kzn_aprovador.ID_APROVADOR +
+ *  ID_USUARIO) de propósito: o que aparece na fila tem de poder ser
+ *  decidido, sem um segundo critério para divergir. Admin não entra —
+ *  só o aprovador designado decide. */
+async function situacaoDaDecisao(idKaizen, idUsuario) {
   const idPendente = await idDoStatus("emAprovacao");
   const r = await runQuery(
-    `SELECT p.ID_KAIZEN FROM ${FULL_PVC_TABLE} p
-     JOIN ${FULL_TABLE_NAME} a ON a.ID_APROVADOR = p.ID_APROVADOR
-     WHERE p.ID_KAIZEN = @idKaizen AND a.ID_USUARIO = @idUsuario AND ${filtroPendente(idPendente)}`,
-    paramsComPendente([["idKaizen", sql.Int, idKaizen], ["idUsuario", sql.Int, idUsuario]], idPendente)
+    `SELECT p.ID_STATUS,
+            EH_APROVADOR = CASE WHEN EXISTS (
+              SELECT 1 FROM ${FULL_TABLE_NAME} a
+               WHERE a.ID_APROVADOR = p.ID_APROVADOR AND a.ID_USUARIO = @idUsuario
+            ) THEN 1 ELSE 0 END
+       FROM ${FULL_PVC_TABLE} p
+      WHERE p.ID_KAIZEN = @idKaizen`,
+    [["idKaizen", sql.Int, idKaizen], ["idUsuario", sql.Int, idUsuario]]
   );
-  return r.recordset.length > 0;
+  const linha = r.recordset[0];
+  if (!linha) return { existe: false, autorizado: false, pendente: false, idStatus: null };
+  // Mesma regra de "pendente" da fila: com catálogo, é o ID do status
+  // de aguardando; sem catálogo, é a linha ainda sem status.
+  const pendente = idPendente != null ? linha.ID_STATUS === idPendente : linha.ID_STATUS == null;
+  return {
+    existe: true,
+    autorizado: linha.EH_APROVADOR === 1,
+    pendente,
+    idStatus: linha.ID_STATUS == null ? null : linha.ID_STATUS,
+  };
 }
 
 /** Registra uma decisão do aprovador. Aprovar, reprovar e solicitar
@@ -2819,8 +2845,22 @@ async function registrarDecisao(req, res, opcoes) {
 
     const idUsuario = await idUsuarioLogado(req);
     if (!idUsuario) return res.status(401).json({ error: "Não foi possível identificar o usuário logado." });
-    if (!(await souOAprovadorDoKaizen(idKaizen, idUsuario))) {
-      return res.status(403).json({ error: "Você não é o aprovador designado deste Kaizen (ou ele já foi decidido)." });
+
+    // Uma validação só para as três decisões, com uma resposta
+    // diferente por causa: cada mensagem manda a pessoa para o lugar
+    // certo em vez de sugerir falta de permissão em todos os casos.
+    const situacao = await situacaoDaDecisao(idKaizen, idUsuario);
+    if (!situacao.existe) {
+      console.warn(`[decisao] ID_KAIZEN=${idKaizen} não existe (usuário ${idUsuario}, momento ${opcoes.momento})`);
+      return res.status(404).json({ error: "Kaizen não encontrado." });
+    }
+    if (!situacao.autorizado) {
+      console.warn(`[decisao] usuário ${idUsuario} não é o aprovador de ID_KAIZEN=${idKaizen} (momento ${opcoes.momento})`);
+      return res.status(403).json({ error: "Usuário não autorizado para decidir este Kaizen." });
+    }
+    if (!situacao.pendente) {
+      console.warn(`[decisao] ID_KAIZEN=${idKaizen} já decidido (ID_STATUS=${situacao.idStatus}); usuário ${idUsuario}, momento ${opcoes.momento}`);
+      return res.status(409).json({ error: "Este Kaizen já possui uma decisão registrada." });
     }
 
     const idStatus = await idDoStatus(opcoes.momento);
