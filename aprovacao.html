@@ -524,7 +524,11 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           </div>
 
           <!-- Approval actions -->
-          <div style="background:var(--vbm-off-white);border-radius:.75rem;padding:1.25rem;border:1px solid #eaeaea;">
+          <!-- id usado pelo botão de ampliar para TIRAR este bloco do
+               clone: o clone não carrega os listeners nem os ids, então
+               dentro do pop-up o campo e os botões ficariam inertes. A
+               decisão acontece no painel, em um lugar só. -->
+          <div id="apDecisao" style="background:var(--vbm-off-white);border-radius:.75rem;padding:1.25rem;border:1px solid #eaeaea;">
             <div style="font-family:'Poppins', sans-serif;font-weight:700;font-size:.85rem;color:var(--vbm-dark);margin-bottom:.75rem;">
               <i class="fa-solid fa-clipboard-check" style="color:var(--vbm-blue);margin-right:.4rem;"></i>
               <span data-i18n="ap.approvalDecision">Decisão de Aprovação</span>
