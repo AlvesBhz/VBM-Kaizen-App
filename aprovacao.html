@@ -465,6 +465,15 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
               </div>
             </div>
             <span class="badge badge-aguardando" data-i18n="badge.aguardando">Aguardando</span>
+            <!-- Amplia o MESMO conteúdo do painel: o modal recebe um
+                 clone na hora de abrir, então não há segunda consulta
+                 nem uma segunda montagem para divergir. -->
+            <button type="button" class="btn-icon" id="btnAmpliarKaizen"
+                    style="background:rgba(255,255,255,.12);color:#fff;border:none;"
+                    title="Ampliar" data-i18n-title="ap.expand"
+                    aria-label="Ampliar" data-i18n-aria="ap.expand">
+              <i class="fa-solid fa-up-right-and-down-left-from-center"></i>
+            </button>
           </div>
         </div>
 
@@ -541,6 +550,18 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 
   </div>
 </main>
+</div>
+
+<!-- Modal: Kaizen ampliado — recebe um clone do painel ao abrir -->
+<div class="modal-backdrop" id="modalKaizenAmpliado" role="dialog" aria-modal="true" aria-labelledby="tituloKaizenAmpliado">
+  <div class="modal modal-xl">
+    <div class="modal-head">
+      <div class="modal-icon" style="--hue:60,181,229;background:var(--vbm-blue-pale);border-color:rgba(60,181,229,.22);"><i class="fa-solid fa-clipboard-list" style="color:var(--vbm-blue-dark);"></i></div>
+      <div class="modal-title" id="tituloKaizenAmpliado" data-i18n="ap.expandedTitle">Kaizen ampliado</div>
+      <button class="modal-close" data-modal-close aria-label="Fechar" data-i18n-aria="common.fechar"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body" id="corpoKaizenAmpliado"></div>
+  </div>
 </div>
 
 <!-- Modal: Editar Kaizen (aprovador) -->
@@ -758,6 +779,40 @@ function removerDaFila(id) {
     return d.innerHTML;
   }
 
+  // ─── Ampliar o Kaizen selecionado ───
+  // Clona o painel já renderizado em vez de montar tudo de novo: o que
+  // aparece ampliado é exatamente o que está na tela, sem consulta
+  // extra e sem uma segunda montagem para divergir da primeira.
+  var btnAmpliar = document.getElementById('btnAmpliarKaizen');
+  if (btnAmpliar) {
+    btnAmpliar.addEventListener('click', function () {
+      var corpo = document.getElementById('corpoKaizenAmpliado');
+      if (!corpo || !panel) return;
+      var copia = panel.cloneNode(true);
+      // Fora do painel esses dois não fazem sentido: o botão de ampliar
+      // (já estamos ampliados) e a área de decisão, que fica no painel
+      // para o aprovador agir de um lugar só.
+      var lixo = copia.querySelector('#btnAmpliarKaizen');
+      if (lixo) lixo.remove();
+      var decisao = copia.querySelector('#apDecisao');
+      if (decisao) decisao.remove();
+      // ids duplicados quebrariam getElementById do painel original.
+      copia.removeAttribute('id');
+      copia.querySelectorAll('[id]').forEach(function (el) { el.removeAttribute('id'); });
+      copia.style.display = 'block';
+      copia.style.maxHeight = 'none';
+      corpo.innerHTML = '';
+      corpo.appendChild(copia);
+      var titulo = document.getElementById('tituloKaizenAmpliado');
+      var nome = document.getElementById('kdHeadTitle');
+      if (titulo && nome) titulo.textContent = nome.textContent;
+      window.openModal('modalKaizenAmpliado');
+      // Foco no fechar: teclado entra no modal, não fica atrás dele.
+      var x = document.querySelector('#modalKaizenAmpliado .modal-close');
+      if (x && x.focus) x.focus();
+    });
+  }
+
   carregarFila();
   carregarResumo();
   window.addEventListener('vbm:idioma', carregarResumo);
@@ -891,6 +946,8 @@ function removerDaFila(id) {
       'kd.resultsAchieved': 'Resultados Alcançados',
       'ap.eyebrow': 'Autoridade de Aprovação',
       'ap.heroTitle': 'APROVAÇÃO',
+      'ap.expand': 'Ampliar',
+      'ap.expandedTitle': 'Kaizen ampliado',
       'ap.summaryTitle': 'Resumo {ano}'
     },
     'en': {
@@ -938,6 +995,8 @@ function removerDaFila(id) {
       'kd.resultsAchieved': 'Results Achieved',
       'ap.eyebrow': 'Approval Authority',
       'ap.heroTitle': 'APPROVAL',
+      'ap.expand': 'Expand',
+      'ap.expandedTitle': 'Expanded Kaizen',
       'ap.summaryTitle': 'Summary {ano}'
     }
   };
