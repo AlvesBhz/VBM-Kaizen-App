@@ -298,6 +298,17 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
   outline: 2px solid var(--vbm-blue);
   outline-offset: 2px;
 }
+/* Desabilitado: mesmo tamanho e mesma posição — só o contraste cai, para
+   a linha de ações não mudar de card para card. */
+.kaizen-card-edit.btn-icon[disabled] {
+  opacity: .45;
+  cursor: not-allowed;
+}
+.kaizen-card-edit.btn-icon[disabled]:hover {
+  transform: none;
+  box-shadow: none;
+  filter: none;
+}
 
 [data-bg="dark"] .btn-icon { border: none !important; color: #fff !important; }
 [data-bg="dark"] .btn-icon-blue { color: #bfe8ff !important; }
@@ -725,15 +736,26 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
      Imprimir. Mesmo .btn-icon dos outros dois, então dimensões, hover e
      foco vêm do mesmo lugar — não há estilo próprio para manter. */
   function botaoEditarHtml(k) {
-    // Quem decide é o servidor: PODE_EDITAR vem calculado por linha em
-    // GET /api/kaizens (autor OU aprovador designado OU admin). Esconder
-    // aqui é conveniência de tela — a rota de edição refaz a checagem.
+    // Os dois sinais vêm calculados por linha em GET /api/kaizens, no
+    // servidor: PODE_EDITAR é a permissão da pessoa (autor, aprovador
+    // designado ou admin) e EDICAO_LIBERADA junta essa permissão com o
+    // status do Kaizen. Aqui é só apresentação — as rotas de edição
+    // refazem as duas checagens.
+    //
+    // Sem permissão o botão nem aparece; com permissão mas em status que
+    // não aceita edição ele aparece DESABILITADO, para o lugar do botão
+    // não mudar de card para card.
     if (!k.PODE_EDITAR) return '';
-    var rotulo = txtI18n('bib.editKaizen', 'Editar Kaizen');
+    var liberado = !!k.EDICAO_LIBERADA;
+    var rotulo = liberado
+      ? txtI18n('bib.editKaizen', 'Editar Kaizen')
+      : txtI18n('bib.editBlocked', 'Edição indisponível para o status atual');
+    var chave = liberado ? 'bib.editKaizen' : 'bib.editBlocked';
     return '<button type="button" class="btn-icon btn-icon-blue kaizen-card-edit"' +
+      (liberado ? '' : ' disabled aria-disabled="true"') +
       ' data-editar-kaizen="' + k.ID_KAIZEN + '"' +
-      ' title="' + rotulo + '" data-i18n-title="bib.editKaizen"' +
-      ' aria-label="' + rotulo + '" data-i18n-aria="bib.editKaizen">' +
+      ' title="' + rotulo + '" data-i18n-title="' + chave + '"' +
+      ' aria-label="' + rotulo + '" data-i18n-aria="' + chave + '">' +
       '<i class="fa-solid fa-pen" aria-hidden="true"></i></button>';
   }
 
@@ -806,6 +828,10 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     if (!botao) return;
     e.preventDefault();
     e.stopPropagation();
+    // Botão desabilitado não navega. O <button disabled> já não dispara
+    // clique nem Enter, mas a checagem fica explícita para o dia em que
+    // o estilo do desabilitado mudar.
+    if (botao.disabled) return;
     window.location.href = 'kaizen-novo.html?id=' + encodeURIComponent(botao.dataset.editarKaizen);
   });
 
@@ -1157,6 +1183,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       'bib.countTemplate': '{total} Kaizens · Exibindo {n}',
       'bib.userPlaceholder': 'Nome do usuário...',
       'bib.editKaizen': 'Editar Kaizen',
+      'bib.editBlocked': 'Edição indisponível para o status atual',
       'bib.loadMore': 'Carregar mais',
       'bib.summaryTitle': 'Resumo da Biblioteca',
       'bib.total2024': 'Total 2024',
@@ -1221,6 +1248,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       'bib.countTemplate': '{total} Kaizens · Showing {n}',
       'bib.userPlaceholder': 'User name...',
       'bib.editKaizen': 'Edit Kaizen',
+      'bib.editBlocked': 'Editing unavailable for the current status',
       'bib.loadMore': 'Load more',
       'bib.summaryTitle': 'Library Summary',
       'bib.total2024': 'Total 2024',

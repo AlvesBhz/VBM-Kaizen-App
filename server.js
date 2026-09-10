@@ -2635,7 +2635,8 @@ apiRouter.get("/kaizens", async (req, res) => {
                  FROM ${FULL_KZ_DESPERDICIO_TABLE} kd
                  JOIN ${FULL_DESPERDICIO_TABLE} d ON d.ID_DESPERDICIO = kd.ID_DESPERDICIO AND d.ID_IDIOMA = @idIdioma
                 WHERE kd.ID_KAIZEN = p.ID_KAIZEN) AS NM_DESPERDICIO_1,
-              PODE_EDITAR = ${SQL_PODE_EDITAR("p")}
+              PODE_EDITAR = ${SQL_PODE_EDITAR("p")},
+              STATUS_EDITAVEL = ${SQL_STATUS_EDITAVEL("p")}
        FROM ${FULL_PVC_TABLE} p
        LEFT JOIN ${FULL_CATEGORIA_TABLE} cat ON cat.ID_CATEGORIA = p.ID_CATEGORIA AND cat.ID_IDIOMA = @idIdioma
        LEFT JOIN ${FULL_STATUS_TABLE} st ON st.ID_STATUS = p.ID_STATUS AND st.ID_IDIOMA = @idIdioma
@@ -2659,7 +2660,11 @@ apiRouter.get("/kaizens", async (req, res) => {
     res.json(
       result.recordset.map((r) => ({
         ID_KAIZEN: r.ID_KAIZEN,
+        // Dois sinais, de propósito: PODE_EDITAR é a permissão da pessoa
+        // (mostra ou esconde o botão) e EDICAO_LIBERADA junta a
+        // permissão com o status (habilita ou desabilita).
         PODE_EDITAR: r.PODE_EDITAR === 1,
+        EDICAO_LIBERADA: r.PODE_EDITAR === 1 && r.STATUS_EDITAVEL === 1,
         ROTULO: rotuloIdKaizen(r.ID_KAIZEN, r.DT_CRIACAO),
         NM_KAIZEN: r.NM_KAIZEN,
         // O rótulo do status vem do cadastro (kzn_status), no idioma
@@ -3002,34 +3007,75 @@ const SQL_PODE_EDITAR = (aliasPvc) => `
             )
        THEN 1 ELSE 0 END`;
 
-/** Contexto de autorização do usuário logado: os dois parâmetros que o
- *  SQL_PODE_EDITAR precisa. Resolvido no servidor, nunca recebido do
- *  navegador. */
+/** Status em que o Kaizen ainda pode ser editado: "Aguardando
+ *  aprovação" e "Solicitado alterações" — 3 e 4 no cadastro atual.
+ *
+ *  Resolvidos pelo mesmo idDoStatus() do resto do sistema, e não fixos
+ *  no código, para acompanharem o cadastro. Os números da regra ficam
+ *  como reserva: se a resolução falhar, a edição não pode passar a
+ *  aceitar qualquer status. A comparação é sempre por ID — nome
+ *  traduzido não decide nada. */
+const ID_STATUS_EDITAVEIS_PADRAO = [3, 4];
+
+async function idsStatusEditaveis() {
+  const [aguardando, alteracao] = await Promise.all([
+    idDoStatus("emAprovacao"),
+    idDoStatus("alteracao"),
+  ]);
+  const ids = [aguardando, alteracao].filter((x) => Number.isInteger(x));
+  return ids.length ? ids : ID_STATUS_EDITAVEIS_PADRAO;
+}
+
+/** Contexto de autorização do usuário logado: os parâmetros que o
+ *  SQL_PODE_EDITAR e o SQL_STATUS_EDITAVEL precisam. Resolvido no
+ *  servidor, nunca recebido do navegador. */
 async function contextoDeEdicao(req) {
   const perfil = await perfilDeAcesso(req);
   const idUsuario = await idUsuarioLogado(req);
+  const editaveis = await idsStatusEditaveis();
   return {
     idUsuario,
     admin: !!perfil.admin,
+    editaveis,
     params: [
       ["ehAdmin", sql.Bit, perfil.admin ? 1 : 0],
       ["idUsuarioLogado", sql.Int, idUsuario ?? -1],
+      ["statusEdit1", sql.Int, editaveis[0] ?? -1],
+      ["statusEdit2", sql.Int, editaveis[1] ?? editaveis[0] ?? -1],
     ],
   };
 }
+
+/** Status permite editar? Parametrizado, nunca com o número no SQL. */
+const SQL_STATUS_EDITAVEL = (aliasPvc) =>
+  `CASE WHEN ${aliasPvc}.ID_STATUS IN (@statusEdit1, @statusEdit2) THEN 1 ELSE 0 END`;
 
 /** Resposta direta para UM Kaizen: existe? e este usuário pode editar? */
 async function podeEditarKaizen(req, idKaizen) {
   const ctx = await contextoDeEdicao(req);
   const r = await runQuery(
-    `SELECT PODE_EDITAR = ${SQL_PODE_EDITAR("p")}
+    `SELECT PODE_EDITAR = ${SQL_PODE_EDITAR("p")},
+            STATUS_EDITAVEL = ${SQL_STATUS_EDITAVEL("p")},
+            p.ID_STATUS
        FROM ${FULL_PVC_TABLE} p WHERE p.ID_KAIZEN = @idKaizen`,
     ctx.params.concat([["idKaizen", sql.Int, idKaizen]])
   );
   const linha = r.recordset[0];
-  if (!linha) return { existe: false, pode: false, idUsuario: ctx.idUsuario };
-  return { existe: true, pode: linha.PODE_EDITAR === 1, idUsuario: ctx.idUsuario };
+  if (!linha) return { existe: false, pode: false, statusPermite: false, idUsuario: ctx.idUsuario };
+  return {
+    existe: true,
+    pode: linha.PODE_EDITAR === 1,
+    statusPermite: linha.STATUS_EDITAVEL === 1,
+    idStatus: linha.ID_STATUS,
+    idUsuario: ctx.idUsuario,
+  };
 }
+
+// Mesma recusa nos dois pontos que leem/gravam a edição: o status é
+// conferido de novo no servidor, então mudar de status entre abrir a
+// tela e salvar barra a gravação em vez de deixá-la passar.
+const ERRO_STATUS_NAO_EDITAVEL =
+  "Este Kaizen não pode mais ser editado: o status atual não permite edição.";
 
 /** Dados do Kaizen + destinatários, do jeito que os comunicados pedem.
  *
@@ -3302,6 +3348,10 @@ apiRouter.put("/kaizens/:id", async (req, res) => {
       console.warn(`[edicao] usuário ${autoriz.idUsuario} sem permissão para gravar ID_KAIZEN=${idKaizen}`);
       return res.status(403).json({ error: "Usuário não autorizado a editar este Kaizen." });
     }
+    if (!autoriz.statusPermite) {
+      console.warn(`[edicao] gravação recusada: ID_KAIZEN=${idKaizen} está em ID_STATUS=${autoriz.idStatus}`);
+      return res.status(409).json({ error: ERRO_STATUS_NAO_EDITAVEL });
+    }
     const idUsuario = autoriz.idUsuario;
     if (!idUsuario) return res.status(401).json({ error: "Não foi possível identificar o usuário logado." });
 
@@ -3448,6 +3498,10 @@ apiRouter.get("/kaizens/:id/edicao", async (req, res) => {
     if (!autoriz.pode) {
       console.warn(`[edicao] usuário ${autoriz.idUsuario} sem permissão para editar ID_KAIZEN=${idKaizen}`);
       return res.status(403).json({ error: "Usuário não autorizado a editar este Kaizen." });
+    }
+    if (!autoriz.statusPermite) {
+      console.warn(`[edicao] ID_KAIZEN=${idKaizen} com ID_STATUS=${autoriz.idStatus} não permite edição`);
+      return res.status(409).json({ error: ERRO_STATUS_NAO_EDITAVEL });
     }
 
     const idIdioma = idIdiomaDaRequisicao(req);
