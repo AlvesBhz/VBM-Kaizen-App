@@ -27,6 +27,7 @@ const compression = require("compression");
 const sql = require("mssql");
 const multer = require("multer");
 const { enviarArquivoParaVolume, baixarArquivoDoVolume } = require("./databricks-fs");
+const { enviarEmailDecisao } = require("./email-kaizen");
 
 const app = express();
 
@@ -2819,6 +2820,67 @@ async function situacaoDaDecisao(idKaizen, idUsuario) {
   };
 }
 
+/** Avisa o autor da iniciativa por e-mail, DEPOIS da gravação.
+ *
+ *  Relê a linha do banco em vez de reaproveitar o que veio da tela: o
+ *  e-mail tem de descrever o que ficou gravado, não o que o aprovador
+ *  digitou. Se a gravação tivesse falhado, esta função nem seria
+ *  chamada — quem decide isso é o rowsAffected em registrarDecisao.
+ *
+ *  Nome e e-mail do autor, e o site, saem do MDM pelo ID_USUARIO_CADASTRO
+ *  (quem abriu o Kaizen), com o líder como reserva quando a coluna está
+ *  nula nos Kaizens antigos. O status vem de kzn_status nos DOIS idiomas,
+ *  porque o e-mail é bilíngue. */
+async function avisarAutorDaDecisao(momento, idKaizen, idUsuario, idStatus) {
+  try {
+    const r = await runQuery(
+      `SELECT p.ID_KAIZEN, p.NM_KAIZEN, p.DS_MOTIVO, p.ID_STATUS, p.DT_ATUALIZACAO,
+              autor.NM_USUARIO AS NM_AUTOR, autor.CD_EMAIL AS EMAIL_AUTOR,
+              autor.NM_SITE, autor.NM_CIDADE, autor.NM_ESTADO,
+              aprov.NM_USUARIO AS NM_APROVADOR,
+              stPt.NM_STATUS AS STATUS_PT, stEn.NM_STATUS AS STATUS_EN
+         FROM ${FULL_PVC_TABLE} p
+         OUTER APPLY (
+           SELECT TOP (1) x.NM_USUARIO, x.CD_EMAIL, x.NM_SITE, x.NM_CIDADE, x.NM_ESTADO
+             FROM ${FULL_MDM_TABLE} x
+            WHERE x.ID_USUARIO = ISNULL(p.ID_USUARIO_CADASTRO, p.ID_USUARIO_LIDER)
+            ORDER BY x.ID_TIPO_USUARIO
+         ) autor
+         OUTER APPLY (
+           SELECT TOP (1) y.NM_USUARIO FROM ${FULL_MDM_TABLE} y
+            WHERE y.ID_USUARIO = @idUsuario ORDER BY y.ID_TIPO_USUARIO
+         ) aprov
+         LEFT JOIN ${FULL_STATUS_TABLE} stPt ON stPt.ID_STATUS = p.ID_STATUS AND stPt.ID_IDIOMA = @idPt
+         LEFT JOIN ${FULL_STATUS_TABLE} stEn ON stEn.ID_STATUS = p.ID_STATUS AND stEn.ID_IDIOMA = @idEn
+        WHERE p.ID_KAIZEN = @idKaizen`,
+      [["idKaizen", sql.Int, idKaizen], ["idUsuario", sql.Int, idUsuario],
+       ["idPt", sql.Int, ID_IDIOMA_PT], ["idEn", sql.Int, ID_IDIOMA_EN]]
+    );
+    const k = r.recordset[0];
+    if (!k) {
+      console.warn(`[email] ID_KAIZEN=${idKaizen} não encontrado para montar o aviso.`);
+      return { enviado: false, motivo: "Kaizen não encontrado" };
+    }
+    return enviarEmailDecisao(momento, {
+      idKaizen: k.ID_KAIZEN,
+      idStatus: k.ID_STATUS,
+      codigo: rotuloIdKaizen(k.ID_KAIZEN, k.DT_ATUALIZACAO),
+      titulo: k.NM_KAIZEN,
+      site: k.NM_SITE || k.NM_CIDADE || k.NM_ESTADO,
+      nomeAutor: k.NM_AUTOR,
+      emailAutor: k.EMAIL_AUTOR,
+      nomeAprovador: k.NM_APROVADOR,
+      statusPt: k.STATUS_PT,
+      statusEn: k.STATUS_EN || k.STATUS_PT,
+      dataDecisao: k.DT_ATUALIZACAO,
+      motivo: k.DS_MOTIVO,
+    });
+  } catch (err) {
+    console.error(`[email] falha ao montar o aviso de ID_KAIZEN=${idKaizen}: ${err.message}`);
+    return { enviado: false, motivo: err.message };
+  }
+}
+
 /** Registra uma decisão do aprovador. Aprovar, reprovar e solicitar
  *  alteração só diferem em três coisas — o status gravado, se o motivo
  *  é obrigatório e se a decisão encerra o Kaizen —, então dividem o
@@ -2895,7 +2957,13 @@ async function registrarDecisao(req, res, opcoes) {
       console.error(`[${opcoes.momento}] nenhuma linha atualizada para ID_KAIZEN=${idKaizen}`);
       return res.status(409).json({ error: "Não foi possível gravar a decisão: o Kaizen não está mais disponível." });
     }
-    res.json({ ok: true, ID_STATUS: idStatus });
+
+    // Só aqui: a gravação terminou e afetou a linha. Antes disso não há
+    // decisão para avisar, e um erro no caminho acima devolve sem
+    // chegar nesta linha. O envio nunca derruba a decisão (o módulo já
+    // devolve o resultado em vez de lançar).
+    const aviso = await avisarAutorDaDecisao(opcoes.momento, idKaizen, idUsuario, idStatus);
+    res.json({ ok: true, ID_STATUS: idStatus, EMAIL_ENVIADO: aviso.enviado });
   } catch (err) {
     console.error(`[${opcoes.momento}] erro:`, err.message);
     res.status(500).json({ error: "Erro ao registrar a decisão: " + err.message });
