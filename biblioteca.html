@@ -291,6 +291,25 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
   filter: saturate(1.15);
 }
 
+/* Editar, no canto superior direito do card. Fica aqui, e não no
+   vbm-app.css, por dois motivos: o botão só existe na Biblioteca, e o
+   .btn-icon desta página (acima) redefine position — uma regra no
+   arquivo compartilhado seria sobrescrita por ela.
+   Sobreposto ao card, não dentro do corpo: assim não empurra nada nem
+   entra na coluna do texto. O respiro à direita do corpo é o que impede
+   o botão de cobrir o código e o título. */
+.kaizen-card { position: relative; }
+.kaizen-card-edit.btn-icon {
+  position: absolute; top: .7rem; right: .7rem;
+  width: 30px; height: 30px; font-size: .7rem;
+  z-index: 2;
+}
+.kaizen-card.tem-editar > .kaizen-card-body { padding-right: 3.1rem; }
+.kaizen-card-edit.btn-icon:focus-visible {
+  outline: 2px solid var(--vbm-blue);
+  outline-offset: 2px;
+}
+
 [data-bg="dark"] .btn-icon { border: none !important; color: #fff !important; }
 [data-bg="dark"] .btn-icon-blue { color: #bfe8ff !important; }
 [data-bg="dark"] .btn-icon:hover {
@@ -713,12 +732,32 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   var PAGE_SIZE = 6;
   var detalheCache = {};
 
+  /* Ícone de edição no canto superior direito do card. Fica FORA do
+     .kaizen-card-body, posicionado sobre o card, e o body ganha um
+     respiro à direita (.kaizen-card.tem-editar) para o botão não cobrir
+     o código nem o título. Mesmo .btn-icon dos outros ícones da tela. */
+  function botaoEditarHtml(k) {
+    var rotulo = txtI18n('bib.editKaizen', 'Editar Kaizen');
+    return '<button type="button" class="btn-icon btn-icon-blue kaizen-card-edit"' +
+      ' data-editar-kaizen="' + k.ID_KAIZEN + '"' +
+      ' title="' + rotulo + '" data-i18n-title="bib.editKaizen"' +
+      ' aria-label="' + rotulo + '" data-i18n-aria="bib.editKaizen">' +
+      '<i class="fa-solid fa-pen" aria-hidden="true"></i></button>';
+  }
+
+  /* Os cards são montados depois do applyLang, então o texto do idioma
+     tem de ser lido na hora — mesmo caminho já usado por bib.countTemplate. */
+  function txtI18n(chave, padrao) {
+    return (window.__i18n && window.__i18n[chave]) || padrao;
+  }
+
   function cartaoHtml(k) {
     var info = statusInfo(k);
     var tags = (k.TAGS || []).map(function (t) { return '<span class="kaizen-tag">' + t + '</span>'; }).join('');
     return (
-      '<div class="kaizen-card" data-filter-item>' +
+      '<div class="kaizen-card tem-editar" data-filter-item>' +
       '<div class="kaizen-card-accent accent-green"></div>' +
+      botaoEditarHtml(k) +
       '<div class="kaizen-card-body" style="display:flex;flex-direction:column;padding-bottom:.4rem;">' +
       '<div class="kaizen-card-id">' + k.ROTULO + (k.NM_CIDADE ? ' · ' + k.NM_CIDADE : '') + '</div>' +
       '<div class="kaizen-card-title" style="font-weight:600;font-size:.76rem;">' + k.NM_KAIZEN + '</div>' +
@@ -1112,6 +1151,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       'bib.showingCount': '31 Kaizens aprovados · Exibindo 6',
       'bib.countTemplate': '{total} Kaizens · Exibindo {n}',
       'bib.userPlaceholder': 'Nome do usuário...',
+      'bib.editKaizen': 'Editar Kaizen',
       'bib.loadMore': 'Carregar mais',
       'bib.summaryTitle': 'Resumo da Biblioteca',
       'bib.total2024': 'Total 2024',
@@ -1175,6 +1215,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       'bib.showingCount': '31 approved Kaizens · Showing 6',
       'bib.countTemplate': '{total} Kaizens · Showing {n}',
       'bib.userPlaceholder': 'User name...',
+      'bib.editKaizen': 'Edit Kaizen',
       'bib.loadMore': 'Load more',
       'bib.summaryTitle': 'Library Summary',
       'bib.total2024': 'Total 2024',
