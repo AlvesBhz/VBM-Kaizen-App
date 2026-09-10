@@ -912,6 +912,10 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 <!-- Dados do usuário logado (Microsoft Graph) — reaproveita o token do
      login já existente; sem MSAL próprio, sem alterar o fluxo de auth. -->
 <script src="js/usuario-graph.js?v=20260817-1"></script>
+<!-- Comunicados do cadastro: o servidor devolve as mensagens prontas e
+     estes dois enviam pelo Graph com o token de quem está logado. -->
+<script src="js/msal-config.js?v=20260910-1"></script>
+<script src="js/envio-email.js?v=20260910-1"></script>
 <script>
 // Garante que a página sempre abra rolada para o topo, exibindo o
 // cabeçalho do wizard por completo (evita restauração de scroll do navegador).
@@ -2386,7 +2390,18 @@ window.validacaoWizard = (function () {
       .then(function (resultado) {
         if (!resultado.ok) throw new Error((resultado.corpo && resultado.corpo.error) || 'Falha ao enviar o Kaizen.');
         showToast('success', 'Kaizen enviado!', 'Kaizen #' + resultado.corpo.ID_KAIZEN + ' enviado para aprovação.');
-        setTimeout(function () { window.location.href = 'biblioteca.html'; }, 1800);
+        // Os comunicados (equipe e aprovador) saem ANTES de trocar de
+        // página: o envio acontece aqui no navegador, e navegar no meio
+        // dele cancelaria a requisição — inclusive o popup de
+        // consentimento, na primeira vez. O tempo mínimo de 1,8 s é o
+        // mesmo de antes, só para o aviso na tela ser lido.
+        var enviando = window.VBMEmail
+          ? window.VBMEmail.enviarTodos(resultado.corpo.AVISOS, resultado.corpo.ID_KAIZEN)
+          : Promise.resolve([]);
+        var espera = new Promise(function (r) { setTimeout(r, 1800); });
+        Promise.all([enviando.catch(function () {}), espera]).then(function () {
+          window.location.href = 'biblioteca.html';
+        });
       })
       .catch(function (err) {
         showToast('error', 'Erro ao enviar', err.message || 'Não foi possível enviar o Kaizen.');

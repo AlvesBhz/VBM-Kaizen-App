@@ -27,7 +27,7 @@ const compression = require("compression");
 const sql = require("mssql");
 const multer = require("multer");
 const { enviarArquivoParaVolume, baixarArquivoDoVolume } = require("./databricks-fs");
-const { montarAvisoDecisao } = require("./email-kaizen");
+const { montarAviso } = require("./email-kaizen");
 
 const app = express();
 
@@ -2429,7 +2429,13 @@ apiRouter.post("/kaizens", async (req, res) => {
       }
 
       await tx.commit();
-      res.status(201).json({ ok: true, ID_KAIZEN: idKaizen, ID_STATUS: idStatusNovo });
+      // Só depois do commit: antes disso o Kaizen ainda pode sumir no
+      // rollback, e comunicar um cadastro que não existe é pior do que
+      // não comunicar. Os comunicados vão MONTADOS na resposta; quem
+      // entrega ao Graph é a tela, com o token de quem está logado
+      // (ver js/envio-email.js).
+      const avisos = await avisosDoCadastro(idKaizen, idUsuarioCadastro);
+      res.status(201).json({ ok: true, ID_KAIZEN: idKaizen, ID_STATUS: idStatusNovo, AVISOS: avisos });
     } catch (errTx) {
       await tx.rollback().catch(() => {});
       throw errTx;
@@ -2820,64 +2826,124 @@ async function situacaoDaDecisao(idKaizen, idUsuario) {
   };
 }
 
-/** Avisa o autor da iniciativa por e-mail, DEPOIS da gravação.
+/** Dados do Kaizen + destinatários, do jeito que os comunicados pedem.
  *
  *  Relê a linha do banco em vez de reaproveitar o que veio da tela: o
- *  e-mail tem de descrever o que ficou gravado, não o que o aprovador
- *  digitou. Se a gravação tivesse falhado, esta função nem seria
- *  chamada — quem decide isso é o rowsAffected em registrarDecisao.
+ *  comunicado tem de descrever o que ficou gravado, não o que alguém
+ *  digitou.
  *
- *  Nome e e-mail do autor, e o site, saem do MDM pelo ID_USUARIO_CADASTRO
- *  (quem abriu o Kaizen), com o líder como reserva quando a coluna está
- *  nula nos Kaizens antigos. O status vem de kzn_status nos DOIS idiomas,
- *  porque o e-mail é bilíngue. */
-async function avisarAutorDaDecisao(momento, idKaizen, idUsuario, idStatus) {
-  try {
-    const r = await runQuery(
-      `SELECT p.ID_KAIZEN, p.NM_KAIZEN, p.DS_MOTIVO, p.ID_STATUS, p.DT_ATUALIZACAO,
-              autor.NM_USUARIO AS NM_AUTOR, autor.CD_EMAIL AS EMAIL_AUTOR,
-              autor.NM_SITE, autor.NM_CIDADE, autor.NM_ESTADO,
-              aprov.NM_USUARIO AS NM_APROVADOR,
-              stPt.NM_STATUS AS STATUS_PT, stEn.NM_STATUS AS STATUS_EN
-         FROM ${FULL_PVC_TABLE} p
-         OUTER APPLY (
-           SELECT TOP (1) x.NM_USUARIO, x.CD_EMAIL, x.NM_SITE, x.NM_CIDADE, x.NM_ESTADO
-             FROM ${FULL_MDM_TABLE} x
-            WHERE x.ID_USUARIO = ISNULL(p.ID_USUARIO_CADASTRO, p.ID_USUARIO_LIDER)
-            ORDER BY x.ID_TIPO_USUARIO
-         ) autor
-         OUTER APPLY (
-           SELECT TOP (1) y.NM_USUARIO FROM ${FULL_MDM_TABLE} y
-            WHERE y.ID_USUARIO = @idUsuario ORDER BY y.ID_TIPO_USUARIO
-         ) aprov
-         LEFT JOIN ${FULL_STATUS_TABLE} stPt ON stPt.ID_STATUS = p.ID_STATUS AND stPt.ID_IDIOMA = @idPt
-         LEFT JOIN ${FULL_STATUS_TABLE} stEn ON stEn.ID_STATUS = p.ID_STATUS AND stEn.ID_IDIOMA = @idEn
-        WHERE p.ID_KAIZEN = @idKaizen`,
-      [["idKaizen", sql.Int, idKaizen], ["idUsuario", sql.Int, idUsuario],
-       ["idPt", sql.Int, ID_IDIOMA_PT], ["idEn", sql.Int, ID_IDIOMA_EN]]
-    );
-    const k = r.recordset[0];
-    if (!k) {
-      console.warn(`[email] ID_KAIZEN=${idKaizen} não encontrado para montar o aviso.`);
-      return { erro: "Kaizen não encontrado" };
-    }
-    return montarAvisoDecisao(momento, {
+ *  Dono do Kaizen: ID_USUARIO_CADASTRO (o líder é a reserva nos Kaizens
+ *  antigos, quando a coluna está nula). Participantes: kzn_membros_equipe.
+ *  Aprovador: kzn_aprovador pela CD_MATRICULA — é ela que diz QUEM
+ *  recebeu o direito (ID_USUARIO nessa tabela é quem concedeu).
+ *
+ *  Categoria e status vêm nos DOIS idiomas, porque o e-mail é bilíngue. */
+async function dadosDoComunicado(idKaizen, idUsuarioAcao) {
+  const r = await runQuery(
+    `SELECT p.ID_KAIZEN, p.NM_KAIZEN, p.DS_MOTIVO, p.ID_STATUS, p.DT_ATUALIZACAO,
+            autor.NM_USUARIO AS NM_AUTOR, autor.CD_EMAIL AS EMAIL_AUTOR,
+            autor.NM_SITE, autor.NM_CIDADE, autor.NM_ESTADO,
+            aprov.NM_USUARIO AS NM_APROVADOR, aprov.CD_EMAIL AS EMAIL_APROVADOR,
+            acao.NM_USUARIO AS NM_ACAO,
+            catPt.NM_CATEGORIA AS CATEGORIA_PT, catEn.NM_CATEGORIA AS CATEGORIA_EN,
+            stPt.NM_STATUS AS STATUS_PT, stEn.NM_STATUS AS STATUS_EN
+       FROM ${FULL_PVC_TABLE} p
+       OUTER APPLY (
+         SELECT TOP (1) x.NM_USUARIO, x.CD_EMAIL, x.NM_SITE, x.NM_CIDADE, x.NM_ESTADO
+           FROM ${FULL_MDM_TABLE} x
+          WHERE x.ID_USUARIO = ISNULL(p.ID_USUARIO_CADASTRO, p.ID_USUARIO_LIDER)
+          ORDER BY x.ID_TIPO_USUARIO
+       ) autor
+       OUTER APPLY (
+         SELECT TOP (1) z.NM_USUARIO, z.CD_EMAIL
+           FROM ${FULL_TABLE_NAME} a
+           JOIN ${FULL_MDM_TABLE} z ON ${MATRICULA_IGUAL("z.CD_MATRICULA", "a.CD_MATRICULA")}
+          WHERE a.ID_APROVADOR = p.ID_APROVADOR
+          ORDER BY z.ID_TIPO_USUARIO
+       ) aprov
+       OUTER APPLY (
+         SELECT TOP (1) y.NM_USUARIO FROM ${FULL_MDM_TABLE} y
+          WHERE y.ID_USUARIO = @idUsuarioAcao ORDER BY y.ID_TIPO_USUARIO
+       ) acao
+       LEFT JOIN ${FULL_CATEGORIA_TABLE} catPt ON catPt.ID_CATEGORIA = p.ID_CATEGORIA AND catPt.ID_IDIOMA = @idPt
+       LEFT JOIN ${FULL_CATEGORIA_TABLE} catEn ON catEn.ID_CATEGORIA = p.ID_CATEGORIA AND catEn.ID_IDIOMA = @idEn
+       LEFT JOIN ${FULL_STATUS_TABLE} stPt ON stPt.ID_STATUS = p.ID_STATUS AND stPt.ID_IDIOMA = @idPt
+       LEFT JOIN ${FULL_STATUS_TABLE} stEn ON stEn.ID_STATUS = p.ID_STATUS AND stEn.ID_IDIOMA = @idEn
+      WHERE p.ID_KAIZEN = @idKaizen`,
+    [["idKaizen", sql.Int, idKaizen], ["idUsuarioAcao", sql.Int, idUsuarioAcao],
+     ["idPt", sql.Int, ID_IDIOMA_PT], ["idEn", sql.Int, ID_IDIOMA_EN]]
+  );
+  const k = r.recordset[0];
+  if (!k) return null;
+
+  const equipe = await runQuery(
+    `SELECT DISTINCT m.CD_EMAIL FROM ${FULL_MEMBROS_TABLE} me
+       JOIN ${FULL_MDM_TABLE} m ON m.ID_USUARIO = me.ID_USUARIO
+      WHERE me.ID_KAIZEN = @idKaizen AND m.CD_EMAIL IS NOT NULL`,
+    [["idKaizen", sql.Int, idKaizen]]
+  );
+
+  return {
+    // Dono + participantes: é a lista dos quatro comunicados de equipe.
+    equipe: [k.EMAIL_AUTOR, ...equipe.recordset.map((m) => m.CD_EMAIL)],
+    emailAprovador: k.EMAIL_APROVADOR,
+    dados: {
       idKaizen: k.ID_KAIZEN,
       idStatus: k.ID_STATUS,
       codigo: rotuloIdKaizen(k.ID_KAIZEN, k.DT_ATUALIZACAO),
       titulo: k.NM_KAIZEN,
       site: k.NM_SITE || k.NM_CIDADE || k.NM_ESTADO,
       nomeAutor: k.NM_AUTOR,
-      emailAutor: k.EMAIL_AUTOR,
-      nomeAprovador: k.NM_APROVADOR,
+      // Dois nomes diferentes de propósito: no comunicado de decisão o
+      // "Aprovador" é quem decidiu; no do cadastro é o designado, que
+      // ainda não decidiu nada. Quem escolhe é cada chamador.
+      nomeDecisor: k.NM_ACAO,
+      nomeAprovadorDesignado: k.NM_APROVADOR,
+      categoriaPt: k.CATEGORIA_PT,
+      categoriaEn: k.CATEGORIA_EN || k.CATEGORIA_PT,
       statusPt: k.STATUS_PT,
       statusEn: k.STATUS_EN || k.STATUS_PT,
       dataDecisao: k.DT_ATUALIZACAO,
       motivo: k.DS_MOTIVO,
-    });
+    },
+  };
+}
+
+/** Comunicados de uma DECISÃO: um só, para o dono e os participantes. */
+async function avisosDaDecisao(momento, idKaizen, idUsuario) {
+  try {
+    const c = await dadosDoComunicado(idKaizen, idUsuario);
+    if (!c) {
+      console.warn(`[email] ID_KAIZEN=${idKaizen} não encontrado para montar o comunicado.`);
+      return [{ erro: "Kaizen não encontrado" }];
+    }
+    const dados = { ...c.dados, nomeAprovador: c.dados.nomeDecisor || c.dados.nomeAprovadorDesignado };
+    return [montarAviso(momento, c.equipe, dados)];
   } catch (err) {
-    console.error(`[email] falha ao montar o aviso de ID_KAIZEN=${idKaizen}: ${err.message}`);
-    return { erro: err.message };
+    console.error(`[email] falha ao montar o comunicado de ID_KAIZEN=${idKaizen}: ${err.message}`);
+    return [{ erro: err.message }];
+  }
+}
+
+/** Comunicados do CADASTRO: um para o dono e os participantes, outro
+ *  para quem vai aprovar — com o link da fila. São dois e-mails porque
+ *  são dois públicos com pedidos diferentes. */
+async function avisosDoCadastro(idKaizen, idUsuario) {
+  try {
+    const c = await dadosDoComunicado(idKaizen, idUsuario);
+    if (!c) {
+      console.warn(`[email] ID_KAIZEN=${idKaizen} não encontrado para montar o comunicado.`);
+      return [{ erro: "Kaizen não encontrado" }];
+    }
+    // No cadastro o "Aprovador" do texto é o designado, não quem cadastrou.
+    const dados = { ...c.dados, nomeAprovador: c.dados.nomeAprovadorDesignado };
+    return [
+      montarAviso("cadastrado", c.equipe, dados),
+      montarAviso("pendenteAprovacao", [c.emailAprovador], dados),
+    ];
+  } catch (err) {
+    console.error(`[email] falha ao montar o comunicado de ID_KAIZEN=${idKaizen}: ${err.message}`);
+    return [{ erro: err.message }];
   }
 }
 
@@ -2964,8 +3030,8 @@ async function registrarDecisao(req, res, opcoes) {
     // ao Graph é a tela, com o token do aprovador logado (ver
     // js/envio-email.js). Montar aqui mantém o conteúdo preso ao que
     // está gravado no banco.
-    const aviso = await avisarAutorDaDecisao(opcoes.momento, idKaizen, idUsuario, idStatus);
-    res.json({ ok: true, ID_STATUS: idStatus, AVISO: aviso });
+    const avisos = await avisosDaDecisao(opcoes.momento, idKaizen, idUsuario);
+    res.json({ ok: true, ID_STATUS: idStatus, AVISOS: avisos });
   } catch (err) {
     console.error(`[${opcoes.momento}] erro:`, err.message);
     res.status(500).json({ error: "Erro ao registrar a decisão: " + err.message });

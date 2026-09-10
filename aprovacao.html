@@ -697,7 +697,7 @@ function decidir(tipo) {
       // gravados) e sai pela caixa do PCI com o perfil de quem aprovou.
       // Não entra no encadeamento: a decisão está registrada, e um
       // problema de e-mail não pode virar erro de decisão na tela.
-      if (window.VBMEmail) window.VBMEmail.enviar(res.c && res.c.AVISO, idDecidido);
+      if (window.VBMEmail) window.VBMEmail.enviarTodos(res.c && res.c.AVISOS, idDecidido);
       campo.value = '';
       atualizarContador();
       // Decidido pelo pop-up, o Kaizen sai da fila: manter a janela

@@ -76,23 +76,86 @@ const RODAPE = {
 
 const ROTULOS = {
   pt: { codigo: "Código", titulo: "Título", site: "Site", status: "Status",
-        aprovador: "Aprovador", data: "Data da decisão" },
+        aprovador: "Aprovador", data: "Data da decisão",
+        categoria: "Categoria", autor: "Autor", dataCadastro: "Data do cadastro" },
   en: { codigo: "Code", titulo: "Title", site: "Site", status: "Status",
-        aprovador: "Approver", data: "Decision date" },
+        aprovador: "Approver", data: "Decision date",
+        categoria: "Category", autor: "Author", dataCadastro: "Registration date" },
 };
 
 /** Um momento do ciclo = um template por idioma. Cada função recebe os
  *  dados reais do Kaizen e devolve { assunto, linhas }, onde `linhas` é
  *  a lista de parágrafos/blocos do corpo. */
 const TEMPLATES = {
+  // Cadastro — vai para o dono do Kaizen e para os demais participantes.
+  cadastrado: {
+    pt: (d) => ({
+      assunto: "[Kaizen] Iniciativa registrada",
+      linhas: [
+        "Olá.",
+        "O Kaizen abaixo foi registrado e está aguardando aprovação.",
+        { campos: [["codigo", d.codigo], ["titulo", d.titulo], ["site", d.site],
+                   ["categoria", d.categoriaPt], ["autor", d.nomeAutor],
+                   ["aprovador", d.nomeAprovador], ["dataCadastro", d.dataPt],
+                   ["status", d.statusPt]] },
+        "Você está recebendo este comunicado por ser o autor ou participante da equipe desta iniciativa.",
+        "Acompanhe pela Biblioteca Kaizen:",
+        { link: URL_BIBLIOTECA },
+      ],
+    }),
+    en: (d) => ({
+      assunto: "[Kaizen] Initiative registered",
+      linhas: [
+        "Hello.",
+        "The Kaizen below has been registered and is awaiting approval.",
+        { campos: [["codigo", d.codigo], ["titulo", d.titulo], ["site", d.site],
+                   ["categoria", d.categoriaEn], ["autor", d.nomeAutor],
+                   ["aprovador", d.nomeAprovador], ["dataCadastro", d.dataEn],
+                   ["status", d.statusEn]] },
+        "You are receiving this notice as the author or a team member of this initiative.",
+        "Follow it in the Kaizen Library:",
+        { link: URL_BIBLIOTECA },
+      ],
+    }),
+  },
+
+  // Cadastro — vai só para quem tem de aprovar, com o link da fila.
+  pendenteAprovacao: {
+    pt: (d) => ({
+      assunto: "[Kaizen] Iniciativa aguardando sua aprovação",
+      linhas: [
+        `Olá, ${d.nomeAprovador}.`,
+        "Um Kaizen foi enviado para a sua aprovação.",
+        { campos: [["codigo", d.codigo], ["titulo", d.titulo], ["site", d.site],
+                   ["categoria", d.categoriaPt], ["autor", d.nomeAutor],
+                   ["dataCadastro", d.dataPt], ["status", d.statusPt]] },
+        "Acesse a fila de aprovação para analisar a iniciativa:",
+        { link: URL_APROVACAO },
+      ],
+    }),
+    en: (d) => ({
+      assunto: "[Kaizen] Initiative awaiting your approval",
+      linhas: [
+        `Hello, ${d.nomeAprovador}.`,
+        "A Kaizen has been submitted for your approval.",
+        { campos: [["codigo", d.codigo], ["titulo", d.titulo], ["site", d.site],
+                   ["categoria", d.categoriaEn], ["autor", d.nomeAutor],
+                   ["dataCadastro", d.dataEn], ["status", d.statusEn]] },
+        "Access the approval queue to review the initiative:",
+        { link: URL_APROVACAO },
+      ],
+    }),
+  },
+
   aprovado: {
     pt: (d) => ({
       assunto: "[Kaizen] Iniciativa aprovada",
       linhas: [
-        `Olá, ${d.nomeAutor}.`,
-        "Seu Kaizen abaixo foi aprovado com sucesso.",
+        "Olá.",
+        "O Kaizen abaixo foi aprovado com sucesso.",
         { campos: [["codigo", d.codigo], ["titulo", d.titulo], ["site", d.site],
-                   ["status", d.statusPt], ["aprovador", d.nomeAprovador], ["data", d.dataPt]] },
+                   ["autor", d.nomeAutor], ["status", d.statusPt],
+                   ["aprovador", d.nomeAprovador], ["data", d.dataPt]] },
         "Parabéns! Sua iniciativa foi aprovada e seguirá o fluxo definido pelo programa Kaizen.",
         "Acesse o sistema para mais detalhes:",
         { link: URL_APROVACAO },
@@ -101,10 +164,11 @@ const TEMPLATES = {
     en: (d) => ({
       assunto: "[Kaizen] Initiative approved",
       linhas: [
-        `Hello, ${d.nomeAutor}.`,
-        "Your Kaizen below has been successfully approved.",
+        "Hello.",
+        "The Kaizen below has been successfully approved.",
         { campos: [["codigo", d.codigo], ["titulo", d.titulo], ["site", d.site],
-                   ["status", d.statusEn], ["aprovador", d.nomeAprovador], ["data", d.dataEn]] },
+                   ["autor", d.nomeAutor], ["status", d.statusEn],
+                   ["aprovador", d.nomeAprovador], ["data", d.dataEn]] },
         "Congratulations! Your initiative has been approved and will follow the flow defined by the Kaizen program.",
         "Access the system for more details:",
         { link: URL_APROVACAO },
@@ -116,10 +180,10 @@ const TEMPLATES = {
     pt: (d) => ({
       assunto: "[Kaizen] Iniciativa não aprovada",
       linhas: [
-        `Olá, ${d.nomeAutor}.`,
+        "Olá.",
         "Após avaliação, o Kaizen abaixo não foi aprovado.",
         { campos: [["codigo", d.codigo], ["titulo", d.titulo], ["site", d.site],
-                   ["aprovador", d.nomeAprovador], ["data", d.dataPt]] },
+                   ["autor", d.nomeAutor], ["aprovador", d.nomeAprovador], ["data", d.dataPt]] },
         "Motivo informado pelo aprovador:",
         { destaque: d.motivo },
         "Caso necessário, consulte seu gestor ou responsável local para orientação.",
@@ -128,10 +192,10 @@ const TEMPLATES = {
     en: (d) => ({
       assunto: "[Kaizen] Initiative not approved",
       linhas: [
-        `Hello, ${d.nomeAutor}.`,
+        "Hello.",
         "After review, the Kaizen below was not approved.",
         { campos: [["codigo", d.codigo], ["titulo", d.titulo], ["site", d.site],
-                   ["aprovador", d.nomeAprovador], ["data", d.dataEn]] },
+                   ["autor", d.nomeAutor], ["aprovador", d.nomeAprovador], ["data", d.dataEn]] },
         "Reason given by the approver:",
         { destaque: d.motivo },
         "If needed, contact your manager or local representative for guidance.",
@@ -145,10 +209,10 @@ const TEMPLATES = {
     pt: (d) => ({
       assunto: "[Kaizen] Ajustes solicitados em sua iniciativa",
       linhas: [
-        `Olá, ${d.nomeAutor}.`,
-        "Seu Kaizen foi analisado e necessita de ajustes antes de uma nova avaliação.",
+        "Olá.",
+        "O Kaizen abaixo foi analisado e necessita de ajustes antes de uma nova avaliação.",
         { campos: [["codigo", d.codigo], ["titulo", d.titulo], ["site", d.site],
-                   ["aprovador", d.nomeAprovador], ["data", d.dataPt]] },
+                   ["autor", d.nomeAutor], ["aprovador", d.nomeAprovador], ["data", d.dataPt]] },
         "Comentários do aprovador:",
         { destaque: d.motivo },
         "Para realizar as correções, acesse a Biblioteca Kaizen:",
@@ -159,10 +223,10 @@ const TEMPLATES = {
     en: (d) => ({
       assunto: "[Kaizen] Changes requested in your initiative",
       linhas: [
-        `Hello, ${d.nomeAutor}.`,
-        "Your Kaizen has been reviewed and needs changes before a new evaluation.",
+        "Hello.",
+        "The Kaizen below has been reviewed and needs changes before a new evaluation.",
         { campos: [["codigo", d.codigo], ["titulo", d.titulo], ["site", d.site],
-                   ["aprovador", d.nomeAprovador], ["data", d.dataEn]] },
+                   ["autor", d.nomeAutor], ["aprovador", d.nomeAprovador], ["data", d.dataEn]] },
         "Approver comments:",
         { destaque: d.motivo },
         "To make the corrections, access the Kaizen Library:",
@@ -229,18 +293,22 @@ function montarMensagem(momento, dados) {
 // ------------------------------------------------------------------
 
 /**
- * Monta o aviso da decisão para o autor da iniciativa.
+ * Monta um comunicado do Kaizen.
  *
- * @param {string} momento   "aprovado" | "reprovado" | "alteracao"
- * @param {object} dados     dados REAIS do Kaizen, lidos do banco:
- *   idKaizen, idStatus, codigo, titulo, site, nomeAutor, emailAutor,
- *   nomeAprovador, statusPt, statusEn, dataDecisao, motivo
- * @returns {{chave, de, para, assunto, html}|{erro}} o objeto que a tela
- *   entrega ao Graph; `erro` quando não há a quem enviar.
+ * @param {string} momento  "cadastrado" | "pendenteAprovacao" |
+ *                          "aprovado" | "reprovado" | "alteracao"
+ * @param {string[]} destinatarios  e-mails reais; nulos e repetidos são
+ *   descartados aqui, para nenhum fluxo precisar lembrar de fazer isso.
+ * @param {object} dados    dados REAIS do Kaizen, lidos do banco.
+ * @returns {{chave, de, para, assunto, html}|{erro}} `erro` quando não
+ *   sobrou ninguém a quem enviar.
  */
-function montarAvisoDecisao(momento, dados) {
-  if (!dados.emailAutor) {
-    return { erro: "autor sem e-mail cadastrado no MDM" };
+function montarAviso(momento, destinatarios, dados) {
+  const para = [...new Set((destinatarios || [])
+    .map((e) => String(e || "").trim())
+    .filter((e) => e.includes("@")))];
+  if (!para.length) {
+    return { erro: `sem destinatário com e-mail no MDM (${momento})` };
   }
   const { assunto, html } = montarMensagem(momento, {
     ...dados,
@@ -248,14 +316,14 @@ function montarAvisoDecisao(momento, dados) {
     dataEn: formatarData(dados.dataDecisao, "en"),
   });
   return {
-    // Identifica a decisão: a tela usa para não enviar duas vezes o
+    // Identifica o comunicado: a tela usa para não enviar duas vezes o
     // mesmo aviso e o servidor usa no log.
     chave: `${dados.idKaizen}:${dados.idStatus}:${momento}`,
     de: REMETENTE,
-    para: dados.emailAutor,
+    para,
     assunto,
     html,
   };
 }
 
-module.exports = { montarAvisoDecisao, TEMPLATES, montarMensagem, formatarData, REMETENTE };
+module.exports = { montarAviso, TEMPLATES, montarMensagem, formatarData, REMETENTE };

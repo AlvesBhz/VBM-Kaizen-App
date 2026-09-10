@@ -1,14 +1,16 @@
 /**
- * VBM Kaizen — envio do aviso da decisão pelo Microsoft Graph.
+ * VBM Kaizen — envio dos comunicados do Kaizen pelo Microsoft Graph.
  *
- * Quem envia é o NAVEGADOR, com o token delegado do aprovador logado:
+ * Cobre o cadastro (equipe + aprovador) e as três decisões.
+ *
+ * Quem envia é o NAVEGADOR, com o token delegado de quem está logado:
  * é o perfil dele que autentica, e a mensagem sai pela caixa
  * compartilhada PCI.Base.Metals@Vale.com (ele precisa ter "Enviar Como"
  * nessa caixa). Não há client secret nem identidade de aplicação em
  * nenhum ponto — ver js/msal-config.js.
  *
- * O CONTEÚDO NÃO É MONTADO AQUI. O servidor devolve o aviso pronto
- * (destinatário, assunto e corpo) na resposta da decisão, gerado a
+ * O CONTEÚDO NÃO É MONTADO AQUI. O servidor devolve os comunicados
+ * prontos (destinatários, assunto e corpo) na resposta, gerados a
  * partir da linha já gravada no banco (email-kaizen.js). Esta camada só
  * entrega ao Graph e informa o resultado de volta, para o log ficar no
  * servidor como o dos demais fluxos.
@@ -19,6 +21,10 @@
   var GRAPH = 'https://graph.microsoft.com/v1.0';
   var ESCOPOS = ['Mail.Send.Shared'];
   var enviados = {};   // chave da decisão -> true; evita disparo repetido
+
+  function destinatarios(para) {
+    return Array.isArray(para) ? para : [para];
+  }
 
   function avisarServidor(idKaizen, chave, ok, motivo) {
     // Falha aqui não afeta nada na tela: é só o registro do envio.
@@ -73,7 +79,11 @@
             message: {
               subject: aviso.assunto,
               body: { contentType: 'HTML', content: aviso.html },
-              toRecipients: [{ emailAddress: { address: aviso.para } }]
+              // `para` é lista: o dono do Kaizen e os participantes da
+              // equipe recebem o MESMO comunicado, num envio só.
+              toRecipients: destinatarios(aviso.para).map(function (e) {
+                return { emailAddress: { address: e } };
+              })
             },
             saveToSentItems: true
           })
@@ -97,5 +107,17 @@
       });
   }
 
-  window.VBMEmail = { enviar: enviar };
+  /** Envia a lista de comunicados que veio na resposta (cadastro manda
+   *  dois: equipe e aprovador; decisão manda um). Em sequência, não em
+   *  paralelo: o token é o mesmo e o primeiro envio já o deixa em cache. */
+  function enviarTodos(avisos, idKaizen) {
+    var lista = Array.isArray(avisos) ? avisos : (avisos ? [avisos] : []);
+    return lista.reduce(function (fila, aviso) {
+      return fila.then(function (acc) {
+        return enviar(aviso, idKaizen).then(function (r) { return acc.concat([r]); });
+      });
+    }, Promise.resolve([]));
+  }
+
+  window.VBMEmail = { enviar: enviar, enviarTodos: enviarTodos };
 })();
