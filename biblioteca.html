@@ -544,22 +544,23 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
           <p style="font-size:.82rem;color:rgba(255,255,255,.5);max-width:440px;line-height:1.6;" data-i18n="bib.heroDesc">Todos os Kaizens aprovados da organização. Consulte, inspire-se e replique melhorias em sua área.</p>
         </div>
         <div style="background:rgba(255,255,255,.08);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.14);border-radius:.9rem;padding:1.1rem 1.4rem;min-width:220px;box-shadow:0 8px 32px rgba(0,0,0,.18);">
-          <div style="font-size:.58rem;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:.75rem;" data-i18n="bib.summaryTitle">Resumo da Biblioteca</div>
-          <div style="display:flex;flex-direction:column;gap:.55rem;" id="bibResumoAnos">
-            <!-- populado via GET /api/kaizens/resumo -->
-          </div>
-          <div style="height:1px;background:rgba(255,255,255,.1);margin:.55rem 0;"></div>
+          <div style="font-family:'Poppins',sans-serif;font-size:.8rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.85);text-align:center;margin-bottom:.75rem;" data-i18n="bib.summaryTitle">Resumo da Biblioteca</div>
           <div style="display:flex;flex-direction:column;gap:.55rem;">
+            <!-- Uma linha por ano, montada em carregarResumo(). -->
+            <div id="bibResumoAnos" style="display:flex;flex-direction:column;gap:.55rem;"></div>
+            <div style="height:1px;background:rgba(255,255,255,.1);"></div>
+            <!-- Só rótulo e número: os marcadores coloridos saíram para o
+                 painel ficar igual ao Resumo da Aprovação. -->
             <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
-              <span style="font-size:.72rem;color:rgba(255,255,255,.55);display:flex;align-items:center;gap:.4rem;"><span style="width:7px;height:7px;border-radius:50%;background:#16a34a;display:inline-block;"></span> <span data-i18n="badge.aprovados">Aprovados</span></span>
+              <span style="font-size:.72rem;color:rgba(255,255,255,.55);" data-i18n="badge.aprovados">Aprovados</span>
               <span style="font-family:'Poppins', sans-serif;font-weight:700;font-size:.85rem;color:#fff;" id="bibQtdAprovado">—</span>
             </div>
             <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
-              <span style="font-size:.72rem;color:rgba(255,255,255,.55);display:flex;align-items:center;gap:.4rem;"><span style="width:7px;height:7px;border-radius:50%;background:#dc2626;display:inline-block;"></span> <span data-i18n="badge.reprovados">Reprovados</span></span>
+              <span style="font-size:.72rem;color:rgba(255,255,255,.55);" data-i18n="badge.reprovados">Reprovados</span>
               <span style="font-family:'Poppins', sans-serif;font-weight:700;font-size:.85rem;color:#fff;" id="bibQtdReprovado">—</span>
             </div>
             <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
-              <span style="font-size:.72rem;color:rgba(255,255,255,.55);display:flex;align-items:center;gap:.4rem;"><span style="width:7px;height:7px;border-radius:50%;background:#f59e0b;display:inline-block;"></span> <span data-i18n="badge.aguardando">Aguardando</span></span>
+              <span style="font-size:.72rem;color:rgba(255,255,255,.55);" data-i18n="badge.aguardando">Aguardando</span>
               <span style="font-family:'Poppins', sans-serif;font-weight:700;font-size:.85rem;color:#fff;" id="bibQtdAguardando">—</span>
             </div>
           </div>
