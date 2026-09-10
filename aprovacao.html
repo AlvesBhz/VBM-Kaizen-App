@@ -642,6 +642,14 @@ function travarDecisao(travado) {
   botoesDecisao().forEach(function (b) { b.disabled = travado; });
 }
 
+// Fecha o pop-up de ampliação se ele estiver aberto. O bloco de decisão
+// volta para o painel sozinho — quem devolve é o observador registrado
+// junto do botão de ampliar.
+function fecharAmpliado() {
+  var m = document.getElementById('modalKaizenAmpliado');
+  if (m && m.classList.contains('open') && window.closeModal) window.closeModal('modalKaizenAmpliado');
+}
+
 function decidir(tipo) {
   var cfg = DECISOES[tipo];
   // Duplo clique / clique durante o envio não pode virar 2 registros.
@@ -674,6 +682,7 @@ function decidir(tipo) {
         // Recarregar deixa a tela mostrar o que existe de verdade, em
         // vez de manter um item que só vai recusar de novo.
         if (res.status === 404 || res.status === 403 || res.status === 409) {
+          fecharAmpliado();
           window.recarregarAprovacao();
         }
         throw new Error((res.c && res.c.error) || txt('ap.decisionFailed', 'Falha ao registrar a decisão.'));
@@ -681,6 +690,9 @@ function decidir(tipo) {
       showToast(cfg.tom, txt(cfg.chave, 'Decisão registrada'), txt('ap.authorNotified', 'O autor será notificado.'));
       campo.value = '';
       atualizarContador();
+      // Decidido pelo pop-up, o Kaizen sai da fila: manter a janela
+      // aberta deixaria na tela um Kaizen que não está mais lá.
+      fecharAmpliado();
       // Fila, resumo e Kaizen selecionado saem do banco de novo — o que
       // some da fila e o que muda no resumo vêm da mesma fonte.
       window.recarregarAprovacao();
@@ -840,15 +852,49 @@ function atualizarContador() {
   // Clona o painel já renderizado em vez de montar tudo de novo: o que
   // aparece ampliado é exatamente o que está na tela, sem consulta
   // extra e sem uma segunda montagem para divergir da primeira.
+  //
+  // O bloco de decisão é a exceção: ele NÃO é clonado, é MOVIDO para
+  // dentro do modal e devolvido ao painel no fechamento. Cópia não
+  // carrega listener nem id — no pop-up o contador ficava em 0/300 e os
+  // botões não respondiam. Movendo o nó real, o campo, o contador, as
+  // travas e os três botões são exatamente os mesmos, e continua
+  // existindo um único bloco de decisão na página.
+  var decisaoOrigem = null;   // onde o bloco mora quando o modal está fechado
+
+  function moverDecisaoPara(destino) {
+    var bloco = document.getElementById('apDecisao');
+    if (!bloco || !destino) return;
+    if (!decisaoOrigem) decisaoOrigem = { pai: bloco.parentNode, proximo: bloco.nextSibling };
+    destino.appendChild(bloco);
+  }
+  function devolverDecisaoAoPainel() {
+    var bloco = document.getElementById('apDecisao');
+    if (!bloco || !decisaoOrigem || bloco.parentNode === decisaoOrigem.pai) return;
+    decisaoOrigem.pai.insertBefore(bloco, decisaoOrigem.proximo);
+  }
+
+  var backdropAmpliado = document.getElementById('modalKaizenAmpliado');
+  if (backdropAmpliado && window.MutationObserver) {
+    // O modal fecha por ESC, clique fora e botão X — todos tratados pelo
+    // initModals() global, que só tira a classe .open. Observar a classe
+    // cobre os três sem duplicar aquele tratamento aqui.
+    new MutationObserver(function () {
+      if (!backdropAmpliado.classList.contains('open')) devolverDecisaoAoPainel();
+    }).observe(backdropAmpliado, { attributes: true, attributeFilter: ['class'] });
+  }
+
   var btnAmpliar = document.getElementById('btnAmpliarKaizen');
   if (btnAmpliar) {
     btnAmpliar.addEventListener('click', function () {
       var corpo = document.getElementById('corpoKaizenAmpliado');
       if (!corpo || !panel) return;
+      // Devolve antes de clonar: se o bloco ainda estivesse no modal, o
+      // clone sairia sem ele.
+      devolverDecisaoAoPainel();
       var copia = panel.cloneNode(true);
-      // Fora do painel esses dois não fazem sentido: o botão de ampliar
-      // (já estamos ampliados) e a área de decisão, que fica no painel
-      // para o aprovador agir de um lugar só.
+      // No clone não faz sentido o botão de ampliar (já estamos
+      // ampliados) nem a cópia morta da decisão — o bloco real entra
+      // depois, movido.
       var lixo = copia.querySelector('#btnAmpliarKaizen');
       if (lixo) lixo.remove();
       var decisao = copia.querySelector('#apDecisao');
@@ -860,6 +906,7 @@ function atualizarContador() {
       copia.style.maxHeight = 'none';
       corpo.innerHTML = '';
       corpo.appendChild(copia);
+      moverDecisaoPara(corpo);
       var titulo = document.getElementById('tituloKaizenAmpliado');
       var nome = document.getElementById('kdHeadTitle');
       if (titulo && nome) titulo.textContent = nome.textContent;
