@@ -2153,6 +2153,7 @@ async function idStatusPorNome(nomes) {
 const NOMES_EM_APROVACAO = ["Aguardando aprovação", "Em aprovação", "Aguardando", "Em análise"];
 const NOMES_APROVADO = ["Aprovado", "Aprovada", "Concluído"];
 const NOMES_REPROVADO = ["Reprovado", "Rejeitado", "Reprovada"];
+const NOMES_ALTERACAO = ["Solicitar alterações", "Solicitar alteração", "Em alteração", "Ajuste solicitado"];
 
 /** ID de cada momento do ciclo: variável de ambiente primeiro, nome no
  *  cadastro depois. TODO ponto que precisa de um ID_STATUS passa por
@@ -2163,6 +2164,7 @@ async function idDoStatus(momento) {
   if (daEnv != null) return daEnv;
   const nomes = momento === "aprovado" ? NOMES_APROVADO
               : momento === "reprovado" ? NOMES_REPROVADO
+              : momento === "alteracao" ? NOMES_ALTERACAO
               : NOMES_EM_APROVACAO;
   return idStatusPorNome(nomes);
 }
@@ -2767,72 +2769,78 @@ async function souOAprovadorDoKaizen(idKaizen, idUsuario) {
   return r.recordset.length > 0;
 }
 
-apiRouter.post("/kaizens/:id/aprovar", async (req, res) => {
-  try {
-    const idKaizen = parseInt(req.params.id, 10);
-    const idUsuario = await idUsuarioLogado(req);
-    if (!idUsuario) return res.status(401).json({ error: "Não foi possível identificar o usuário logado." });
-    if (!(await souOAprovadorDoKaizen(idKaizen, idUsuario))) {
-      return res.status(403).json({ error: "Você não é o aprovador designado deste Kaizen (ou ele já foi decidido)." });
-    }
-    // Sem catálogo não há como registrar QUAL foi a decisão: recusa em
-    // vez de marcar o Kaizen como decidido sem dizer como.
-    const idAprovado = await idDoStatus("aprovado");
-    if (idAprovado == null) return res.status(503).json({ error: ERRO_STATUS_NAO_CONFIGURADO });
-    await runQuery(
-      `UPDATE ${FULL_PVC_TABLE}
-       SET ID_STATUS = @idStatus, DT_CONCLUSAO = ${AGORA_BRASILIA}, DT_ATUALIZACAO = ${AGORA_BRASILIA}, ID_USUARIO_ATUALIZACAO = @idUsuario
-       WHERE ID_KAIZEN = @idKaizen`,
-      [["idKaizen", sql.Int, idKaizen], ["idUsuario", sql.Int, idUsuario],
-       ["idStatus", sql.Int, idAprovado]]
-    );
-    res.json({ ok: true });
-  } catch (err) {
-    console.error("[aprovar] erro:", err.message);
-    res.status(500).json({ error: "Erro ao aprovar: " + err.message });
-  }
-});
-
-// Reprovar: a pessoa ESCREVE o motivo, e o texto vai direto para
-// kzn_pedravisaoconsolidada.DS_MOTIVO (VARCHAR(100) no DER).
-//
-// Antes o motivo virava uma linha nova em kzn_motivo_reprovacao — nos 2
-// idiomas, com o mesmo texto — e o Kaizen guardava só o ID_MOTIVO. Essa
-// tabela saiu do DER: cada reprovação criava um "cadastro" novo que
-// ninguém reaproveitava, e o texto era de um Kaizen só. Guardado na
-// própria linha do Kaizen, some a transação, somem os 3 comandos e some
-// o cadastro que crescia sem controle.
-apiRouter.post("/kaizens/:id/reprovar", async (req, res) => {
+/** Registra uma decisão do aprovador. Aprovar, reprovar e solicitar
+ *  alteração só diferem em três coisas — o status gravado, se o motivo
+ *  é obrigatório e se a decisão encerra o Kaizen —, então dividem o
+ *  mesmo caminho: validação, permissão, limite de texto e gravação em
+ *  um lugar só. */
+async function registrarDecisao(req, res, opcoes) {
   try {
     const idKaizen = parseInt(req.params.id, 10);
     const motivo = String((req.body && req.body.motivo) || "").trim();
-    if (!motivo) return res.status(400).json({ error: "Motivo da reprovação é obrigatório." });
-    if (motivo.length > PVC_LIMITES.DS_MOTIVO) {
-      return res.status(400).json({ error: `Motivo deve ter no máximo ${PVC_LIMITES.DS_MOTIVO} caracteres.` });
+
+    if (opcoes.motivoObrigatorio && !motivo) {
+      return res.status(400).json({ error: opcoes.erroMotivo });
     }
+    if (motivo.length > PVC_LIMITES.DS_MOTIVO) {
+      return res.status(400).json({
+        error: `Motivo deve ter no máximo ${PVC_LIMITES.DS_MOTIVO} caracteres.`,
+      });
+    }
+
     const idUsuario = await idUsuarioLogado(req);
     if (!idUsuario) return res.status(401).json({ error: "Não foi possível identificar o usuário logado." });
     if (!(await souOAprovadorDoKaizen(idKaizen, idUsuario))) {
       return res.status(403).json({ error: "Você não é o aprovador designado deste Kaizen (ou ele já foi decidido)." });
     }
-    const idReprovado = await idDoStatus("reprovado");
-    if (idReprovado == null) return res.status(503).json({ error: ERRO_STATUS_NAO_CONFIGURADO });
+
+    const idStatus = await idDoStatus(opcoes.momento);
+    if (idStatus == null) return res.status(503).json({ error: ERRO_STATUS_NAO_CONFIGURADO });
+
+    // DS_MOTIVO só entra no comando quando há texto: aprovar sem
+    // comentário não deve apagar nada nem gravar string vazia.
+    const gravaMotivo = motivo.length > 0;
+    const params = [
+      ["idKaizen", sql.Int, idKaizen], ["idUsuario", sql.Int, idUsuario],
+      ["idStatus", sql.Int, idStatus],
+    ];
+    if (gravaMotivo) params.push(["motivo", sql.NVarChar(PVC_LIMITES.DS_MOTIVO), motivo]);
 
     await runQuery(
       `UPDATE ${FULL_PVC_TABLE}
-       SET ID_STATUS = @idStatus, DS_MOTIVO = @motivo,
+       SET ID_STATUS = @idStatus${gravaMotivo ? ", DS_MOTIVO = @motivo" : ""}${opcoes.conclui ? `, DT_CONCLUSAO = ${AGORA_BRASILIA}` : ""},
            DT_ATUALIZACAO = ${AGORA_BRASILIA}, ID_USUARIO_ATUALIZACAO = @idUsuario
        WHERE ID_KAIZEN = @idKaizen`,
-      [["idKaizen", sql.Int, idKaizen], ["idUsuario", sql.Int, idUsuario],
-       ["idStatus", sql.Int, idReprovado],
-       ["motivo", sql.NVarChar(PVC_LIMITES.DS_MOTIVO), motivo]]
+      params
     );
-    res.json({ ok: true });
+    res.json({ ok: true, ID_STATUS: idStatus });
   } catch (err) {
-    console.error("[reprovar] erro:", err.message);
-    res.status(500).json({ error: "Erro ao reprovar: " + err.message });
+    console.error(`[${opcoes.momento}] erro:`, err.message);
+    res.status(500).json({ error: "Erro ao registrar a decisão: " + err.message });
   }
-});
+}
+
+// Aprovar — motivo OPCIONAL (é um comentário, não uma justificativa).
+apiRouter.post("/kaizens/:id/aprovar", (req, res) =>
+  registrarDecisao(req, res, { momento: "aprovado", motivoObrigatorio: false, conclui: true }));
+
+// Reprovar — motivo obrigatório; o texto vai direto para PVC.DS_MOTIVO.
+//
+// Antes o motivo virava uma linha nova em kzn_motivo_reprovacao, nos 2
+// idiomas, e o Kaizen guardava só o ID_MOTIVO. Essa tabela saiu do DER.
+apiRouter.post("/kaizens/:id/reprovar", (req, res) =>
+  registrarDecisao(req, res, {
+    momento: "reprovado", motivoObrigatorio: true, conclui: false,
+    erroMotivo: "Motivo da reprovação é obrigatório.",
+  }));
+
+// Solicitar alteração — devolve o Kaizen ao autor com o que corrigir.
+// Não conclui: o Kaizen volta a andar depois do ajuste.
+apiRouter.post("/kaizens/:id/solicitar-alteracao", (req, res) =>
+  registrarDecisao(req, res, {
+    momento: "alteracao", motivoObrigatorio: true, conclui: false,
+    erroMotivo: "Descreva o que precisa ser corrigido.",
+  }));
 
 app.use("/api", apiRouter);
 

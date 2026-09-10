@@ -530,15 +530,21 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
               <span data-i18n="ap.approvalDecision">Decisão de Aprovação</span>
             </div>
             <div class="form-group" id="kdMotivoWrap">
-              <label class="form-label" data-i18n="ap.rejectReason">Motivo da Reprovação <span class="req">*</span></label>
-              <textarea class="form-control" rows="3" id="kdMotivo" placeholder="Descreva o motivo da reprovação (obrigatório ao reprovar)..." data-i18n-placeholder="ap.commentPlaceholder"></textarea>
-              <div class="form-helper" data-i18n="ap.rejectReasonHelper">Máximo de 100 caracteres. Fica registrado vinculado a este Kaizen.</div>
+              <label class="form-label" data-i18n="ap.rejectReason">Motivo da Reprovação ou correção</label>
+              <textarea class="form-control" rows="3" id="kdMotivo" maxlength="300" placeholder="Descreva o motivo da reprovação (obrigatório ao reprovar)..." data-i18n-placeholder="ap.commentPlaceholder"></textarea>
+              <div style="display:flex;justify-content:space-between;gap:1rem;">
+                <div class="form-helper" data-i18n="ap.rejectReasonHelper">Máximo de 300 caracteres. Fica registrado vinculado a este Kaizen.</div>
+                <div class="form-helper" id="kdMotivoContador">0/300</div>
+              </div>
             </div>
             <div class="ap-actions">
-              <button class="btn btn-danger ap-action-btn" onclick="handleReject()">
-                <i class="fa-solid fa-circle-xmark"></i> <span data-i18n="ap.reject">Reprovar</span>
+              <button class="btn btn-outline ap-action-btn" data-decisao="alteracao">
+                <i class="fa-solid fa-rotate-left"></i> <span data-i18n="ap.requestChange">Solicitar alteração</span>
               </button>
-              <button class="btn btn-success ap-action-btn" onclick="handleApprove()">
+              <button class="btn btn-danger ap-action-btn" data-decisao="reprovar">
+                <i class="fa-solid fa-circle-xmark"></i> <span data-i18n="ap.reject">Rejeitar</span>
+              </button>
+              <button class="btn btn-success ap-action-btn" data-decisao="aprovar">
                 <i class="fa-solid fa-circle-check"></i> <span data-i18n="ap.approveKaizen">Aprovar Kaizen</span>
               </button>
             </div>
@@ -596,7 +602,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" data-modal-close data-i18n="common.cancelar">Cancelar</button>
-      <button class="btn btn-success" onclick="handleApprove();closeModal('modalEditKaizen')">
+      <button class="btn btn-success" onclick="closeModal('modalEditKaizen');decidir('aprovar')">
         <i class="fa-solid fa-circle-check"></i> <span data-i18n="ap.saveAndApprove">Salvar e Aprovar</span>
       </button>
     </div>
@@ -612,41 +618,73 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 // ─── Aprovação: fila + decisão, ligado ao banco (era mock) ───
 var kaizenSelecionadoId = null;
 
-function handleApprove() {
-  if (!kaizenSelecionadoId) return;
-  fetch('/api/kaizens/' + kaizenSelecionadoId + '/aprovar', { method: 'POST' })
-    .then(function (r) { return r.json().then(function (c) { return { ok: r.ok, c: c }; }); })
-    .then(function (res) {
-      if (!res.ok) throw new Error((res.c && res.c.error) || 'Falha ao aprovar.');
-      showToast('success', 'Kaizen Aprovado!', 'O autor será notificado.');
-      removerDaFila(kaizenSelecionadoId);
-    })
-    .catch(function (err) { showToast('error', 'Erro ao aprovar', err.message); });
+// As 3 decisões dividem o mesmo caminho: o que muda é a rota, se o
+// motivo é obrigatório e a mensagem de sucesso.
+var DECISOES = {
+  aprovar:   { rota: 'aprovar',              exigeMotivo: false, tom: 'success', chave: 'ap.okApproved' },
+  reprovar:  { rota: 'reprovar',             exigeMotivo: true,  tom: 'warning', chave: 'ap.okRejected' },
+  alteracao: { rota: 'solicitar-alteracao',  exigeMotivo: true,  tom: 'info',    chave: 'ap.okChangeRequested' },
+};
+var decisaoEmCurso = false;
+
+function txt(chave, padrao) {
+  return (window.__i18n && window.__i18n[chave]) || padrao;
 }
-function handleReject() {
-  if (!kaizenSelecionadoId) return;
-  var motivo = document.getElementById('kdMotivo').value.trim();
-  if (!motivo) {
-    showToast('error', 'Campo obrigatório', 'Descreva o motivo da reprovação.', 4000);
+function botoesDecisao() {
+  return Array.prototype.slice.call(document.querySelectorAll('.ap-actions [data-decisao]'));
+}
+function travarDecisao(travado) {
+  decisaoEmCurso = travado;
+  botoesDecisao().forEach(function (b) { b.disabled = travado; });
+}
+
+function decidir(tipo) {
+  var cfg = DECISOES[tipo];
+  // Duplo clique / clique durante o envio não pode virar 2 registros.
+  if (!cfg || !kaizenSelecionadoId || decisaoEmCurso) return;
+
+  var campo = document.getElementById('kdMotivo');
+  var motivo = (campo.value || '').trim();   // trim antes de tudo: só espaço não é motivo
+  if (cfg.exigeMotivo && !motivo) {
+    showToast('error', txt('ap.requiredField', 'Campo obrigatório'),
+              txt('ap.reasonRequired', 'Descreva o motivo.'), 4000);
+    campo.focus();
     return;
   }
-  fetch('/api/kaizens/' + kaizenSelecionadoId + '/reprovar', {
+  if (motivo.length > 300) {
+    showToast('error', txt('ap.requiredField', 'Campo obrigatório'),
+              txt('ap.reasonTooLong', 'O motivo deve ter no máximo 300 caracteres.'), 4000);
+    return;
+  }
+
+  travarDecisao(true);
+  fetch('/api/kaizens/' + kaizenSelecionadoId + '/' + cfg.rota, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ motivo: motivo }),
   })
     .then(function (r) { return r.json().then(function (c) { return { ok: r.ok, c: c }; }); })
     .then(function (res) {
-      if (!res.ok) throw new Error((res.c && res.c.error) || 'Falha ao reprovar.');
-      showToast('warning', 'Kaizen Reprovado', 'O autor receberá o feedback.');
-      removerDaFila(kaizenSelecionadoId);
+      if (!res.ok) throw new Error((res.c && res.c.error) || txt('ap.decisionFailed', 'Falha ao registrar a decisão.'));
+      showToast(cfg.tom, txt(cfg.chave, 'Decisão registrada'), txt('ap.authorNotified', 'O autor será notificado.'));
+      campo.value = '';
+      atualizarContador();
+      // Fila, resumo e Kaizen selecionado saem do banco de novo — o que
+      // some da fila e o que muda no resumo vêm da mesma fonte.
+      carregarFila();
+      carregarResumo();
     })
-    .catch(function (err) { showToast('error', 'Erro ao reprovar', err.message); });
+    .catch(function (err) {
+      // O texto digitado FICA: refazer a justificativa por causa de uma
+      // falha de rede seria punir quem já escreveu.
+      showToast('error', txt('ap.decisionError', 'Erro ao registrar'), err.message);
+    })
+    .finally(function () { travarDecisao(false); });
 }
-function removerDaFila(id) {
-  var item = document.querySelector('.approval-item[data-kaizen="' + id + '"]');
-  if (item) item.remove();
-  document.getElementById('approvalDetail').style.display = 'none';
-  kaizenSelecionadoId = null;
+
+function atualizarContador() {
+  var campo = document.getElementById('kdMotivo');
+  var contador = document.getElementById('kdMotivoContador');
+  if (campo && contador) contador.textContent = (campo.value || '').length + '/300';
 }
 
 // ─── Fila de aprovação: só o que o usuário logado é o aprovador designado ───
@@ -704,8 +742,10 @@ function removerDaFila(id) {
     fetch('/api/aprovacoes', { headers: { Accept: 'application/json' } })
       .then(function (r) { return r.ok ? r.json() : []; })
       .then(function (itens) {
-        document.querySelector('.badge-glass').textContent = itens.length;
-        document.getElementById('apQtdPendentes').textContent = itens.length;
+        // #apQtdPendentes deixou de existir: a contagem de pendentes
+        // agora sai do resumo, junto com os demais status do cadastro.
+        var badge = document.querySelector('.badge-glass');
+        if (badge) badge.textContent = itens.length;
         if (!itens.length) {
           fila.innerHTML = '<p style="padding:1rem;color:var(--vbm-mid);font-size:.8rem;">Nenhuma aprovação pendente para você.</p>';
           panel.style.display = 'none';
@@ -812,6 +852,13 @@ function removerDaFila(id) {
       if (x && x.focus) x.focus();
     });
   }
+
+  botoesDecisao().forEach(function (b) {
+    b.addEventListener('click', function () { decidir(b.dataset.decisao); });
+  });
+  var campoMotivo = document.getElementById('kdMotivo');
+  if (campoMotivo) campoMotivo.addEventListener('input', atualizarContador);
+  atualizarContador();
 
   carregarFila();
   carregarResumo();
@@ -927,13 +974,13 @@ function removerDaFila(id) {
       'ap.membersCount': '3 membros',
       'ap.generatedValue': 'Valor Gerado',
       'ap.approvalDecision': 'Decisão de Aprovação',
-      'ap.rejectReason': 'Motivo da Reprovação',
-      'ap.rejectReasonHelper': 'Máximo de 100 caracteres. Fica registrado vinculado a este Kaizen.',
+      'ap.rejectReason': 'Motivo da Reprovação ou correção',
+      'ap.rejectReasonHelper': 'Máximo de 300 caracteres. Fica registrado vinculado a este Kaizen.',
       'ap.approverComment': 'Comentário do Aprovador',
       'ap.commentPlaceholder': 'Deixe um feedback para o autor (obrigatório ao reprovar)...',
       'ap.approveKaizen': 'Aprovar Kaizen',
       'ap.editAndApprove': 'Editar e Aprovar',
-      'ap.reject': 'Reprovar',
+      'ap.reject': 'Rejeitar',
       'ap.editKaizenAsApprover': 'Editar Kaizen (como Aprovador)',
       'ap.editWarning': 'Como aprovador, você pode editar os campos deste Kaizen antes de aprová-lo. Suas alterações serão registradas no histórico.',
       'ap.titulo': 'Título',
@@ -948,6 +995,16 @@ function removerDaFila(id) {
       'ap.heroTitle': 'APROVAÇÃO',
       'ap.expand': 'Ampliar',
       'ap.expandedTitle': 'Kaizen ampliado',
+      'ap.requestChange': 'Solicitar alteração',
+      'ap.requiredField': 'Campo obrigatório',
+      'ap.reasonRequired': 'Descreva o motivo.',
+      'ap.reasonTooLong': 'O motivo deve ter no máximo 300 caracteres.',
+      'ap.okApproved': 'Kaizen aprovado!',
+      'ap.okRejected': 'Kaizen rejeitado',
+      'ap.okChangeRequested': 'Alteração solicitada',
+      'ap.authorNotified': 'O autor será notificado.',
+      'ap.decisionFailed': 'Falha ao registrar a decisão.',
+      'ap.decisionError': 'Erro ao registrar',
       'ap.summaryTitle': 'Resumo {ano}'
     },
     'en': {
@@ -976,8 +1033,8 @@ function removerDaFila(id) {
       'ap.membersCount': '3 members',
       'ap.generatedValue': 'Value Generated',
       'ap.approvalDecision': 'Approval Decision',
-      'ap.rejectReason': 'Rejection Reason',
-      'ap.rejectReasonHelper': 'Max 100 characters. Recorded and linked to this Kaizen.',
+      'ap.rejectReason': 'Rejection or correction reason',
+      'ap.rejectReasonHelper': 'Max 300 characters. Recorded and linked to this Kaizen.',
       'ap.approverComment': "Approver's Comment",
       'ap.commentPlaceholder': 'Leave feedback for the author (required when rejecting)...',
       'ap.approveKaizen': 'Approve Kaizen',
@@ -997,6 +1054,16 @@ function removerDaFila(id) {
       'ap.heroTitle': 'APPROVAL',
       'ap.expand': 'Expand',
       'ap.expandedTitle': 'Expanded Kaizen',
+      'ap.requestChange': 'Request change',
+      'ap.requiredField': 'Required field',
+      'ap.reasonRequired': 'Describe the reason.',
+      'ap.reasonTooLong': 'The reason must be at most 300 characters.',
+      'ap.okApproved': 'Kaizen approved!',
+      'ap.okRejected': 'Kaizen rejected',
+      'ap.okChangeRequested': 'Change requested',
+      'ap.authorNotified': 'The author will be notified.',
+      'ap.decisionFailed': 'Could not record the decision.',
+      'ap.decisionError': 'Error recording',
       'ap.summaryTitle': 'Summary {ano}'
     }
   };
