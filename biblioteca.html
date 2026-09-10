@@ -296,44 +296,16 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
    e demais classificações) afastados um do outro para a leitura não
    depender de decorar a ordem. Quebra de linha quando falta espaço; sem
    corte de texto. */
-/* Duas colunas lado a lado: Categoria à esquerda, Redução de
-   Desperdícios à direita, cada uma com o rótulo em cima e os balões
-   embaixo. Sem linha divisória — a separação é o espaço entre elas.
-   A coluna da direita ganha um pouco mais de largura porque nome de
-   desperdício costuma ser mais longo. Card estreito volta a uma coluna
-   só, para nada ficar espremido. */
-.kaizen-card-tags {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
-  gap: .6rem 1.15rem;
-  align-items: start;
-}
-.kaizen-tag-grupo { display: flex; flex-direction: column; gap: .32rem; min-width: 0; }
-.kaizen-tag-lista { display: flex; flex-wrap: wrap; gap: .3rem; }
-/* Rótulo da coluna: pequeno e discreto, para nomear sem competir com os
-   balões. O fio curto à esquerda amarra o título à sua coluna. */
+.kaizen-card-tags { display: flex; flex-wrap: wrap; gap: .5rem 1.1rem; }
+.kaizen-tag-grupo { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .35rem; }
+/* Rótulo do grupo: diz o que os balões ao lado são, sem competir com
+   eles — menor, sem caixa e na cor de apoio. */
 .kaizen-tag-titulo {
-  font-size: .53rem; text-transform: uppercase; letter-spacing: .13em;
+  font-size: .55rem; text-transform: uppercase; letter-spacing: .12em;
   color: var(--vbm-mid); font-family: 'Poppins', sans-serif; font-weight: 600;
-  display: flex; align-items: flex-start; gap: .35rem; line-height: 1.25;
-  /* Duas linhas de altura mesmo quando o título ocupa uma: os balões das
-     duas colunas começam na mesma altura, em vez de um bloco subir. */
-  min-height: 2.5em;
-}
-.kaizen-tag-titulo::before { margin-top: .45em; }
-.kaizen-tag-titulo::before {
-  content: ''; width: 10px; height: 2px; border-radius: 2px;
-  background: currentColor; opacity: .45; flex-shrink: 0;
-}
-.grupo-desperdicio .kaizen-tag-titulo { color: var(--vbm-blue-dark); }
-@media (max-width: 460px) {
-  .kaizen-card-tags { grid-template-columns: minmax(0, 1fr); gap: .55rem; }
-  /* Em coluna única não há o que alinhar entre lados: a altura reservada
-     para o título viraria só um vão. */
-  .kaizen-tag-titulo { min-height: 0; }
+  margin-right: .1rem;
 }
 [data-bg="dark"] .kaizen-tag-titulo { color: rgba(255,255,255,.55); }
-[data-bg="dark"] .grupo-desperdicio .kaizen-tag-titulo { color: #8fdcff; }
 .kaizen-card-tags .kaizen-tag {
   background: rgba(255,255,255,.55);
   border: 1px solid rgba(16,24,40,.10);
@@ -422,7 +394,11 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 .data-table th:nth-child(6), .data-table td:nth-child(6),
 .data-table th:nth-child(7), .data-table td:nth-child(7) { text-align: center; }
 .data-table td:nth-child(6) .badge { display:inline-flex; }
-.data-table td:nth-child(7) .table-actions { justify-content: center; }
+/* A classe fica no proprio <td>, então o seletor tem de ser td.table-actions
+   — como descendente (td .table-actions) ele nunca casava, e os botões
+   ficavam encostados à esquerda, fora do eixo do título "Ações". */
+.data-table td.table-actions { justify-content: center; }
+.data-table th:last-child { text-align: center; }
 
 /* Badge de Categoria — largura fixa para todas as tags, independente
    do tamanho do texto, com o mesmo efeito vidro (glass) usado nas tags
@@ -638,7 +614,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
           <table class="data-table">
             <thead>
               <tr>
-                <th>#</th><th data-i18n="table.titulo">Título</th><th data-i18n="table.categoria">Categoria</th><th data-i18n="bib.unidade">Unidade</th><th data-i18n="table.data">Data</th><th data-i18n="table.status">Status</th><th data-i18n="table.acoes">Ações</th>
+                <th data-i18n="table.idKaizen">ID Kaizen</th><th data-i18n="table.titulo">Título</th><th data-i18n="table.categoria">Categoria</th><th data-i18n="bib.unidade">Unidade</th><th data-i18n="table.data">Data</th><th data-i18n="table.status">Status</th><th data-i18n="table.acoes">Ações</th>
               </tr>
             </thead>
             <tbody id="bibListaTabela">
@@ -854,14 +830,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     function grupo(valores, chaveTitulo, padraoTitulo, classeExtra) {
       var itens = (valores || []).filter(Boolean);
       if (!itens.length) return '';
-      return '<div class="kaizen-tag-grupo' + (classeExtra ? ' ' + classeExtra : '') + '">' +
+      return '<span class="kaizen-tag-grupo' + (classeExtra ? ' ' + classeExtra : '') + '">' +
         '<span class="kaizen-tag-titulo" data-i18n="' + chaveTitulo + '">' +
           escaparHtml(txtI18n(chaveTitulo, padraoTitulo)) + '</span>' +
-        '<div class="kaizen-tag-lista">' +
-          itens.map(function (v) {
-            return '<span class="kaizen-tag">' + escaparHtml(v) + '</span>';
-          }).join('') +
-        '</div></div>';
+        itens.map(function (v) {
+          return '<span class="kaizen-tag">' + escaparHtml(v) + '</span>';
+        }).join('') + '</span>';
     }
     // Categoria primeiro, desperdícios depois — a ordem pedida na tela.
     return grupo([k.NM_CATEGORIA], 'bib.groupCategoria', 'Categoria') +
@@ -905,6 +879,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       '<td class="table-actions">' +
       '<button class="btn-icon btn-icon-blue" title="Ver" data-ver-detalhe="' + k.ID_KAIZEN + '"><i class="fa-solid fa-eye"></i></button>' +
       '<button class="btn-icon" onclick="printKaizen(\'bibPrint\')" title="Imprimir"><i class="fa-solid fa-print"></i></button>' +
+      botaoEditarHtml(k) +
       '</td></tr>'
     );
   }
@@ -924,9 +899,11 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   /* Clique no lápis: abre a MESMA página de cadastro em modo de edição,
      levando só o ID_KAIZEN na navegação. Nada do conteúdo vai na URL —
      o formulário busca o registro no servidor, que confere a permissão
-     de novo antes de devolver qualquer campo. Delegado no container
-     porque os cards são remontados a cada filtro. */
-  bibList.addEventListener('click', function (e) {
+     de novo antes de devolver qualquer campo. Delegado nos containers
+     porque os cards e as linhas são remontados a cada filtro — e nos
+     DOIS, grade e lista, senão o mesmo botão funcionaria só numa
+     visão. */
+  function aoClicarEditar(e) {
     var botao = e.target.closest('[data-editar-kaizen]');
     if (!botao) return;
     e.preventDefault();
@@ -936,7 +913,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     // o estilo do desabilitado mudar.
     if (botao.disabled) return;
     window.location.href = 'kaizen-novo.html?id=' + encodeURIComponent(botao.dataset.editarKaizen);
-  });
+  }
+  bibList.addEventListener('click', aoClicarEditar);
+  if (bibTabela) bibTabela.addEventListener('click', aoClicarEditar);
 
   // Ano da CRIAÇÃO do Kaizen. A data chega da API como "2026-09-09T14:30:00"
   // (relógio, sem fuso — ver relogioLocal em server.js), então os 4
@@ -1294,6 +1273,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       'bib.total2024': 'Total 2024',
       'bib.total2025': 'Total 2025',
       'bib.total2026': 'Total 2026',
+      'table.idKaizen': 'ID Kaizen',
       'table.titulo': 'Título',
       'table.categoria': 'Categoria',
       'table.data': 'Data',
@@ -1361,6 +1341,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       'bib.total2024': 'Total 2024',
       'bib.total2025': 'Total 2025',
       'bib.total2026': 'Total 2026',
+      'table.idKaizen': 'Kaizen ID',
       'table.titulo': 'Title',
       'table.categoria': 'Category',
       'table.data': 'Date',
