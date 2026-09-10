@@ -330,6 +330,22 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 .form-control::placeholder { color: #a8a8a8; font-weight: 300; }
 [data-bg="dark"] .form-control::placeholder { color: rgba(255,255,255,.3); }
 .form-helper { font-size: .68rem; line-height: 1.5; }
+/* Contador de caracteres: divide a linha com o texto de ajuda do campo,
+   encostado à direita. Mesma escala do .form-helper para não virar um
+   segundo nível de informação. */
+.campo-contador-linha {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 1rem; margin-top: .3rem;
+}
+.campo-contador-linha .form-helper { margin: 0; }
+.campo-contador {
+  font-family: 'Poppins', sans-serif; font-size: .66rem; font-weight: 600;
+  color: var(--vbm-mid); white-space: nowrap; margin-left: auto;
+  font-variant-numeric: tabular-nums;   /* o número não "pula" ao digitar */
+}
+.campo-contador.no-limite { color: #c2770e; }
+[data-bg="dark"] .campo-contador { color: rgba(255,255,255,.55); }
+[data-bg="dark"] .campo-contador.no-limite { color: #f0b45f; }
 .field-tag-optional { font-weight: 400; }
 /* Textos dentro de componentes/"objetos" (toggle, checkbox de confirmação,
    zona de upload) estavam maiores que o restante da hierarquia — alinhados
@@ -1839,6 +1855,71 @@ createTeamPicker({
 // formulário. A pré-visualização local continua funcionando sozinha
 // (initPhotoUpload, em vbm-app.js, lê o arquivo com FileReader — não
 // depende deste upload).
+// ─── Contador de caracteres + limite do banco ───
+// Um lugar só define o teto de cada campo, com o mesmo valor da coluna
+// em KZN_PEDRAVISAOCONSOLIDADA (e, no caso do "Outros resultados", o de
+// kzn_resultados). O maxlength sai daqui, então corrigir a tabela é
+// corrigir a tela — não há número repetido no HTML.
+//
+// O servidor continua validando os mesmos limites (ver lerKaizenDoCorpo
+// em server.js): isto é conforto de digitação, não a barreira.
+(function () {
+  var LIMITES = {
+    titulo_kaizen: 30,              // NM_KAIZEN
+    declaracao_problema: 300,       // DS_PROBLEMA
+    meta_objetivo: 300,             // DS_OBJETIVO
+    descricao_antes: 300,           // DS_ESTADO_ANTES
+    descricao_depois: 300,          // DS_ESTADO_DEPOIS
+    links_documentos: 300,          // URL_REFERENCIA
+    licoes_aprendidas: 300,         // DS_LICOES_APRENDIDAS
+    comparacao_meta_inicial: 300,   // DS_RESULTADO_ESPERADO
+    descricao_resultado_outros: 100 // kzn_resultados.DS_RESULTADO
+  };
+
+  var campos = [];
+
+  function atualizar(campo, contador, max) {
+    // Colar acima do limite: o maxlength já corta na maioria dos casos,
+    // mas preenchimento por script e alguns teclados passam por cima.
+    if (campo.value.length > max) campo.value = campo.value.slice(0, max);
+    contador.textContent = campo.value.length + '/' + max;
+    contador.classList.toggle('no-limite', campo.value.length >= max);
+  }
+
+  Object.keys(LIMITES).forEach(function (id) {
+    var campo = document.getElementById(id);
+    if (!campo) return;
+    var max = LIMITES[id];
+    campo.setAttribute('maxlength', max);
+
+    var contador = document.createElement('span');
+    contador.className = 'campo-contador';
+    contador.setAttribute('aria-hidden', 'true');   // a contagem é apoio visual
+
+    // O contador divide a linha com o texto de ajuda quando ele existe;
+    // senão fica sozinho, alinhado à direita, embaixo do campo.
+    var grupo = campo.closest('.form-group') || campo.parentElement;
+    var ajuda = grupo.querySelector('.form-helper');
+    var linha = document.createElement('div');
+    linha.className = 'campo-contador-linha';
+    if (ajuda && ajuda.parentElement === grupo) {
+      grupo.insertBefore(linha, ajuda);
+      linha.appendChild(ajuda);
+    } else {
+      grupo.appendChild(linha);
+    }
+    linha.appendChild(contador);
+
+    campo.addEventListener('input', function () { atualizar(campo, contador, max); });
+    atualizar(campo, contador, max);
+    campos.push(function () { atualizar(campo, contador, max); });
+  });
+
+  // A edição preenche os campos por script, e atribuir .value não dispara
+  // 'input' — sem isto o contador ficaria em 0 num campo já preenchido.
+  window.VBMContadores = { atualizar: function () { campos.forEach(function (f) { f(); }); } };
+})();
+
 // ─── Formatos aceitos nas fotos (Antes/Depois) ───
 // O accept dos inputs já filtra a janela de escolha, mas é só uma
 // sugestão: o navegador deixa trocar para "todos os arquivos" e o
@@ -2655,6 +2736,10 @@ function txtEdicao(chave, padrao) {
         var wrap = el(wrapId);
         if (wrap && wrap.__preencher) wrap.__preencher(m);
       });
+
+      // Os campos foram preenchidos por script: os contadores precisam
+      // ser recalculados, porque atribuir .value não dispara 'input'.
+      if (window.VBMContadores) window.VBMContadores.atualizar();
 
       marcarTelaComoEdicao(k);
     })
