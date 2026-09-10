@@ -296,8 +296,16 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
    e demais classificações) afastados um do outro para a leitura não
    depender de decorar a ordem. Quebra de linha quando falta espaço; sem
    corte de texto. */
-.kaizen-card-tags { display: flex; flex-wrap: wrap; gap: .35rem 1.1rem; }
-.kaizen-tag-grupo { display: inline-flex; flex-wrap: wrap; gap: .35rem; }
+.kaizen-card-tags { display: flex; flex-wrap: wrap; gap: .5rem 1.1rem; }
+.kaizen-tag-grupo { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .35rem; }
+/* Rótulo do grupo: diz o que os balões ao lado são, sem competir com
+   eles — menor, sem caixa e na cor de apoio. */
+.kaizen-tag-titulo {
+  font-size: .55rem; text-transform: uppercase; letter-spacing: .12em;
+  color: var(--vbm-mid); font-family: 'Poppins', sans-serif; font-weight: 600;
+  margin-right: .1rem;
+}
+[data-bg="dark"] .kaizen-tag-titulo { color: rgba(255,255,255,.55); }
 .kaizen-card-tags .kaizen-tag {
   background: rgba(255,255,255,.55);
   border: 1px solid rgba(16,24,40,.10);
@@ -720,6 +728,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     'awaiting approval': 'badge-aguardando',
     'em aprovacao': 'badge-aguardando',
     'aguardando': 'badge-aguardando',
+    'revisado': 'badge-blue',
+    'reviewed': 'badge-blue',
     'rascunho': 'badge-rascunho',
     'aberto': 'badge-rascunho',
   };
@@ -813,15 +823,19 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
      mesmo balão, e nada de texto fixo aqui — tudo vem do banco, já no
      idioma da tela (a API traduz categoria e desperdício por ID_IDIOMA). */
   function baloesHtml(k) {
-    function grupo(valores, classeExtra) {
+    function grupo(valores, chaveTitulo, padraoTitulo, classeExtra) {
       var itens = (valores || []).filter(Boolean);
       if (!itens.length) return '';
       return '<span class="kaizen-tag-grupo' + (classeExtra ? ' ' + classeExtra : '') + '">' +
+        '<span class="kaizen-tag-titulo" data-i18n="' + chaveTitulo + '">' +
+          escaparHtml(txtI18n(chaveTitulo, padraoTitulo)) + '</span>' +
         itens.map(function (v) {
           return '<span class="kaizen-tag">' + escaparHtml(v) + '</span>';
         }).join('') + '</span>';
     }
-    return grupo(k.DESPERDICIOS, 'grupo-desperdicio') + grupo([k.NM_CATEGORIA]);
+    // Categoria primeiro, desperdícios depois — a ordem pedida na tela.
+    return grupo([k.NM_CATEGORIA], 'bib.groupCategoria', 'Categoria') +
+           grupo(k.DESPERDICIOS, 'bib.groupDesperdicios', 'Redução de Desperdícios', 'grupo-desperdicio');
   }
 
   function cartaoHtml(k) {
@@ -1242,6 +1256,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       'bib.countTemplate': '{total} Kaizens · Exibindo {n}',
       'bib.userPlaceholder': 'Nome do usuário...',
       'bib.editKaizen': 'Editar Kaizen',
+      'bib.groupCategoria': 'Categoria',
+      'bib.groupDesperdicios': 'Redução de Desperdícios',
       'bib.editBlocked': 'Edição indisponível para o status atual',
       'bib.loadMore': 'Carregar mais',
       'bib.summaryTitle': 'Resumo da Biblioteca',
@@ -1307,6 +1323,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       'bib.countTemplate': '{total} Kaizens · Showing {n}',
       'bib.userPlaceholder': 'User name...',
       'bib.editKaizen': 'Edit Kaizen',
+      'bib.groupCategoria': 'Category',
+      'bib.groupDesperdicios': 'Waste Reduction',
       'bib.editBlocked': 'Editing unavailable for the current status',
       'bib.loadMore': 'Load more',
       'bib.summaryTitle': 'Library Summary',
