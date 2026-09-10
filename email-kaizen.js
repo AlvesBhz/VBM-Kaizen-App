@@ -151,6 +151,33 @@ const TEMPLATES = {
       ],
     }),
   },
+
+  reprovado: {
+    pt: (d) => ({
+      assunto: "[Kaizen] Iniciativa não aprovada",
+      linhas: [
+        `Olá, ${d.nomeAutor}.`,
+        "Após avaliação, o Kaizen abaixo não foi aprovado.",
+        { campos: [["codigo", d.codigo], ["titulo", d.titulo], ["site", d.site],
+                   ["aprovador", d.nomeAprovador], ["data", d.dataPt]] },
+        "Motivo informado pelo aprovador:",
+        { destaque: d.motivo },
+        "Caso necessário, consulte seu gestor ou responsável local para orientação.",
+      ],
+    }),
+    en: (d) => ({
+      assunto: "[Kaizen] Initiative not approved",
+      linhas: [
+        `Hello, ${d.nomeAutor}.`,
+        "After review, the Kaizen below was not approved.",
+        { campos: [["codigo", d.codigo], ["titulo", d.titulo], ["site", d.site],
+                   ["aprovador", d.nomeAprovador], ["data", d.dataEn]] },
+        "Reason given by the approver:",
+        { destaque: d.motivo },
+        "If needed, contact your manager or local representative for guidance.",
+      ],
+    }),
+  },
 };
 
 /** Monta o HTML de um idioma. Mesmo desenho para os três momentos: sem
