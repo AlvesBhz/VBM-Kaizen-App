@@ -852,8 +852,26 @@ async function matriculaDoMdm(idUsuario, matriculaEscolhida) {
 // para ID_USUARIO, então resolvemos aqui, sempre no servidor, e de
 // quebra confirmamos que o aprovador escolhido está ATIVO.
 async function idAprovadorPorUsuario(idUsuario) {
+  // Quem RECEBE o direito de aprovar é identificado por CD_MATRICULA —
+  // kzn_aprovador.ID_USUARIO é quem CONCEDEU (ver POST /aprovadores).
+  // A tela manda o ID_USUARIO da pessoa (é o que /api/aprovadores
+  // devolve), então o caminho oficial é pela matrícula do MDM.
+  //
+  // O segundo ramo (ID_USUARIO) cobre as linhas antigas, gravadas quando
+  // a coluna ainda era usada como "o aprovador": sem ele, um Kaizen
+  // apontando para uma dessas linhas deixaria de salvar.
   const r = await runQuery(
-    `SELECT TOP (1) ID_APROVADOR FROM ${FULL_TABLE_NAME} WHERE ID_USUARIO = @id AND SG_ATIVO = 'S'`,
+    `SELECT TOP (1) a.ID_APROVADOR
+       FROM ${FULL_TABLE_NAME} a
+      WHERE a.SG_ATIVO = 'S'
+        AND (EXISTS (SELECT 1 FROM ${FULL_MDM_TABLE} m
+                      WHERE m.ID_USUARIO = @id
+                        AND ${MATRICULA_IGUAL("m.CD_MATRICULA", "a.CD_MATRICULA")})
+             OR a.ID_USUARIO = @id)
+      ORDER BY CASE WHEN EXISTS (SELECT 1 FROM ${FULL_MDM_TABLE} m2
+                                  WHERE m2.ID_USUARIO = @id
+                                    AND ${MATRICULA_IGUAL("m2.CD_MATRICULA", "a.CD_MATRICULA")})
+                    THEN 0 ELSE 1 END, a.ID_APROVADOR`,
     [["id", sql.Int, idUsuario]]
   );
   return r.recordset.length ? r.recordset[0].ID_APROVADOR : null;
@@ -2263,14 +2281,25 @@ async function idStatusRevisado() {
  *  `idIgnorar` existe para a EDIÇÃO: ao atualizar, o próprio registro
  *  não pode ser tratado como duplicata de si mesmo. */
 async function existeKaizenComMesmoNome(nome, idIgnorar) {
-  const alvo = semAcento(nome).replace(/\s+/g, " ");
+  const alvo = String(nome || "").trim().replace(/\s+/g, " ");
   if (!alvo) return false;
+  // A comparação acontece no banco, parametrizada: COLLATE ..._CI_AI
+  // ignora maiúsculas (CI) e acento (AI), a mesma indiferença que a
+  // busca da Biblioteca aplica no navegador. O REPLACE aninhado colapsa
+  // espaço repetido, para "Reduzir  setup" não virar um cadastro novo.
+  //
+  // @idIgnorar é o registro EM EDIÇÃO: ele nunca pode ser duplicata de
+  // si mesmo. Nulo (cadastro novo) faz a condição sair da conta.
+  const semEspacoDuplo = (col) =>
+    `REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(${col})), ' ', '<>'), '><', ''), '<>', ' ')`;
   const r = await runQuery(
-    `SELECT ID_KAIZEN, NM_KAIZEN FROM ${FULL_PVC_TABLE}
-      WHERE (@idIgnorar IS NULL OR ID_KAIZEN <> @idIgnorar)`,
-    [["idIgnorar", sql.Int, Number.isInteger(idIgnorar) ? idIgnorar : null]]
+    `SELECT TOP (1) ID_KAIZEN FROM ${FULL_PVC_TABLE}
+      WHERE ${semEspacoDuplo("NM_KAIZEN")} COLLATE Latin1_General_CI_AI = @nome COLLATE Latin1_General_CI_AI
+        AND (@idIgnorar IS NULL OR ID_KAIZEN <> @idIgnorar)`,
+    [["nome", sql.NVarChar(PVC_LIMITES.NM_KAIZEN), alvo],
+     ["idIgnorar", sql.Int, Number.isInteger(idIgnorar) ? idIgnorar : null]]
   );
-  return r.recordset.some((x) => semAcento(x.NM_KAIZEN).replace(/\s+/g, " ") === alvo);
+  return r.recordset.length > 0;
 }
 
 /** Leitura e validação do corpo do formulário de Kaizen.
@@ -3387,13 +3416,29 @@ apiRouter.get("/kaizens/:id/edicao", async (req, res) => {
     const idIdioma = idIdiomaDaRequisicao(req);
     const [principal, membros, desperdicios, resultados] = await Promise.all([
       runQuery(
+        // O aprovador do formulário é o ID_USUARIO da PESSOA (é o que a
+        // lista /api/aprovadores devolve e o que o salvamento espera).
+        // Na PVC está gravado o ID_APROVADOR, que é o registro do
+        // vínculo — a ponte entre os dois é a CD_MATRICULA, que é quem
+        // de fato recebeu o direito. Sem essa conversão o select abria
+        // vazio, porque nenhuma opção tem o ID_APROVADOR como valor.
         `SELECT p.*, p.DT_ATUALIZACAO AS DT_CRIACAO,
                 lider.NM_USUARIO AS NM_LIDER, lider.NM_SITE, lider.NM_ESTADO, lider.NM_CIDADE,
                 autor.NM_USUARIO AS NM_AUTOR,
-                st.NM_STATUS
+                st.NM_STATUS,
+                apr.SG_ATIVO AS APROVADOR_ATIVO,
+                aprPessoa.ID_USUARIO AS ID_USUARIO_APROVADOR,
+                aprPessoa.NM_USUARIO AS NM_APROVADOR
            FROM ${FULL_PVC_TABLE} p
            LEFT JOIN ${FULL_MDM_TABLE} lider ON lider.ID_USUARIO = p.ID_USUARIO_LIDER
            LEFT JOIN ${FULL_MDM_TABLE} autor ON autor.ID_USUARIO = p.ID_USUARIO_CADASTRO
+           LEFT JOIN ${FULL_TABLE_NAME} apr ON apr.ID_APROVADOR = p.ID_APROVADOR
+           OUTER APPLY (
+             SELECT TOP (1) x.ID_USUARIO, x.NM_USUARIO
+               FROM ${FULL_MDM_TABLE} x
+              WHERE ${MATRICULA_IGUAL("x.CD_MATRICULA", "apr.CD_MATRICULA")}
+              ORDER BY x.ID_TIPO_USUARIO
+           ) aprPessoa
            LEFT JOIN ${FULL_STATUS_TABLE} st ON st.ID_STATUS = p.ID_STATUS AND st.ID_IDIOMA = @idIdioma
           WHERE p.ID_KAIZEN = @idKaizen`,
         [["idKaizen", sql.Int, idKaizen], ["idIdioma", sql.Int, idIdioma]]
@@ -3429,7 +3474,15 @@ apiRouter.get("/kaizens/:id/edicao", async (req, res) => {
       id_usuario_lider: k.ID_USUARIO_LIDER,
       id_categoria: k.ID_CATEGORIA,
       id_replicacao: k.ID_REPLICACAO,
-      id_usuario_aprovador: k.ID_APROVADOR,
+      // ID da PESSOA (para o select) + o ID do vínculo (rastreabilidade).
+      id_usuario_aprovador: k.ID_USUARIO_APROVADOR,
+      ID_APROVADOR: k.ID_APROVADOR,
+      NM_APROVADOR: k.NM_APROVADOR,
+      // Avisa a tela quando o vínculo existe mas não dá para selecionar:
+      // aprovador inativo ou sem pessoa correspondente no MDM. O vínculo
+      // NÃO é apagado — só é sinalizado.
+      APROVADOR_INDISPONIVEL: k.ID_APROVADOR != null
+        && (k.ID_USUARIO_APROVADOR == null || String(k.APROVADOR_ATIVO || "").toUpperCase() !== "S"),
       declaracao_problema: k.DS_PROBLEMA,
       meta_objetivo: k.DS_OBJETIVO,
       descricao_antes: k.DS_ESTADO_ANTES,

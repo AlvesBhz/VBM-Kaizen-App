@@ -1155,6 +1155,8 @@ function rotuloPessoa(p) {
       'edit.savedTitle': 'Kaizen atualizado!',
       'edit.savedMsg': 'Kaizen #{id} revisado e reenviado para aprovação.',
       'edit.blockedTitle': 'Edição não permitida',
+      'edit.approverTitle': 'Aprovador indisponível',
+      'edit.approverMsg': 'O aprovador vinculado a este Kaizen está inativo ou não foi encontrado. Escolha outro para salvar.',
       'wiz.confirmSubmit': 'Confirmo que as informações são precisas e que estou ciente que este Kaizen será enviado para aprovação pelo aprovador responsável da minha unidade.'
     },
     'en': {
@@ -1294,6 +1296,8 @@ function rotuloPessoa(p) {
       'edit.savedTitle': 'Kaizen updated!',
       'edit.savedMsg': 'Kaizen #{id} revised and resubmitted for approval.',
       'edit.blockedTitle': 'Editing not allowed',
+      'edit.approverTitle': 'Approver unavailable',
+      'edit.approverMsg': 'The approver linked to this Kaizen is inactive or was not found. Choose another one to save.',
       'wiz.confirmSubmit': "I confirm the information is accurate and I understand this Kaizen will be sent for approval to my unit's responsible approver."
     }
   };
@@ -2517,6 +2521,13 @@ function txtEdicao(chave, padrao) {
       selecionar('id_categoria', k.id_categoria);
       selecionar('id_replicacao_potencial', k.id_replicacao);
       selecionar('id_aprovador', k.id_usuario_aprovador);
+      // Vínculo existe mas não está selecionável (aprovador inativo ou
+      // sem pessoa no MDM): avisa e mantém o vínculo — apagar em
+      // silêncio trocaria o aprovador do Kaizen sem ninguém perceber.
+      if (k.APROVADOR_INDISPONIVEL) {
+        showToast('warning', txtEdicao('edit.approverTitle', 'Aprovador indisponível'),
+          txtEdicao('edit.approverMsg', 'O aprovador vinculado a este Kaizen está inativo ou não foi encontrado. Escolha outro para salvar.'), 6000);
+      }
 
       // Líder: o hidden guarda o ID e o campo visível mostra o nome —
       // mesmo par que a busca do líder já usa.
