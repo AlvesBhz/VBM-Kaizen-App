@@ -296,16 +296,44 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
    e demais classificações) afastados um do outro para a leitura não
    depender de decorar a ordem. Quebra de linha quando falta espaço; sem
    corte de texto. */
-.kaizen-card-tags { display: flex; flex-wrap: wrap; gap: .5rem 1.1rem; }
-.kaizen-tag-grupo { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .35rem; }
-/* Rótulo do grupo: diz o que os balões ao lado são, sem competir com
-   eles — menor, sem caixa e na cor de apoio. */
+/* Duas colunas lado a lado: Categoria à esquerda, Redução de
+   Desperdícios à direita, cada uma com o rótulo em cima e os balões
+   embaixo. Sem linha divisória — a separação é o espaço entre elas.
+   A coluna da direita ganha um pouco mais de largura porque nome de
+   desperdício costuma ser mais longo. Card estreito volta a uma coluna
+   só, para nada ficar espremido. */
+.kaizen-card-tags {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+  gap: .6rem 1.15rem;
+  align-items: start;
+}
+.kaizen-tag-grupo { display: flex; flex-direction: column; gap: .32rem; min-width: 0; }
+.kaizen-tag-lista { display: flex; flex-wrap: wrap; gap: .3rem; }
+/* Rótulo da coluna: pequeno e discreto, para nomear sem competir com os
+   balões. O fio curto à esquerda amarra o título à sua coluna. */
 .kaizen-tag-titulo {
-  font-size: .55rem; text-transform: uppercase; letter-spacing: .12em;
+  font-size: .53rem; text-transform: uppercase; letter-spacing: .13em;
   color: var(--vbm-mid); font-family: 'Poppins', sans-serif; font-weight: 600;
-  margin-right: .1rem;
+  display: flex; align-items: flex-start; gap: .35rem; line-height: 1.25;
+  /* Duas linhas de altura mesmo quando o título ocupa uma: os balões das
+     duas colunas começam na mesma altura, em vez de um bloco subir. */
+  min-height: 2.5em;
+}
+.kaizen-tag-titulo::before { margin-top: .45em; }
+.kaizen-tag-titulo::before {
+  content: ''; width: 10px; height: 2px; border-radius: 2px;
+  background: currentColor; opacity: .45; flex-shrink: 0;
+}
+.grupo-desperdicio .kaizen-tag-titulo { color: var(--vbm-blue-dark); }
+@media (max-width: 460px) {
+  .kaizen-card-tags { grid-template-columns: minmax(0, 1fr); gap: .55rem; }
+  /* Em coluna única não há o que alinhar entre lados: a altura reservada
+     para o título viraria só um vão. */
+  .kaizen-tag-titulo { min-height: 0; }
 }
 [data-bg="dark"] .kaizen-tag-titulo { color: rgba(255,255,255,.55); }
+[data-bg="dark"] .grupo-desperdicio .kaizen-tag-titulo { color: #8fdcff; }
 .kaizen-card-tags .kaizen-tag {
   background: rgba(255,255,255,.55);
   border: 1px solid rgba(16,24,40,.10);
@@ -826,12 +854,14 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     function grupo(valores, chaveTitulo, padraoTitulo, classeExtra) {
       var itens = (valores || []).filter(Boolean);
       if (!itens.length) return '';
-      return '<span class="kaizen-tag-grupo' + (classeExtra ? ' ' + classeExtra : '') + '">' +
+      return '<div class="kaizen-tag-grupo' + (classeExtra ? ' ' + classeExtra : '') + '">' +
         '<span class="kaizen-tag-titulo" data-i18n="' + chaveTitulo + '">' +
           escaparHtml(txtI18n(chaveTitulo, padraoTitulo)) + '</span>' +
-        itens.map(function (v) {
-          return '<span class="kaizen-tag">' + escaparHtml(v) + '</span>';
-        }).join('') + '</span>';
+        '<div class="kaizen-tag-lista">' +
+          itens.map(function (v) {
+            return '<span class="kaizen-tag">' + escaparHtml(v) + '</span>';
+          }).join('') +
+        '</div></div>';
     }
     // Categoria primeiro, desperdícios depois — a ordem pedida na tela.
     return grupo([k.NM_CATEGORIA], 'bib.groupCategoria', 'Categoria') +
