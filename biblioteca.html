@@ -763,7 +763,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       '<div class="kaizen-card-accent accent-green"></div>' +
       botaoEditarHtml(k) +
       '<div class="kaizen-card-body" style="display:flex;flex-direction:column;padding-bottom:.4rem;">' +
-      '<div class="kaizen-card-id">' + k.ROTULO + (k.NM_CIDADE ? ' · ' + k.NM_CIDADE : '') + '</div>' +
+      '<div class="kaizen-card-id">' + k.ROTULO + (k.NM_SITE ? ' · ' + k.NM_SITE : '') + '</div>' +
       '<div class="kaizen-card-title" style="font-weight:600;font-size:.76rem;">' + k.NM_KAIZEN + '</div>' +
       '<div class="kaizen-card-tags">' + tags + '</div>' +
       '<div class="kaizen-meta" style="margin-top:auto;margin-bottom:0;">' +
@@ -786,7 +786,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       '<td><span style="font-family:\'Poppins\',sans-serif;color:var(--vbm-blue);font-size:.72rem;">' + k.ROTULO + '</span></td>' +
       '<td><span style="font-size:.82rem;">' + k.NM_KAIZEN + '</span></td>' +
       '<td><span class="badge badge-blue" style="font-size:.58rem;">' + (k.NM_CATEGORIA || '—') + '</span></td>' +
-      '<td><span style="font-size:.75rem;color:var(--vbm-mid);">' + (k.NM_CIDADE || '—') + '</span></td>' +
+      '<td><span style="font-size:.75rem;color:var(--vbm-mid);">' + (k.NM_SITE || '—') + '</span></td>' +
       '<td><span style="font-size:.75rem;color:var(--vbm-mid);">' + formatarMesAno(k.DT_CONCLUSAO || k.DT_CRIACAO) + '</span></td>' +
       '<td><span class="badge ' + info.classe + '">' + info.rotulo + '</span></td>' +
       '<td class="table-actions">' +

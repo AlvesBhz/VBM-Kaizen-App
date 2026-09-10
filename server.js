@@ -2629,6 +2629,7 @@ apiRouter.get("/kaizens", async (req, res) => {
               p.DT_ATUALIZACAO AS DT_CRIACAO, p.DT_CONCLUSAO,
               p.ID_CATEGORIA, cat.NM_CATEGORIA,
               lider.NM_USUARIO AS NM_LIDER, lider.NM_ESTADO, lider.NM_CIDADE,
+              autor.NM_SITE,
               p.URL_IMG_ANTES, p.URL_IMG_DEPOIS,
               (SELECT TOP (1) d.NM_DESPERDICIO
                  FROM ${FULL_KZ_DESPERDICIO_TABLE} kd
@@ -2638,7 +2639,18 @@ apiRouter.get("/kaizens", async (req, res) => {
        FROM ${FULL_PVC_TABLE} p
        LEFT JOIN ${FULL_CATEGORIA_TABLE} cat ON cat.ID_CATEGORIA = p.ID_CATEGORIA AND cat.ID_IDIOMA = @idIdioma
        LEFT JOIN ${FULL_STATUS_TABLE} st ON st.ID_STATUS = p.ID_STATUS AND st.ID_IDIOMA = @idIdioma
-       LEFT JOIN ${FULL_MDM_TABLE} lider ON lider.ID_USUARIO = p.ID_USUARIO_LIDER
+       OUTER APPLY (
+         SELECT TOP (1) x.NM_USUARIO, x.NM_ESTADO, x.NM_CIDADE
+           FROM ${FULL_MDM_TABLE} x
+          WHERE x.ID_USUARIO = p.ID_USUARIO_LIDER
+          ORDER BY x.ID_TIPO_USUARIO
+       ) lider
+       OUTER APPLY (
+         SELECT TOP (1) y.NM_SITE
+           FROM ${FULL_MDM_TABLE} y
+          WHERE y.ID_USUARIO = ISNULL(p.ID_USUARIO_CADASTRO, p.ID_USUARIO_LIDER)
+          ORDER BY y.ID_TIPO_USUARIO
+       ) autor
        WHERE ${filtros.join(" AND ")}
        ORDER BY ISNULL(p.DT_CONCLUSAO, p.DT_ATUALIZACAO) DESC`,
       params
@@ -2663,6 +2675,9 @@ apiRouter.get("/kaizens", async (req, res) => {
         ID_CATEGORIA: r.ID_CATEGORIA,
         NM_CATEGORIA: r.NM_CATEGORIA,
         NM_LIDER: r.NM_LIDER,
+        // Site do AUTOR, direto de kzn_mdm_hierarquia.NM_SITE — o card
+        // mostrava NM_CIDADE, que é outro campo (por isso "Nova Lima").
+        NM_SITE: r.NM_SITE,
         NM_ESTADO: r.NM_ESTADO,
         NM_CIDADE: r.NM_CIDADE,
         URL_IMG_ANTES: r.URL_IMG_ANTES,
