@@ -61,21 +61,20 @@ FROM    [ci].[kzn_status] s
 WHERE   s.ID_IDIOMA = 1
 ORDER BY s.ID_STATUS;
 
-/* ETAPA 3 — as linhas para o app.yaml -------------------------------
-   Copie a coluna LINHA_APP_YAML e cole no bloco "env:" do app.yaml,
-   depois republique o app. Sem isso, aprovar e reprovar continuam
-   recusando.
+/* ETAPA 3 — conferência final --------------------------------------
+   O app resolve o ID_STATUS lendo esta tabela pelo NOME do status, em
+   qualquer idioma, e só considera SG_ATIVO = 'S'. Não há mais variável
+   de ambiente no caminho: o que está cadastrado aqui é o que vale.
+
+   Os nomes que o app reconhece para cada momento do ciclo:
+     · aguardando  -> 'Aguardando aprovação' / 'Awaiting approval'
+     · aprovado    -> 'Aprovado'             / 'Approved'
+     · reprovado   -> 'Rejeitado'            / 'Reject'
+     · alteração   -> 'Solicitado alterações'/ 'Request changes'
    ------------------------------------------------------------------- */
-SELECT  LINHA_APP_YAML =
-            '  - name: ''' + v.VARIAVEL + '''' + CHAR(13) + CHAR(10) +
-            '    value: ''' + CAST(s.ID_STATUS AS VARCHAR(10)) + ''''
+SELECT  s.ID_STATUS, s.ID_IDIOMA, s.NM_STATUS, s.SG_ATIVO
 FROM    [ci].[kzn_status] s
-JOIN    (VALUES ('Em aprovação', 'AZURE_SQL_STATUS_ID_EM_APROVACAO'),
-                ('Aprovado',     'AZURE_SQL_STATUS_ID_APROVADO'),
-                ('Reprovado',    'AZURE_SQL_STATUS_ID_REPROVADO')
-        ) v (NOME, VARIAVEL) ON v.NOME = s.NM_STATUS
-WHERE   s.ID_IDIOMA = 1
-ORDER BY v.VARIAVEL;
+ORDER BY s.ID_STATUS, s.ID_IDIOMA;
 
 /* ---------------------------------------------------------------------
    Se você já tinha Kaizens gravados antes desta mudança, eles estão com

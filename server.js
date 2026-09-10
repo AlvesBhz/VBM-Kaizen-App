@@ -2079,30 +2079,16 @@ apiRouter.post("/kaizens/imagem", receberImagemUnica, async (req, res) => {
 // kzn_status — que é um CADASTRO, editável pela aba Status Kaizen. Não
 // há mais literal para o código fixar.
 //
-// Como kzn_status é cadastro, o número de cada status é dado do banco,
-// não do código: vem de variável de ambiente, SEM padrão. Fixar um
-// número aqui seria adivinhar, e adivinhar errado grava o status errado
-// em produção sem ninguém perceber.
+// A ÚNICA fonte do ID é kzn_status. Não há variável de ambiente no
+// caminho: os status já estão cadastrados, e um ID em app.yaml só
+// acrescentava um segundo lugar para a verdade divergir — se alguém
+// trocasse o número lá, o app gravaria um status que não é o da tela.
 //
-// Enquanto não estiverem configuradas:
-//   · criar Kaizen funciona e NÃO toca em ID_STATUS (a coluna fica como
-//     o banco a deixar) — a tela de Novo Kaizen segue no ar;
-//   · a fila de aprovação trata "sem status" como pendente;
-//   · aprovar/reprovar RECUSAM com mensagem clara, porque registrar uma
-//     decisão sem poder gravar qual foi ela não é registrar nada.
-//
-// Para configurar: veja database/popular_status.sql, que cria os
-// status e devolve os IDs prontos para o app.yaml.
-function idStatusDeEnv(variavel) {
-  const bruto = process.env[variavel];
-  const n = parseInt(bruto, 10);
-  return Number.isInteger(n) && n > 0 ? n : null;
-}
-const STATUS_IDS = {
-  emAprovacao: idStatusDeEnv("AZURE_SQL_STATUS_ID_EM_APROVACAO"),
-  aprovado: idStatusDeEnv("AZURE_SQL_STATUS_ID_APROVADO"),
-  reprovado: idStatusDeEnv("AZURE_SQL_STATUS_ID_REPROVADO"),
-};
+// ID_STATUS é a chave funcional (o mesmo número nos dois idiomas) e
+// ID_IDIOMA é só apresentação. Por isso a resolução varre o cadastro
+// inteiro, em qualquer idioma: "Aguardando aprovação" e "Awaiting
+// approval" são a mesma linha lógica e devolvem o mesmo ID_STATUS.
+// Só entram linhas com SG_ATIVO = 'S'.
 /** Acrescenta @idStatusPendente aos parâmetros só quando o filtro de
  *  "pendente" cita esse parâmetro — sem catálogo o WHERE usa
  *  "ID_STATUS IS NULL" e mandar o parâmetro sobrando quebraria. */
@@ -2115,65 +2101,77 @@ function paramsComPendente(params, idPendente) {
     : params;
 }
 
-/** ID do status pelo NOME em português, direto de kzn_status.
- *
- *  Serve de saída quando a variável de ambiente não foi configurada: o
- *  ID de um cadastro é dado do banco, e buscá-lo pelo nome é melhor do
- *  que deixar o Kaizen nascer sem status. A variável, quando existe,
- *  continua tendo prioridade — é o caminho previsível, que não quebra
- *  se alguém renomear o status na aba.
- *
- *  Aceita mais de um nome porque o mesmo estado pode estar cadastrado
- *  com rótulos diferentes. Resultado guardado em memória: é catálogo,
- *  não muda a cada Kaizen. */
-const cacheStatusPorNome = new Map();
-async function idStatusPorNome(nomes) {
-  const chave = nomes.join("|");
-  if (cacheStatusPorNome.has(chave)) return cacheStatusPorNome.get(chave);
-  try {
-    const lista = await runQuery(
-      `SELECT ID_STATUS, NM_STATUS FROM ${FULL_STATUS_TABLE}
-        WHERE ID_IDIOMA = @idIdioma AND SG_ATIVO = 'S'`,
-      [["idIdioma", sql.Int, ID_IDIOMA_PT]]
-    );
-    const semAcento = (x) =>
-      String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-    const alvo = nomes.map(semAcento);
-    const achado = lista.recordset.find((r) => alvo.includes(semAcento(r.NM_STATUS)));
-    const id = achado ? achado.ID_STATUS : null;
-    if (id != null) cacheStatusPorNome.set(chave, id);
-    return id;
-  } catch (err) {
-    console.error("[status] não foi possível resolver pelo nome:", err.message);
-    return null;
+/** Nomes cadastrados que identificam cada momento do ciclo, nos dois
+ *  idiomas. É a ponte entre o cadastro — que o administrador edita na
+ *  aba Status Kaizen — e os quatro momentos que o código precisa nomear.
+ *  Vários rótulos por momento porque o mesmo estado já foi cadastrado
+ *  com nomes diferentes ao longo do projeto ("Solicitado alterações"
+ *  hoje, "Solicitar alteração" antes); um rótulo antigo não pode
+ *  derrubar a decisão do aprovador. */
+const NOMES_DO_STATUS = {
+  emAprovacao: ["Aguardando aprovação", "Em aprovação", "Aguardando", "Em análise",
+                "Awaiting approval", "Pending approval", "Waiting approval"],
+  aprovado: ["Aprovado", "Aprovada", "Concluído", "Approved", "Approve"],
+  reprovado: ["Reprovado", "Rejeitado", "Reprovada", "Rejected", "Reject"],
+  alteracao: ["Solicitado alterações", "Solicitado alteração", "Solicitar alterações",
+              "Solicitar alteração", "Em alteração", "Ajuste solicitado",
+              "Request changes", "Requested changes", "Change requested"],
+};
+
+const semAcento = (x) =>
+  String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+
+/** kzn_status carregado uma vez e reusado: é cadastro, não muda a cada
+ *  Kaizen. O TTL curto existe porque a aba Status Kaizen edita essa
+ *  mesma tabela — sem ele, renomear um status só passaria a valer no
+ *  próximo restart do app. */
+const TTL_CATALOGO_STATUS_MS = 60 * 1000;
+let catalogoStatus = null;   // Map: nome normalizado -> ID_STATUS
+let catalogoStatusEm = 0;
+
+async function carregarCatalogoStatus() {
+  if (catalogoStatus && Date.now() - catalogoStatusEm < TTL_CATALOGO_STATUS_MS) {
+    return catalogoStatus;
   }
+  // Sem try/catch: um erro de consulta precisa subir. Engolir aqui fazia
+  // "banco fora do ar" parecer "status não cadastrado" — exatamente o
+  // diagnóstico errado que este trecho já produziu em produção.
+  const lista = await runQuery(
+    `SELECT ID_STATUS, NM_STATUS FROM ${FULL_STATUS_TABLE} WHERE SG_ATIVO = 'S'`
+  );
+  const mapa = new Map();
+  lista.recordset.forEach((r) => {
+    const chave = semAcento(r.NM_STATUS);
+    if (chave && !mapa.has(chave)) mapa.set(chave, r.ID_STATUS);
+  });
+  catalogoStatus = mapa;
+  catalogoStatusEm = Date.now();
+  return mapa;
 }
 
-// Nomes aceitos para "aguardando aprovação" — o Kaizen nasce com este.
-const NOMES_EM_APROVACAO = ["Aguardando aprovação", "Em aprovação", "Aguardando", "Em análise"];
-const NOMES_APROVADO = ["Aprovado", "Aprovada", "Concluído"];
-const NOMES_REPROVADO = ["Reprovado", "Rejeitado", "Reprovada"];
-const NOMES_ALTERACAO = ["Solicitar alterações", "Solicitar alteração", "Em alteração", "Ajuste solicitado"];
-
-/** ID de cada momento do ciclo: variável de ambiente primeiro, nome no
- *  cadastro depois. TODO ponto que precisa de um ID_STATUS passa por
- *  aqui — senão um caminho resolve pelo nome e o outro não, e o Kaizen
- *  criado some da fila de aprovação. */
+/** ID_STATUS de um momento do ciclo, resolvido só por kzn_status. TODO
+ *  ponto que precisa de um ID passa por aqui — senão um caminho resolve
+ *  de um jeito e o outro de outro, e o Kaizen some da fila. */
 async function idDoStatus(momento) {
-  const daEnv = STATUS_IDS[momento];
-  if (daEnv != null) return daEnv;
-  const nomes = momento === "aprovado" ? NOMES_APROVADO
-              : momento === "reprovado" ? NOMES_REPROVADO
-              : momento === "alteracao" ? NOMES_ALTERACAO
-              : NOMES_EM_APROVACAO;
-  return idStatusPorNome(nomes);
+  const nomes = NOMES_DO_STATUS[momento] || NOMES_DO_STATUS.emAprovacao;
+  const mapa = await carregarCatalogoStatus();
+  for (const nome of nomes) {
+    const id = mapa.get(semAcento(nome));
+    if (id != null) return id;
+  }
+  // Log com o que o cadastro realmente tem: sem isso, "nome diferente do
+  // esperado" e "cadastro vazio" ficam indistinguíveis no incidente.
+  console.error(
+    `[status] momento "${momento}" não encontrado em ${FULL_STATUS_TABLE}. ` +
+    `Aceitos: ${nomes.join(" | ")}. Ativos no cadastro: ${[...mapa.keys()].join(" | ") || "(nenhum)"}.`
+  );
+  return null;
 }
 
 const ERRO_STATUS_NAO_CONFIGURADO =
-  "Catálogo de status não configurado. Cadastre os status na aba " +
-  "Administração > Status Kaizen e informe os IDs em " +
-  "AZURE_SQL_STATUS_ID_EM_APROVACAO, AZURE_SQL_STATUS_ID_APROVADO e " +
-  "AZURE_SQL_STATUS_ID_REPROVADO (ver database/popular_status.sql).";
+  "Status não encontrado no cadastro. Verifique em Administração > " +
+  "Status Kaizen se os status Aguardando aprovação, Aprovado, Rejeitado " +
+  "e Solicitado alterações existem e estão ativos.";
 
 // Limites de texto — vêm do DER (database/DER_VBM_Kaizen.html /
 // e_PVC). NM_KAIZEN é VARCHAR(30): o mesmo limite curto das tabelas de
@@ -2194,6 +2192,32 @@ const PVC_LIMITES = {
   // DS_MOTIVO: texto da reprovação, gravado direto na linha do Kaizen.
   DS_MOTIVO: 300,
 };
+
+/** Tamanho REAL de DS_MOTIVO, lido do banco em vez de confiado ao DER.
+ *
+ *  O DER diz VARCHAR(300); se a coluna em produção for menor, validar
+ *  por 300 deixa passar um texto que o UPDATE recusa depois — o
+ *  aprovador escreve, clica e leva um erro de truncamento no lugar da
+ *  decisão. Lido uma vez e guardado: é metadado, não muda em runtime.
+ *  Só consulta INFORMATION_SCHEMA — não altera estrutura nenhuma. */
+let limiteMotivoCache = null;
+async function limiteDsMotivo() {
+  if (limiteMotivoCache != null) return limiteMotivoCache;
+  try {
+    const r = await runQuery(
+      `SELECT CHARACTER_MAXIMUM_LENGTH AS TAM FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = @schema AND TABLE_NAME = @tabela AND COLUMN_NAME = 'DS_MOTIVO'`,
+      [["schema", sql.NVarChar(128), DB_SCHEMA], ["tabela", sql.NVarChar(128), DB_PVC_TABLE]]
+    );
+    const tam = r.recordset.length ? r.recordset[0].TAM : null;
+    // -1 = VARCHAR(MAX): sem limite prático, vale o do DER.
+    limiteMotivoCache = tam > 0 ? tam : PVC_LIMITES.DS_MOTIVO;
+  } catch (err) {
+    console.error("[motivo] não foi possível ler o tamanho de DS_MOTIVO:", err.message);
+    limiteMotivoCache = PVC_LIMITES.DS_MOTIVO;
+  }
+  return limiteMotivoCache;
+}
 
 apiRouter.post("/kaizens", async (req, res) => {
   const b = req.body || {};
@@ -2777,14 +2801,19 @@ async function souOAprovadorDoKaizen(idKaizen, idUsuario) {
 async function registrarDecisao(req, res, opcoes) {
   try {
     const idKaizen = parseInt(req.params.id, 10);
+    if (!Number.isInteger(idKaizen) || idKaizen <= 0) {
+      return res.status(400).json({ error: "Kaizen inválido." });
+    }
     const motivo = String((req.body && req.body.motivo) || "").trim();
 
     if (opcoes.motivoObrigatorio && !motivo) {
       return res.status(400).json({ error: opcoes.erroMotivo });
     }
-    if (motivo.length > PVC_LIMITES.DS_MOTIVO) {
+    // Limite conferido contra a coluna real, não contra o DER.
+    const limiteMotivo = await limiteDsMotivo();
+    if (motivo.length > limiteMotivo) {
       return res.status(400).json({
-        error: `Motivo deve ter no máximo ${PVC_LIMITES.DS_MOTIVO} caracteres.`,
+        error: `Motivo deve ter no máximo ${limiteMotivo} caracteres.`,
       });
     }
 
@@ -2804,15 +2833,28 @@ async function registrarDecisao(req, res, opcoes) {
       ["idKaizen", sql.Int, idKaizen], ["idUsuario", sql.Int, idUsuario],
       ["idStatus", sql.Int, idStatus],
     ];
-    if (gravaMotivo) params.push(["motivo", sql.NVarChar(PVC_LIMITES.DS_MOTIVO), motivo]);
+    if (gravaMotivo) params.push(["motivo", sql.NVarChar(limiteMotivo), motivo]);
 
-    await runQuery(
+    // Status e DS_MOTIVO saem no MESMO UPDATE, sempre parametrizado e
+    // sempre pela chave única ID_KAIZEN. Um único comando é atômico no
+    // SQL Server: ou as duas colunas gravam, ou nenhuma — não existe o
+    // estado intermediário "reprovado sem motivo". Dividir em dois
+    // comandos é que exigiria transação explícita.
+    const gravacao = await runQuery(
       `UPDATE ${FULL_PVC_TABLE}
        SET ID_STATUS = @idStatus${gravaMotivo ? ", DS_MOTIVO = @motivo" : ""}${opcoes.conclui ? `, DT_CONCLUSAO = ${AGORA_BRASILIA}` : ""},
            DT_ATUALIZACAO = ${AGORA_BRASILIA}, ID_USUARIO_ATUALIZACAO = @idUsuario
        WHERE ID_KAIZEN = @idKaizen`,
       params
     );
+    // Zero linhas = o Kaizen sumiu entre a checagem e a gravação.
+    // Responder ok aqui faria a tela comemorar uma decisão que não foi
+    // gravada em lugar nenhum.
+    const linhas = gravacao.rowsAffected ? gravacao.rowsAffected[0] : 1;
+    if (!linhas) {
+      console.error(`[${opcoes.momento}] nenhuma linha atualizada para ID_KAIZEN=${idKaizen}`);
+      return res.status(409).json({ error: "Não foi possível gravar a decisão: o Kaizen não está mais disponível." });
+    }
     res.json({ ok: true, ID_STATUS: idStatus });
   } catch (err) {
     console.error(`[${opcoes.momento}] erro:`, err.message);
