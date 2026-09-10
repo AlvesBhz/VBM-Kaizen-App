@@ -2631,10 +2631,13 @@ apiRouter.get("/kaizens", async (req, res) => {
               lider.NM_USUARIO AS NM_LIDER, lider.NM_ESTADO, lider.NM_CIDADE,
               autor.NM_SITE,
               p.URL_IMG_ANTES, p.URL_IMG_DEPOIS,
-              (SELECT TOP (1) d.NM_DESPERDICIO
+              -- TODOS os desperdícios do Kaizen, não só o primeiro: cada
+              -- um vira um balão próprio no card. STRING_AGG com um
+              -- separador que não aparece em nome de cadastro.
+              (SELECT STRING_AGG(d.NM_DESPERDICIO, '§')
                  FROM ${FULL_KZ_DESPERDICIO_TABLE} kd
                  JOIN ${FULL_DESPERDICIO_TABLE} d ON d.ID_DESPERDICIO = kd.ID_DESPERDICIO AND d.ID_IDIOMA = @idIdioma
-                WHERE kd.ID_KAIZEN = p.ID_KAIZEN) AS NM_DESPERDICIO_1,
+                WHERE kd.ID_KAIZEN = p.ID_KAIZEN) AS DESPERDICIOS,
               PODE_EDITAR = ${SQL_PODE_EDITAR("p")},
               STATUS_EDITAVEL = ${SQL_STATUS_EDITAVEL("p")}
        FROM ${FULL_PVC_TABLE} p
@@ -2687,7 +2690,10 @@ apiRouter.get("/kaizens", async (req, res) => {
         NM_CIDADE: r.NM_CIDADE,
         URL_IMG_ANTES: r.URL_IMG_ANTES,
         URL_IMG_DEPOIS: r.URL_IMG_DEPOIS,
-        TAGS: [r.NM_CATEGORIA, r.NM_DESPERDICIO_1].filter(Boolean),
+        // Campos NOMEADOS, não uma lista posicional: categoria e
+        // desperdício viajavam juntos em TAGS e a tela não tinha como
+        // saber qual era qual para separar os balões.
+        DESPERDICIOS: r.DESPERDICIOS ? String(r.DESPERDICIOS).split("§").filter(Boolean) : [],
       }))
     );
   } catch (err) {
