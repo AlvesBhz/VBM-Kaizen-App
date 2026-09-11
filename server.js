@@ -102,6 +102,30 @@ function relogioLocal(valor) {
   return valor.toISOString().slice(0, 19);
 }
 
+/** Só a parte da DATA ("YYYY-MM-DD"), para as colunas do tipo DATE.
+ *
+ *  DT_CONCLUSAO é DATE no DER — não tem hora para mostrar. É o formato
+ *  que o <input type="date"> entende, então serve direto para o
+ *  formulário de edição. */
+function somenteData(valor) {
+  if (!(valor instanceof Date) || Number.isNaN(valor.getTime())) return valor ?? null;
+  return valor.toISOString().slice(0, 10);
+}
+
+/** Data de HOJE em Brasília, no formato "YYYY-MM-DD".
+ *
+ *  Não dá para usar `new Date().toISOString()`: o contêiner roda em UTC
+ *  e, das 21h às 24h de Brasília, o UTC já está no dia seguinte — uma
+ *  data informada "hoje" passaria a ser aceita como se fosse ontem. O
+ *  fuso vem pelo nome ('America/Sao_Paulo'), então horário de verão, se
+ *  voltar, é respeitado sozinho. 'en-CA' é o truque de sempre para
+ *  receber a data já em ISO. */
+function hojeEmBrasilia() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date());
+}
+
 /**
  * Comparação de matrícula entre kzn_aprovador e kzn_mdm_hierarquia.
  *
@@ -2382,6 +2406,20 @@ function lerKaizenDoCorpo(b) {
   const licoesAprendidas = textoOuNuloLocal(b.licoes_aprendidas);
   const comparacaoMeta = textoOuNuloLocal(b.comparacao_meta_inicial);
 
+  // Data de Conclusão — coluna DT_CONCLUSAO, do tipo DATE. Chega como
+  // "YYYY-MM-DD" (o formato que o <input type="date"> envia) e é
+  // comparada como TEXTO: nesse formato a ordem alfabética é a ordem
+  // cronológica, então não há Date, fuso nem hora no meio do caminho
+  // para distorcer a conta. Campo opcional; vazio grava NULL.
+  const dataConclusao = textoOuNuloLocal(b.data_conclusao);
+  const formatoDataOk = dataConclusao == null || /^\d{4}-\d{2}-\d{2}$/.test(dataConclusao);
+  // Data que existe no calendário: "2026-02-31" passa no formato acima
+  // mas não é dia nenhum, e o SQL Server recusaria na conversão.
+  const dataExiste = formatoDataOk && dataConclusao != null
+    ? somenteData(new Date(dataConclusao + "T00:00:00Z")) === dataConclusao
+    : true;
+  const dataAnteriorAHoje = dataConclusao == null || dataConclusao < hojeEmBrasilia();
+
   // "Tipo de Resultado Financeiro" (Saving/Cost Avoided) continua só na
   // tela — não há coluna no DER para essa classificação. Moeda e Valor
   // são gravados normalmente quando o bloco "Resultado Financeiro" está
@@ -2425,18 +2463,21 @@ function lerKaizenDoCorpo(b) {
     maxLen(urlReferencia, PVC_LIMITES.URL_REFERENCIA, "Links / Documentos"),
     maxLen(licoesAprendidas, PVC_LIMITES.DS_LICOES_APRENDIDAS, "Lições Aprendidas"),
     maxLen(comparacaoMeta, PVC_LIMITES.DS_RESULTADO_ESPERADO, "Comparação com a meta inicial"),
+    !formatoDataOk || !dataExiste ? "Data de Conclusão inválida." : null,
+    formatoDataOk && dataExiste && !dataAnteriorAHoje
+      ? "A Data de Conclusão deve ser anterior à data de hoje." : null,
     geraResultadoOutros && !Number.isInteger(idTipoResultadoOutros) ? "Tipo de Resultado (Outros) é obrigatório quando o bloco está ativo." : null,
     geraResultadoOutros && !descricaoResultadoOutros ? "Descrição dos Resultados Alcançados é obrigatória quando \"Outros\" está ativo." : null,
     maxLen(descricaoResultadoOutros, 100, "Descrição dos Resultados Alcançados"),
   ].filter(Boolean);
-  return { erros, dados: { titulo, declaracaoProblema, metaObjetivo, descricaoAntes, descricaoDepois, idCategoria, idReplicacao, idUsuarioAprovador, idUsuarioLider, idsDesperdicio, urlImgAntes, urlImgDepois, urlReferencia, licoesAprendidas, comparacaoMeta, geraResultadoFinanceiro, idMoeda, valorResultadoFinanceiro, geraResultadoOutros, idTipoResultadoOutros, descricaoResultadoOutros, membros } };
+  return { erros, dados: { titulo, declaracaoProblema, metaObjetivo, descricaoAntes, descricaoDepois, idCategoria, idReplicacao, idUsuarioAprovador, idUsuarioLider, idsDesperdicio, urlImgAntes, urlImgDepois, urlReferencia, licoesAprendidas, comparacaoMeta, dataConclusao, geraResultadoFinanceiro, idMoeda, valorResultadoFinanceiro, geraResultadoOutros, idTipoResultadoOutros, descricaoResultadoOutros, membros } };
 }
 
 apiRouter.post("/kaizens", async (req, res) => {
   const b = req.body || {};
   const { erros, dados } = lerKaizenDoCorpo(b);
   if (erros.length) return res.status(400).json({ error: erros[0], erros });
-  const { titulo, declaracaoProblema, metaObjetivo, descricaoAntes, descricaoDepois, idCategoria, idReplicacao, idUsuarioAprovador, idUsuarioLider, idsDesperdicio, urlImgAntes, urlImgDepois, urlReferencia, licoesAprendidas, comparacaoMeta, geraResultadoFinanceiro, idMoeda, valorResultadoFinanceiro, geraResultadoOutros, idTipoResultadoOutros, descricaoResultadoOutros, membros } = dados;
+  const { titulo, declaracaoProblema, metaObjetivo, descricaoAntes, descricaoDepois, idCategoria, idReplicacao, idUsuarioAprovador, idUsuarioLider, idsDesperdicio, urlImgAntes, urlImgDepois, urlReferencia, licoesAprendidas, comparacaoMeta, dataConclusao, geraResultadoFinanceiro, idMoeda, valorResultadoFinanceiro, geraResultadoOutros, idTipoResultadoOutros, descricaoResultadoOutros, membros } = dados;
 
   try {
     // Título contra o tamanho REAL da coluna: enquanto o ALTER de 30
@@ -2509,19 +2550,24 @@ apiRouter.post("/kaizens", async (req, res) => {
       reqInsert.input("vlResultado", sql.Decimal(18, 2), valorResultadoFinanceiro);
       reqInsert.input("idMoeda", sql.Int, idMoeda);
       reqInsert.input("dsResultadoEsperado", sql.NVarChar(PVC_LIMITES.DS_RESULTADO_ESPERADO), comparacaoMeta);
+      // DT_CONCLUSAO é DATE. Vai como TEXTO "YYYY-MM-DD" e a conversão
+      // fica com o banco (CONVERT ... 23), em vez de montar um Date no
+      // Node: assim não há fuso no meio para empurrar a data um dia
+      // para trás ou para frente. Só data, nunca hora.
+      reqInsert.input("dtConclusao", sql.VarChar(10), dataConclusao);
 
       await reqInsert.query(`
         INSERT INTO ${FULL_PVC_TABLE}
           (ID_KAIZEN, ID_USUARIO_CADASTRO, ID_USUARIO_LIDER, NM_KAIZEN, ID_CATEGORIA, ID_REPLICACAO,
            DS_PROBLEMA, DS_OBJETIVO,${gravaStatus ? " ID_STATUS," : ""} ID_APROVADOR, URL_IMG_ANTES, DS_ESTADO_ANTES,
            URL_IMG_DEPOIS, DS_ESTADO_DEPOIS, URL_REFERENCIA, ID_DESPERDICIO, DS_LICOES_APRENDIDAS,
-           VL_RESULTADO_FINANCEIRO, ID_MOEDA, DS_RESULTADO_ESPERADO, DT_ATUALIZACAO,
+           VL_RESULTADO_FINANCEIRO, ID_MOEDA, DS_RESULTADO_ESPERADO, DT_CONCLUSAO, DT_ATUALIZACAO,
            ID_USUARIO_ATUALIZACAO)
         VALUES
           (@idKaizen, @idUsuarioCadastro, @idUsuarioLider, @nmKaizen, @idCategoria, @idReplicacao,
            @dsProblema, @dsObjetivo,${gravaStatus ? " @idStatus," : ""} @idAprovador, @urlImgAntes, @dsEstadoAntes,
            @urlImgDepois, @dsEstadoDepois, @urlReferencia, @idDesperdicio, @dsLicoes,
-           @vlResultado, @idMoeda, @dsResultadoEsperado, ${AGORA_BRASILIA},
+           @vlResultado, @idMoeda, @dsResultadoEsperado, CONVERT(DATE, @dtConclusao, 23), ${AGORA_BRASILIA},
            @idUsuarioCadastro)`);
 
       for (const idMembro of membros) {
@@ -3327,6 +3373,16 @@ async function registrarDecisao(req, res, opcoes) {
     ];
     if (gravaMotivo) params.push(["motivo", sql.NVarChar(limiteMotivo), motivo]);
 
+    // DT_CONCLUSAO na aprovação: só preenche quando está VAZIA. A data
+    // de conclusão agora é informada pelo autor na Etapa 4, e ela é a
+    // data em que o Kaizen ficou pronto — não a data em que o aprovador
+    // clicou. Sobrescrever apagaria o que o autor registrou. Quando o
+    // campo veio vazio, o comportamento antigo continua valendo: a
+    // aprovação carimba a data do dia.
+    const setConclusao = opcoes.conclui
+      ? `, DT_CONCLUSAO = ISNULL(DT_CONCLUSAO, CAST(${AGORA_BRASILIA} AS DATE))`
+      : "";
+
     // Status e DS_MOTIVO saem no MESMO UPDATE, sempre parametrizado e
     // sempre pela chave única ID_KAIZEN. Um único comando é atômico no
     // SQL Server: ou as duas colunas gravam, ou nenhuma — não existe o
@@ -3334,7 +3390,7 @@ async function registrarDecisao(req, res, opcoes) {
     // comandos é que exigiria transação explícita.
     const gravacao = await runQuery(
       `UPDATE ${FULL_PVC_TABLE}
-       SET ID_STATUS = @idStatus${setMotivo}${opcoes.conclui ? `, DT_CONCLUSAO = ${AGORA_BRASILIA}` : ""},
+       SET ID_STATUS = @idStatus${setMotivo}${setConclusao},
            DT_ATUALIZACAO = ${AGORA_BRASILIA}, ID_USUARIO_ATUALIZACAO = @idUsuario
        WHERE ID_KAIZEN = @idKaizen`,
       params
@@ -3456,6 +3512,9 @@ apiRouter.put("/kaizens/:id", async (req, res) => {
       r.input("dsResultadoEsperado", sql.NVarChar(PVC_LIMITES.DS_RESULTADO_ESPERADO), dados.comparacaoMeta);
       r.input("vlResultado", sql.Decimal(18, 2), dados.valorResultadoFinanceiro);
       r.input("idMoeda", sql.Int, dados.idMoeda);
+      // Mesma regra do cadastro: texto "YYYY-MM-DD" convertido pelo
+      // banco. Limpar o campo na edição grava NULL de volta.
+      r.input("dtConclusao", sql.VarChar(10), dados.dataConclusao);
       // Imagem só é trocada quando veio URL nova. Sem arquivo novo, a
       // coluna nem entra no SET: apagar a foto de quem só corrigiu um
       // texto seria perder o "antes" que ninguém consegue refazer.
@@ -3483,7 +3542,8 @@ apiRouter.put("/kaizens/:id", async (req, res) => {
                 DS_LICOES_APRENDIDAS = @dsLicoes,
                 DS_RESULTADO_ESPERADO = @dsResultadoEsperado,
                 VL_RESULTADO_FINANCEIRO = @vlResultado,
-                ID_MOEDA = @idMoeda,${trocaAntes ? "\n                URL_IMG_ANTES = @urlImgAntes," : ""}${trocaDepois ? "\n                URL_IMG_DEPOIS = @urlImgDepois," : ""}
+                ID_MOEDA = @idMoeda,
+                DT_CONCLUSAO = CONVERT(DATE, @dtConclusao, 23),${trocaAntes ? "\n                URL_IMG_ANTES = @urlImgAntes," : ""}${trocaDepois ? "\n                URL_IMG_DEPOIS = @urlImgDepois," : ""}
                 ID_STATUS = @idStatus,
                 DT_ATUALIZACAO = ${AGORA_BRASILIA},
                 ID_USUARIO_ATUALIZACAO = @idUsuario
@@ -3648,6 +3708,8 @@ apiRouter.get("/kaizens/:id/edicao", async (req, res) => {
       links_documentos: k.URL_REFERENCIA,
       licoes_aprendidas: k.DS_LICOES_APRENDIDAS,
       comparacao_meta_inicial: k.DS_RESULTADO_ESPERADO,
+      // DATE puro, do jeito que o <input type="date"> espera.
+      data_conclusao: somenteData(k.DT_CONCLUSAO),
       valor_resultado_financeiro: k.VL_RESULTADO_FINANCEIRO,
       id_moeda: k.ID_MOEDA,
       ID_STATUS: k.ID_STATUS,

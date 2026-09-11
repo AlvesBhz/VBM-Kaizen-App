@@ -880,6 +880,24 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
             <input type="hidden" id="fl_resultado_financeiro" name="fl_resultado_financeiro" value="false"/>
           </div>
 
+          <!-- Data de Conclusão — grava em KZN_PEDRAVISAOCONSOLIDADA.
+               DT_CONCLUSAO, coluna do tipo DATE (só data, sem hora).
+               Fica FORA dos blocos "Resultado Financeiro" e "Outros
+               resultados" de propósito: aqueles dois são condicionais e
+               nascem desabilitados, e a conclusão do Kaizen não depende
+               de ele ter gerado um resultado ou outro.
+               O `max` é acertado por script para ONTEM — ver o bloco
+               "Data de Conclusão" no final da página. -->
+          <div class="form-group">
+            <div class="form-grid form-grid-2">
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label" data-i18n="f.completionDate">Data de Conclusão</label>
+                <input type="date" class="form-control" id="data_conclusao" name="data_conclusao"/>
+                <div class="form-helper" data-i18n="f.completionDateHelper">Data em que o Kaizen foi concluído. Deve ser anterior à data de hoje.</div>
+              </div>
+            </div>
+          </div>
+
           <div class="form-group">
             <label class="form-label" data-i18n="f.comparisonWithGoal">Comparação com a Meta Inicial / Declaração do Problema</label> <span class="req">*</span>
             <textarea class="form-control" id="comparacao_meta_inicial" name="comparacao_meta_inicial" rows="3" placeholder="Compare o resultado obtido com a meta ou o problema originalmente declarado..." data-i18n-placeholder="f.comparisonWithGoalPlaceholder"></textarea>
@@ -1156,6 +1174,9 @@ function rotuloPessoa(p) {
       'f.otherResultDescriptionPlaceholder': 'Descreva os resultados alcançados...',
       'f.comparisonWithGoal': 'Comparação com a Meta Inicial / Declaração do Problema',
       'f.comparisonWithGoalPlaceholder': 'Compare o resultado obtido com a meta ou o problema originalmente declarado...',
+      'f.completionDate': 'Data de Conclusão',
+      'f.completionDateHelper': 'Data em que o Kaizen foi concluído. Deve ser anterior à data de hoje.',
+      'f.completionDateInvalid': 'Data de Conclusão (deve ser anterior à data de hoje)',
       'wiz.title': 'Novo Kaizen',
       'wiz.subtitle': 'Registre sua iniciativa de melhoria contínua em 4 etapas',
       'wiz.step1': 'Iniciativa',
@@ -1301,6 +1322,9 @@ function rotuloPessoa(p) {
       'f.otherResultDescriptionPlaceholder': 'Describe the results achieved...',
       'f.comparisonWithGoal': 'Comparison with Initial Goal / Problem Statement',
       'f.comparisonWithGoalPlaceholder': 'Compare the result obtained with the originally stated goal or problem...',
+      'f.completionDate': 'Completion Date',
+      'f.completionDateHelper': 'Date the Kaizen was completed. Must be earlier than today.',
+      'f.completionDateInvalid': 'Completion Date (must be earlier than today)',
       'wiz.title': 'New Kaizen',
       'wiz.subtitle': 'Register your continuous improvement initiative in 4 steps',
       'wiz.step1': 'Initiative',
@@ -1920,6 +1944,48 @@ createTeamPicker({
   window.VBMContadores = { atualizar: function () { campos.forEach(function (f) { f(); }); } };
 })();
 
+// ─── Data de Conclusão: teto no calendário ───
+// A regra é "anterior à data de hoje", então o maior dia escolhível é
+// ONTEM. Acertar o `max` faz o próprio calendário do navegador
+// desabilitar hoje e o futuro — o usuário nem chega a errar. Não é a
+// barreira: digitação direta e colagem passam por cima do `max`, e por
+// isso a mesma conta é refeita no envio (dataConclusaoValida) e no
+// servidor (lerKaizenDoCorpo), que é quem de fato decide.
+//
+// "Hoje" é o de BRASÍLIA, não o do aparelho. O servidor grava e compara
+// tudo nesse fuso (ver AGORA_BRASILIA em server.js); se a tela usasse o
+// relógio local, quem estivesse com o aparelho em outro fuso — ou o
+// navegador em UTC, das 21h à meia-noite de Brasília — veria um limite
+// e receberia outro do servidor na hora de salvar. O fuso vem pelo nome
+// ('America/Sao_Paulo'), então horário de verão, se voltar, é
+// respeitado sozinho; 'en-CA' devolve a data já em ISO.
+window.VBMDataBrasilia = {
+  hoje: function () {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit'
+    }).format(new Date());
+  },
+  ontem: function () {
+    // A data de hoje é lida como meia-noite UTC só para poder voltar um
+    // dia sem cair na borda do fuso — o resultado volta a ser texto.
+    var d = new Date(this.hoje() + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() - 1);
+    return d.toISOString().slice(0, 10);
+  }
+};
+
+(function () {
+  var campo = document.getElementById('data_conclusao');
+  if (!campo) return;
+  function acertarTeto() { campo.setAttribute('max', window.VBMDataBrasilia.ontem()); }
+  acertarTeto();
+  // Uma aba aberta durante a virada do dia continuaria com o teto de
+  // ontem; ao voltar para ela, o limite é recalculado.
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) acertarTeto();
+  });
+})();
+
 // ─── Formatos aceitos nas fotos (Antes/Depois) ───
 // O accept dos inputs já filtra a janela de escolha, mas é só uma
 // sugestão: o navegador deixa trocar para "todos os arquivos" e o
@@ -2417,6 +2483,20 @@ window.validacaoWizard = (function () {
     if (steps[indice]) steps[indice].click();
   }
 
+  /* Data de Conclusão anterior a hoje.
+     "Hoje" é o de Brasília (window.VBMDataBrasilia), o mesmo que o
+     servidor usa — com o relógio do aparelho, tela e servidor podiam
+     discordar de qual é o dia de hoje e a pessoa levava uma recusa
+     depois de a tela ter aprovado.
+     A comparação é de TEXTO "YYYY-MM-DD": nesse formato a ordem
+     alfabética é a cronológica, então não entra objeto Date nem fuso na
+     conta — mesmo critério de lerKaizenDoCorpo em server.js. */
+  function dataConclusaoValida() {
+    var v = valor('data_conclusao');
+    if (!v) return true;                       // campo opcional
+    return /^\d{4}-\d{2}-\d{2}$/.test(v) && v < window.VBMDataBrasilia.hoje();
+  }
+
   // AÇÃO 1 — Lições Aprendidas. Só espaços não conta como conteúdo.
   // A ordem das regras segue a ordem dos campos na tela; a primeira
   // pendência interrompe.
@@ -2448,6 +2528,15 @@ window.validacaoWizard = (function () {
 
     exigir('comparacao_meta_inicial', 'f.comparisonWithGoal',
       'Comparação com a Meta Inicial / Declaração do Problema');
+
+    // Data de Conclusão é opcional; quando preenchida, tem de ser
+    // anterior a hoje. O `max` do input já impede escolher no
+    // calendário, mas digitação direta e colagem passam por cima dele —
+    // e o servidor confere de novo, de qualquer forma.
+    if (valor('data_conclusao') && !dataConclusaoValida()) {
+      faltando.push({ id: 'data_conclusao', chave: 'f.completionDateInvalid',
+                      padrao: 'Data de Conclusão (deve ser anterior à data de hoje)' });
+    }
 
     // A confirmação de envio é pendência como qualquer outra: entra na
     // mesma lista, para o usuário ver tudo o que falta numa só passada.
@@ -2561,6 +2650,8 @@ window.validacaoWizard = (function () {
 
       licoes_aprendidas: valor('licoes_aprendidas'),
       comparacao_meta_inicial: valor('comparacao_meta_inicial'),
+      // Vazio = o servidor grava NULL em DT_CONCLUSAO.
+      data_conclusao: valor('data_conclusao'),
       fl_resultado_financeiro: flResultadoFinanceiro,
       valor_resultado_financeiro: flResultadoFinanceiro ? valor('valor_resultado_financeiro') : '',
       id_moeda: flResultadoFinanceiro ? valor('moeda_resultado_financeiro') : '',
@@ -2685,6 +2776,9 @@ function txtEdicao(chave, padrao) {
       texto('links_documentos', k.links_documentos);
       texto('licoes_aprendidas', k.licoes_aprendidas);
       texto('comparacao_meta_inicial', k.comparacao_meta_inicial);
+      // DT_CONCLUSAO volta como "YYYY-MM-DD", que é o valor que o
+      // <input type="date"> aceita. Nulo deixa o campo vazio.
+      texto('data_conclusao', k.data_conclusao || '');
       selecionar('id_categoria', k.id_categoria);
       selecionar('id_replicacao_potencial', k.id_replicacao);
       selecionar('id_aprovador', k.id_usuario_aprovador);
