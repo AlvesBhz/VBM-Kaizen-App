@@ -84,9 +84,11 @@ async function obterToken() {
 
 /**
  * Grava `buffer` no caminho de volume informado (ex.:
- * "/Volumes/franquia_bmsa_insight/ci/kaizen/imgs/before/123_ab12cd34.png").
- * overwrite=true é seguro aqui porque o nome do arquivo já é gerado no
- * servidor (nomeArquivoImagem em server.js) — nunca reaproveita nome.
+ * "/Volumes/franquia_bmsa_insight/ci/kaizen/imgs/before/123_ANTES.png").
+ * overwrite=true é ESSENCIAL aqui: o nome do arquivo é o ID do Kaizen
+ * (ver nomeArquivoImagem em server.js), então trocar a foto de um Kaizen
+ * grava por cima da anterior — é o comportamento desejado, um Kaizen tem
+ * uma foto de "antes" e uma de "depois", não um histórico delas.
  *
  * Lança erro (com a mensagem crua da API do Databricks) em qualquer
  * falha; quem chama decide como traduzir isso pro usuário.
@@ -128,4 +130,24 @@ async function baixarArquivoDoVolume(caminhoVolume) {
   return { buffer, contentType };
 }
 
-module.exports = { enviarArquivoParaVolume, baixarArquivoDoVolume };
+/**
+ * Apaga `caminhoVolume`. Usado só para limpar o arquivo TEMPORÁRIO do
+ * cadastro novo depois que ele é regravado com o nome definitivo (o ID
+ * do Kaizen) — ver renomearImagemParaId em server.js.
+ *
+ * NÃO lança: se a limpeza falhar, o que fica é um arquivo órfão no
+ * volume, e derrubar o cadastro por causa disso seria pior do que o
+ * arquivo sobrando. Devolve true/false para quem chama registrar no log.
+ */
+async function removerArquivoDoVolume(caminhoVolume) {
+  try {
+    const token = await obterToken();
+    const url = `${DATABRICKS_HOST}/api/2.0/fs/files${caminhoVolume}`;
+    const resp = await fetch(url, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+    return resp.ok;
+  } catch (err) {
+    return false;
+  }
+}
+
+module.exports = { enviarArquivoParaVolume, baixarArquivoDoVolume, removerArquivoDoVolume };

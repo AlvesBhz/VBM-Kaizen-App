@@ -2165,7 +2165,9 @@ window.VBMDataConclusao = (function () {
       var hidden = document.getElementById(input.id.replace('imagem_', 'url_imagem_'));
       var gravada = hidden && hidden.value;
       if (gravada) {
-        preview.src = '/api/kaizens/imagem?path=' + encodeURIComponent(gravada);
+        // &v= só para furar o cache do navegador — ver nota em
+        // mostrarImagemAtual, no fim da página.
+        preview.src = '/api/kaizens/imagem?path=' + encodeURIComponent(gravada) + '&v=' + Date.now();
         input.dataset.jaGravada = '1';
       } else {
         preview.removeAttribute('src');
@@ -3055,7 +3057,12 @@ function txtEdicao(chave, padrao) {
     var zona = input.closest('.photo-upload-zone');
     var preview = zona && zona.nextElementSibling;
     if (preview && preview.classList.contains('photo-preview-img')) {
-      preview.src = '/api/kaizens/imagem?path=' + encodeURIComponent(caminho);
+      // O &v= não é lido pelo servidor (a rota só olha o ?path=): serve
+      // para o navegador não reaproveitar a imagem do cache. O nome do
+      // arquivo agora é o ID do Kaizen e não muda ao trocar a foto —
+      // sem isto, reabrir a edição logo depois de trocar mostraria a
+      // foto antiga.
+      preview.src = '/api/kaizens/imagem?path=' + encodeURIComponent(caminho) + '&v=' + Date.now();
       preview.style.display = 'block';
     }
   }
