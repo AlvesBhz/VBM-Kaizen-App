@@ -584,6 +584,9 @@
        repete os 55%/80% de opacidade do modal: corpo com mais contraste
        e um pouco maior, rótulo em branco cheio. */
     '.cab-metas{display:flex;flex-wrap:wrap;gap:.45em 1.4em}',
+    // Sem nenhum item, a faixa não deve virar um espaço em branco.
+    '.cab-metas:empty{display:none}',
+    '.cab-metas+.cab-metas{margin-top:.5em}',
     '.cab-meta{font-size:.78em;color:rgba(255,255,255,.86);display:flex;align-items:center;gap:.35em;' +
       'font-weight:500}',
     '.cab-meta i{color:var(--az)}',
@@ -843,13 +846,19 @@
             (k.NM_STATUS ? '<div class="cab-status">' + pk_escapar(k.NM_STATUS) + '</div>' : '') +
           '</div>' +
           '<h1>' + pk_escapar(k.NM_KAIZEN || '') + '</h1>' +
+          // Duas faixas de propósito: primeiro QUEM e QUANDO, depois
+          // COMO o Kaizen se classifica. Cada uma é uma linha própria —
+          // juntas numa só, a quebra caía onde coubesse e separava
+          // rótulo de valor sem critério.
+          '<div class="cab-metas">' +
+            linhaMeta('fa-user', r('lider', 'Líder'), k.NM_LIDER) +
+            linhaMeta('fa-users', r('equipe', 'Equipe'), equipe) +
+            linhaMeta('fa-calendar-day', r('data', 'Data'), dataRef) +
+          '</div>' +
           '<div class="cab-metas">' +
             linhaMeta('fa-tag', r('categoria', 'Categoria'), k.NM_CATEGORIA) +
             linhaMeta('fa-globe', r('replicacao', 'Replicação'), k.NM_REPLICACAO) +
             linhaMeta('fa-recycle', r('desperdicios', 'Redução de Desperdícios'), desperdicios) +
-            linhaMeta('fa-user', r('lider', 'Líder'), k.NM_LIDER) +
-            linhaMeta('fa-users', r('equipe', 'Equipe'), equipe) +
-            linhaMeta('fa-calendar-day', r('data', 'Data'), dataRef) +
           '</div>' +
         '</header>' +
 
