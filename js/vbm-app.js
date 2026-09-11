@@ -573,15 +573,21 @@
       'linear-gradient(90deg,rgba(60,181,229,.04) 1px,transparent 1px);background-size:25px 25px}',
     '.cab>*{position:relative;z-index:1}',
     '.cab-topo{display:flex;align-items:flex-start;justify-content:space-between;gap:1em}',
-    '.cab-id{font-size:.62em;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.45)}',
+    '.cab-id{font-size:.66em;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.62);' +
+      'font-weight:600}',
     '.cab-status{flex:none;border:1px solid var(--az);color:var(--az);border-radius:2em;padding:.2em .9em;' +
       'font-size:.6em;font-weight:700;text-transform:uppercase;letter-spacing:.12em;white-space:nowrap}',
     '.cab h1{font-family:var(--tit);font-weight:700;font-size:1.5em;line-height:1.25;color:#fff;' +
       'margin:.45em 0 .6em}',
-    '.cab-metas{display:flex;flex-wrap:wrap;gap:.4em 1.4em}',
-    '.cab-meta{font-size:.72em;color:rgba(255,255,255,.55);display:flex;align-items:center;gap:.35em}',
+    /* Texto claro sobre fundo escuro fica mais fino do que o mesmo texto
+       sobre branco — no papel, mais ainda. Por isso a linha de metas não
+       repete os 55%/80% de opacidade do modal: corpo com mais contraste
+       e um pouco maior, rótulo em branco cheio. */
+    '.cab-metas{display:flex;flex-wrap:wrap;gap:.45em 1.4em}',
+    '.cab-meta{font-size:.78em;color:rgba(255,255,255,.86);display:flex;align-items:center;gap:.35em;' +
+      'font-weight:500}',
     '.cab-meta i{color:var(--az)}',
-    '.cab-meta strong{color:rgba(255,255,255,.8);font-weight:600}',
+    '.cab-meta strong{color:#fff;font-weight:600}',
 
     /* ── cartões: o .kd-section do modal ── */
     '.duas{display:grid;grid-template-columns:1fr 1fr;gap:1em}',
@@ -641,10 +647,16 @@
        do A4 e nada mais: sem sombra, sem borda, sem largura fixa. O
        tamanho-base menor é o que reacomoda a página inteira. */
     '@media print{',
-    '  @page{size:A4 portrait;margin:10mm}',
+    /* margem 0 em cima e embaixo: é NESSA faixa que o navegador imprime
+       a data e o título do documento. Sem ela o cabeçalho e o rodapé do
+       Chrome/Edge não têm onde ser desenhados e a folha sai limpa. O
+       respiro de 10mm volta como padding da própria folha, e as margens
+       laterais ficam na @page para continuarem valendo em cada página. */
+    '  @page{size:A4 portrait;margin:0 10mm}',
     '  body{background:#fff}',
     '  .aviso{display:none!important}',
-    '  .folha{font-size:9.4pt;width:auto;max-width:none;margin:0;padding:0;box-shadow:none;border-radius:0;gap:.8em}',
+    '  .folha{font-size:9.4pt;width:auto;max-width:none;margin:0;padding:10mm 0;box-shadow:none;' +
+      'border-radius:0;gap:.8em}',
     '  .cab{padding:1.1em 1.2em}',
     '  .foto-img{height:56mm}',
     '  .cab,.duas,.rodape{break-inside:avoid;page-break-inside:avoid}',
