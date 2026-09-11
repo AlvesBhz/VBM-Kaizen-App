@@ -1178,13 +1178,28 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   // ─── Modal de detalhe ───
   function preencherModal(k) {
     document.getElementById('bibModalTitulo').textContent = k.ROTULO + ' — ' + k.NM_KAIZEN;
-    document.getElementById('bibModalId').textContent = [k.ROTULO, k.NM_CATEGORIA, [k.NM_CIDADE, k.NM_ESTADO].filter(Boolean).join(', ')].filter(Boolean).join(' · ');
+    // Linha de cima: código · categoria · UNIDADE. A unidade é o NM_SITE
+    // que vem com o Kaizen (kzn_mdm_hierarquia, pelo autor) — o mesmo
+    // valor do card da lista. Antes eram cidade e estado do líder, que
+    // são outra coisa: o endereço da pessoa, não a unidade do Kaizen.
+    document.getElementById('bibModalId').textContent = [k.ROTULO, k.NM_CATEGORIA, k.NM_SITE].filter(Boolean).join(' · ');
     document.getElementById('bibModalTitle').textContent = k.NM_KAIZEN;
+    // Metas: informação de NEGÓCIO do Kaizen, não das pessoas. Cada uma
+    // com o rótulo em destaque e o valor ao lado. Tudo já vem no mesmo
+    // GET /kaizens/:id que preenche o resto do modal — nenhuma consulta
+    // nova. Os ícones são os que a linha já usava.
+    var meta = function (icone, rotulo, valor) {
+      return '<div class="kd-meta"><i class="fa-solid ' + icone + '"></i> <strong>' +
+             escaparHtml(rotulo) + ':</strong> ' + escaparHtml(valor) + '</div>';
+    };
+    var desperdicios = (k.DESPERDICIOS || []).filter(Boolean).join(', ');
     var metas = [
-      k.NM_LIDER ? '<div class="kd-meta"><i class="fa-solid fa-user"></i> Líder: ' + k.NM_LIDER + '</div>' : '',
-      (k.MEMBROS && k.MEMBROS.length) ? '<div class="kd-meta"><i class="fa-solid fa-users"></i> Equipe: ' + k.MEMBROS.map(function (m) { return m.NM_USUARIO; }).join(', ') + '</div>' : '',
-      k.NM_CATEGORIA ? '<div class="kd-meta"><i class="fa-solid fa-tag"></i> ' + k.NM_CATEGORIA + '</div>' : '',
-      k.NM_REPLICACAO ? '<div class="kd-meta"><i class="fa-solid fa-globe"></i> Replicação: ' + k.NM_REPLICACAO + '</div>' : '',
+      // Os rótulos de Categoria e Desperdícios são os MESMOS dos balões
+      // do card (bib.groupCategoria / bib.groupDesperdicios): o modal
+      // repete o nome que a pessoa acabou de ler na lista.
+      k.NM_CATEGORIA ? meta('fa-tag', txtI18n('bib.groupCategoria', 'Categoria'), k.NM_CATEGORIA) : '',
+      k.NM_REPLICACAO ? meta('fa-globe', txtI18n('bib.replication', 'Replicação'), k.NM_REPLICACAO) : '',
+      desperdicios ? meta('fa-recycle', txtI18n('bib.groupDesperdicios', 'Redução de Desperdícios'), desperdicios) : '',
     ].join('');
     document.getElementById('bibModalMetas').innerHTML = metas;
     document.getElementById('bibModalProblema').textContent = k.DS_PROBLEMA || '—';
@@ -1384,6 +1399,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       'bib.userPlaceholder': 'Nome do usuário...',
       'bib.editKaizen': 'Editar Kaizen',
       'bib.groupCategoria': 'Categoria',
+      'bib.replication': 'Replicação',
       'bib.groupDesperdicios': 'Redução de Desperdícios',
       'bib.editBlocked': 'Edição indisponível para o status atual',
       'bib.loadMore': 'Carregar mais',
@@ -1455,6 +1471,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       'bib.userPlaceholder': 'User name...',
       'bib.editKaizen': 'Edit Kaizen',
       'bib.groupCategoria': 'Category',
+      'bib.replication': 'Replication',
       'bib.groupDesperdicios': 'Waste Reduction',
       'bib.editBlocked': 'Editing unavailable for the current status',
       'bib.loadMore': 'Load more',

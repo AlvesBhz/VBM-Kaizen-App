@@ -3032,6 +3032,7 @@ apiRouter.get("/kaizens/:id", async (req, res) => {
       `SELECT p.*, p.DT_ATUALIZACAO AS DT_CRIACAO, cat.NM_CATEGORIA, repl.NM_REPLICACAO, moeda.SG_MOEDA, moeda.NM_MOEDA,
               st.NM_STATUS, st.DS_STATUS,
               lider.NM_USUARIO AS NM_LIDER, lider.NM_ESTADO, lider.NM_CIDADE,
+              autor.NM_SITE,
               aprov.NM_USUARIO AS NM_APROVADOR
        FROM ${FULL_PVC_TABLE} p
        LEFT JOIN ${FULL_CATEGORIA_TABLE} cat ON cat.ID_CATEGORIA = p.ID_CATEGORIA AND cat.ID_IDIOMA = @idIdioma
@@ -3039,6 +3040,16 @@ apiRouter.get("/kaizens/:id", async (req, res) => {
        LEFT JOIN ${FULL_STATUS_TABLE} st ON st.ID_STATUS = p.ID_STATUS AND st.ID_IDIOMA = @idIdioma
        LEFT JOIN ${FULL_MOEDA_TABLE} moeda ON moeda.ID_MOEDA = p.ID_MOEDA
        LEFT JOIN ${FULL_MDM_TABLE} lider ON lider.ID_USUARIO = p.ID_USUARIO_LIDER
+       -- Unidade do Kaizen: NM_SITE de quem cadastrou (sem cadastrante,
+       -- o líder). MESMO OUTER APPLY de GET /kaizens, para o modal e o
+       -- card mostrarem a mesma unidade. O TOP(1) + ORDER BY existe
+       -- porque a mesma pessoa pode ter mais de uma linha no MDM.
+       OUTER APPLY (
+         SELECT TOP (1) y.NM_SITE
+           FROM ${FULL_MDM_TABLE} y
+          WHERE y.ID_USUARIO = ISNULL(p.ID_USUARIO_CADASTRO, p.ID_USUARIO_LIDER)
+          ORDER BY y.ID_TIPO_USUARIO
+       ) autor
        LEFT JOIN ${FULL_TABLE_NAME} aprovFk ON aprovFk.ID_APROVADOR = p.ID_APROVADOR
        LEFT JOIN ${FULL_MDM_TABLE} aprov ON aprov.ID_USUARIO = aprovFk.ID_USUARIO
        WHERE p.ID_KAIZEN = @idKaizen`,
@@ -3080,6 +3091,9 @@ apiRouter.get("/kaizens/:id", async (req, res) => {
       NM_CATEGORIA: k.NM_CATEGORIA,
       NM_REPLICACAO: k.NM_REPLICACAO,
       NM_LIDER: k.NM_LIDER,
+      // Unidade do Kaizen (kzn_mdm_hierarquia.NM_SITE do autor) — é o que
+      // o cabeçalho do modal mostra, a mesma unidade do card da lista.
+      NM_SITE: k.NM_SITE,
       NM_ESTADO: k.NM_ESTADO,
       NM_CIDADE: k.NM_CIDADE,
       NM_APROVADOR: k.NM_APROVADOR,
