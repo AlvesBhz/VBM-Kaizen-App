@@ -1677,6 +1677,33 @@ textarea.lang-slot-input.form-control { min-height: 1.4rem; resize: vertical; }
   #modalBibDetail .kd-photo-box img { height: clamp(180px, 30vh, 300px); }
 }
 
+/* Tema escuro do Kaizen lido por inteiro.
+   As medidas acima já são únicas para as duas telas; a cor precisava ser
+   também. Os blocos .kd-* nascem claros por padrão (#fff no cartão,
+   #fafafa no cabeçalho) e os textos usam --vbm-dark / --vbm-text /
+   --vbm-mid — tokens que o tema escuro inverte para tons quase brancos.
+   Resultado: cartão branco com letra branca, ilegível. Aqui o cartão
+   vira translúcido sobre o fundo escuro e o texto reaparece, na mesma
+   linguagem das demais superfícies do tema (branco a 5%/6% com anel a
+   10%/12%). Vale para o modal da Biblioteca e para o ampliado da
+   Aprovação — um bloco só, para as duas telas não começarem iguais e
+   terminarem diferentes. */
+[data-bg="dark"] .kd-section { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.1); }
+[data-bg="dark"] .kd-section-head {
+  background: rgba(255,255,255,.05); border-bottom-color: rgba(255,255,255,.1);
+}
+[data-bg="dark"] .kd-section-icon { background: rgba(60,181,229,.16); color: var(--vbm-blue-light); }
+[data-bg="dark"] .kd-section-title { color: #fff; }
+[data-bg="dark"] .kd-photo-box { background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.12); }
+[data-bg="dark"] .kd-photo-desc { color: rgba(255,255,255,.6); }
+/* Os cartões de "Resultados Alcançados" são montados por script com
+   background:var(--vbm-off-white) no atributo style — inline vence
+   qualquer classe, então a regra tem de alcançar o atributo. */
+[data-bg="dark"] #modalBibDetail [style*="--vbm-off-white"],
+[data-bg="dark"] #modalKaizenAmpliado [style*="--vbm-off-white"] {
+  background: rgba(255,255,255,.06) !important; border-color: rgba(255,255,255,.12) !important;
+}
+
 /* ═══════════════════════════════════════════════════
    ADMIN PANEL
 ═══════════════════════════════════════════════════ */
