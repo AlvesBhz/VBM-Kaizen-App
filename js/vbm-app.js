@@ -128,7 +128,13 @@
 
   window.openModal = function(id) {
     const el = document.getElementById(id);
-    if (el) { el.classList.add('open'); document.body.style.overflow = 'hidden'; }
+    if (el) {
+      el.classList.add('open');
+      document.body.style.overflow = 'hidden';
+      // O conteúdo do modal pode ter sido montado agora por script:
+      // rotula o que entrou depois da passagem inicial.
+      if (window.VBMRotulos) window.VBMRotulos(el);
+    }
   };
   window.closeModal = function(id) {
     const el = document.getElementById(id);
@@ -723,7 +729,7 @@
   function pk_folhasHerdadas() {
     return Array.prototype.slice.call(document.querySelectorAll('link[rel~="stylesheet"]'))
       .map(function (l) { return l.href; })
-      .filter(function (h) { return /all\.min\.css/i.test(h) || /fonts\.googleapis\.com/i.test(h); })
+      .filter(function (h) { return /fontawesome|all\.min\.css/i.test(h) || /poppins\.css/i.test(h); })
       .map(function (h) { return '<link rel="stylesheet" href="' + pk_escapar(h) + '"/>'; })
       .join('');
   }
@@ -1013,6 +1019,102 @@
       .catch(function () {});
   }
 
+  /* ── Rótulos acessíveis ────────────────────────────────────────────
+     Campo sem rótulo programático é anunciado pelo leitor de tela só
+     como "caixa de edição", sem dizer qual — a auditoria encontrou 75
+     assim só na Administração. O rótulo VISUAL existe em quase todos;
+     o que falta é a ligação, e em dois casos ela não cabe no HTML:
+
+       · campos bilíngues: um <label> serve DOIS campos (PT e EN), então
+         `for=` não resolve — cada um recebe "Rótulo (PT-BR)" / "(EN)",
+         lido da própria etiqueta de idioma que está na tela;
+       · modais da Administração: o conteúdo é montado por script depois
+         do carregamento, então marcação estática não alcançaria.
+
+     Por isso a passagem é feita aqui, em runtime, e repetida quando um
+     modal abre. Nada de layout muda: só entram atributos.
+
+     O que NÃO é tocado: quem já tem label[for], aria-label,
+     aria-labelledby ou placeholder — o rótulo existente sempre vence. */
+  function textoDoRotulo(el) {
+    return (el.textContent || '').replace(/\s+/g, ' ').trim().replace(/[:*]+$/, '');
+  }
+
+  function rotularControle(campo) {
+    if (campo.type === 'hidden' || campo.disabled) return;
+    if (campo.getAttribute('aria-label') || campo.getAttribute('aria-labelledby')) return;
+    if (campo.id && document.querySelector('label[for="' + CSS.escape(campo.id) + '"]')) return;
+    if (campo.getAttribute('placeholder')) return;
+
+    // Sobe até o bloco do campo e pega o rótulo visual dele.
+    var bloco = campo.closest('.form-group, .settings-section, .filter-bar, .lang-slot-group') || campo.parentElement;
+    var rotulo = bloco ? bloco.querySelector('label, .form-label, .settings-section-title, .filter-label') : null;
+    var texto = rotulo ? textoDoRotulo(rotulo) : '';
+
+    // Dentro de um slot bilíngue, o idioma entra junto: sem isso os dois
+    // campos do mesmo rótulo seriam anunciados com o mesmo nome.
+    var slot = campo.closest('.lang-slot');
+    if (slot) {
+      var tag = slot.querySelector('.lang-slot-tag');
+      var idioma = tag ? textoDoRotulo(tag) : (campo.dataset.lang || '');
+      if (idioma) texto = texto ? texto + ' (' + idioma + ')' : idioma;
+    }
+
+    // Combo de filtro não tem rótulo visual: a primeira opção ("Todas
+    // as unidades", "Todos os status") é exatamente o nome do campo, e
+    // já vem traduzida pelo dicionário da página.
+    if (!texto && campo.tagName === 'SELECT' && campo.options.length) {
+      texto = textoDoRotulo(campo.options[0]);
+    }
+    // Caixa de seleção: o texto que fica ao lado dela é o rótulo.
+    if (!texto && (campo.type === 'checkbox' || campo.type === 'radio')) {
+      var vizinho = campo.closest('label') || campo.parentElement;
+      if (vizinho) texto = textoDoRotulo(vizinho);
+    }
+
+    if (texto) campo.setAttribute('aria-label', texto);
+  }
+
+  function rotularBotao(botao) {
+    if (botao.getAttribute('aria-label') || botao.textContent.trim()) return;
+    var titulo = botao.getAttribute('title');
+    if (titulo) { botao.setAttribute('aria-label', titulo); return; }
+    // Botão só com ícone e sem título: o nome do ícone é o melhor sinal
+    // disponível. "fa-solid fa-xmark" tem DOIS fa-*, e o primeiro é o
+    // estilo — ler o primeiro daria "solid" e não identificaria nada.
+    var icone = botao.querySelector('i[class*="fa-"]');
+    var estilos = { solid: 1, regular: 1, brands: 1, light: 1, thin: 1, duotone: 1, fw: 1, spin: 1, lg: 1, sm: 1, xs: 1 };
+    var nome = null;
+    if (icone) {
+      String(icone.className).split(/\s+/).forEach(function (c) {
+        var m = /^fa-([a-z0-9-]+)$/.exec(c);
+        if (m && !estilos[m[1]] && !nome) nome = m[1];
+      });
+    }
+    var conhecidos = {
+      xmark: 'common.fechar', times: 'common.fechar', bars: 'a11y.abrirMenu',
+      'chevron-down': 'a11y.expandir', 'chevron-right': 'a11y.avancar',
+      'arrow-left': 'a11y.voltar', plus: 'a11y.adicionar',
+    };
+    var padroes = {
+      'common.fechar': 'Fechar', 'a11y.abrirMenu': 'Abrir menu', 'a11y.expandir': 'Expandir',
+      'a11y.avancar': 'Avançar', 'a11y.voltar': 'Voltar', 'a11y.adicionar': 'Adicionar',
+    };
+    var chave = nome && conhecidos[nome];
+    if (!chave) return;
+    // data-i18n-aria: o próprio tradutor da página reescreve o rótulo na
+    // troca de idioma, sem esta função precisar rodar de novo.
+    botao.setAttribute('data-i18n-aria', chave);
+    var dicionario = window.__i18n || {};
+    botao.setAttribute('aria-label', dicionario[chave] || padroes[chave]);
+  }
+
+  window.VBMRotulos = function (raiz) {
+    var alvo = raiz || document;
+    alvo.querySelectorAll('input, select, textarea').forEach(rotularControle);
+    alvo.querySelectorAll('button').forEach(rotularBotao);
+  };
+
   document.addEventListener('DOMContentLoaded', function() {
     initSidebar();
     initActiveNav();
@@ -1029,6 +1131,7 @@
     initApproval();
     initAOS();
     initBadgeAprovacao();
+    window.VBMRotulos();
   });
 
   /* ──────────────────────────────────────────────────────────────

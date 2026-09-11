@@ -37,18 +37,12 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>VBM Kaizen — Aprovação</title>
-<link href="css/vendor/e5e202e3c8995079_all.min.css" rel="stylesheet"/>
+<link href="css/fontawesome-subset.css?v=20260911-1" rel="stylesheet"/>
 <link href="css/vbm-app.css?v=20260819-1" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com" rel="preconnect"/>
-<link href="https://fonts.gstatic.com" rel="preconnect" crossorigin/>
-<!-- Poppins carregada SEM bloquear a renderização: como "print" o navegador
-     baixa a folha mas não espera por ela para pintar a tela; o onload a
-     promove para "all" e a fonte entra assim que chega. Antes, esta linha
-     era render-blocking — num ambiente sem saída para a internet a página
-     ficava em branco até o timeout do fonts.googleapis.com. O <noscript>
-     mantém o comportamento original quando não há JS. -->
-<link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet" media="print" onload="this.media='all';this.onload=null;"/>
-<noscript><link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet"/></noscript>
+<!-- Poppins servida pelo próprio app (css/poppins.css + assets/fonts/poppins).
+     Vinha de fonts.googleapis.com: em rede sem saída para a internet o
+     pedido ficava pendente e o evento load da página nunca disparava. -->
+<link href="css/poppins.css?v=20260911-1" rel="stylesheet"/>
 <link href="assets/icons/a1922a98664cc516_favicon-32x32-1.png" rel="icon"/>
 <style>
 /* ═══════════════════════════════════════════════════
@@ -263,15 +257,12 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
   border-color:rgba(194,119,14,.35);
 }
 
-/* ── Painel de detalhe (direita) — correção dos "gaps" de cor:
-   blocos que eram brancos/cinza-claro fixos e destoavam no tema escuro. ── */
-[data-bg="dark"] .kd-section{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1);}
-[data-bg="dark"] .kd-section-head{background:rgba(255,255,255,.05);border-bottom-color:rgba(255,255,255,.1);}
-[data-bg="dark"] .kd-section-icon{background:rgba(60,181,229,.16);color:var(--vbm-blue-light);}
-[data-bg="dark"] .kd-section-title{color:#fff;}
-[data-bg="dark"] .kd-photo-box{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.12);}
-[data-bg="dark"] .kd-photo-desc{color:rgba(255,255,255,.6);}
-/* Blocos com background var(--vbm-off-white) inline (métricas e caixa de decisão) */
+/* ── Painel de detalhe (direita) — tema escuro dos blocos .kd-* mora no
+   css/vbm-app.css, junto da definição deles e do bloco de medidas que a
+   Biblioteca também usa. Duas cópias das mesmas cores é o caminho curto
+   para as duas telas começarem iguais e terminarem diferentes.
+   Aqui fica só o que é exclusivo desta tela: os blocos com background
+   var(--vbm-off-white) no atributo style (métricas e caixa de decisão). ── */
 [data-bg="dark"] .approval-detail-panel [style*="--vbm-off-white"]{
   background:rgba(255,255,255,.06) !important;border-color:rgba(255,255,255,.12) !important;
 }
@@ -345,7 +336,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
     <a href="admin.html" class="topnav-link"><i class="fa-solid fa-shield-halved"></i> <span data-i18n="nav.administracao">Administração</span></a>
   </div>
   <div class="topnav-actions">
-    <button class="settings-btn" id="settingsBtn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="settingsPanel" title="Configurações" data-i18n-title="settings.btnTitle">
+    <button class="settings-btn" id="settingsBtn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="settingsPanel" title="Configurações" data-i18n-title="settings.btnTitle" aria-label="Configurações">
       <svg width="17" height="17" viewBox="0 0 20 20" fill="none">
         <path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" stroke="currentColor" stroke-width="1.5" />
         <path d="M16.2 12.3a1.4 1.4 0 0 0 .28 1.54l.05.05a1.7 1.7 0 1 1-2.4 2.4l-.05-.05a1.4 1.4 0 0 0-1.54-.28 1.4 1.4 0 0 0-.85 1.28V17.4a1.7 1.7 0 0 1-3.4 0v-.08a1.4 1.4 0 0 0-.91-1.28 1.4 1.4 0 0 0-1.54.28l-.05.05a1.7 1.7 0 1 1-2.4-2.4l.05-.05a1.4 1.4 0 0 0 .28-1.54 1.4 1.4 0 0 0-1.28-.85H2.6a1.7 1.7 0 0 1 0-3.4h.08a1.4 1.4 0 0 0 1.28-.91 1.4 1.4 0 0 0-.28-1.54l-.05-.05a1.7 1.7 0 1 1 2.4-2.4l.05.05a1.4 1.4 0 0 0 1.54.28h.06a1.4 1.4 0 0 0 .85-1.28V2.6a1.7 1.7 0 0 1 3.4 0v.08a1.4 1.4 0 0 0 .85 1.28h.06a1.4 1.4 0 0 0 1.54-.28l.05-.05a1.7 1.7 0 1 1 2.4 2.4l-.05.05a1.4 1.4 0 0 0-.28 1.54v.06a1.4 1.4 0 0 0 1.28.85h.08a1.7 1.7 0 0 1 0 3.4h-.08a1.4 1.4 0 0 0-1.28.85Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
@@ -407,12 +398,12 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
   <div class="page-content">
 
     <!-- Hero banner — mesmo layout/linguagem do hero de biblioteca.html -->
-    <div style="position:relative;border-radius:1.25rem;overflow:hidden;margin-bottom:1.5rem;background:linear-gradient(135deg,#041523,#082d4f);background-image:url('assets/images/Fundo_Sossego_2400x1145.svg');background-size:cover;background-position:center;padding:2rem;">
+    <div style="position:relative;border-radius:1.25rem;overflow:hidden;margin-bottom:1.5rem;background:linear-gradient(135deg,#041523,#082d4f);background-image:url('assets/images/Fundo_Sossego_2400x1145.webp');background-size:cover;background-position:center;padding:2rem;">
       <div style="position:absolute;width:350px;height:350px;border-radius:50%;background:radial-gradient(circle,rgba(60,181,229,.18) 0%,transparent 65%);top:-100px;right:-60px;filter:blur(50px);animation:orb1 20s ease-in-out infinite;pointer-events:none;"></div>
       <div style="position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;">
         <div>
           <div style="font-size:.6rem;letter-spacing:.25em;text-transform:uppercase;color:var(--vbm-blue-light);margin-bottom:.6rem;" data-i18n="ap.eyebrow">Autoridade de Aprovação</div>
-          <div style="font-family:'Poppins',sans-serif;font-weight:700;font-style:italic;font-size:clamp(1.8rem,4vw,3rem);color:#fff;mix-blend-mode:overlay;line-height:.9;margin-bottom:.4rem;" data-i18n="ap.heroTitle">APROVAÇÃO</div>
+          <div style="font-family:'Poppins',sans-serif;font-weight:700;font-style:italic;font-size:clamp(1.8rem,4vw,3rem);color:#fff;mix-blend-mode:overlay;line-height:.9;margin-bottom:.4rem;" data-i18n="ap.heroTitle" role="heading" aria-level="1">APROVAÇÃO</div>
           <div style="font-family:'Poppins',sans-serif;font-weight:700;font-size:clamp(.9rem,2vw,1.3rem);color:rgba(255,255,255,.75);mix-blend-mode:overlay;margin-bottom:.75rem;">KAIZENS · VALE BASE METALS</div>
           <p style="font-size:.82rem;color:rgba(255,255,255,.5);max-width:440px;line-height:1.6;" data-i18n="ap.subtitle">Revise, aprove ou devolva os Kaizens submetidos da sua unidade.</p>
         </div>
@@ -534,7 +525,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
               <span data-i18n="ap.approvalDecision">Decisão de Aprovação</span>
             </div>
             <div class="form-group" id="kdMotivoWrap">
-              <label class="form-label" data-i18n="ap.rejectReason">Motivo da Reprovação ou correção</label>
+              <label for="kdMotivo" class="form-label" data-i18n="ap.rejectReason">Motivo da Reprovação ou correção</label>
               <textarea class="form-control" rows="3" id="kdMotivo" maxlength="300" placeholder="Descreva o motivo da reprovação (obrigatório ao reprovar)..." data-i18n-placeholder="ap.commentPlaceholder"></textarea>
               <div style="display:flex;justify-content:space-between;gap:1rem;">
                 <div class="form-helper" data-i18n="ap.rejectReasonHelper">Máximo de 300 caracteres. Fica registrado vinculado a este Kaizen.</div>
@@ -575,11 +566,11 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 </div>
 
 <!-- Modal: Editar Kaizen (aprovador) -->
-<div class="modal-backdrop" id="modalEditKaizen">
+<div class="modal-backdrop" id="modalEditKaizen" role="dialog" aria-modal="true" aria-labelledby="modalEditKaizenTitulo">
   <div class="modal modal-lg">
     <div class="modal-head">
       <div class="modal-icon" style="background:var(--vbm-blue-pale);"><i class="fa-solid fa-pen" style="color:var(--vbm-blue);"></i></div>
-      <div class="modal-title" data-i18n="ap.editKaizenAsApprover">Editar Kaizen (como Aprovador)</div>
+      <div class="modal-title" id="modalEditKaizenTitulo" data-i18n="ap.editKaizenAsApprover">Editar Kaizen (como Aprovador)</div>
       <button class="modal-close" data-modal-close><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
@@ -736,9 +727,9 @@ function atualizarContador() {
     setText('kdHeadDate', k.DT_CRIACAO ? new Date(k.DT_CRIACAO).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }) : '—');
     setText('kdProblem', k.DS_PROBLEMA);
     setText('kdObjective', k.DS_OBJETIVO);
-    document.getElementById('kdImgAntes').src = k.URL_IMG_ANTES ? '/api/kaizens/imagem?path=' + encodeURIComponent(k.URL_IMG_ANTES) : '';
+    document.getElementById('kdImgAntes').src = k.URL_IMG_ANTES ? '/api/kaizens/imagem?path=' + encodeURIComponent(k.URL_IMG_ANTES) + '&v=' + encodeURIComponent(String(k.DT_CRIACAO || '').slice(0, 19)) : '';
     setText('kdDescAntes', k.DS_ESTADO_ANTES);
-    document.getElementById('kdImgDepois').src = k.URL_IMG_DEPOIS ? '/api/kaizens/imagem?path=' + encodeURIComponent(k.URL_IMG_DEPOIS) : '';
+    document.getElementById('kdImgDepois').src = k.URL_IMG_DEPOIS ? '/api/kaizens/imagem?path=' + encodeURIComponent(k.URL_IMG_DEPOIS) + '&v=' + encodeURIComponent(String(k.DT_CRIACAO || '').slice(0, 19)) : '';
     setText('kdDescDepois', k.DS_ESTADO_DEPOIS);
 
     // A fila agora tem dois status (Aguardando aprovação e Revisado), e
@@ -762,8 +753,8 @@ function atualizarContador() {
     }
     (k.RESULTADOS || []).forEach(function (r) {
       boxes.push('<div style="background:var(--vbm-off-white);border-radius:.5rem;padding:.75rem;border-left:3px solid var(--vbm-blue);">' +
-        '<div style="font-family:\'Poppins\',sans-serif;font-weight:700;font-size:.82rem;color:var(--vbm-dark);">' + r.NM_RESULTADO + '</div>' +
-        '<div style="font-size:.68rem;color:var(--vbm-mid);">' + r.DS_RESULTADO + '</div></div>');
+        '<div style="font-family:\'Poppins\',sans-serif;font-weight:700;font-size:.82rem;color:var(--vbm-dark);">' + escaparHtml(r.NM_RESULTADO) + '</div>' +
+        '<div style="font-size:.68rem;color:var(--vbm-mid);">' + escaparHtml(r.DS_RESULTADO) + '</div></div>');
     });
     document.getElementById('kdResults').innerHTML = boxes.join('') || '<p style="font-size:.78rem;color:var(--vbm-mid);">Nenhum resultado registrado.</p>';
   }
@@ -801,8 +792,8 @@ function atualizarContador() {
         fila.innerHTML = itens.map(function (k, i) {
           return '<div class="approval-item' + (i === 0 ? ' selected' : '') + '" data-kaizen="' + k.ID_KAIZEN + '">' +
             '<div class="approval-icon"><i class="fa-solid fa-clipboard-list"></i></div>' +
-            '<div class="approval-info"><div class="approval-title">' + k.NM_KAIZEN + '</div>' +
-            '<div class="approval-meta">' + (k.NM_LIDER || '—') + ' · ' + k.ROTULO +
+            '<div class="approval-info"><div class="approval-title">' + escaparHtml(k.NM_KAIZEN) + '</div>' +
+            '<div class="approval-meta">' + escaparHtml(k.NM_LIDER || '—') + ' · ' + escaparHtml(k.ROTULO) +
               (k.NM_STATUS ? ' · ' + escaparHtml(k.NM_STATUS) : '') + '</div></div>' +
             '<i class="fa-solid fa-chevron-right approval-chevron"></i></div>';
         }).join('');
@@ -837,7 +828,12 @@ function atualizarContador() {
     return String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
   }
 
+  // Idioma com que o resumo na tela foi montado — ver a guarda do
+  // vbm:idioma no fim deste bloco.
+  var idiomaDoResumo = null;
+
   function carregarResumo() {
+    idiomaDoResumo = idiomaDaTela();
     var alvo = document.getElementById('apResumoStatus');
     var elTaxa = document.getElementById('apTaxa');
     if (!alvo) return;
@@ -957,7 +953,14 @@ function atualizarContador() {
 
   carregarFila();
   carregarResumo();
-  window.addEventListener('vbm:idioma', carregarResumo);
+  // O applyLang inicial TAMBÉM dispara vbm:idioma, então sem esta guarda
+  // o resumo era consultado duas vezes em toda abertura da tela (medido:
+  // 2x GET /api/kaizens/resumo). Mesma proteção que a Biblioteca usa: só
+  // reconsulta em troca REAL de idioma.
+  window.addEventListener('vbm:idioma', function () {
+    if (idiomaDaTela() === idiomaDoResumo) return;
+    carregarResumo();
+  });
 })();
 
 (function(){
@@ -1044,6 +1047,12 @@ function atualizarContador() {
 (function () {
   var I18N = {
     'pt-BR': {
+      'a11y.abrirMenu': 'Abrir menu',
+      'a11y.expandir': 'Expandir',
+      'a11y.avancar': 'Avançar',
+      'a11y.voltar': 'Voltar',
+      'a11y.adicionar': 'Adicionar',
+      'common.fechar': 'Fechar',
       'settings.btnTitle': 'Configurações',
       'settings.title': 'Configurações',
       'settings.close': 'Fechar',
@@ -1103,6 +1112,12 @@ function atualizarContador() {
       'ap.summaryTitle': 'Resumo {ano}'
     },
     'en': {
+      'a11y.abrirMenu': 'Open menu',
+      'a11y.expandir': 'Expand',
+      'a11y.avancar': 'Next',
+      'a11y.voltar': 'Back',
+      'a11y.adicionar': 'Add',
+      'common.fechar': 'Close',
       'settings.btnTitle': 'Settings',
       'settings.title': 'Settings',
       'settings.close': 'Close',

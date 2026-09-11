@@ -37,18 +37,12 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>VBM Kaizen — Biblioteca</title>
-<link href="css/vendor/e5e202e3c8995079_all.min.css" rel="stylesheet"/>
+<link href="css/fontawesome-subset.css?v=20260911-1" rel="stylesheet"/>
 <link href="css/vbm-app.css?v=20260819-1" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com" rel="preconnect"/>
-<link href="https://fonts.gstatic.com" rel="preconnect" crossorigin/>
-<!-- Poppins carregada SEM bloquear a renderização: como "print" o navegador
-     baixa a folha mas não espera por ela para pintar a tela; o onload a
-     promove para "all" e a fonte entra assim que chega. Antes, esta linha
-     era render-blocking — num ambiente sem saída para a internet a página
-     ficava em branco até o timeout do fonts.googleapis.com. O <noscript>
-     mantém o comportamento original quando não há JS. -->
-<link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet" media="print" onload="this.media='all';this.onload=null;"/>
-<noscript><link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet"/></noscript>
+<!-- Poppins servida pelo próprio app (css/poppins.css + assets/fonts/poppins).
+     Vinha de fonts.googleapis.com: em rede sem saída para a internet o
+     pedido ficava pendente e o evento load da página nunca disparava. -->
+<link href="css/poppins.css?v=20260911-1" rel="stylesheet"/>
 <link href="assets/icons/a1922a98664cc516_favicon-32x32-1.png" rel="icon"/>
 <style>
 /* ═══════════════════════════════════════════════════
@@ -490,7 +484,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     <a href="admin.html" class="topnav-link"><i class="fa-solid fa-shield-halved"></i> <span data-i18n="nav.administracao">Administração</span></a>
   </div>
   <div class="topnav-actions">
-    <button class="settings-btn" id="settingsBtn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="settingsPanel" title="Configurações" data-i18n-title="settings.btnTitle">
+    <button class="settings-btn" id="settingsBtn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="settingsPanel" title="Configurações" data-i18n-title="settings.btnTitle" aria-label="Configurações">
       <svg width="17" height="17" viewBox="0 0 20 20" fill="none">
         <path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" stroke="currentColor" stroke-width="1.5" />
         <path d="M16.2 12.3a1.4 1.4 0 0 0 .28 1.54l.05.05a1.7 1.7 0 1 1-2.4 2.4l-.05-.05a1.4 1.4 0 0 0-1.54-.28 1.4 1.4 0 0 0-.85 1.28V17.4a1.7 1.7 0 0 1-3.4 0v-.08a1.4 1.4 0 0 0-.91-1.28 1.4 1.4 0 0 0-1.54.28l-.05.05a1.7 1.7 0 1 1-2.4-2.4l.05-.05a1.4 1.4 0 0 0 .28-1.54 1.4 1.4 0 0 0-1.28-.85H2.6a1.7 1.7 0 0 1 0-3.4h.08a1.4 1.4 0 0 0 1.28-.91 1.4 1.4 0 0 0-.28-1.54l-.05-.05a1.7 1.7 0 1 1 2.4-2.4l.05.05a1.4 1.4 0 0 0 1.54.28h.06a1.4 1.4 0 0 0 .85-1.28V2.6a1.7 1.7 0 0 1 3.4 0v.08a1.4 1.4 0 0 0 .85 1.28h.06a1.4 1.4 0 0 0 1.54-.28l.05-.05a1.7 1.7 0 1 1 2.4 2.4l-.05.05a1.4 1.4 0 0 0-.28 1.54v.06a1.4 1.4 0 0 0 1.28.85h.08a1.7 1.7 0 0 1 0 3.4h-.08a1.4 1.4 0 0 0-1.28.85Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
@@ -552,12 +546,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   <div class="page-content">
 
     <!-- Hero banner for library -->
-    <div style="position:relative;border-radius:1.25rem;overflow:hidden;margin-bottom:1.5rem;background:linear-gradient(135deg,#041523,#082d4f);background-image:url('assets/images/Fundo_VNL_2400x1145.svg');background-size:cover;background-position:center;padding:2rem;">
+    <div style="position:relative;border-radius:1.25rem;overflow:hidden;margin-bottom:1.5rem;background:linear-gradient(135deg,#041523,#082d4f);background-image:url('assets/images/Fundo_VNL_2400x1145.webp');background-size:cover;background-position:center;padding:2rem;">
       <div style="position:absolute;width:350px;height:350px;border-radius:50%;background:radial-gradient(circle,rgba(60,181,229,.18) 0%,transparent 65%);top:-100px;right:-60px;filter:blur(50px);animation:orb1 20s ease-in-out infinite;pointer-events:none;"></div>
       <div style="position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;">
         <div>
           <div style="font-size:.6rem;letter-spacing:.25em;text-transform:uppercase;color:var(--vbm-blue-light);margin-bottom:.6rem;" data-i18n="bib.officialRepo">Repositório Oficial</div>
-          <div style="font-family:'Poppins',sans-serif;font-weight:700;font-style:italic;font-size:clamp(1.8rem,4vw,3rem);color:#fff;mix-blend-mode:overlay;line-height:.9;margin-bottom:.4rem;" data-i18n="bib.heroTitle">BIBLIOTECA</div>
+          <div style="font-family:'Poppins',sans-serif;font-weight:700;font-style:italic;font-size:clamp(1.8rem,4vw,3rem);color:#fff;mix-blend-mode:overlay;line-height:.9;margin-bottom:.4rem;" data-i18n="bib.heroTitle" role="heading" aria-level="1">BIBLIOTECA</div>
           <div style="font-family:'Poppins',sans-serif;font-weight:700;font-size:clamp(.9rem,2vw,1.3rem);color:rgba(255,255,255,.75);mix-blend-mode:overlay;margin-bottom:.75rem;" data-i18n="bib.heroSubtitle">KAIZENS · VALE BASE METALS</div>
           <p style="font-size:.82rem;color:rgba(255,255,255,.5);max-width:440px;line-height:1.6;" data-i18n="bib.heroDesc">Todos os Kaizens aprovados da organização. Consulte, inspire-se e replique melhorias em sua área.</p>
         </div>
@@ -620,13 +614,13 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         <!-- Depois do último filtro e antes dos botões de grade/lista —
              que continuam encostados à direita pelo margin-left:auto. -->
         <button type="button" class="filter-clear-btn" id="bibLimparFiltros"
-                data-i18n-title="bib.clearFilters" title="Limpar filtros">
+                data-i18n-title="bib.clearFilters" title="Limpar filtros" aria-label="bib.clearFilters">
           <i class="fa-solid fa-filter-circle-xmark"></i>
           <span data-i18n="bib.clearFilters">Limpar filtros</span>
         </button>
         <div class="filter-view-toggle" style="margin-left:auto;">
-          <button class="filter-view-btn active" data-view-toggle="biblioteca" data-view="grid" title="Grade" data-i18n-title="common.grid"><i class="fa-solid fa-th-large"></i></button>
-          <button class="filter-view-btn" data-view-toggle="biblioteca" data-view="list" title="Lista" data-i18n-title="common.list"><i class="fa-solid fa-list"></i></button>
+          <button class="filter-view-btn active" data-view-toggle="biblioteca" data-view="grid" title="Grade" data-i18n-title="common.grid" aria-label="Grade"><i class="fa-solid fa-th-large"></i></button>
+          <button class="filter-view-btn" data-view-toggle="biblioteca" data-view="list" title="Lista" data-i18n-title="common.list" aria-label="Lista"><i class="fa-solid fa-list"></i></button>
         </div>
       </div>
 
@@ -662,7 +656,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 </div>
 
 <!-- Modal: Detalhe com Print A4 -->
-<div class="modal-backdrop" id="modalBibDetail">
+<div class="modal-backdrop" id="modalBibDetail" role="dialog" aria-modal="true" aria-labelledby="bibModalTitulo">
   <div class="modal modal-xl">
     <div class="modal-head">
       <div class="modal-icon" style="background:#e8f8f0;"><i class="fa-solid fa-circle-check" style="color:#16a34a;"></i></div>
@@ -783,8 +777,16 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     };
   }
 
-  function urlImagem(path) {
-    return path ? '/api/kaizens/imagem?path=' + encodeURIComponent(path) : '';
+  /* A foto mora em /imgs/{antes|depois}/{ID}.png — o nome NÃO muda
+     quando a foto é trocada, então a URL precisa carregar a versão para
+     o navegador saber que o conteúdo mudou. A versão é a DT_ATUALIZACAO
+     do próprio Kaizen (chega como DT_CRIACAO na resposta), e é ela que
+     autoriza o servidor a marcar a resposta como imutável — sem isso
+     cada foto era rebuscada do volume do Databricks a cada minuto. */
+  function urlImagem(path, versao) {
+    if (!path) return '';
+    var url = '/api/kaizens/imagem?path=' + encodeURIComponent(path);
+    return versao ? url + '&v=' + encodeURIComponent(String(versao).slice(0, 19)) : url;
   }
   function formatarMesAno(dataStr) {
     if (!dataStr) return '—';
@@ -804,13 +806,19 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   var inputNome = document.getElementById('bibFiltroNome');
   if (!bibList) return;
 
-  // "todos" guarda o que veio da API UMA vez; "lote" é o recorte que os
-  // filtros produzem. Antes cada mudança de filtro refazia a consulta —
-  // agora a filtragem é em memória e a rede só é usada no carregamento.
-  var todos = [];
+  /* A lista é PAGINADA PELO SERVIDOR. A versão anterior baixava a base
+     inteira e peneirava em memória: com 2.000 Kaizens eram 1,1 MB de
+     JSON por abertura para desenhar 6 cards, e o custo crescia junto com
+     a base. Agora cada filtro vira parâmetro da consulta e "Carregar
+     mais" pede a página seguinte.
+
+     "lote" guarda só o que já foi carregado (as páginas pedidas até
+     agora), "total" é quantos existem com os filtros atuais. */
   var lote = [];
-  var visiveis = 6;
-  var PAGE_SIZE = 6;
+  var total = 0;
+  var paginaAtual = 0;
+  var PAGE_SIZE = 24;
+  var carregando = false;
   var detalheCache = {};
 
   /* Terceiro botão da linha de ações do card, depois de Visualizar e
@@ -884,18 +892,18 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       '<div class="kaizen-card" data-filter-item>' +
       '<div class="kaizen-card-accent accent-green"></div>' +
       '<div class="kaizen-card-body" style="display:flex;flex-direction:column;padding-bottom:.4rem;">' +
-      '<div class="kaizen-card-id">' + k.ROTULO + (k.NM_SITE ? ' · ' + k.NM_SITE : '') + '</div>' +
-      '<div class="kaizen-card-title" style="font-weight:600;font-size:.76rem;">' + k.NM_KAIZEN + '</div>' +
+      '<div class="kaizen-card-id">' + escaparHtml(k.ROTULO) + (k.NM_SITE ? ' · ' + escaparHtml(k.NM_SITE) : '') + '</div>' +
+      '<div class="kaizen-card-title" style="font-weight:600;font-size:.76rem;">' + escaparHtml(k.NM_KAIZEN) + '</div>' +
       '<div class="kaizen-card-tags">' + tags + '</div>' +
       '<div class="kaizen-meta" style="margin-top:auto;margin-bottom:0;">' +
-      '<div class="kaizen-meta-item"><i class="fa-solid fa-user"></i> ' + (k.NM_LIDER || '—') + '</div>' +
+      '<div class="kaizen-meta-item"><i class="fa-solid fa-user"></i> ' + escaparHtml(k.NM_LIDER || '—') + '</div>' +
       '<div class="kaizen-meta-item"><i class="fa-solid fa-calendar"></i> ' + formatarMesAno(k.DT_CONCLUSAO || k.DT_CRIACAO) + '</div>' +
       '</div></div>' +
       '<div class="kaizen-card-foot">' +
       '<span class="badge ' + info.classe + '">' + info.rotulo + '</span>' +
       '<div class="kaizen-card-actions">' +
-      '<button class="btn-icon btn-icon-blue" title="Ver detalhe" data-ver-detalhe="' + k.ID_KAIZEN + '"><i class="fa-solid fa-eye"></i></button>' +
-      '<button class="btn-icon" title="Imprimir A4" onclick="imprimirKaizen(' + k.ID_KAIZEN + ')"><i class="fa-solid fa-print"></i></button>' +
+      '<button class="btn-icon btn-icon-blue" title="Ver detalhe" data-ver-detalhe="' + k.ID_KAIZEN + '" aria-label="Ver detalhe"><i class="fa-solid fa-eye"></i></button>' +
+      '<button class="btn-icon" title="Imprimir A4" onclick="imprimirKaizen(' + k.ID_KAIZEN + ')" aria-label="Imprimir A4"><i class="fa-solid fa-print"></i></button>' +
       botaoEditarHtml(k) +
       '</div></div></div>'
     );
@@ -905,31 +913,35 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     var info = statusInfo(k);
     return (
       '<tr data-filter-item>' +
-      '<td><span style="font-family:\'Poppins\',sans-serif;color:var(--vbm-blue);font-size:.72rem;">' + k.ROTULO + '</span></td>' +
-      '<td><span style="font-size:.82rem;">' + k.NM_KAIZEN + '</span></td>' +
-      '<td><span class="badge badge-blue" style="font-size:.58rem;">' + (k.NM_CATEGORIA || '—') + '</span></td>' +
-      '<td><span style="font-size:.75rem;color:var(--vbm-mid);">' + (k.NM_SITE || '—') + '</span></td>' +
+      '<td><span style="font-family:\'Poppins\',sans-serif;color:var(--vbm-blue);font-size:.72rem;">' + escaparHtml(k.ROTULO) + '</span></td>' +
+      '<td><span style="font-size:.82rem;">' + escaparHtml(k.NM_KAIZEN) + '</span></td>' +
+      '<td><span class="badge badge-blue" style="font-size:.58rem;">' + escaparHtml(k.NM_CATEGORIA || '—') + '</span></td>' +
+      '<td><span style="font-size:.75rem;color:var(--vbm-mid);">' + escaparHtml(k.NM_SITE || '—') + '</span></td>' +
       '<td><span style="font-size:.75rem;color:var(--vbm-mid);">' + formatarMesAno(k.DT_CONCLUSAO || k.DT_CRIACAO) + '</span></td>' +
       '<td><span class="badge ' + info.classe + '">' + info.rotulo + '</span></td>' +
       '<td class="table-actions">' +
-      '<button class="btn-icon btn-icon-blue" title="Ver" data-ver-detalhe="' + k.ID_KAIZEN + '"><i class="fa-solid fa-eye"></i></button>' +
-      '<button class="btn-icon" onclick="imprimirKaizen(' + k.ID_KAIZEN + ')" title="Imprimir"><i class="fa-solid fa-print"></i></button>' +
+      '<button class="btn-icon btn-icon-blue" title="Ver" data-ver-detalhe="' + k.ID_KAIZEN + '" aria-label="Ver"><i class="fa-solid fa-eye"></i></button>' +
+      '<button class="btn-icon" onclick="imprimirKaizen(' + k.ID_KAIZEN + ')" title="Imprimir" aria-label="Imprimir"><i class="fa-solid fa-print"></i></button>' +
       botaoEditarHtml(k) +
       '</td></tr>'
     );
   }
 
   function render() {
-    var pagina = lote.slice(0, visiveis);
-    bibList.innerHTML = pagina.map(cartaoHtml).join('') || '<p style="padding:1.5rem;color:var(--vbm-mid);font-size:.8rem;">Nenhum Kaizen encontrado.</p>';
-    bibTabela.innerHTML = pagina.map(linhaHtml).join('');
+    bibList.innerHTML = lote.map(cartaoHtml).join('') || '<p style="padding:1.5rem;color:var(--vbm-mid);font-size:.8rem;">' + escaparHtml(txtI18n('bib.empty', 'Nenhum Kaizen encontrado.')) + '</p>';
+    bibTabela.innerHTML = lote.map(linhaHtml).join('');
     // Texto do dicionário: era montado em português direto no código.
     var molde = (window.__i18n && window.__i18n['bib.countTemplate']) || '{total} Kaizens · Exibindo {n}';
-    showingCount.textContent = molde.replace('{total}', lote.length).replace('{n}', pagina.length);
-    loadMoreBtn.style.display = visiveis < lote.length ? '' : 'none';
+    showingCount.textContent = molde.replace('{total}', total).replace('{n}', lote.length);
+    loadMoreBtn.style.display = lote.length < total ? '' : 'none';
   }
 
-  loadMoreBtn.addEventListener('click', function () { visiveis += PAGE_SIZE; render(); });
+  // Pede a PRÓXIMA página ao servidor e acrescenta ao que já está na
+  // tela — antes só revelava o que já estava na memória.
+  loadMoreBtn.addEventListener('click', function () {
+    if (carregando || lote.length >= total) return;
+    carregarLista({ pagina: paginaAtual + 1 });
+  });
 
   /* Clique no lápis: abre a MESMA página de cadastro em modo de edição,
      levando só o ID_KAIZEN na navegação. Nada do conteúdo vai na URL —
@@ -951,21 +963,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   }
   bibList.addEventListener('click', aoClicarEditar);
   if (bibTabela) bibTabela.addEventListener('click', aoClicarEditar);
-
-  // Ano do Kaizen: o da CONCLUSÃO; sem conclusão, o da última
-  // atualização. É a mesma regra que monta as opções do filtro
-  // (GET /kaizens/filtros) e que o servidor usa em ?ano= e na ordenação
-  // da lista — as três precisam concordar, senão escolher um ano do
-  // combo devolveria um recorte diferente do esperado.
-  //
-  // A data chega da API como "2026-09-09T14:30:00" (relógio, sem fuso —
-  // ver relogioLocal em server.js), então os 4 primeiros caracteres já
-  // são o ano: ler assim evita depender do fuso de quem acessa, que na
-  // virada do ano mudaria o resultado.
-  function anoDe(k) {
-    var data = k.DT_CONCLUSAO || k.DT_CRIACAO;
-    return data ? String(data).slice(0, 4) : '';
-  }
 
   /* Preenche um <select> de filtro preservando a opção "Todos…" (que é
      sempre a primeira, com value="" e o data-i18n dela) e a escolha que
@@ -1023,28 +1020,33 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       .trim().replace(/\s+/g, ' ');
   }
 
-  /** Aplica TODOS os filtros de uma vez, em memória, sobre "todos". */
-  function aplicarFiltros() {
-    var nome = normalizar(inputNome.value);
-    var usuario = normalizar(selUsuario.value);
-    var unidade = selUnidade.value;
-    var categoria = selCategoria.value;
-    var status = selStatus.value;
-    var ano = selPeriodo.value;
+  /** Monta os parâmetros de consulta a partir da barra de filtros. */
+  /* Os seis filtros da barra viram parâmetros da consulta. Eram
+     aplicados no navegador, o que só funcionava porque a base inteira
+     vinha junto — a peneira ficava correta e o tráfego, não. */
+  function filtrosAtuais() {
+    var p = {};
+    if (inputNome.value.trim()) p.q = inputNome.value.trim();
+    if (selUsuario.value.trim()) p.lider = selUsuario.value.trim();
+    if (selUnidade.value) p.site = selUnidade.value;
+    if (selCategoria.value) p.categoria = selCategoria.value;
+    if (selStatus.value) p.status = selStatus.value;
+    if (selPeriodo.value) p.ano = selPeriodo.value;
+    return p;
+  }
 
-    lote = todos.filter(function (k) {
-      if (nome && normalizar(k.NM_KAIZEN).indexOf(nome) === -1) return false;
-      if (usuario && normalizar(k.NM_LIDER).indexOf(usuario) === -1) return false;
-      // O combo passou a listar NM_SITE (a unidade de verdade); antes
-      // listava e comparava NM_ESTADO, que é o estado do líder.
-      if (unidade && k.NM_SITE !== unidade) return false;
-      if (categoria && String(k.ID_CATEGORIA) !== String(categoria)) return false;
-      if (status && String(k.ID_STATUS) !== String(status)) return false;
-      if (ano && anoDe(k) !== ano) return false;
-      return true;
-    });
-    visiveis = PAGE_SIZE;
-    render();
+  // Filtro alterado recomeça da primeira página.
+  function aplicarFiltros() {
+    carregarLista({ pagina: 0 });
+  }
+
+  /* Digitar dispara uma consulta por tecla se nada segurar. 300 ms é o
+     bastante para juntar a digitação numa chamada só, sem parecer lento
+     — antes a filtragem era local e não custava rede nenhuma. */
+  var esperaBusca = null;
+  function aplicarFiltrosComEspera() {
+    clearTimeout(esperaBusca);
+    esperaBusca = setTimeout(aplicarFiltros, 300);
   }
 
   // Idioma da última carga. A lista traz textos vindos do banco
@@ -1058,23 +1060,58 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     return (sel && sel.value) || 'pt-BR';
   }
 
-  function carregarLista() {
-    // Sem parâmetro nenhum: a rota devolve TODOS os Kaizens, de qualquer
-    // status. Uma chamada só, no carregamento da página; daí em diante
-    // os filtros trabalham sobre esses dados.
+  /* Busca UMA página no servidor. pagina 0 troca o conteúdo da tela;
+     as seguintes acrescentam ao fim (é o "Carregar mais").
+     As opções dos filtros não saem daqui: cada uma vem da sua tabela
+     (ver carregarFiltrosDoBanco, carregarStatus e carregarCategorias). */
+  var requisicaoAtual = 0;
+  function carregarLista(opcoes) {
+    var o = opcoes || {};
+    var pagina = o.pagina || 0;
     idiomaDaLista = idiomaDaTela();
-    bibList.innerHTML = '<p style="padding:1.5rem;color:var(--vbm-mid);font-size:.8rem;">Carregando…</p>';
-    fetch('/api/kaizens?idioma=' + encodeURIComponent(idiomaDaLista), { headers: { Accept: 'application/json' } })
-      .then(function (r) { return r.ok ? r.json() : []; })
-      .then(function (itens) {
-        todos = itens || [];
-        // As opções dos filtros não saem mais daqui: cada uma vem da sua
-        // tabela (ver carregarFiltrosDoBanco, carregarStatus e
-        // carregarCategorias).
-        aplicarFiltros();
+    carregando = true;
+    if (pagina === 0) {
+      bibList.innerHTML = '<p style="padding:1.5rem;color:var(--vbm-mid);font-size:.8rem;">' +
+        escaparHtml(txtI18n('bib.loading', 'Carregando…')) + '</p>';
+    } else {
+      loadMoreBtn.disabled = true;
+    }
+
+    var params = filtrosAtuais();
+    params.idioma = idiomaDaLista;
+    params.pagina = pagina;
+    params.tamanho = PAGE_SIZE;
+
+    // Respostas fora de ordem: digitar rápido dispara pedidos em
+    // sequência e o mais lento pode chegar por último. Só a resposta do
+    // pedido MAIS RECENTE pode desenhar.
+    var meuPedido = ++requisicaoAtual;
+
+    fetch('/api/kaizens?' + new URLSearchParams(params).toString(), { headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (resposta) {
+        if (meuPedido !== requisicaoAtual) return;
+        carregando = false;
+        loadMoreBtn.disabled = false;
+        if (!resposta) throw new Error('resposta inválida');
+        var itens = resposta.itens || [];
+        if (pagina === 0) {
+          lote = itens;
+          total = resposta.total != null ? resposta.total : itens.length;
+        } else {
+          lote = lote.concat(itens);
+        }
+        paginaAtual = pagina;
+        render();
       })
       .catch(function () {
-        bibList.innerHTML = '<p style="padding:1.5rem;color:#dc2626;font-size:.8rem;">Erro ao carregar a Biblioteca.</p>';
+        if (meuPedido !== requisicaoAtual) return;
+        carregando = false;
+        loadMoreBtn.disabled = false;
+        if (pagina === 0) {
+          bibList.innerHTML = '<p style="padding:1.5rem;color:#dc2626;font-size:.8rem;">' +
+            escaparHtml(txtI18n('bib.loadError', 'Erro ao carregar a Biblioteca.')) + '</p>';
+        }
       });
   }
 
@@ -1082,8 +1119,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   selPeriodo.addEventListener('change', aplicarFiltros);
   selCategoria.addEventListener('change', aplicarFiltros);
   selStatus.addEventListener('change', aplicarFiltros);
-  selUsuario.addEventListener('input', aplicarFiltros);
-  inputNome.addEventListener('input', aplicarFiltros);
+  selUsuario.addEventListener('input', aplicarFiltrosComEspera);
+  inputNome.addEventListener('input', aplicarFiltrosComEspera);
 
   /* Nome do usuário: nasce com o nome de quem está logado.
 
@@ -1211,9 +1248,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     document.getElementById('bibModalMetas').innerHTML = metas;
     document.getElementById('bibModalProblema').textContent = k.DS_PROBLEMA || '—';
     document.getElementById('bibModalObjetivo').textContent = k.DS_OBJETIVO || '—';
-    document.getElementById('bibModalImgAntes').src = urlImagem(k.URL_IMG_ANTES);
+    document.getElementById('bibModalImgAntes').src = urlImagem(k.URL_IMG_ANTES, k.DT_CRIACAO);
     document.getElementById('bibModalDescAntes').textContent = k.DS_ESTADO_ANTES || '—';
-    document.getElementById('bibModalImgDepois').src = urlImagem(k.URL_IMG_DEPOIS);
+    document.getElementById('bibModalImgDepois').src = urlImagem(k.URL_IMG_DEPOIS, k.DT_CRIACAO);
     document.getElementById('bibModalDescDepois').textContent = k.DS_ESTADO_DEPOIS || '—';
 
     var boxes = [];
@@ -1227,16 +1264,22 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     (k.RESULTADOS || []).forEach(function (r) {
       boxes.push(
         '<div style="background:var(--vbm-off-white);border-radius:.5rem;padding:.85rem;border-left:3px solid var(--vbm-blue);text-align:left;">' +
-        '<div style="font-family:\'Poppins\',sans-serif;font-weight:700;font-size:.82rem;color:var(--vbm-dark);">' + r.NM_RESULTADO + '</div>' +
-        '<div style="font-size:.7rem;color:var(--vbm-mid);margin-top:.2rem;">' + r.DS_RESULTADO + '</div></div>'
+        '<div style="font-family:\'Poppins\',sans-serif;font-weight:700;font-size:.82rem;color:var(--vbm-dark);">' + escaparHtml(r.NM_RESULTADO) + '</div>' +
+        '<div style="font-size:.7rem;color:var(--vbm-mid);margin-top:.2rem;">' + escaparHtml(r.DS_RESULTADO) + '</div></div>'
       );
     });
     document.getElementById('bibModalResultados').innerHTML = boxes.join('') || '<p style="font-size:.78rem;color:var(--vbm-mid);">Nenhum resultado registrado.</p>';
 
+    // Rótulo pelas chaves print.* (as MESMAS que o relatório A4 usa, para
+    // tela e papel não divergirem) e valor escapado: DS_* é texto digitado
+    // pelo usuário e entra em innerHTML.
     var licoes = [];
-    if (k.DS_LICOES_APRENDIDAS) licoes.push('<strong>Lições Aprendidas:</strong> ' + k.DS_LICOES_APRENDIDAS);
-    if (k.DS_RESULTADO_ESPERADO) licoes.push('<strong>Comparação com a meta:</strong> ' + k.DS_RESULTADO_ESPERADO);
-    if (k.DESPERDICIOS && k.DESPERDICIOS.length) licoes.push('<strong>Desperdícios reduzidos:</strong> ' + k.DESPERDICIOS.join(', '));
+    var item = function (chave, padrao, valor) {
+      return '<strong>' + escaparHtml(txtI18n(chave, padrao)) + ':</strong> ' + escaparHtml(valor);
+    };
+    if (k.DS_LICOES_APRENDIDAS) licoes.push(item('print.lessons', 'Lições Aprendidas', k.DS_LICOES_APRENDIDAS));
+    if (k.DS_RESULTADO_ESPERADO) licoes.push(item('print.goalComparison', 'Comparação com a meta', k.DS_RESULTADO_ESPERADO));
+    if (k.DESPERDICIOS && k.DESPERDICIOS.length) licoes.push(item('print.wasteReduced', 'Desperdícios reduzidos', k.DESPERDICIOS.join(', ')));
     document.getElementById('bibModalLicoes').innerHTML = licoes.join('<br/><br/>') || '—';
   }
 
@@ -1277,7 +1320,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         idioma: idiomaDaTela(),
         // Mesma função que o <img> do modal usa — o relatório não inventa
         // um jeito próprio de montar o endereço da foto.
-        urlImagem: urlImagem,
+        urlImagem: function (caminho) { return urlImagem(caminho, k.DT_CRIACAO); },
         rotulos: {
           programa: txtI18n('print.program', 'Kaizen Corporativo'),
           lider: txtI18n('print.leader', 'Líder'),
@@ -1433,6 +1476,11 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       'badge.aguardando': 'Aguardando',
       'badge.rascunhos': 'Rascunhos',
       'common.fechar': 'Fechar',
+      'a11y.abrirMenu': 'Abrir menu',
+      'a11y.expandir': 'Expandir',
+      'a11y.avancar': 'Avançar',
+      'a11y.voltar': 'Voltar',
+      'a11y.adicionar': 'Adicionar',
       'common.imprimirA4': 'Imprimir A4',
       'filter.allCategories': 'Todas as categorias',
       'filter.allUnits': 'Todas as unidades',
@@ -1482,6 +1530,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       'bib.groupDesperdicios': 'Redução de Desperdícios',
       'bib.editBlocked': 'Edição indisponível para o status atual',
       'bib.loadMore': 'Carregar mais',
+      'bib.loading': 'Carregando…',
+      'bib.empty': 'Nenhum Kaizen encontrado.',
+      'bib.loadError': 'Erro ao carregar a Biblioteca.',
       'bib.summaryTitle': 'Resumo da Biblioteca',
       'bib.total2024': 'Total 2024',
       'bib.total2025': 'Total 2025',
@@ -1525,6 +1576,11 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       'badge.aguardando': 'Pending',
       'badge.rascunhos': 'Drafts',
       'common.fechar': 'Close',
+      'a11y.abrirMenu': 'Open menu',
+      'a11y.expandir': 'Expand',
+      'a11y.avancar': 'Next',
+      'a11y.voltar': 'Back',
+      'a11y.adicionar': 'Add',
       'common.imprimirA4': 'Print PDF',
       'filter.allCategories': 'All categories',
       'filter.allUnits': 'All units',
@@ -1569,6 +1625,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       'bib.groupDesperdicios': 'Waste Reduction',
       'bib.editBlocked': 'Editing unavailable for the current status',
       'bib.loadMore': 'Load more',
+      'bib.loading': 'Loading…',
+      'bib.empty': 'No Kaizen found.',
+      'bib.loadError': 'The Library could not be loaded.',
       'bib.summaryTitle': 'Library Summary',
       'bib.total2024': 'Total 2024',
       'bib.total2025': 'Total 2025',

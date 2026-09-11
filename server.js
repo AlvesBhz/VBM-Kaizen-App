@@ -333,6 +333,9 @@ async function runQuery(query, params = []) {
 //     resposta de algumas centenas de bytes.
 const UM_ANO_EM_SEGUNDOS = 60 * 60 * 24 * 365;
 const ARQUIVO_COM_HASH_NO_NOME = /(?:^|[\\/])[0-9a-f]{8,}_[^\\/]+$/i;
+// Arquivos que são conteúdo estático puro: mesmo sem versão na URL, não
+// precisam de uma ida ao servidor por navegação.
+const ATIVO_ESTATICO = /\.(?:png|jpe?g|gif|webp|svg|ico|woff2?|ttf|eot|mp4|webm)$/i;
 
 // ------------------------------------------------------------------
 // Controle de acesso (kzn_admin / kzn_aprovador)
@@ -384,7 +387,12 @@ async function perfilDeAcesso(req) {
                                  WHERE ap.ID_USUARIO = m.ID_USUARIO AND ap.SG_ATIVO = 'S')
                    THEN 1 ELSE 0 END AS EH_APROVADOR
        FROM ${FULL_MDM_TABLE} m
-       WHERE LOWER(m.CD_EMAIL) = LOWER(@email)`,
+       -- Sem LOWER() na COLUNA: a função invalidava qualquer índice em
+       -- CD_EMAIL e esta é a consulta mais executada do sistema (roda
+       -- antes de toda requisição de API). As collations padrão do SQL
+       -- Server são case-insensitive, então a comparação direta casa
+       -- igual e passa a usar índice.
+       WHERE m.CD_EMAIL = @email`,
       [["email", sql.NVarChar(255), email]]
     );
     const linha = result.recordset[0];
@@ -451,9 +459,25 @@ app.use(
     etag: true,
     index: false,
     lastModified: true,
-    setHeaders: (res, filePath) => {
-      if (ARQUIVO_COM_HASH_NO_NOME.test(filePath)) {
+    setHeaders: (res, filePath, stat) => {
+      // Imutável em dois casos, porque nos dois o ENDEREÇO muda quando o
+      // conteúdo muda — que é a condição para poder cachear para sempre:
+      //   1. hash no nome do arquivo (o padrão do vendor);
+      //   2. ?v=... na URL (css/vbm-app.css?v=20260819-1, as fontes, as
+      //      páginas que já versionam suas folhas). Sem isto, esses
+      //      arquivos voltavam com "no-cache" e revalidavam a CADA
+      //      navegação, apesar de já carregarem a versão na URL.
+      // O HTML nunca entra: ele é a porta de entrada e é quem carrega a
+      // versão nova dos outros.
+      const requisicao = res.req;
+      const versionadoNaUrl = !!(requisicao && requisicao.query && requisicao.query.v);
+      const ehHtml = /\.html?$/i.test(filePath);
+      if (!ehHtml && (ARQUIVO_COM_HASH_NO_NOME.test(filePath) || versionadoNaUrl)) {
         res.set("Cache-Control", `public, max-age=${UM_ANO_EM_SEGUNDOS}, immutable`);
+      } else if (ATIVO_ESTATICO.test(filePath)) {
+        // Imagem/fonte sem versão na URL: uma hora de validade e
+        // revalidação depois disso, em vez de ida ao servidor sempre.
+        res.set("Cache-Control", `public, max-age=3600`);
       } else {
         res.set("Cache-Control", "no-cache");
       }
@@ -466,24 +490,97 @@ app.use(
 // ------------------------------------------------------------------
 const apiRouter = express.Router();
 
-// Rotas abertas a qualquer usuário autenticado pelo proxy. Só GET /me,
-// que devolve exclusivamente a identidade de QUEM chamou (e é o que
-// permite ao front-end esconder os links das páginas restritas).
+/* Gate da API em TRÊS FAIXAS.
+   Antes havia uma só: tudo exigia kzn_admin, com /me de exceção. Na
+   prática isso trancava a aplicação inteira — quem não estava em
+   KZN_ADMIN abria a Biblioteca e o Novo Kaizen e recebia 403 em todas
+   as consultas, então não conseguia listar, cadastrar nem ser aprovado.
+
+   As faixas, da mais aberta para a mais fechada:
+
+     AUTENTICADO  qualquer pessoa que o proxy do Databricks identificou
+                  e que existe no MDM. É o uso normal do sistema: ler a
+                  Biblioteca e criar/editar o PRÓPRIO Kaizen. As rotas
+                  de escrita desta faixa já fazem a checagem por LINHA
+                  (contextoDeEdicao / podeEditarKaizen) — a faixa diz
+                  "pode chamar", a rota diz "pode mexer NESTE registro".
+     APROVADOR    kzn_aprovador: a fila e as decisões.
+     ADMIN        kzn_admin: cadastros, usuários, aprovadores, testes.
+
+   Continua sendo uma lista de EXCEÇÕES: rota que não estiver aqui cai
+   na faixa ADMIN, ou seja, nasce fechada. */
+
+// Faixa 1 — identidade. Devolve só quem está chamando.
 const ROTAS_API_PUBLICAS = new Set(["/me"]);
 
-// Gate da API — o reforço server-side do bloqueio das páginas. Todo o
-// resto da API existe para servir o admin.html, então exige kzn_admin:
-// esconder o botão no front não basta, a chamada direta ao endpoint
-// (curl, DevTools, URL colada) tem que ser recusada aqui. Lista de
-// EXCEÇÕES, não de rotas protegidas — rota nova nasce fechada.
+// Faixa 1 — leitura do sistema, liberada a qualquer usuário autenticado.
+// São as consultas que a Biblioteca e o Novo Kaizen precisam para
+// funcionar. Nenhuma delas expõe dado de outra pessoa além do que já
+// aparece no Kaizen publicado.
+const ROTAS_LEITURA_AUTENTICADA = [
+  /^\/kaizens$/,
+  /^\/kaizens\/\d+$/,
+  /^\/kaizens\/\d+\/edicao$/,
+  /^\/kaizens\/(filtros|imagem|resumo|titulo-existe)$/,
+  /^\/(categorias|status|replicacoes|desperdicios|resultados|tiporesultados|moedas)$/,
+  /^\/aprovadores$/,
+  /^\/aprovadores\/mdm(\/\d+)?$/,
+  /^\/aprovacoes\/contagem$/,
+];
+
+// Faixa 1 — escrita do PRÓPRIO Kaizen. A permissão por linha é
+// verificada dentro de cada rota; aqui só se garante que quem chama é
+// alguém identificado.
+const ROTAS_ESCRITA_AUTENTICADA = [
+  { metodo: "POST", padrao: /^\/kaizens$/ },
+  { metodo: "PUT", padrao: /^\/kaizens\/\d+$/ },
+  { metodo: "POST", padrao: /^\/kaizens\/imagem$/ },
+];
+
+// Faixa 2 — aprovação. Fila e decisões.
+const ROTAS_APROVADOR = [
+  { metodo: "GET", padrao: /^\/aprovacoes$/ },
+  { metodo: "POST", padrao: /^\/kaizens\/\d+\/(aprovar|reprovar|solicitar-alteracao|aviso)$/ },
+];
+
+function casa(lista, metodo, caminho) {
+  return lista.some((r) =>
+    r.padrao ? r.metodo === metodo && r.padrao.test(caminho) : r.test(caminho)
+  );
+}
+
 apiRouter.use(async (req, res, next) => {
+  // no-store por padrão. As rotas que PODEM ser guardadas pelo navegador
+  // (listas de cadastro, imagem do Kaizen) sobrescrevem este cabeçalho
+  // depois, cada uma com o prazo que faz sentido para ela.
   res.set("Cache-Control", "no-store");
-  if (ROTAS_API_PUBLICAS.has(req.path.toLowerCase())) return next();
+
+  const caminho = req.path.toLowerCase();
+  const metodo = req.method.toUpperCase();
+  if (ROTAS_API_PUBLICAS.has(caminho)) return next();
 
   const perfil = await perfilDeAcesso(req);
+
+  // Sem correspondência no MDM não há identidade: nem a faixa mais
+  // aberta vale. perfilDeAcesso já registra o motivo no log.
+  if (!perfil.idUsuario) {
+    return res.status(403).json({ error: "Acesso não autorizado." });
+  }
+
+  const ehLeitura = metodo === "GET" && casa(ROTAS_LEITURA_AUTENTICADA, metodo, caminho);
+  if (ehLeitura || casa(ROTAS_ESCRITA_AUTENTICADA, metodo, caminho)) return next();
+
+  if (casa(ROTAS_APROVADOR, metodo, caminho)) {
+    // Admin também decide: ele é quem destrava a fila quando o aprovador
+    // designado está fora.
+    if (perfil.aprovador || perfil.admin) return next();
+    console.warn(`[acesso] API ${metodo} ${req.path} bloqueada (exige kzn_aprovador)`);
+    return res.status(403).json({ error: "Acesso não autorizado." });
+  }
+
   if (perfil.admin) return next();
 
-  console.warn(`[acesso] API ${req.method} ${req.path} bloqueada (exige kzn_admin)`);
+  console.warn(`[acesso] API ${metodo} ${req.path} bloqueada (exige kzn_admin)`);
   res.status(403).json({ error: "Acesso não autorizado." });
 });
 
@@ -501,7 +598,8 @@ async function buscarMdmPorEmail(email) {
   if (!email) return null;
   try {
     const result = await runQuery(
-      `SELECT TOP (1) ID_USUARIO, CD_MATRICULA, NM_USUARIO, NM_POSICAO FROM ${FULL_MDM_TABLE} WHERE LOWER(CD_EMAIL) = LOWER(@email)`,
+      // Comparação direta, sem LOWER() na coluna — ver perfilDeAcesso.
+      `SELECT TOP (1) ID_USUARIO, CD_MATRICULA, NM_USUARIO, NM_POSICAO FROM ${FULL_MDM_TABLE} WHERE CD_EMAIL = @email`,
       [["email", sql.NVarChar(255), email]]
     );
     return result.recordset[0] || null;
@@ -1516,6 +1614,32 @@ function mensagemErroSql(err, rotuloSing, rotuloExtra) {
   return null; // sem tradução conhecida: quem chamou usa a mensagem crua do err
 }
 
+/* Cache em memória das listas de CADASTRO (categorias, status,
+   replicações, desperdícios, resultados, tipos de resultado).
+   São listas pequenas, mudam raramente e eram reconsultadas a cada
+   abertura de tela e a cada troca de idioma — só o Novo Kaizen abria
+   com 6 consultas dessas. A chave inclui o idioma porque a lista vem
+   traduzida. Qualquer gravação na própria rota limpa a entrada, então
+   o cadastro continua refletindo na tela na hora: o TTL é rede de
+   segurança para alteração feita FORA do app (direto no banco).
+   Mesma ideia do limiteColunaCache mais abaixo. */
+const CADASTRO_TTL_MS = 5 * 60 * 1000;
+const cadastroCache = new Map();
+
+function cadastroCacheLer(rota, idIdioma) {
+  const item = cadastroCache.get(`${rota}|${idIdioma}`);
+  if (!item || item.expiraEm < Date.now()) return null;
+  return item.dados;
+}
+function cadastroCacheGravar(rota, idIdioma, dados) {
+  cadastroCache.set(`${rota}|${idIdioma}`, { dados, expiraEm: Date.now() + CADASTRO_TTL_MS });
+}
+function cadastroCacheLimpar(rota) {
+  for (const chave of cadastroCache.keys()) {
+    if (chave.startsWith(`${rota}|`)) cadastroCache.delete(chave);
+  }
+}
+
 function registrarCadastroBilingue(cfg) {
   const { rota, tabela, pk, colNome, colDescricao, maxNome, maxDescricao, rotuloSing } = cfg;
   const extras = cfg.colunasExtras || [];
@@ -1677,6 +1801,13 @@ function registrarCadastroBilingue(cfg) {
   apiRouter.get(`/${rota}`, async (req, res) => {
     try {
       const idIdiomaPedido = idIdiomaDaRequisicao(req);
+      const emCache = cadastroCacheLer(rota, idIdiomaPedido);
+      if (emCache) {
+        // private: a lista é igual para todo mundo, mas o gate de acesso
+        // vem antes — nenhum proxy compartilhado deve guardar isto.
+        res.set("Cache-Control", "private, max-age=300");
+        return res.json(emCache);
+      }
       const colsSelect = [`base.${pk} AS ID`, `COALESCE(tr.${colNome}, base.${colNome}) AS NM`];
       if (colDescricao) colsSelect.push(`COALESCE(tr.${colDescricao}, base.${colDescricao}) AS DS`);
       colsSelect.push(`base.${colNome} AS NM_PT`);
@@ -1686,7 +1817,10 @@ function registrarCadastroBilingue(cfg) {
         `CASE WHEN @idIdioma <> @idIdiomaBase AND tr.ID_IDIOMA IS NULL THEN 1 ELSE 0 END AS SEM_TRADUCAO`
       );
       const result = await runQuery(
-        `SELECT ${colsSelect.join(", ")}
+        // TOP explícito: são tabelas de cadastro, hoje com dezenas de
+        // linhas, e a tela é um <select>. O teto existe para que um
+        // crescimento inesperado não vire uma lista sem fim na resposta.
+        `SELECT TOP (1000) ${colsSelect.join(", ")}
          FROM ${tabela} base
          LEFT JOIN ${tabela} tr
                 ON tr.${pk} = base.${pk} AND tr.ID_IDIOMA = @idIdioma
@@ -1715,8 +1849,7 @@ function registrarCadastroBilingue(cfg) {
         }
       }
 
-      res.json(
-        result.recordset.map((r) => ({
+      const corpo = result.recordset.map((r) => ({
           ID: r.ID,
           NM: r.NM,
           DS: colDescricao ? r.DS : null,
@@ -1731,8 +1864,10 @@ function registrarCadastroBilingue(cfg) {
           // card, em vez de deixar parecer, em silêncio, que o texto em
           // português É a tradução.
           SEM_TRADUCAO: r.SEM_TRADUCAO === 1,
-        }))
-      );
+      }));
+      cadastroCacheGravar(rota, idIdiomaPedido, corpo);
+      res.set("Cache-Control", "private, max-age=300");
+      res.json(corpo);
     } catch (err) {
       console.error(`${log} erro ao consultar:`, err.message);
       res.status(500).json({ error: `Erro ao consultar ${rotuloSing}: ` + err.message });
@@ -1784,6 +1919,7 @@ function registrarCadastroBilingue(cfg) {
   // criar do zero é só pelo POST.
   apiRouter.put(`/${rota}/:id`, async (req, res) => {
     try {
+      cadastroCacheLimpar(rota);   // a lista mudou: próxima leitura vai ao banco
       const id = parseInt(req.params.id, 10);
       if (!Number.isInteger(id)) return res.status(400).json({ error: `${pk} inválido.` });
 
@@ -1827,6 +1963,7 @@ function registrarCadastroBilingue(cfg) {
   // situação que o upsert do editar já resolve numa edição seguinte.
   apiRouter.post(`/${rota}`, async (req, res) => {
     try {
+      cadastroCacheLimpar(rota);   // a lista mudou: próxima leitura vai ao banco
       const { nomePt, descPt, nomeEn, descEn, extra, urlIcone } = lerCorpo(req);
       const erro = validarCampos(nomePt, descPt, nomeEn, descEn);
       if (erro) return res.status(400).json({ error: erro });
@@ -1856,6 +1993,7 @@ function registrarCadastroBilingue(cfg) {
   // idiomas desse ID (o status é do registro, não de uma tradução).
   apiRouter.put(`/${rota}/:id/status`, async (req, res) => {
     try {
+      cadastroCacheLimpar(rota);   // a lista mudou: próxima leitura vai ao banco
       const id = parseInt(req.params.id, 10);
       if (!Number.isInteger(id)) return res.status(400).json({ error: `${pk} inválido.` });
       if (typeof req.body?.ativo !== "boolean") {
@@ -2168,14 +2306,17 @@ apiRouter.get("/kaizens/imagem", async (req, res) => {
     }
     const { buffer, contentType } = await baixarArquivoDoVolume(caminho);
     res.setHeader("Content-Type", contentType);
-    // Uma hora de cache era seguro quando cada foto nova tinha um nome
-    // diferente: a URL mudava junto e o navegador buscava de novo
-    // sozinho. Agora o nome é o ID do Kaizen e NÃO muda ao trocar a
-    // foto — com 1h de cache, quem acabou de trocar continuaria vendo a
-    // antiga. Um minuto ainda evita rebuscar a mesma imagem enquanto a
-    // pessoa navega pela lista, e some depressa o bastante para a troca
-    // aparecer.
-    res.setHeader("Cache-Control", "private, max-age=60");
+    // O nome do arquivo é o ID do Kaizen e NÃO muda ao trocar a foto,
+    // então a URL sozinha não diz se o conteúdo mudou. Quem chama
+    // resolve isso passando ?v= com a DT_ATUALIZACAO do Kaizen — que
+    // muda exatamente quando a foto é substituída. Com versão na URL a
+    // resposta pode ser guardada para sempre; sem ela, o cache curto de
+    // antes, que ainda evita rebuscar a mesma imagem durante a
+    // navegação mas deixa a troca aparecer depressa.
+    res.setHeader(
+      "Cache-Control",
+      req.query.v ? `private, max-age=${UM_ANO_EM_SEGUNDOS}, immutable` : "private, max-age=60"
+    );
     res.send(buffer);
   } catch (err) {
     console.error("[kaizens/imagem GET] erro:", err.message);
@@ -2379,6 +2520,36 @@ const PVC_LIMITES = {
  *  Era exclusivo do DS_MOTIVO; virou genérico porque NM_KAIZEN passou a
  *  precisar da mesma proteção enquanto o ALTER TABLE de 30 para 100
  *  (database/alterar_nm_kaizen_100.sql) não for aplicado. */
+/* DT_REFERENCIA é a coluna computada persistida sugerida na auditoria
+   (ISNULL(DT_CONCLUSAO, DT_ATUALIZACAO)) — ver
+   database/otimizacao_indices.sql. Ela é o que torna o filtro por
+   período e a ordenação da Biblioteca indexáveis: ISNULL() aplicado na
+   hora da consulta impede qualquer índice de ser usado.
+
+   O código funciona COM ou SEM ela: enquanto o script não for rodado, a
+   expressão original é usada e nada quebra; assim que a coluna existir,
+   a mesma consulta passa a usá-la sem precisar de novo deploy. A
+   verificação é feita uma vez e guardada. */
+let colunaReferenciaExiste = null;
+async function expressaoDataReferencia(prefixo) {
+  const p = prefixo ? `${prefixo}.` : "";
+  if (colunaReferenciaExiste === null) {
+    try {
+      const r = await runQuery(
+        `SELECT 1 AS OK FROM INFORMATION_SCHEMA.COLUMNS
+          WHERE TABLE_SCHEMA = @esquema AND TABLE_NAME = @tabela AND COLUMN_NAME = 'DT_REFERENCIA'`,
+        [["esquema", sql.NVarChar(128), DB_SCHEMA], ["tabela", sql.NVarChar(128), DB_PVC_TABLE]]
+      );
+      colunaReferenciaExiste = r.recordset.length > 0;
+      console.log(`[kaizens] DT_REFERENCIA ${colunaReferenciaExiste ? "disponível" : "ausente"} — ` +
+        `ordenação ${colunaReferenciaExiste ? "por índice" : "pela expressão (rode database/otimizacao_indices.sql)"}`);
+    } catch (err) {
+      colunaReferenciaExiste = false;
+    }
+  }
+  return colunaReferenciaExiste ? `${p}DT_REFERENCIA` : `ISNULL(${p}DT_CONCLUSAO, ${p}DT_ATUALIZACAO)`;
+}
+
 const limiteColunaCache = new Map();
 async function limiteDaColuna(coluna, padraoDER) {
   if (limiteColunaCache.has(coluna)) return limiteColunaCache.get(coluna);
@@ -2795,8 +2966,18 @@ apiRouter.get("/kaizens", async (req, res) => {
     const idStatus = intOuNuloGlobal(req.query.status);
     const idCategoria = intOuNuloGlobal(req.query.categoria);
     const estado = textoOuNuloGlobal(req.query.estado);
+    const site = textoOuNuloGlobal(req.query.site);
+    const lider = textoOuNuloGlobal(req.query.lider);
     const ano = intOuNuloGlobal(req.query.ano);
     const q = textoOuNuloGlobal(req.query.q);
+
+    // Paginação no SERVIDOR. Antes a rota devolvia a tabela inteira e a
+    // tela mostrava 6 por vez — com 2.000 Kaizens eram 1,1 MB de JSON
+    // por abertura para desenhar 3,5 KB. O teto de 100 existe para que
+    // um ?tamanho= grande na URL não recrie o problema.
+    const pagina = Math.max(0, intOuNuloGlobal(req.query.pagina) || 0);
+    const tamanho = Math.min(100, Math.max(1, intOuNuloGlobal(req.query.tamanho) || 24));
+    const dataRef = await expressaoDataReferencia("p");
 
     // Autorização por linha: a Biblioteca só mostra o lápis onde este
     // usuário pode mesmo editar. É a MESMA regra que a gravação aplica.
@@ -2810,11 +2991,41 @@ apiRouter.get("/kaizens", async (req, res) => {
     if (idStatus != null) { filtros.push("p.ID_STATUS = @idStatus"); params.push(["idStatus", sql.Int, idStatus]); }
     if (idCategoria != null) { filtros.push("p.ID_CATEGORIA = @idCategoria"); params.push(["idCategoria", sql.Int, idCategoria]); }
     if (estado) { filtros.push("lider.NM_ESTADO = @estado"); params.push(["estado", sql.NVarChar(100), estado]); }
-    if (ano != null) { filtros.push("YEAR(ISNULL(p.DT_CONCLUSAO, p.DT_ATUALIZACAO)) = @ano"); params.push(["ano", sql.Int, ano]); }
+    // Unidade e líder passaram a filtrar AQUI. Eram peneirados no
+    // navegador, o que só funcionava porque a base inteira ia junto.
+    if (site) { filtros.push("autor.NM_SITE = @site"); params.push(["site", sql.NVarChar(200), site]); }
+    if (lider) { filtros.push("lider.NM_USUARIO LIKE @lider"); params.push(["lider", sql.NVarChar(255), termoContem(lider)]); }
+    // Faixa de datas em vez de YEAR(coluna): função sobre a coluna
+    // impede o uso de índice e obrigava a varrer a tabela mesmo com o
+    // filtro de ano aplicado.
+    if (ano != null) {
+      filtros.push(`${dataRef} >= @iniAno AND ${dataRef} < @fimAno`);
+      params.push(["iniAno", sql.DateTime2, new Date(Date.UTC(ano, 0, 1))]);
+      params.push(["fimAno", sql.DateTime2, new Date(Date.UTC(ano + 1, 0, 1))]);
+    }
     if (q) {
       filtros.push("(p.NM_KAIZEN LIKE @q OR lider.NM_USUARIO LIKE @q OR CAST(p.ID_KAIZEN AS VARCHAR(20)) LIKE @q)");
       params.push(["q", sql.NVarChar(255), termoContem(q)]);
     }
+    params.push(["deslocamento", sql.Int, pagina * tamanho]);
+    params.push(["tamanho", sql.Int, tamanho]);
+
+    // Os dois OUTER APPLY precisam existir também na contagem: "site" e
+    // "líder" filtram por colunas que vêm deles.
+    const fonte = `FROM ${FULL_PVC_TABLE} p
+       OUTER APPLY (
+         SELECT TOP (1) x.NM_USUARIO, x.NM_ESTADO, x.NM_CIDADE
+           FROM ${FULL_MDM_TABLE} x
+          WHERE x.ID_USUARIO = p.ID_USUARIO_LIDER
+          ORDER BY x.ID_TIPO_USUARIO
+       ) lider
+       OUTER APPLY (
+         SELECT TOP (1) y.NM_SITE
+           FROM ${FULL_MDM_TABLE} y
+          WHERE y.ID_USUARIO = ISNULL(p.ID_USUARIO_CADASTRO, p.ID_USUARIO_LIDER)
+          ORDER BY y.ID_TIPO_USUARIO
+       ) autor
+       WHERE ${filtros.join(" AND ")}`;
 
     const result = await runQuery(
       `SELECT p.ID_KAIZEN, p.NM_KAIZEN, p.ID_STATUS, st.NM_STATUS, st.DS_STATUS,
@@ -2832,28 +3043,29 @@ apiRouter.get("/kaizens", async (req, res) => {
                 WHERE kd.ID_KAIZEN = p.ID_KAIZEN) AS DESPERDICIOS,
               PODE_EDITAR = ${SQL_PODE_EDITAR("p")},
               STATUS_EDITAVEL = ${SQL_STATUS_EDITAVEL("p")}
-       FROM ${FULL_PVC_TABLE} p
-       LEFT JOIN ${FULL_CATEGORIA_TABLE} cat ON cat.ID_CATEGORIA = p.ID_CATEGORIA AND cat.ID_IDIOMA = @idIdioma
-       LEFT JOIN ${FULL_STATUS_TABLE} st ON st.ID_STATUS = p.ID_STATUS AND st.ID_IDIOMA = @idIdioma
-       OUTER APPLY (
-         SELECT TOP (1) x.NM_USUARIO, x.NM_ESTADO, x.NM_CIDADE
-           FROM ${FULL_MDM_TABLE} x
-          WHERE x.ID_USUARIO = p.ID_USUARIO_LIDER
-          ORDER BY x.ID_TIPO_USUARIO
-       ) lider
-       OUTER APPLY (
-         SELECT TOP (1) y.NM_SITE
-           FROM ${FULL_MDM_TABLE} y
-          WHERE y.ID_USUARIO = ISNULL(p.ID_USUARIO_CADASTRO, p.ID_USUARIO_LIDER)
-          ORDER BY y.ID_TIPO_USUARIO
-       ) autor
-       WHERE ${filtros.join(" AND ")}
-       ORDER BY ISNULL(p.DT_CONCLUSAO, p.DT_ATUALIZACAO) DESC`,
+       ${fonte}
+       -- ID_KAIZEN como desempate: sem ele, dois Kaizens com a mesma
+       -- data poderiam trocar de lugar entre uma página e outra e um
+       -- deles sumiria da listagem.
+       ORDER BY ${dataRef} DESC, p.ID_KAIZEN DESC
+       OFFSET @deslocamento ROWS FETCH NEXT @tamanho ROWS ONLY`,
       params
     );
 
-    res.json(
-      result.recordset.map((r) => ({
+    // Total só na PRIMEIRA página: é o que a tela precisa para o "N de
+    // M" e para saber se ainda há o que carregar. Repetir o COUNT a cada
+    // "Carregar mais" seria pagar duas vezes pela mesma informação.
+    let total = null;
+    if (pagina === 0) {
+      const contagem = await runQuery(`SELECT COUNT(*) AS TOTAL ${fonte}`, params);
+      total = contagem.recordset[0].TOTAL;
+    }
+
+    res.json({
+      pagina,
+      tamanho,
+      total,
+      itens: result.recordset.map((r) => ({
         ID_KAIZEN: r.ID_KAIZEN,
         // Dois sinais, de propósito: PODE_EDITAR é a permissão da pessoa
         // (mostra ou esconde o botão) e EDICAO_LIBERADA junta a
@@ -2886,8 +3098,8 @@ apiRouter.get("/kaizens", async (req, res) => {
         // desperdício viajavam juntos em TAGS e a tela não tinha como
         // saber qual era qual para separar os balões.
         DESPERDICIOS: r.DESPERDICIOS ? String(r.DESPERDICIOS).split("§").filter(Boolean) : [],
-      }))
-    );
+      })),
+    });
   } catch (err) {
     console.error("[kaizens] erro ao listar:", err.message);
     res.status(500).json({ error: "Erro ao consultar Kaizens: " + err.message });
@@ -2998,6 +3210,7 @@ apiRouter.get("/kaizens/titulo-existe", async (req, res) => {
 // ID (mesmo cuidado de /kaizens/resumo e /kaizens/titulo-existe).
 apiRouter.get("/kaizens/filtros", async (req, res) => {
   try {
+    const dataRef = await expressaoDataReferencia("");
     const [unidades, anos] = await Promise.all([
       // Todas as unidades da hierarquia, não só as dos terceiros.
       opcoesDistintasDoMdm("NM_SITE", { todosOsTipos: true }),
@@ -3007,9 +3220,12 @@ apiRouter.get("/kaizens/filtros", async (req, res) => {
       // tela ofereceria anos que o filtro não sabe casar, e Kaizens sem
       // data de conclusão ficariam fora de qualquer ano.
       runQuery(
-        `SELECT DISTINCT YEAR(ISNULL(DT_CONCLUSAO, DT_ATUALIZACAO)) AS ANO
+        // Sobre DT_REFERENCIA quando ela existir: YEAR(ISNULL(...))
+        // impede o uso de índice e obriga a varrer a tabela para montar
+        // um combo de meia dúzia de anos.
+        `SELECT DISTINCT YEAR(${dataRef}) AS ANO
            FROM ${FULL_PVC_TABLE}
-          WHERE ISNULL(DT_CONCLUSAO, DT_ATUALIZACAO) IS NOT NULL
+          WHERE ${dataRef} IS NOT NULL
           ORDER BY ANO DESC`
       ),
     ]);

@@ -38,18 +38,12 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>VBM Kaizen — Administração</title>
-<link href="css/vendor/e5e202e3c8995079_all.min.css" rel="stylesheet"/>
+<link href="css/fontawesome-subset.css?v=20260911-1" rel="stylesheet"/>
 <link href="css/vbm-app.css?v=20260819-1" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com" rel="preconnect"/>
-<link href="https://fonts.gstatic.com" rel="preconnect" crossorigin/>
-<!-- Poppins carregada SEM bloquear a renderização: como "print" o navegador
-     baixa a folha mas não espera por ela para pintar a tela; o onload a
-     promove para "all" e a fonte entra assim que chega. Antes, esta linha
-     era render-blocking — num ambiente sem saída para a internet a página
-     ficava em branco até o timeout do fonts.googleapis.com. O <noscript>
-     mantém o comportamento original quando não há JS. -->
-<link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet" media="print" onload="this.media='all';this.onload=null;"/>
-<noscript><link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet"/></noscript>
+<!-- Poppins servida pelo próprio app (css/poppins.css + assets/fonts/poppins).
+     Vinha de fonts.googleapis.com: em rede sem saída para a internet o
+     pedido ficava pendente e o evento load da página nunca disparava. -->
+<link href="css/poppins.css?v=20260911-1" rel="stylesheet"/>
 <link href="assets/icons/a1922a98664cc516_favicon-32x32-1.png" rel="icon"/>
 <style>
 /* ═══════════════════════════════════════════════════
@@ -194,7 +188,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 
 /* ─── Admin page extras ─── */
 .admin-hero{position:relative;border-radius:1.25rem;overflow:hidden;margin-bottom:1.5rem;background:linear-gradient(135deg,#020e1c 0%,#082d4f 60%,#0d3d6b 100%);padding:2rem 2rem 3.5rem;}
-.admin-hero{background-image:url('assets/images/Fundo_VBM_2400x1145.svg');background-size:cover;background-position:center;}
+.admin-hero{background-image:url('assets/images/Fundo_VBM_2400x1145.webp');background-size:cover;background-position:center;}
 .admin-hero-orb{position:absolute;border-radius:50%;filter:blur(60px);pointer-events:none;}
 .admin-hero-orb-1{width:400px;height:400px;background:radial-gradient(circle,rgba(60,181,229,.2) 0%,transparent 65%);top:-80px;right:-80px;animation:orb1 22s ease-in-out infinite;}
 .admin-hero-orb-2{width:200px;height:200px;background:radial-gradient(circle,rgba(99,102,241,.18) 0%,transparent 65%);bottom:-40px;left:120px;animation:orb2 18s ease-in-out infinite;}
@@ -543,7 +537,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
     <a href="admin.html" class="topnav-link active"><i class="fa-solid fa-shield-halved"></i> <span data-i18n="nav.administracao">Administração</span></a>
   </div>
   <div class="topnav-actions">
-    <button class="settings-btn" id="settingsBtn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="settingsPanel" title="Configurações" data-i18n-title="settings.btnTitle">
+    <button class="settings-btn" id="settingsBtn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="settingsPanel" title="Configurações" data-i18n-title="settings.btnTitle" aria-label="Configurações">
       <svg width="17" height="17" viewBox="0 0 20 20" fill="none">
         <path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" stroke="currentColor" stroke-width="1.5" />
         <path d="M16.2 12.3a1.4 1.4 0 0 0 .28 1.54l.05.05a1.7 1.7 0 1 1-2.4 2.4l-.05-.05a1.4 1.4 0 0 0-1.54-.28 1.4 1.4 0 0 0-.85 1.28V17.4a1.7 1.7 0 0 1-3.4 0v-.08a1.4 1.4 0 0 0-.91-1.28 1.4 1.4 0 0 0-1.54.28l-.05.05a1.7 1.7 0 1 1-2.4-2.4l.05-.05a1.4 1.4 0 0 0 .28-1.54 1.4 1.4 0 0 0-1.28-.85H2.6a1.7 1.7 0 0 1 0-3.4h.08a1.4 1.4 0 0 0 1.28-.91 1.4 1.4 0 0 0-.28-1.54l-.05-.05a1.7 1.7 0 1 1 2.4-2.4l.05.05a1.4 1.4 0 0 0 1.54.28h.06a1.4 1.4 0 0 0 .85-1.28V2.6a1.7 1.7 0 0 1 3.4 0v.08a1.4 1.4 0 0 0 .85 1.28h.06a1.4 1.4 0 0 0 1.54-.28l.05-.05a1.7 1.7 0 1 1 2.4 2.4l-.05.05a1.4 1.4 0 0 0-.28 1.54v.06a1.4 1.4 0 0 0 1.28.85h.08a1.7 1.7 0 0 1 0 3.4h-.08a1.4 1.4 0 0 0-1.28.85Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
@@ -610,7 +604,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       <div class="admin-hero-orb admin-hero-orb-2"></div>
       <div class="admin-hero-content">
         <div class="admin-hero-label" data-i18n="adm.heroLabel">Painel ADM · Dono do Sistema</div>
-        <div class="admin-hero-title">ADMINISTRAÇÃO</div>
+        <div class="admin-hero-title" role="heading" aria-level="1">ADMINISTRAÇÃO</div>
         <div class="admin-hero-sub">VALE BASE METALS · KAIZEN SYSTEM</div>
         <div class="admin-hero-desc" data-i18n="adm.heroDesc">Configure aprovadores por unidade, categorias, potenciais de replicação, tipos de desperdício e resultados alcançados.</div>
       </div>
@@ -775,11 +769,11 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 
 <!-- ═══ MODALS ═══ -->
 
-<div class="modal-backdrop" id="modalAddAprovador">
+<div class="modal-backdrop" id="modalAddAprovador" role="dialog" aria-modal="true" aria-labelledby="modalAddAprovadorTitulo">
   <div class="modal">
     <div class="modal-head">
       <div class="modal-icon" style="--hue:60,181,229;background:#e8f3fb;border-color:rgba(60,181,229,.28);"><i class="fa-solid fa-user-plus" style="color:var(--vbm-blue);"></i></div>
-      <div class="modal-title" data-i18n="adm.addApprover">Adicionar Aprovador</div>
+      <div class="modal-title" id="modalAddAprovadorTitulo" data-i18n="adm.addApprover">Adicionar Aprovador</div>
       <button class="modal-close" data-modal-close><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
@@ -796,17 +790,17 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
         </div>
       </div>
       <div class="form-group form-suggest-wrap">
-        <label class="form-label" data-i18n="adm.searchUser">Usuário <span class="req">*</span></label>
+        <label for="addAprovadorBusca" class="form-label" data-i18n="adm.searchUser">Usuário <span class="req">*</span></label>
         <input type="text" class="form-control" id="addAprovadorBusca" autocomplete="off" placeholder="Digite ao menos 2 caracteres..." data-i18n-placeholder="adm.searchUserHint"/>
         <div class="form-suggest" id="addAprovadorSugestoes" hidden></div>
       </div>
       <div class="form-grid form-grid-2">
-        <div class="form-group" style="grid-column:1/-1;"><label class="form-label" data-i18n="adm.fullName">Nome Completo</label><input type="text" class="form-control" id="addAprovadorNome" readonly/></div>
-        <div class="form-group"><label class="form-label" data-i18n="adm.registration">Matrícula</label><input type="text" class="form-control" id="addAprovadorMatricula" readonly/></div>
-        <div class="form-group"><label class="form-label" data-i18n="adm.email">E-mail</label><input type="text" class="form-control" id="addAprovadorEmail" readonly/></div>
-        <div class="form-group"><label class="form-label" data-i18n="adm.position">Cargo</label><input type="text" class="form-control" id="addAprovadorCargo" readonly/></div>
-        <div class="form-group"><label class="form-label" data-i18n="adm.state">Estado</label><input type="text" class="form-control" id="addAprovadorEstado" readonly/></div>
-        <div class="form-group"><label class="form-label" data-i18n="adm.city">Cidade</label><input type="text" class="form-control" id="addAprovadorCidade" readonly/></div>
+        <div class="form-group" style="grid-column:1/-1;"><label for="addAprovadorNome" class="form-label" data-i18n="adm.fullName">Nome Completo</label><input type="text" class="form-control" id="addAprovadorNome" readonly/></div>
+        <div class="form-group"><label for="addAprovadorMatricula" class="form-label" data-i18n="adm.registration">Matrícula</label><input type="text" class="form-control" id="addAprovadorMatricula" readonly/></div>
+        <div class="form-group"><label for="addAprovadorEmail" class="form-label" data-i18n="adm.email">E-mail</label><input type="text" class="form-control" id="addAprovadorEmail" readonly/></div>
+        <div class="form-group"><label for="addAprovadorCargo" class="form-label" data-i18n="adm.position">Cargo</label><input type="text" class="form-control" id="addAprovadorCargo" readonly/></div>
+        <div class="form-group"><label for="addAprovadorEstado" class="form-label" data-i18n="adm.state">Estado</label><input type="text" class="form-control" id="addAprovadorEstado" readonly/></div>
+        <div class="form-group"><label for="addAprovadorCidade" class="form-label" data-i18n="adm.city">Cidade</label><input type="text" class="form-control" id="addAprovadorCidade" readonly/></div>
       </div>
     </div>
     <div class="modal-foot">
@@ -820,11 +814,11 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
      editável é o mesmo: kzn_aprovador só guarda ID_USUARIO (o SG_ATIVO
      é o botão de ativar/desativar da lista). Escolher outra pessoa na
      busca aponta o registro para ela; os campos do MDM são leitura. -->
-<div class="modal-backdrop" id="modalEditAprovador">
+<div class="modal-backdrop" id="modalEditAprovador" role="dialog" aria-modal="true" aria-labelledby="modalEditAprovadorTitulo">
   <div class="modal">
     <div class="modal-head">
       <div class="modal-icon" style="--hue:60,181,229;background:#e8f3fb;border-color:rgba(60,181,229,.28);"><i class="fa-solid fa-user-pen" style="color:var(--vbm-blue);"></i></div>
-      <div class="modal-title" data-i18n="adm.editApprover">Editar Aprovador</div>
+      <div class="modal-title" id="modalEditAprovadorTitulo" data-i18n="adm.editApprover">Editar Aprovador</div>
       <button class="modal-close" data-modal-close><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
@@ -836,17 +830,17 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
         </div>
       </div>
       <div class="form-group form-suggest-wrap">
-        <label class="form-label" data-i18n="adm.searchUser">Usuário <span class="req">*</span></label>
+        <label for="editAprovadorBusca" class="form-label" data-i18n="adm.searchUser">Usuário <span class="req">*</span></label>
         <input type="text" class="form-control" id="editAprovadorBusca" autocomplete="off" placeholder="Digite ao menos 2 caracteres..." data-i18n-placeholder="adm.searchUserHint"/>
         <div class="form-suggest" id="editAprovadorSugestoes" hidden></div>
       </div>
       <div class="form-grid form-grid-2">
-        <div class="form-group" style="grid-column:1/-1;"><label class="form-label" data-i18n="adm.fullName">Nome Completo</label><input type="text" class="form-control" id="editAprovadorNome" readonly/></div>
-        <div class="form-group"><label class="form-label" data-i18n="adm.registration">Matrícula</label><input type="text" class="form-control" id="editAprovadorMatricula" readonly/></div>
-        <div class="form-group"><label class="form-label" data-i18n="adm.email">E-mail</label><input type="text" class="form-control" id="editAprovadorEmail" readonly/></div>
-        <div class="form-group"><label class="form-label" data-i18n="adm.position">Cargo</label><input type="text" class="form-control" id="editAprovadorCargo" readonly/></div>
-        <div class="form-group"><label class="form-label" data-i18n="adm.state">Estado</label><input type="text" class="form-control" id="editAprovadorEstado" readonly/></div>
-        <div class="form-group"><label class="form-label" data-i18n="adm.city">Cidade</label><input type="text" class="form-control" id="editAprovadorCidade" readonly/></div>
+        <div class="form-group" style="grid-column:1/-1;"><label for="editAprovadorNome" class="form-label" data-i18n="adm.fullName">Nome Completo</label><input type="text" class="form-control" id="editAprovadorNome" readonly/></div>
+        <div class="form-group"><label for="editAprovadorMatricula" class="form-label" data-i18n="adm.registration">Matrícula</label><input type="text" class="form-control" id="editAprovadorMatricula" readonly/></div>
+        <div class="form-group"><label for="editAprovadorEmail" class="form-label" data-i18n="adm.email">E-mail</label><input type="text" class="form-control" id="editAprovadorEmail" readonly/></div>
+        <div class="form-group"><label for="editAprovadorCargo" class="form-label" data-i18n="adm.position">Cargo</label><input type="text" class="form-control" id="editAprovadorCargo" readonly/></div>
+        <div class="form-group"><label for="editAprovadorEstado" class="form-label" data-i18n="adm.state">Estado</label><input type="text" class="form-control" id="editAprovadorEstado" readonly/></div>
+        <div class="form-group"><label for="editAprovadorCidade" class="form-label" data-i18n="adm.city">Cidade</label><input type="text" class="form-control" id="editAprovadorCidade" readonly/></div>
       </div>
     </div>
     <div class="modal-foot">
@@ -856,27 +850,27 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
   </div>
 </div>
 
-<div class="modal-backdrop" id="modalAddCategoria">
+<div class="modal-backdrop" id="modalAddCategoria" role="dialog" aria-modal="true" aria-labelledby="modalAddCategoriaTitulo">
   <div class="modal">
     <div class="modal-head">
       <div class="modal-icon" style="--hue:26,139,191;background:#eef6fb;border-color:rgba(26,139,191,.28);"><i class="fa-solid fa-tag" style="color:var(--vbm-blue-dark);"></i></div>
-      <div class="modal-title" data-i18n="adm.newCategory">Nova Categoria</div>
+      <div class="modal-title" id="modalAddCategoriaTitulo" data-i18n="adm.newCategory">Nova Categoria</div>
       <button class="modal-close" data-modal-close><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <div class="form-group">
         <label class="form-label" data-i18n="adm.icons">Ícones</label>
         <div class="icon-swatch-row" id="catAddIconGrid">
-          <button type="button" class="icon-swatch active" data-icon="fa-solid fa-tag" onclick="pickCategoryIcon(this,'catAdd')" title="Tag"><i class="fa-solid fa-tag"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-helmet-safety" onclick="pickCategoryIcon(this,'catAdd')" title="Segurança"><i class="fa-solid fa-helmet-safety"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-broom" onclick="pickCategoryIcon(this,'catAdd')" title="5S"><i class="fa-solid fa-broom"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-bolt" onclick="pickCategoryIcon(this,'catAdd')" title="Energia"><i class="fa-solid fa-bolt"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-screwdriver-wrench" onclick="pickCategoryIcon(this,'catAdd')" title="Manutenção"><i class="fa-solid fa-screwdriver-wrench"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-circle-check" onclick="pickCategoryIcon(this,'catAdd')" title="Qualidade"><i class="fa-solid fa-circle-check"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-leaf" onclick="pickCategoryIcon(this,'catAdd')" title="Meio Ambiente"><i class="fa-solid fa-leaf"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-truck" onclick="pickCategoryIcon(this,'catAdd')" title="Logística"><i class="fa-solid fa-truck"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-recycle" onclick="pickCategoryIcon(this,'catAdd')" title="Reciclagem"><i class="fa-solid fa-recycle"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-industry" onclick="pickCategoryIcon(this,'catAdd')" title="Indústria"><i class="fa-solid fa-industry"></i></button>
+          <button type="button" class="icon-swatch active" data-icon="fa-solid fa-tag" onclick="pickCategoryIcon(this,'catAdd')" title="Tag" aria-label="Tag"><i class="fa-solid fa-tag"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-helmet-safety" onclick="pickCategoryIcon(this,'catAdd')" title="Segurança" aria-label="Segurança"><i class="fa-solid fa-helmet-safety"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-broom" onclick="pickCategoryIcon(this,'catAdd')" title="5S" aria-label="5S"><i class="fa-solid fa-broom"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-bolt" onclick="pickCategoryIcon(this,'catAdd')" title="Energia" aria-label="Energia"><i class="fa-solid fa-bolt"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-screwdriver-wrench" onclick="pickCategoryIcon(this,'catAdd')" title="Manutenção" aria-label="Manutenção"><i class="fa-solid fa-screwdriver-wrench"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-circle-check" onclick="pickCategoryIcon(this,'catAdd')" title="Qualidade" aria-label="Qualidade"><i class="fa-solid fa-circle-check"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-leaf" onclick="pickCategoryIcon(this,'catAdd')" title="Meio Ambiente" aria-label="Meio Ambiente"><i class="fa-solid fa-leaf"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-truck" onclick="pickCategoryIcon(this,'catAdd')" title="Logística" aria-label="Logística"><i class="fa-solid fa-truck"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-recycle" onclick="pickCategoryIcon(this,'catAdd')" title="Reciclagem" aria-label="Reciclagem"><i class="fa-solid fa-recycle"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-industry" onclick="pickCategoryIcon(this,'catAdd')" title="Indústria" aria-label="Indústria"><i class="fa-solid fa-industry"></i></button>
         </div>
         <input type="hidden" id="catAddIconInput" value="fa-solid fa-tag"/>
       </div>
@@ -921,27 +915,27 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
   </div>
 </div>
 
-<div class="modal-backdrop" id="modalEditCategoria">
+<div class="modal-backdrop" id="modalEditCategoria" role="dialog" aria-modal="true" aria-labelledby="modalEditCategoriaTitulo">
   <div class="modal">
     <div class="modal-head">
       <div class="modal-icon" style="--hue:26,139,191;background:#eef6fb;border-color:rgba(26,139,191,.28);"><i class="fa-solid fa-tag" style="color:var(--vbm-blue-dark);"></i></div>
-      <div class="modal-title" data-i18n="adm.editCategory">Editar Categoria</div>
+      <div class="modal-title" id="modalEditCategoriaTitulo" data-i18n="adm.editCategory">Editar Categoria</div>
       <button class="modal-close" data-modal-close><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <div class="form-group">
         <label class="form-label" data-i18n="adm.icons">Ícones</label>
         <div class="icon-swatch-row" id="catEditIconGrid">
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-tag" onclick="pickCategoryIcon(this,'catEdit')" title="Tag"><i class="fa-solid fa-tag"></i></button>
-          <button type="button" class="icon-swatch active" data-icon="fa-solid fa-helmet-safety" onclick="pickCategoryIcon(this,'catEdit')" title="Segurança"><i class="fa-solid fa-helmet-safety"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-broom" onclick="pickCategoryIcon(this,'catEdit')" title="5S"><i class="fa-solid fa-broom"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-bolt" onclick="pickCategoryIcon(this,'catEdit')" title="Energia"><i class="fa-solid fa-bolt"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-screwdriver-wrench" onclick="pickCategoryIcon(this,'catEdit')" title="Manutenção"><i class="fa-solid fa-screwdriver-wrench"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-circle-check" onclick="pickCategoryIcon(this,'catEdit')" title="Qualidade"><i class="fa-solid fa-circle-check"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-leaf" onclick="pickCategoryIcon(this,'catEdit')" title="Meio Ambiente"><i class="fa-solid fa-leaf"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-truck" onclick="pickCategoryIcon(this,'catEdit')" title="Logística"><i class="fa-solid fa-truck"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-recycle" onclick="pickCategoryIcon(this,'catEdit')" title="Reciclagem"><i class="fa-solid fa-recycle"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-industry" onclick="pickCategoryIcon(this,'catEdit')" title="Indústria"><i class="fa-solid fa-industry"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-tag" onclick="pickCategoryIcon(this,'catEdit')" title="Tag" aria-label="Tag"><i class="fa-solid fa-tag"></i></button>
+          <button type="button" class="icon-swatch active" data-icon="fa-solid fa-helmet-safety" onclick="pickCategoryIcon(this,'catEdit')" title="Segurança" aria-label="Segurança"><i class="fa-solid fa-helmet-safety"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-broom" onclick="pickCategoryIcon(this,'catEdit')" title="5S" aria-label="5S"><i class="fa-solid fa-broom"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-bolt" onclick="pickCategoryIcon(this,'catEdit')" title="Energia" aria-label="Energia"><i class="fa-solid fa-bolt"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-screwdriver-wrench" onclick="pickCategoryIcon(this,'catEdit')" title="Manutenção" aria-label="Manutenção"><i class="fa-solid fa-screwdriver-wrench"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-circle-check" onclick="pickCategoryIcon(this,'catEdit')" title="Qualidade" aria-label="Qualidade"><i class="fa-solid fa-circle-check"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-leaf" onclick="pickCategoryIcon(this,'catEdit')" title="Meio Ambiente" aria-label="Meio Ambiente"><i class="fa-solid fa-leaf"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-truck" onclick="pickCategoryIcon(this,'catEdit')" title="Logística" aria-label="Logística"><i class="fa-solid fa-truck"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-recycle" onclick="pickCategoryIcon(this,'catEdit')" title="Reciclagem" aria-label="Reciclagem"><i class="fa-solid fa-recycle"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-industry" onclick="pickCategoryIcon(this,'catEdit')" title="Indústria" aria-label="Indústria"><i class="fa-solid fa-industry"></i></button>
         </div>
         <input type="hidden" id="catEditIconInput" value="fa-solid fa-helmet-safety"/>
       </div>
@@ -1004,11 +998,11 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 <datalist id="opt-NM_HIERARQUIA_N7"></datalist>
 <datalist id="opt-NM_HIERARQUIA_N8"></datalist>
 
-<div class="modal-backdrop" id="modalAddUser">
+<div class="modal-backdrop" id="modalAddUser" role="dialog" aria-modal="true" aria-labelledby="modalAddUserTitulo">
   <div class="modal modal-lg">
     <div class="modal-head">
       <div class="modal-icon" style="--hue:26,26,26;background:#f2f2f2;border-color:rgba(26,26,26,.16);"><i class="fa-solid fa-user-plus" style="color:var(--vbm-dark);"></i></div>
-      <div class="modal-title" data-i18n="adm.newUser">Novo Usuário</div>
+      <div class="modal-title" id="modalAddUserTitulo" data-i18n="adm.newUser">Novo Usuário</div>
       <button class="modal-close" data-modal-close><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
@@ -1034,11 +1028,11 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
   </div>
 </div>
 
-<div class="modal-backdrop" id="modalEditUser">
+<div class="modal-backdrop" id="modalEditUser" role="dialog" aria-modal="true" aria-labelledby="modalEditUserTitulo">
   <div class="modal modal-lg">
     <div class="modal-head">
       <div class="modal-icon" style="--hue:26,26,26;background:#f2f2f2;border-color:rgba(26,26,26,.16);"><i class="fa-solid fa-user-pen" style="color:var(--vbm-dark);"></i></div>
-      <div class="modal-title" data-i18n="adm.editUser">Editar Usuário</div>
+      <div class="modal-title" id="modalEditUserTitulo" data-i18n="adm.editUser">Editar Usuário</div>
       <button class="modal-close" data-modal-close><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
@@ -1064,21 +1058,21 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
   </div>
 </div>
 
-<div class="modal-backdrop" id="modalAddReplicacao">
+<div class="modal-backdrop" id="modalAddReplicacao" role="dialog" aria-modal="true" aria-labelledby="modalAddReplicacaoTitulo">
   <div class="modal">
     <div class="modal-head">
       <div class="modal-icon" style="--hue:60,181,229;background:#dcf1fc;border-color:rgba(60,181,229,.3);"><i class="fa-solid fa-globe" style="color:var(--vbm-blue-dark);"></i></div>
-      <div class="modal-title" data-i18n="adm.newReplication">Novo Potencial de Replicação</div>
+      <div class="modal-title" id="modalAddReplicacaoTitulo" data-i18n="adm.newReplication">Novo Potencial de Replicação</div>
       <button class="modal-close" data-modal-close><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <div class="form-group">
-        <label class="form-label" data-i18n="adm.icons">Ícones</label>
+        <label for="resAddTipoResultado" class="form-label" data-i18n="adm.icons">Ícones</label>
         <div class="icon-swatch-row" id="replAddIconGrid">
-          <button type="button" class="icon-swatch active" data-icon="fa-solid fa-globe" onclick="pickCategoryIcon(this,'replAdd')" title="Global"><i class="fa-solid fa-globe"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-building" onclick="pickCategoryIcon(this,'replAdd')" title="Unidade"><i class="fa-solid fa-building"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-map-location-dot" onclick="pickCategoryIcon(this,'replAdd')" title="País"><i class="fa-solid fa-map-location-dot"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-ban" onclick="pickCategoryIcon(this,'replAdd')" title="Não replicável"><i class="fa-solid fa-ban"></i></button>
+          <button type="button" class="icon-swatch active" data-icon="fa-solid fa-globe" onclick="pickCategoryIcon(this,'replAdd')" title="Global" aria-label="Global"><i class="fa-solid fa-globe"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-building" onclick="pickCategoryIcon(this,'replAdd')" title="Unidade" aria-label="Unidade"><i class="fa-solid fa-building"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-map-location-dot" onclick="pickCategoryIcon(this,'replAdd')" title="País" aria-label="País"><i class="fa-solid fa-map-location-dot"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-ban" onclick="pickCategoryIcon(this,'replAdd')" title="Não replicável" aria-label="Não replicável"><i class="fa-solid fa-ban"></i></button>
         </div>
         <input type="hidden" id="replAddIconInput" value="fa-solid fa-globe"/>
       </div>
@@ -1121,21 +1115,21 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
   </div>
 </div>
 
-<div class="modal-backdrop" id="modalEditReplicacao">
+<div class="modal-backdrop" id="modalEditReplicacao" role="dialog" aria-modal="true" aria-labelledby="modalEditReplicacaoTitulo">
   <div class="modal">
     <div class="modal-head">
       <div class="modal-icon" style="--hue:60,181,229;background:#dcf1fc;border-color:rgba(60,181,229,.3);"><i class="fa-solid fa-globe" style="color:var(--vbm-blue-dark);"></i></div>
-      <div class="modal-title" data-i18n="adm.editReplication">Editar Potencial de Replicação</div>
+      <div class="modal-title" id="modalEditReplicacaoTitulo" data-i18n="adm.editReplication">Editar Potencial de Replicação</div>
       <button class="modal-close" data-modal-close><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <div class="form-group">
         <label class="form-label" data-i18n="adm.icons">Ícones</label>
         <div class="icon-swatch-row" id="replEditIconGrid">
-          <button type="button" class="icon-swatch active" data-icon="fa-solid fa-globe" onclick="pickCategoryIcon(this,'replEdit')" title="Global"><i class="fa-solid fa-globe"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-building" onclick="pickCategoryIcon(this,'replEdit')" title="Unidade"><i class="fa-solid fa-building"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-map-location-dot" onclick="pickCategoryIcon(this,'replEdit')" title="País"><i class="fa-solid fa-map-location-dot"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-ban" onclick="pickCategoryIcon(this,'replEdit')" title="Não replicável"><i class="fa-solid fa-ban"></i></button>
+          <button type="button" class="icon-swatch active" data-icon="fa-solid fa-globe" onclick="pickCategoryIcon(this,'replEdit')" title="Global" aria-label="Global"><i class="fa-solid fa-globe"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-building" onclick="pickCategoryIcon(this,'replEdit')" title="Unidade" aria-label="Unidade"><i class="fa-solid fa-building"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-map-location-dot" onclick="pickCategoryIcon(this,'replEdit')" title="País" aria-label="País"><i class="fa-solid fa-map-location-dot"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-ban" onclick="pickCategoryIcon(this,'replEdit')" title="Não replicável" aria-label="Não replicável"><i class="fa-solid fa-ban"></i></button>
         </div>
         <input type="hidden" id="replEditIconInput" value="fa-solid fa-globe"/>
       </div>
@@ -1178,21 +1172,21 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
   </div>
 </div>
 
-<div class="modal-backdrop" id="modalAddDesperdicio">
+<div class="modal-backdrop" id="modalAddDesperdicio" role="dialog" aria-modal="true" aria-labelledby="modalAddDesperdicioTitulo">
   <div class="modal">
     <div class="modal-head">
       <div class="modal-icon" style="--hue:60,181,229;background:rgba(60,181,229,.62);border-color:rgba(26,139,191,.5);"><i class="fa-solid fa-recycle" style="color:#fff;"></i></div>
-      <div class="modal-title" data-i18n="adm.newWasteType">Novo Potencial de Desperdício</div>
+      <div class="modal-title" id="modalAddDesperdicioTitulo" data-i18n="adm.newWasteType">Novo Potencial de Desperdício</div>
       <button class="modal-close" data-modal-close><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <div class="form-group">
         <label class="form-label" data-i18n="adm.icons">Ícones</label>
         <div class="icon-swatch-row" id="despAddIconGrid">
-          <button type="button" class="icon-swatch active" data-icon="fa-solid fa-bolt" onclick="pickCategoryIcon(this,'despAdd')" title="Kaizen Simples"><i class="fa-solid fa-bolt"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-wrench" onclick="pickCategoryIcon(this,'despAdd')" title="Kaizen Complexo"><i class="fa-solid fa-wrench"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-lightbulb" onclick="pickCategoryIcon(this,'despAdd')" title="Inovação"><i class="fa-solid fa-lightbulb"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-shield-halved" onclick="pickCategoryIcon(this,'despAdd')" title="Segurança"><i class="fa-solid fa-shield-halved"></i></button>
+          <button type="button" class="icon-swatch active" data-icon="fa-solid fa-bolt" onclick="pickCategoryIcon(this,'despAdd')" title="Kaizen Simples" aria-label="Kaizen Simples"><i class="fa-solid fa-bolt"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-wrench" onclick="pickCategoryIcon(this,'despAdd')" title="Kaizen Complexo" aria-label="Kaizen Complexo"><i class="fa-solid fa-wrench"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-lightbulb" onclick="pickCategoryIcon(this,'despAdd')" title="Inovação" aria-label="Inovação"><i class="fa-solid fa-lightbulb"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-shield-halved" onclick="pickCategoryIcon(this,'despAdd')" title="Segurança" aria-label="Segurança"><i class="fa-solid fa-shield-halved"></i></button>
         </div>
         <input type="hidden" id="despAddIconInput" value="fa-solid fa-bolt"/>
       </div>
@@ -1235,21 +1229,21 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
   </div>
 </div>
 
-<div class="modal-backdrop" id="modalEditDesperdicio">
+<div class="modal-backdrop" id="modalEditDesperdicio" role="dialog" aria-modal="true" aria-labelledby="modalEditDesperdicioTitulo">
   <div class="modal">
     <div class="modal-head">
       <div class="modal-icon" style="--hue:60,181,229;background:rgba(60,181,229,.62);border-color:rgba(26,139,191,.5);"><i class="fa-solid fa-recycle" style="color:#fff;"></i></div>
-      <div class="modal-title" data-i18n="adm.editWasteType">Editar Potencial de Desperdício</div>
+      <div class="modal-title" id="modalEditDesperdicioTitulo" data-i18n="adm.editWasteType">Editar Potencial de Desperdício</div>
       <button class="modal-close" data-modal-close><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <div class="form-group">
         <label class="form-label" data-i18n="adm.icons">Ícones</label>
         <div class="icon-swatch-row" id="despEditIconGrid">
-          <button type="button" class="icon-swatch active" data-icon="fa-solid fa-bolt" onclick="pickCategoryIcon(this,'despEdit')" title="Kaizen Simples"><i class="fa-solid fa-bolt"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-wrench" onclick="pickCategoryIcon(this,'despEdit')" title="Kaizen Complexo"><i class="fa-solid fa-wrench"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-lightbulb" onclick="pickCategoryIcon(this,'despEdit')" title="Inovação"><i class="fa-solid fa-lightbulb"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-shield-halved" onclick="pickCategoryIcon(this,'despEdit')" title="Segurança"><i class="fa-solid fa-shield-halved"></i></button>
+          <button type="button" class="icon-swatch active" data-icon="fa-solid fa-bolt" onclick="pickCategoryIcon(this,'despEdit')" title="Kaizen Simples" aria-label="Kaizen Simples"><i class="fa-solid fa-bolt"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-wrench" onclick="pickCategoryIcon(this,'despEdit')" title="Kaizen Complexo" aria-label="Kaizen Complexo"><i class="fa-solid fa-wrench"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-lightbulb" onclick="pickCategoryIcon(this,'despEdit')" title="Inovação" aria-label="Inovação"><i class="fa-solid fa-lightbulb"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-shield-halved" onclick="pickCategoryIcon(this,'despEdit')" title="Segurança" aria-label="Segurança"><i class="fa-solid fa-shield-halved"></i></button>
         </div>
         <input type="hidden" id="despEditIconInput" value="fa-solid fa-bolt"/>
       </div>
@@ -1292,23 +1286,23 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
   </div>
 </div>
 
-<div class="modal-backdrop" id="modalAddResultado">
+<div class="modal-backdrop" id="modalAddResultado" role="dialog" aria-modal="true" aria-labelledby="modalAddResultadoTitulo">
   <div class="modal">
     <div class="modal-head">
       <div class="modal-icon" style="--hue:60,181,229;background:var(--vbm-blue-pale);border-color:rgba(60,181,229,.22);"><i class="fa-solid fa-trophy" style="color:var(--vbm-blue-dark);"></i></div>
-      <div class="modal-title" data-i18n="adm.newResultType">Novo Resultado Alcançado</div>
+      <div class="modal-title" id="modalAddResultadoTitulo" data-i18n="adm.newResultType">Novo Resultado Alcançado</div>
       <button class="modal-close" data-modal-close><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <div class="form-group">
         <label class="form-label" data-i18n="adm.icons">Ícones</label>
         <div class="icon-swatch-row" id="resAddIconGrid">
-          <button type="button" class="icon-swatch active" data-icon="fa-solid fa-dollar-sign" onclick="pickCategoryIcon(this,'resAdd')" title="Redução de Custo"><i class="fa-solid fa-dollar-sign"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-chart-line" onclick="pickCategoryIcon(this,'resAdd')" title="Produtividade"><i class="fa-solid fa-chart-line"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-shield-halved" onclick="pickCategoryIcon(this,'resAdd')" title="Segurança"><i class="fa-solid fa-shield-halved"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-leaf" onclick="pickCategoryIcon(this,'resAdd')" title="Sustentabilidade"><i class="fa-solid fa-leaf"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-circle-check" onclick="pickCategoryIcon(this,'resAdd')" title="Qualidade"><i class="fa-solid fa-circle-check"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-hand-holding-hand" onclick="pickCategoryIcon(this,'resAdd')" title="Engajamento"><i class="fa-solid fa-hand-holding-hand"></i></button>
+          <button type="button" class="icon-swatch active" data-icon="fa-solid fa-dollar-sign" onclick="pickCategoryIcon(this,'resAdd')" title="Redução de Custo" aria-label="Redução de Custo"><i class="fa-solid fa-dollar-sign"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-chart-line" onclick="pickCategoryIcon(this,'resAdd')" title="Produtividade" aria-label="Produtividade"><i class="fa-solid fa-chart-line"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-shield-halved" onclick="pickCategoryIcon(this,'resAdd')" title="Segurança" aria-label="Segurança"><i class="fa-solid fa-shield-halved"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-leaf" onclick="pickCategoryIcon(this,'resAdd')" title="Sustentabilidade" aria-label="Sustentabilidade"><i class="fa-solid fa-leaf"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-circle-check" onclick="pickCategoryIcon(this,'resAdd')" title="Qualidade" aria-label="Qualidade"><i class="fa-solid fa-circle-check"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-hand-holding-hand" onclick="pickCategoryIcon(this,'resAdd')" title="Engajamento" aria-label="Engajamento"><i class="fa-solid fa-hand-holding-hand"></i></button>
         </div>
         <input type="hidden" id="resAddIconInput" value="fa-solid fa-dollar-sign"/>
       </div>
@@ -1334,7 +1328,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
         </select>
       </div>
       <div class="form-group">
-        <label class="form-label" data-i18n="adm.description">Descrição <span class="req">*</span></label>
+        <label for="resEditTipoResultado" class="form-label" data-i18n="adm.description">Descrição <span class="req">*</span></label>
         <div class="lang-stack">
           <div class="lang-slot lang-slot-textarea">
             <span class="lang-slot-tag"><span class="lang-slot-flag flag-br"></span> PT-BR</span>
@@ -1357,23 +1351,23 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
   </div>
 </div>
 
-<div class="modal-backdrop" id="modalEditResultado">
+<div class="modal-backdrop" id="modalEditResultado" role="dialog" aria-modal="true" aria-labelledby="modalEditResultadoTitulo">
   <div class="modal">
     <div class="modal-head">
       <div class="modal-icon" style="--hue:60,181,229;background:var(--vbm-blue-pale);border-color:rgba(60,181,229,.22);"><i class="fa-solid fa-trophy" style="color:var(--vbm-blue-dark);"></i></div>
-      <div class="modal-title" data-i18n="adm.editResultType">Editar Resultado Alcançado</div>
+      <div class="modal-title" id="modalEditResultadoTitulo" data-i18n="adm.editResultType">Editar Resultado Alcançado</div>
       <button class="modal-close" data-modal-close><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <div class="form-group">
         <label class="form-label" data-i18n="adm.icons">Ícones</label>
         <div class="icon-swatch-row" id="resEditIconGrid">
-          <button type="button" class="icon-swatch active" data-icon="fa-solid fa-dollar-sign" onclick="pickCategoryIcon(this,'resEdit')" title="Redução de Custo"><i class="fa-solid fa-dollar-sign"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-chart-line" onclick="pickCategoryIcon(this,'resEdit')" title="Produtividade"><i class="fa-solid fa-chart-line"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-shield-halved" onclick="pickCategoryIcon(this,'resEdit')" title="Segurança"><i class="fa-solid fa-shield-halved"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-leaf" onclick="pickCategoryIcon(this,'resEdit')" title="Sustentabilidade"><i class="fa-solid fa-leaf"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-circle-check" onclick="pickCategoryIcon(this,'resEdit')" title="Qualidade"><i class="fa-solid fa-circle-check"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-hand-holding-hand" onclick="pickCategoryIcon(this,'resEdit')" title="Engajamento"><i class="fa-solid fa-hand-holding-hand"></i></button>
+          <button type="button" class="icon-swatch active" data-icon="fa-solid fa-dollar-sign" onclick="pickCategoryIcon(this,'resEdit')" title="Redução de Custo" aria-label="Redução de Custo"><i class="fa-solid fa-dollar-sign"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-chart-line" onclick="pickCategoryIcon(this,'resEdit')" title="Produtividade" aria-label="Produtividade"><i class="fa-solid fa-chart-line"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-shield-halved" onclick="pickCategoryIcon(this,'resEdit')" title="Segurança" aria-label="Segurança"><i class="fa-solid fa-shield-halved"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-leaf" onclick="pickCategoryIcon(this,'resEdit')" title="Sustentabilidade" aria-label="Sustentabilidade"><i class="fa-solid fa-leaf"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-circle-check" onclick="pickCategoryIcon(this,'resEdit')" title="Qualidade" aria-label="Qualidade"><i class="fa-solid fa-circle-check"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-hand-holding-hand" onclick="pickCategoryIcon(this,'resEdit')" title="Engajamento" aria-label="Engajamento"><i class="fa-solid fa-hand-holding-hand"></i></button>
         </div>
         <input type="hidden" id="resEditIconInput" value="fa-solid fa-dollar-sign"/>
       </div>
@@ -1422,11 +1416,11 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
   </div>
 </div>
 
-<div class="modal-backdrop" id="modalAddTipoResultado">
+<div class="modal-backdrop" id="modalAddTipoResultado" role="dialog" aria-modal="true" aria-labelledby="modalAddTipoResultadoTitulo">
   <div class="modal">
     <div class="modal-head">
       <div class="modal-icon" style="--hue:60,181,229;background:var(--vbm-blue-pale);border-color:rgba(60,181,229,.22);"><i class="fa-solid fa-layer-group" style="color:var(--vbm-blue-dark);"></i></div>
-      <div class="modal-title" data-i18n="adm.newTipoResultado">Nova Classificação de Tipo de Resultado</div>
+      <div class="modal-title" id="modalAddTipoResultadoTitulo" data-i18n="adm.newTipoResultado">Nova Classificação de Tipo de Resultado</div>
       <button class="modal-close" data-modal-close><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
@@ -1453,11 +1447,11 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
   </div>
 </div>
 
-<div class="modal-backdrop" id="modalEditTipoResultado">
+<div class="modal-backdrop" id="modalEditTipoResultado" role="dialog" aria-modal="true" aria-labelledby="modalEditTipoResultadoTitulo">
   <div class="modal">
     <div class="modal-head">
       <div class="modal-icon" style="--hue:60,181,229;background:var(--vbm-blue-pale);border-color:rgba(60,181,229,.22);"><i class="fa-solid fa-layer-group" style="color:var(--vbm-blue-dark);"></i></div>
-      <div class="modal-title" data-i18n="adm.editTipoResultado">Editar Classificação de Tipo de Resultado</div>
+      <div class="modal-title" id="modalEditTipoResultadoTitulo" data-i18n="adm.editTipoResultado">Editar Classificação de Tipo de Resultado</div>
       <button class="modal-close" data-modal-close><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
@@ -1484,21 +1478,21 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
   </div>
 </div>
 
-<div class="modal-backdrop" id="modalAddStatus">
+<div class="modal-backdrop" id="modalAddStatus" role="dialog" aria-modal="true" aria-labelledby="modalAddStatusTitulo">
   <div class="modal">
     <div class="modal-head">
       <div class="modal-icon" style="--hue:60,181,229;background:var(--vbm-blue-pale);border-color:rgba(60,181,229,.22);"><i class="fa-solid fa-circle-check" style="color:var(--vbm-blue-dark);"></i></div>
-      <div class="modal-title" data-i18n="adm.newStatus">Novo Status</div>
+      <div class="modal-title" id="modalAddStatusTitulo" data-i18n="adm.newStatus">Novo Status</div>
       <button class="modal-close" data-modal-close><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <div class="form-group">
         <label class="form-label" data-i18n="adm.icons">Ícones</label>
         <div class="icon-swatch-row" id="statusAddIconGrid">
-          <button type="button" class="icon-swatch active" data-icon="fa-solid fa-circle-check" onclick="pickCategoryIcon(this,'statusAdd')" title="Aprovado"><i class="fa-solid fa-circle-check"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-circle-xmark" onclick="pickCategoryIcon(this,'statusAdd')" title="Reprovado"><i class="fa-solid fa-circle-xmark"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-clipboard-check" onclick="pickCategoryIcon(this,'statusAdd')" title="Em aprovação"><i class="fa-solid fa-clipboard-check"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-pen" onclick="pickCategoryIcon(this,'statusAdd')" title="Rascunho"><i class="fa-solid fa-pen"></i></button>
+          <button type="button" class="icon-swatch active" data-icon="fa-solid fa-circle-check" onclick="pickCategoryIcon(this,'statusAdd')" title="Aprovado" aria-label="Aprovado"><i class="fa-solid fa-circle-check"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-circle-xmark" onclick="pickCategoryIcon(this,'statusAdd')" title="Reprovado" aria-label="Reprovado"><i class="fa-solid fa-circle-xmark"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-clipboard-check" onclick="pickCategoryIcon(this,'statusAdd')" title="Em aprovação" aria-label="Em aprovação"><i class="fa-solid fa-clipboard-check"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-pen" onclick="pickCategoryIcon(this,'statusAdd')" title="Rascunho" aria-label="Rascunho"><i class="fa-solid fa-pen"></i></button>
         </div>
         <input type="hidden" id="statusAddIconInput" value="fa-solid fa-circle-check"/>
       </div>
@@ -1541,21 +1535,21 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
   </div>
 </div>
 
-<div class="modal-backdrop" id="modalEditStatus">
+<div class="modal-backdrop" id="modalEditStatus" role="dialog" aria-modal="true" aria-labelledby="modalEditStatusTitulo">
   <div class="modal">
     <div class="modal-head">
       <div class="modal-icon" style="--hue:60,181,229;background:var(--vbm-blue-pale);border-color:rgba(60,181,229,.22);"><i class="fa-solid fa-circle-check" style="color:var(--vbm-blue-dark);"></i></div>
-      <div class="modal-title" data-i18n="adm.editStatus">Editar Status</div>
+      <div class="modal-title" id="modalEditStatusTitulo" data-i18n="adm.editStatus">Editar Status</div>
       <button class="modal-close" data-modal-close><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <div class="form-group">
         <label class="form-label" data-i18n="adm.icons">Ícones</label>
         <div class="icon-swatch-row" id="statusEditIconGrid">
-          <button type="button" class="icon-swatch active" data-icon="fa-solid fa-circle-check" onclick="pickCategoryIcon(this,'statusEdit')" title="Aprovado"><i class="fa-solid fa-circle-check"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-circle-xmark" onclick="pickCategoryIcon(this,'statusEdit')" title="Reprovado"><i class="fa-solid fa-circle-xmark"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-clipboard-check" onclick="pickCategoryIcon(this,'statusEdit')" title="Em aprovação"><i class="fa-solid fa-clipboard-check"></i></button>
-          <button type="button" class="icon-swatch" data-icon="fa-solid fa-pen" onclick="pickCategoryIcon(this,'statusEdit')" title="Rascunho"><i class="fa-solid fa-pen"></i></button>
+          <button type="button" class="icon-swatch active" data-icon="fa-solid fa-circle-check" onclick="pickCategoryIcon(this,'statusEdit')" title="Aprovado" aria-label="Aprovado"><i class="fa-solid fa-circle-check"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-circle-xmark" onclick="pickCategoryIcon(this,'statusEdit')" title="Reprovado" aria-label="Reprovado"><i class="fa-solid fa-circle-xmark"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-clipboard-check" onclick="pickCategoryIcon(this,'statusEdit')" title="Em aprovação" aria-label="Em aprovação"><i class="fa-solid fa-clipboard-check"></i></button>
+          <button type="button" class="icon-swatch" data-icon="fa-solid fa-pen" onclick="pickCategoryIcon(this,'statusEdit')" title="Rascunho" aria-label="Rascunho"><i class="fa-solid fa-pen"></i></button>
         </div>
         <input type="hidden" id="statusEditIconInput" value="fa-solid fa-circle-check"/>
       </div>
@@ -1636,7 +1630,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
     if(!list) return;
     var item = document.createElement('div');
     item.className = 'admin-item';
-    item.innerHTML = '<div class="admin-item-icon green"><i class="fa-solid fa-tag"></i></div><div class="admin-item-body"><div class="admin-item-name">'+name+'</div><div class="admin-item-sub">Recém adicionado</div></div><div class="admin-item-actions"><button class="btn-icon btn-icon-blue btn-icon-sm"><i class="fa-solid fa-pen"></i></button><button class="btn-icon btn-icon-red btn-icon-sm" title="Desativar" data-i18n-title="common.desativar" onclick="toggleAdminItemStatus(this,\''+name+'\')"><i class="fa-solid fa-ban"></i></button></div>';
+    item.innerHTML = '<div class="admin-item-icon green"><i class="fa-solid fa-tag"></i></div><div class="admin-item-body"><div class="admin-item-name">'+name+'</div><div class="admin-item-sub">Recém adicionado</div></div><div class="admin-item-actions"><button class="btn-icon btn-icon-blue btn-icon-sm"><i class="fa-solid fa-pen"></i></button><button class="btn-icon btn-icon-red btn-icon-sm" title="Desativar" data-i18n-title="common.desativar" onclick="toggleAdminItemStatus(this,\''+name+'\')" aria-label="Desativar"><i class="fa-solid fa-ban"></i></button></div>';
     list.appendChild(item);
     inputs.forEach(function(i){i.value='';});
     showToast('success','Adicionado','Item cadastrado com sucesso!');
@@ -1773,6 +1767,12 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 (function () {
   var I18N = {
     'pt-BR': {
+      'a11y.abrirMenu': 'Abrir menu',
+      'a11y.expandir': 'Expandir',
+      'a11y.avancar': 'Avançar',
+      'a11y.voltar': 'Voltar',
+      'a11y.adicionar': 'Adicionar',
+      'common.fechar': 'Fechar',
       'settings.btnTitle': 'Configurações',
       'settings.title': 'Configurações',
       'settings.close': 'Fechar',
@@ -1917,6 +1917,12 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       'adm.editUser': 'Editar Usuário'
     },
     'en': {
+      'a11y.abrirMenu': 'Open menu',
+      'a11y.expandir': 'Expand',
+      'a11y.avancar': 'Next',
+      'a11y.voltar': 'Back',
+      'a11y.adicionar': 'Add',
+      'common.fechar': 'Close',
       'settings.btnTitle': 'Settings',
       'settings.title': 'Settings',
       'settings.close': 'Close',

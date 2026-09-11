@@ -1,0 +1,25 @@
+/* Font Awesome 6 Free (Solid) — SUBCONJUNTO do projeto.
+   O pacote completo do vendor tinha 2.482 ícones em 96 KB de CSS mais
+   153,5 KB de fonte, e a medição mostrou 1-2% dele em uso. Aqui ficam
+   só os 69 ícones que as telas realmente referenciam, com a fonte
+   reduzida para 7.5 KB pelo mesmo conjunto de codepoints.
+
+   COMO REGERAR depois de usar um ícone novo: rode o passo descrito em
+   database/README-subset-fontawesome.md — ele varre as telas, remonta
+   esta folha e a fonte a partir do pacote completo. Enquanto o pacote
+   completo continuar no repositório (fora do deploy), nada se perde.
+
+   Licença: Font Awesome Free 6, CC BY 4.0 / SIL OFL 1.1 / MIT —
+   https://fontawesome.com/license/free */
+@font-face{font-family:"Font Awesome 6 Free";font-style:normal;font-weight:900;font-display:block;src:url(../assets/fonts/3a5099f227f69ae1_fa-solid-900-subset.woff2) format("woff2")}
+.fa,.fas,.fa-solid{font-family:"Font Awesome 6 Free";font-weight:900}
+.fa,.fas,.fa-solid,.fa-brands,.fa-regular,.fab,.far{-moz-osx-font-smoothing:grayscale;-webkit-font-smoothing:antialiased;display:var(--fa-display,inline-block);font-style:normal;font-variant:normal;line-height:1;text-rendering:auto}
+.fa-fw{text-align:center;width:1.25em}
+.fa-spin{animation-name:fa-spin;animation-duration:var(--fa-animation-duration,2s);animation-iteration-count:var(--fa-animation-iteration-count,infinite);animation-timing-function:var(--fa-animation-timing,linear)}
+.fa-pulse,.fa-spin-pulse{animation-name:fa-spin;animation-direction:var(--fa-animation-direction,normal);animation-duration:var(--fa-animation-duration,1s);animation-iteration-count:var(--fa-animation-iteration-count,infinite);animation-timing-function:var(--fa-animation-timing,steps(8))}
+@media (prefers-reduced-motion:reduce){.fa-spin,.fa-pulse,.fa-spin-pulse{animation-delay:-1ms;animation-duration:1ms;animation-iteration-count:1}}
+@keyframes fa-spin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
+.fa-lg{font-size:1.25em;line-height:.05em;vertical-align:-.075em}
+.fa-sm{font-size:.875em;line-height:.07em;vertical-align:.05em}
+.fa-xs{font-size:.75em;line-height:.08em;vertical-align:.125em}
+.fa-arrow-left::before{content:"\f060"}.fa-arrow-right::before{content:"\f061"}.fa-ban::before{content:"\f05e"}.fa-bars::before{content:"\f0c9"}.fa-bolt::before{content:"\f0e7"}.fa-book::before{content:"\f02d"}.fa-broom::before{content:"\f51a"}.fa-building::before{content:"\f1ad"}.fa-bullseye::before{content:"\f140"}.fa-calendar::before{content:"\f133"}.fa-calendar-day::before{content:"\f783"}.fa-camera::before{content:"\f030"}.fa-chart-bar::before{content:"\f080"}.fa-chart-line::before{content:"\f201"}.fa-check::before{content:"\f00c"}.fa-chevron-down::before{content:"\f078"}.fa-chevron-right::before{content:"\f054"}.fa-circle-check::before{content:"\f058"}.fa-circle-info::before{content:"\f05a"}.fa-circle-xmark::before{content:"\f057"}.fa-clipboard-check::before{content:"\f46c"}.fa-clipboard-list::before{content:"\f46d"}.fa-clock::before{content:"\f017"}.fa-clock-rotate-left::before{content:"\f1da"}.fa-dollar-sign::before{content:"\24"}.fa-eye::before{content:"\f06e"}.fa-filter-circle-xmark::before{content:"\e17b"}.fa-flag::before{content:"\f024"}.fa-globe::before{content:"\f0ac"}.fa-hand-holding-hand::before{content:"\e4f7"}.fa-helmet-safety::before{content:"\f807"}.fa-house::before{content:"\f015"}.fa-industry::before{content:"\f275"}.fa-language::before{content:"\f1ab"}.fa-layer-group::before{content:"\f5fd"}.fa-leaf::before{content:"\f06c"}.fa-lightbulb::before{content:"\f0eb"}.fa-link::before{content:"\f0c1"}.fa-list::before{content:"\f03a"}.fa-magnifying-glass::before{content:"\f002"}.fa-map-location-dot::before{content:"\f5a0"}.fa-paper-plane::before{content:"\f1d8"}.fa-pen::before{content:"\f304"}.fa-plus::before{content:"\2b"}.fa-plus-circle::before{content:"\f055"}.fa-print::before{content:"\f02f"}.fa-recycle::before{content:"\f1b8"}.fa-rotate-left::before{content:"\f2ea"}.fa-rotate-right::before{content:"\f2f9"}.fa-screwdriver-wrench::before{content:"\f7d9"}.fa-shield-halved::before{content:"\f3ed"}.fa-spinner::before{content:"\f110"}.fa-square-check::before{content:"\f14a"}.fa-tag::before{content:"\f02b"}.fa-tags::before{content:"\f02c"}.fa-th-large::before{content:"\f009"}.fa-triangle-exclamation::before{content:"\f071"}.fa-trophy::before{content:"\f091"}.fa-truck::before{content:"\f0d1"}.fa-up-right-and-down-left-from-center::before{content:"\f424"}.fa-user::before{content:"\f007"}.fa-user-check::before{content:"\f4fc"}.fa-user-pen::before{content:"\f4ff"}.fa-user-plus::before{content:"\f234"}.fa-users::before{content:"\f0c0"}.fa-users-gear::before{content:"\f509"}.fa-wand-magic-sparkles::before{content:"\e2ca"}.fa-wrench::before{content:"\f0ad"}.fa-xmark::before{content:"\f00d"}

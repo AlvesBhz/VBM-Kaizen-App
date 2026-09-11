@@ -37,18 +37,12 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>VBM Kaizen — Novo Kaizen</title>
-<link href="css/vendor/e5e202e3c8995079_all.min.css" rel="stylesheet"/>
+<link href="css/fontawesome-subset.css?v=20260911-1" rel="stylesheet"/>
 <link href="css/vbm-app.css?v=20260819-1" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com" rel="preconnect"/>
-<link href="https://fonts.gstatic.com" rel="preconnect" crossorigin/>
-<!-- Poppins carregada SEM bloquear a renderização: como "print" o navegador
-     baixa a folha mas não espera por ela para pintar a tela; o onload a
-     promove para "all" e a fonte entra assim que chega. Antes, esta linha
-     era render-blocking — num ambiente sem saída para a internet a página
-     ficava em branco até o timeout do fonts.googleapis.com. O <noscript>
-     mantém o comportamento original quando não há JS. -->
-<link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet" media="print" onload="this.media='all';this.onload=null;"/>
-<noscript><link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet"/></noscript>
+<!-- Poppins servida pelo próprio app (css/poppins.css + assets/fonts/poppins).
+     Vinha de fonts.googleapis.com: em rede sem saída para a internet o
+     pedido ficava pendente e o evento load da página nunca disparava. -->
+<link href="css/poppins.css?v=20260911-1" rel="stylesheet"/>
 <link href="assets/icons/a1922a98664cc516_favicon-32x32-1.png" rel="icon"/>
 <style>
 .app-layout{display:block;min-height:100vh}.app-main{margin-left:0}
@@ -545,7 +539,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
     <a href="admin.html" class="topnav-link"><i class="fa-solid fa-shield-halved"></i> <span data-i18n="nav.administracao">Administração</span></a>
   </div>
   <div class="topnav-actions">
-    <button class="settings-btn" id="settingsBtn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="settingsPanel" title="Configurações" data-i18n-title="settings.btnTitle">
+    <button class="settings-btn" id="settingsBtn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="settingsPanel" title="Configurações" data-i18n-title="settings.btnTitle" aria-label="Configurações">
       <svg width="17" height="17" viewBox="0 0 20 20" fill="none">
         <path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" stroke="currentColor" stroke-width="1.5" />
         <path d="M16.2 12.3a1.4 1.4 0 0 0 .28 1.54l.05.05a1.7 1.7 0 1 1-2.4 2.4l-.05-.05a1.4 1.4 0 0 0-1.54-.28 1.4 1.4 0 0 0-.85 1.28V17.4a1.7 1.7 0 0 1-3.4 0v-.08a1.4 1.4 0 0 0-.91-1.28 1.4 1.4 0 0 0-1.54.28l-.05.05a1.7 1.7 0 1 1-2.4-2.4l.05-.05a1.4 1.4 0 0 0 .28-1.54 1.4 1.4 0 0 0-1.28-.85H2.6a1.7 1.7 0 0 1 0-3.4h.08a1.4 1.4 0 0 0 1.28-.91 1.4 1.4 0 0 0-.28-1.54l-.05-.05a1.7 1.7 0 1 1 2.4-2.4l.05.05a1.4 1.4 0 0 0 1.54.28h.06a1.4 1.4 0 0 0 .85-1.28V2.6a1.7 1.7 0 0 1 3.4 0v.08a1.4 1.4 0 0 0 .85 1.28h.06a1.4 1.4 0 0 0 1.54-.28l.05-.05a1.7 1.7 0 1 1 2.4 2.4l-.05.05a1.4 1.4 0 0 0-.28 1.54v.06a1.4 1.4 0 0 0 1.28.85h.08a1.7 1.7 0 0 1 0 3.4h-.08a1.4 1.4 0 0 0-1.28.85Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
@@ -617,7 +611,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 
         <div style="position:relative;z-index:1;display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
           <div>
-            <div class="wizard-header-title" data-i18n="wiz.title">Novo Kaizen</div>
+            <div class="wizard-header-title" data-i18n="wiz.title" role="heading" aria-level="1">Novo Kaizen</div>
             <div class="wizard-header-sub" data-i18n="wiz.subtitle">Registre sua iniciativa de melhoria contínua em 4 etapas</div>
           </div>
         </div>
@@ -644,7 +638,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 
           <div class="form-grid form-grid-2">
             <div class="form-group">
-              <label class="form-label" data-i18n="f.projectLeader">Líder do Projeto <span class="req">*</span></label>
+              <label for="liderSearchWrap" class="form-label" data-i18n="f.projectLeader">Líder do Projeto <span class="req">*</span></label>
               <div class="input-with-icon" id="liderSearchWrap" style="position:relative;">
                 <i class="fa-solid fa-magnifying-glass input-icon"></i>
                 <input type="text" class="form-control" id="id_lider_projeto" name="id_lider_projeto" autocomplete="off" placeholder="Digite o nome..." data-i18n-placeholder="f.namePlaceholder" required/>
@@ -656,7 +650,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
             </div>
 
             <div class="form-group">
-              <label class="form-label" data-i18n="f.kaizenTitle">Título do Kaizen <span class="req">*</span></label>
+              <label for="titulo_kaizen" class="form-label" data-i18n="f.kaizenTitle">Título do Kaizen <span class="req">*</span></label>
               <input type="text" class="form-control" id="titulo_kaizen" name="titulo_kaizen" maxlength="100" placeholder="Ex.: Redução do tempo de setup" data-i18n-placeholder="f.kaizenTitlePlaceholder" required/>
               <!-- ID_KAIZEN do registro em edição. Vazio = cadastro novo.
                    É o que diferencia "o Kaizen mantendo o próprio título"
@@ -669,25 +663,25 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
             </div>
 
             <div class="form-group">
-              <label class="form-label" data-i18n="f.category">Categoria <span class="req">*</span></label>
+              <label for="id_categoria" class="form-label" data-i18n="f.category">Categoria <span class="req">*</span></label>
               <select class="form-control" id="id_categoria" name="id_categoria" required>
                 <option value="" data-i18n="f.selectCategory">Selecione a categoria...</option>
               </select>
             </div>
             <div class="form-group">
-              <label class="form-label" data-i18n="f.replicationPotential">Replicação em Potencial <span class="req">*</span></label>
+              <label for="id_replicacao_potencial" class="form-label" data-i18n="f.replicationPotential">Replicação em Potencial <span class="req">*</span></label>
               <select class="form-control" id="id_replicacao_potencial" name="id_replicacao_potencial" required>
                 <option value="" data-i18n="f.select">Selecione...</option>
               </select>
             </div>
 
             <div class="form-group" style="grid-column:1/-1;">
-              <label class="form-label" data-i18n="f.problemDescription">Descrição do Problema <span class="req">*</span></label>
+              <label for="declaracao_problema" class="form-label" data-i18n="f.problemDescription">Descrição do Problema <span class="req">*</span></label>
               <textarea class="form-control" id="declaracao_problema" name="declaracao_problema" rows="3" placeholder="Descreva claramente o problema ou a oportunidade identificada..." data-i18n-placeholder="f.problemPlaceholder" required></textarea>
               <div class="form-helper" data-i18n="f.problemHelper">Seja específico. Um bom problema bem descrito facilita a solução.</div>
             </div>
             <div class="form-group" style="grid-column:1/-1;">
-              <label class="form-label" data-i18n="f.goalObjective">Meta / Objetivo <span class="req">*</span></label>
+              <label for="meta_objetivo" class="form-label" data-i18n="f.goalObjective">Meta / Objetivo <span class="req">*</span></label>
               <textarea class="form-control" id="meta_objetivo" name="meta_objetivo" rows="3" placeholder="Qual o resultado esperado com este Kaizen?" data-i18n-placeholder="f.goalPlaceholder" required></textarea>
             </div>
           </div>
@@ -696,7 +690,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 
           <div class="form-grid form-grid-2">
             <div class="form-group">
-              <label class="form-label" data-i18n="f.approver">Aprovador <span class="req">*</span></label>
+              <label for="id_aprovador" class="form-label" data-i18n="f.approver">Aprovador <span class="req">*</span></label>
               <select class="form-control" id="id_aprovador" name="id_aprovador" required>
                 <option value="" data-i18n="f.selectApprover">Selecione o aprovador...</option>
               </select>
@@ -704,7 +698,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
             </div>
 
             <div class="form-group" style="grid-column:1/2;">
-              <label class="form-label" data-i18n="f.valeTeamMembers">Membros da Equipe Vale <span class="field-tag-optional" data-i18n="f.optionalMax2">opcional · máx. 2</span></label>
+              <label for="teamSearchWrap" class="form-label" data-i18n="f.valeTeamMembers">Membros da Equipe Vale <span class="field-tag-optional" data-i18n="f.optionalMax2">opcional · máx. 2</span></label>
               <div class="input-with-icon team-search-group" id="teamSearchWrap">
                 <i class="fa-solid fa-magnifying-glass input-icon"></i>
                 <input type="text" class="form-control" id="buscaMembroVale" autocomplete="off" placeholder="Buscar colaborador (MDM)... (Enter para adicionar)" data-i18n-placeholder="f.searchCollaborator"/>
@@ -721,7 +715,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
             </div>
 
             <div class="form-group" style="grid-column:2/3;">
-              <label class="form-label" data-i18n="f.externalMembers">Membros Externos (Terceiros) <span class="field-tag-optional" data-i18n="f.optionalMax1">opcional · máx. 1</span></label>
+              <label for="externoSearchWrap" class="form-label" data-i18n="f.externalMembers">Membros Externos (Terceiros) <span class="field-tag-optional" data-i18n="f.optionalMax1">opcional · máx. 1</span></label>
               <div class="input-with-icon team-search-group" id="externoSearchWrap">
                 <i class="fa-solid fa-user-plus input-icon"></i>
                 <input type="text" class="form-control" id="buscaMembroExterno" autocomplete="off" placeholder="Nome do membro externo... (Enter para adicionar)" data-i18n-placeholder="f.externalNamePlaceholder"/>
@@ -750,7 +744,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="wizard-panel-sub" data-i18n="wiz.panel2Sub">Documente como era a situação antes da melhoria — com evidência visual, se possível.</div>
 
           <div class="form-group">
-            <label class="form-label" data-i18n="f.imageBefore">Imagem do Antes <span class="req">*</span></label>
+            <label for="imagem_antes" class="form-label" data-i18n="f.imageBefore">Imagem do Antes <span class="req">*</span></label>
             <div class="photo-upload-zone">
               <input type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" id="imagem_antes" name="imagem_antes"/>
               <i class="fa-solid fa-camera photo-upload-icon"></i>
@@ -764,13 +758,13 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           </div>
 
           <div class="form-group">
-            <label class="form-label" data-i18n="f.descriptionBefore">Descrição do Antes <span class="req">*</span></label>
+            <label for="descricao_antes" class="form-label" data-i18n="f.descriptionBefore">Descrição do Antes <span class="req">*</span></label>
             <textarea class="form-control" id="descricao_antes" name="descricao_antes" rows="4" placeholder="Descreva a situação e os problemas anteriores à melhoria..." data-i18n-placeholder="f.descriptionBeforePlaceholder" required></textarea>
             <div class="form-helper" data-i18n="f.descriptionBeforeHelper">Inclua dados quantitativos, se disponíveis — facilita medir o ganho depois.</div>
           </div>
 
           <div class="form-group">
-            <label class="form-label" data-i18n="f.wasteReduction">Redução de Desperdícios <span class="req">*</span></label> <span class="field-tag-multi"><i class="fa-solid fa-square-check"></i> <span data-i18n="f.multiSelect">seleção múltipla</span></span>
+            <label for="imagem_depois" class="form-label" data-i18n="f.wasteReduction">Redução de Desperdícios <span class="req">*</span></label> <span class="field-tag-multi"><i class="fa-solid fa-square-check"></i> <span data-i18n="f.multiSelect">seleção múltipla</span></span>
             <div class="waste-tags-grid" id="wasteTagsGrid"><!-- populado via /api/desperdicios --></div>
           </div>
 
@@ -804,12 +798,12 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           </div>
 
           <div class="form-group">
-            <label class="form-label" data-i18n="f.descriptionAfter">Descrição do Depois <span class="req">*</span></label>
+            <label for="descricao_depois" class="form-label" data-i18n="f.descriptionAfter">Descrição do Depois <span class="req">*</span></label>
             <textarea class="form-control" id="descricao_depois" name="descricao_depois" rows="4" placeholder="Descreva a solução, melhorias, padronização e impactos positivos..." data-i18n-placeholder="f.descriptionAfterPlaceholder" required></textarea>
           </div>
 
           <div class="form-group">
-            <label class="form-label" data-i18n="f.extraLinks">Links / Documentos Extras</label> <span class="field-tag-optional" data-i18n="f.optional">opcional</span>
+            <label for="id_resultado_financeiro" class="form-label" data-i18n="f.extraLinks">Links / Documentos Extras</label> <span class="field-tag-optional" data-i18n="f.optional">opcional</span>
             <div class="input-with-icon">
               <i class="fa-solid fa-link input-icon"></i>
               <input type="url" class="form-control" id="links_documentos" name="links_documentos" placeholder="https://... (SharePoint, evidências, anexos)" data-i18n-placeholder="f.extraLinksPlaceholder"/>
@@ -863,13 +857,13 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
                       </select>
                     </div>
                     <div class="form-group" style="margin-bottom:0;">
-                      <label class="form-label" data-i18n="f.resultCurrency">Moeda</label>
+                      <label for="moeda_resultado_financeiro" class="form-label" data-i18n="f.resultCurrency">Moeda</label>
                       <select class="form-control" id="moeda_resultado_financeiro" name="moeda_resultado_financeiro" disabled>
                         <option value="" data-i18n="f.select">Selecione...</option>
                       </select>
                     </div>
                     <div class="form-group" style="margin-bottom:0;">
-                      <label class="form-label" data-i18n="f.resultValue">Valor Alcançado/Esperado</label>
+                      <label for="valor_resultado_financeiro" class="form-label" data-i18n="f.resultValue">Valor Alcançado/Esperado</label>
                       <input type="number" step="0.01" min="0" class="form-control" id="valor_resultado_financeiro" name="valor_resultado_financeiro" placeholder="0,00" disabled/>
                     </div>
                   </div>
@@ -885,13 +879,13 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
                 <div class="form-group conditional-sub">
                   <div class="form-grid form-grid-2">
                     <div class="form-group" style="margin-bottom:0;">
-                      <label class="form-label" id="lblTipoResultadoOutros" data-i18n="f.otherResultType">Tipo de Resultado <span class="field-tag-conditional" data-i18n="f.conditional">Condicional</span></label>
+                      <label for="id_resultado_outros" class="form-label" id="lblTipoResultadoOutros" data-i18n="f.otherResultType">Tipo de Resultado <span class="field-tag-conditional" data-i18n="f.conditional">Condicional</span></label>
                       <select class="form-control" id="id_resultado_outros" name="id_resultado_outros" disabled>
                         <option value="" data-i18n="f.select">Selecione...</option>
                       </select>
                     </div>
                     <div class="form-group" style="margin-bottom:0;">
-                      <label class="form-label" data-i18n="f.otherResultDescription">Descrição dos Resultados Alcançados</label>
+                      <label for="descricao_resultado_outros" class="form-label" data-i18n="f.otherResultDescription">Descrição dos Resultados Alcançados</label>
                       <textarea class="form-control" id="descricao_resultado_outros" name="descricao_resultado_outros" rows="1" placeholder="Descreva os resultados alcançados..." data-i18n-placeholder="f.otherResultDescriptionPlaceholder" disabled></textarea>
                     </div>
                   </div>
@@ -1106,6 +1100,12 @@ function rotuloPessoa(p) {
 (function () {
   var I18N = {
     'pt-BR': {
+      'a11y.abrirMenu': 'Abrir menu',
+      'a11y.expandir': 'Expandir',
+      'a11y.avancar': 'Avançar',
+      'a11y.voltar': 'Voltar',
+      'a11y.adicionar': 'Adicionar',
+      'common.fechar': 'Fechar',
       'settings.btnTitle': 'Configurações',
       'settings.title': 'Configurações',
       'settings.close': 'Fechar',
@@ -1247,6 +1247,7 @@ function rotuloPessoa(p) {
       'wiz.stepOf4': 'Etapa 4 de 4',
       'wiz.submitForApproval': 'Enviar para Aprovação',
       'edit.pageTitle': 'Alterando Kaizen',
+      'edit.pageSubtitle': 'Revise as informações e reenvie o Kaizen para aprovação',
       'edit.submit': 'Salvar revisão',
       'edit.savedTitle': 'Kaizen atualizado!',
       'edit.savedMsg': 'Kaizen #{id} revisado e reenviado para aprovação.',
@@ -1256,6 +1257,12 @@ function rotuloPessoa(p) {
       'wiz.confirmSubmit': 'Confirmo que as informações são precisas e que estou ciente que este Kaizen será enviado para aprovação pelo aprovador responsável da minha unidade.'
     },
     'en': {
+      'a11y.abrirMenu': 'Open menu',
+      'a11y.expandir': 'Expand',
+      'a11y.avancar': 'Next',
+      'a11y.voltar': 'Back',
+      'a11y.adicionar': 'Add',
+      'common.fechar': 'Close',
       'settings.btnTitle': 'Settings',
       'settings.title': 'Settings',
       'settings.close': 'Close',
@@ -1397,6 +1404,7 @@ function rotuloPessoa(p) {
       'wiz.stepOf4': 'Step 4 of 4',
       'wiz.submitForApproval': 'Submit for Approval',
       'edit.pageTitle': 'Editing Kaizen',
+      'edit.pageSubtitle': 'Review the information and resubmit the Kaizen for approval',
       'edit.submit': 'Save revision',
       'edit.savedTitle': 'Kaizen updated!',
       'edit.savedMsg': 'Kaizen #{id} revised and resubmitted for approval.',
@@ -3027,12 +3035,24 @@ function txtEdicao(chave, padrao) {
     el.textContent = txtEdicao(chave, padrao);
   }
 
+  function atualizarTituloDaAba() {
+    document.title = 'VBM Kaizen — ' + txtEdicao('edit.pageTitle', 'Alterando Kaizen');
+  }
+
   function marcarTelaComoEdicao() {
     // O título é o .wizard-header-title do cabeçalho do formulário — o
     // seletor anterior procurava .page-title, que não existe nesta
     // página, então o rótulo nunca mudava ao editar.
     trocarChave(document.querySelector('.wizard-header-title'), 'edit.pageTitle', 'Alterando Kaizen');
+    // O subtítulo dizia "Registre sua iniciativa" embaixo de "Alterando
+    // Kaizen" — duas instruções contrárias no mesmo cabeçalho.
+    trocarChave(document.querySelector('.wizard-header-sub'), 'edit.pageSubtitle',
+      'Revise as informações e reenvie o Kaizen para aprovação');
     trocarChave(document.querySelector('[data-wizard-submit] span'), 'edit.submit', 'Salvar revisão');
+    // A aba do navegador também: com várias abas abertas, "Novo Kaizen"
+    // em todas elas não diz qual é qual.
+    atualizarTituloDaAba();
+    window.addEventListener('vbm:idioma', atualizarTituloDaAba);
   }
 
   /** Mostra a imagem JÁ GRAVADA usando a mesma pré-visualização do
