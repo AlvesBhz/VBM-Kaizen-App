@@ -145,10 +145,12 @@ const FULL_ADMIN_TABLE = `[${DB_SCHEMA}].[${DB_ADMIN_TABLE}]`;
 // Tela "Novo Kaizen" (kaizen-novo.html) — ver
 // Usuário - Novo Kaizen - Aprovação.txt
 // ------------------------------------------------------------------
-// Tabela principal: 1 linha por Kaizen enviado. NM_KAIZEN é VARCHAR(30)
-// no DER (mesmo limite curto das outras tabelas de cadastro) — o
-// helper da Etapa 1 dizia "até 100 caracteres"; ajustado no HTML para
-// bater com o banco de verdade (ver kaizen-novo.html).
+// Tabela principal: 1 linha por Kaizen enviado. NM_KAIZEN passou de
+// VARCHAR(30) para VARCHAR(100) — o DER antigo repetia o limite curto
+// das tabelas de cadastro e 30 caracteres não davam para um título
+// compreensível. A coluna precisa ser alargada no banco pelo script
+// database/alterar_nm_kaizen_100.sql; até lá o servidor continua
+// aceitando só o tamanho REAL da coluna (ver limiteNmKaizen abaixo).
 const DB_PVC_TABLE = safeIdentifier(process.env.AZURE_SQL_PVC_TABLE, "kzn_pedravisaoconsolidada");
 const FULL_PVC_TABLE = `[${DB_SCHEMA}].[${DB_PVC_TABLE}]`;
 
@@ -2222,13 +2224,13 @@ const ERRO_STATUS_NAO_CONFIGURADO =
   "e Solicitado alterações existem e estão ativos.";
 
 // Limites de texto — vêm do DER (database/DER_VBM_Kaizen.html /
-// e_PVC). NM_KAIZEN é VARCHAR(30): o mesmo limite curto das tabelas de
-// cadastro, não os 100 caracteres que o helper da tela antiga sugeria.
+// e_PVC). NM_KAIZEN foi de 30 para 100: o limite curto vinha das tabelas
+// de cadastro e apertava demais o título. Alargar não invalida nada do
+// que já está gravado — o que cabia em 30 cabe em 100.
 const PVC_LIMITES = {
-  NM_KAIZEN: 30,
+  NM_KAIZEN: 100,
   // Os campos de texto livre e de URL foram para VARCHAR(300) no DER
-  // atual. Só NM_KAIZEN continua em 30. Alargar não invalida nada do que
-  // já está gravado: o que cabia em 100 cabe em 300.
+  // atual.
   DS_PROBLEMA: 300,
   DS_OBJETIVO: 300,
   DS_ESTADO_ANTES: 300,
@@ -2241,31 +2243,40 @@ const PVC_LIMITES = {
   DS_MOTIVO: 300,
 };
 
-/** Tamanho REAL de DS_MOTIVO, lido do banco em vez de confiado ao DER.
+/** Tamanho REAL de uma coluna de texto da PVC, lido do banco em vez de
+ *  confiado ao DER.
  *
- *  O DER diz VARCHAR(300); se a coluna em produção for menor, validar
- *  por 300 deixa passar um texto que o UPDATE recusa depois — o
- *  aprovador escreve, clica e leva um erro de truncamento no lugar da
- *  decisão. Lido uma vez e guardado: é metadado, não muda em runtime.
- *  Só consulta INFORMATION_SCHEMA — não altera estrutura nenhuma. */
-let limiteMotivoCache = null;
-async function limiteDsMotivo() {
-  if (limiteMotivoCache != null) return limiteMotivoCache;
+ *  O DER diz um número; se a coluna em produção for menor, validar pelo
+ *  DER deixa passar um texto que o INSERT/UPDATE recusa depois — a
+ *  pessoa escreve, clica e leva um erro de truncamento no lugar do
+ *  resultado. Lido uma vez por coluna e guardado: é metadado, não muda
+ *  em runtime. Só consulta INFORMATION_SCHEMA — não altera estrutura.
+ *
+ *  Era exclusivo do DS_MOTIVO; virou genérico porque NM_KAIZEN passou a
+ *  precisar da mesma proteção enquanto o ALTER TABLE de 30 para 100
+ *  (database/alterar_nm_kaizen_100.sql) não for aplicado. */
+const limiteColunaCache = new Map();
+async function limiteDaColuna(coluna, padraoDER) {
+  if (limiteColunaCache.has(coluna)) return limiteColunaCache.get(coluna);
+  let limite = padraoDER;
   try {
     const r = await runQuery(
       `SELECT CHARACTER_MAXIMUM_LENGTH AS TAM FROM INFORMATION_SCHEMA.COLUMNS
-        WHERE TABLE_SCHEMA = @schema AND TABLE_NAME = @tabela AND COLUMN_NAME = 'DS_MOTIVO'`,
-      [["schema", sql.NVarChar(128), DB_SCHEMA], ["tabela", sql.NVarChar(128), DB_PVC_TABLE]]
+        WHERE TABLE_SCHEMA = @schema AND TABLE_NAME = @tabela AND COLUMN_NAME = @coluna`,
+      [["schema", sql.NVarChar(128), DB_SCHEMA], ["tabela", sql.NVarChar(128), DB_PVC_TABLE],
+       ["coluna", sql.NVarChar(128), coluna]]
     );
     const tam = r.recordset.length ? r.recordset[0].TAM : null;
     // -1 = VARCHAR(MAX): sem limite prático, vale o do DER.
-    limiteMotivoCache = tam > 0 ? tam : PVC_LIMITES.DS_MOTIVO;
+    if (tam > 0) limite = tam;
   } catch (err) {
-    console.error("[motivo] não foi possível ler o tamanho de DS_MOTIVO:", err.message);
-    limiteMotivoCache = PVC_LIMITES.DS_MOTIVO;
+    console.error(`[limite] não foi possível ler o tamanho de ${coluna}:`, err.message);
   }
-  return limiteMotivoCache;
+  limiteColunaCache.set(coluna, limite);
+  return limite;
 }
+const limiteDsMotivo = () => limiteDaColuna("DS_MOTIVO", PVC_LIMITES.DS_MOTIVO);
+const limiteNmKaizen = () => limiteDaColuna("NM_KAIZEN", PVC_LIMITES.NM_KAIZEN);
 
 /** ID_STATUS do "Revisado", conferido no banco antes de ser usado.
  *
@@ -2428,6 +2439,14 @@ apiRouter.post("/kaizens", async (req, res) => {
   const { titulo, declaracaoProblema, metaObjetivo, descricaoAntes, descricaoDepois, idCategoria, idReplicacao, idUsuarioAprovador, idUsuarioLider, idsDesperdicio, urlImgAntes, urlImgDepois, urlReferencia, licoesAprendidas, comparacaoMeta, geraResultadoFinanceiro, idMoeda, valorResultadoFinanceiro, geraResultadoOutros, idTipoResultadoOutros, descricaoResultadoOutros, membros } = dados;
 
   try {
+    // Título contra o tamanho REAL da coluna: enquanto o ALTER de 30
+    // para 100 não rodar, um título longo daria erro de truncamento do
+    // SQL Server na cara do usuário. Aqui vira recusa explicada.
+    const maxTitulo = await limiteNmKaizen();
+    if (titulo.length > maxTitulo) {
+      return res.status(400).json({ error: `Título do Kaizen deve ter no máximo ${maxTitulo} caracteres.` });
+    }
+
     // Quem está criando, sempre pelo servidor (X-Forwarded-Email) —
     // nunca aceito do corpo da requisição (ver idUsuarioLogado acima).
     // Duplicidade pelo NOME — só no cadastro novo. Na edição o próprio
@@ -2466,7 +2485,7 @@ apiRouter.post("/kaizens", async (req, res) => {
       reqInsert.input("idKaizen", sql.Int, idKaizen);
       reqInsert.input("idUsuarioCadastro", sql.Int, idUsuarioCadastro ?? null);
       reqInsert.input("idUsuarioLider", sql.Int, idLider);
-      reqInsert.input("nmKaizen", sql.NVarChar(PVC_LIMITES.NM_KAIZEN), titulo);
+      reqInsert.input("nmKaizen", sql.NVarChar(maxTitulo), titulo);
       reqInsert.input("idCategoria", sql.Int, idCategoria);
       reqInsert.input("idReplicacao", sql.Int, idReplicacao);
       reqInsert.input("dsProblema", sql.NVarChar(PVC_LIMITES.DS_PROBLEMA), declaracaoProblema);
@@ -3394,6 +3413,13 @@ apiRouter.put("/kaizens/:id", async (req, res) => {
     const idUsuario = autoriz.idUsuario;
     if (!idUsuario) return res.status(401).json({ error: "Não foi possível identificar o usuário logado." });
 
+    // Mesma conferência do cadastro: o título é medido contra o tamanho
+    // REAL da coluna, não contra o número do DER (ver limiteNmKaizen).
+    const maxTitulo = await limiteNmKaizen();
+    if (dados.titulo.length > maxTitulo) {
+      return res.status(400).json({ error: `Título do Kaizen deve ter no máximo ${maxTitulo} caracteres.` });
+    }
+
     // O nome NÃO pode barrar a atualização do próprio registro: a busca
     // ignora o ID que está sendo editado.
     if (await existeKaizenComMesmoNome(dados.titulo, idKaizen)) {
@@ -3416,7 +3442,7 @@ apiRouter.put("/kaizens/:id", async (req, res) => {
       r.input("idKaizen", sql.Int, idKaizen);
       r.input("idStatus", sql.Int, revisado.id);
       r.input("idUsuario", sql.Int, idUsuario);
-      r.input("nmKaizen", sql.NVarChar(PVC_LIMITES.NM_KAIZEN), dados.titulo);
+      r.input("nmKaizen", sql.NVarChar(maxTitulo), dados.titulo);
       r.input("idCategoria", sql.Int, dados.idCategoria);
       r.input("idReplicacao", sql.Int, dados.idReplicacao);
       r.input("idAprovador", sql.Int, idAprovador);

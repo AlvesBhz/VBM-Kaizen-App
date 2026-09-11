@@ -633,7 +633,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 
             <div class="form-group">
               <label class="form-label" data-i18n="f.kaizenTitle">Título do Kaizen <span class="req">*</span></label>
-              <input type="text" class="form-control" id="titulo_kaizen" name="titulo_kaizen" maxlength="30" placeholder="Ex.: Redução do tempo de setup" data-i18n-placeholder="f.kaizenTitlePlaceholder" required/>
+              <input type="text" class="form-control" id="titulo_kaizen" name="titulo_kaizen" maxlength="100" placeholder="Ex.: Redução do tempo de setup" data-i18n-placeholder="f.kaizenTitlePlaceholder" required/>
               <!-- ID_KAIZEN do registro em edição. Vazio = cadastro novo.
                    É o que diferencia "o Kaizen mantendo o próprio título"
                    de "outro Kaizen com o mesmo título": as duas checagens
@@ -641,7 +641,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
                    este valor para o servidor excluir o próprio registro
                    da busca. Preenchido só pela carga da edição. -->
               <input type="hidden" id="id_kaizen" name="id_kaizen" value=""/>
-              <div class="form-helper" data-i18n="f.kaizenTitleHelper">Seja claro e objetivo. Máximo de 30 caracteres.</div>
+              <div class="form-helper" data-i18n="f.kaizenTitleHelper">Seja claro e objetivo. Máximo de 100 caracteres.</div>
             </div>
 
             <div class="form-group">
@@ -1865,7 +1865,7 @@ createTeamPicker({
 // em server.js): isto é conforto de digitação, não a barreira.
 (function () {
   var LIMITES = {
-    titulo_kaizen: 30,              // NM_KAIZEN
+    titulo_kaizen: 100,             // NM_KAIZEN
     declaracao_problema: 300,       // DS_PROBLEMA
     meta_objetivo: 300,             // DS_OBJETIVO
     descricao_antes: 300,           // DS_ESTADO_ANTES
