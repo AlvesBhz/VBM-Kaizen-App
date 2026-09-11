@@ -1637,28 +1637,44 @@ textarea.lang-slot-input.form-control { min-height: 1.4rem; resize: vertical; }
 }
 .kd-photo-desc { font-size: 0.78rem; color: var(--vbm-text); line-height: 1.5; }
 
-/* Kaizen ampliado — mesmo componente .modal/.modal-body dos demais modais;
-   só as medidas mudam, e escopadas neste id para não afetar .modal-xl, que
-   também é usado pela biblioteca. A rolagem continua no .modal-body. */
-#modalKaizenAmpliado .modal { width: 94vw; max-width: 1700px; max-height: 92vh; }
-#modalKaizenAmpliado .modal-body { padding: 1.5rem 2rem 2rem; }
-#modalKaizenAmpliado .kd-section-title { font-size: 0.88rem; }
-#modalKaizenAmpliado .kd-section-body { padding: 1.25rem 1.4rem; }
-#modalKaizenAmpliado .kd-before-after { gap: 1.5rem; }
-#modalKaizenAmpliado .kd-photo-label { font-size: 0.66rem; }
-#modalKaizenAmpliado .kd-photo-desc { font-size: 0.86rem; }
+/* Kaizen lido por inteiro — mesmo componente .modal/.modal-body dos demais
+   modais; só as medidas mudam, escopadas por id para não afetar o
+   .modal-xl usado em outros lugares. A rolagem continua no .modal-body.
+   Vale para os DOIS lugares onde o Kaizen é aberto inteiro: o ampliado da
+   Aprovação e o "Visualizar" da Biblioteca. O bloco é UM só de propósito —
+   duas cópias das mesmas medidas é o caminho curto para as duas telas
+   começarem iguais e terminarem diferentes. */
+#modalKaizenAmpliado .modal,
+#modalBibDetail .modal { width: 94vw; max-width: 1700px; max-height: 92vh; }
+#modalKaizenAmpliado .modal-body,
+#modalBibDetail .modal-body { padding: 1.5rem 2rem 2rem; }
+#modalKaizenAmpliado .kd-section-title,
+#modalBibDetail .kd-section-title { font-size: 0.88rem; }
+#modalKaizenAmpliado .kd-section-body,
+#modalBibDetail .kd-section-body { padding: 1.25rem 1.4rem; }
+#modalKaizenAmpliado .kd-before-after,
+#modalBibDetail .kd-before-after { gap: 1.5rem; }
+#modalKaizenAmpliado .kd-photo-label,
+#modalBibDetail .kd-photo-label { font-size: 0.66rem; }
+#modalKaizenAmpliado .kd-photo-desc,
+#modalBibDetail .kd-photo-desc { font-size: 0.86rem; }
 /* Foto grande sem corte: contain sobre fundo neutro preserva a proporção
    original em vez de cortar a imagem como o cover do painel. */
-#modalKaizenAmpliado .kd-photo-box img {
+#modalKaizenAmpliado .kd-photo-box img,
+#modalBibDetail .kd-photo-box img {
   height: clamp(240px, 38vh, 460px);
   object-fit: contain;
   background: #f4f6f8;
 }
 @media (max-width: 900px) {
-  #modalKaizenAmpliado .modal { width: 100%; max-height: 92vh; }
-  #modalKaizenAmpliado .modal-body { padding: 1.15rem; }
-  #modalKaizenAmpliado .kd-section-body { padding: 1rem 1.1rem; }
-  #modalKaizenAmpliado .kd-photo-box img { height: clamp(180px, 30vh, 300px); }
+  #modalKaizenAmpliado .modal,
+  #modalBibDetail .modal { width: 100%; max-height: 92vh; }
+  #modalKaizenAmpliado .modal-body,
+  #modalBibDetail .modal-body { padding: 1.15rem; }
+  #modalKaizenAmpliado .kd-section-body,
+  #modalBibDetail .kd-section-body { padding: 1rem 1.1rem; }
+  #modalKaizenAmpliado .kd-photo-box img,
+  #modalBibDetail .kd-photo-box img { height: clamp(180px, 30vh, 300px); }
 }
 
 /* ═══════════════════════════════════════════════════

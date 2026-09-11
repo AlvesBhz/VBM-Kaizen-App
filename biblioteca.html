@@ -700,11 +700,15 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         <div class="kd-section-body">
           <div class="kd-before-after">
             <div class="kd-photo-box">
-              <img id="bibModalImgAntes" src="" alt="Antes" style="height:160px;" loading="lazy" decoding="async"/>
+              <!-- Sem height inline: a altura vem do CSS (#modalBibDetail
+                   .kd-photo-box img), o mesmo que a Aprovação usa. Um
+                   style="" aqui venceria a regra e a foto continuaria
+                   pequena no modal ampliado. -->
+              <img id="bibModalImgAntes" src="" alt="Antes" loading="lazy" decoding="async"/>
               <div class="kd-photo-box-body"><div class="kd-photo-label" data-i18n="kd.before">Antes</div><div class="kd-photo-desc" id="bibModalDescAntes">—</div></div>
             </div>
             <div class="kd-photo-box">
-              <img id="bibModalImgDepois" src="" alt="Depois" style="height:160px;" loading="lazy" decoding="async"/>
+              <img id="bibModalImgDepois" src="" alt="Depois" loading="lazy" decoding="async"/>
               <div class="kd-photo-box-body"><div class="kd-photo-label" data-i18n="kd.after">Depois</div><div class="kd-photo-desc" id="bibModalDescDepois">—</div></div>
             </div>
           </div>
