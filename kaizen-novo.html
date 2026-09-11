@@ -1246,7 +1246,7 @@ function rotuloPessoa(p) {
       'wiz.stepOf3': 'Etapa 3 de 4',
       'wiz.stepOf4': 'Etapa 4 de 4',
       'wiz.submitForApproval': 'Enviar para Aprovação',
-      'edit.pageTitle': 'Editar Kaizen',
+      'edit.pageTitle': 'Alterando Kaizen',
       'edit.submit': 'Salvar revisão',
       'edit.savedTitle': 'Kaizen atualizado!',
       'edit.savedMsg': 'Kaizen #{id} revisado e reenviado para aprovação.',
@@ -1396,7 +1396,7 @@ function rotuloPessoa(p) {
       'wiz.stepOf3': 'Step 3 of 4',
       'wiz.stepOf4': 'Step 4 of 4',
       'wiz.submitForApproval': 'Submit for Approval',
-      'edit.pageTitle': 'Edit Kaizen',
+      'edit.pageTitle': 'Editing Kaizen',
       'edit.submit': 'Save revision',
       'edit.savedTitle': 'Kaizen updated!',
       'edit.savedMsg': 'Kaizen #{id} revised and resubmitted for approval.',
@@ -3003,7 +3003,7 @@ function txtEdicao(chave, padrao) {
       // ser recalculados, porque atribuir .value não dispara 'input'.
       if (window.VBMContadores) window.VBMContadores.atualizar();
 
-      marcarTelaComoEdicao(k);
+      marcarTelaComoEdicao();
     })
     .catch(function (err) {
       // Sem permissão, Kaizen inexistente ou falha de rede: a página
@@ -3013,18 +3013,26 @@ function txtEdicao(chave, padrao) {
     });
 
   /** Deixa claro que se está editando, sem trocar o layout: só o rótulo
-   *  do cabeçalho e o do botão de envio. */
-  function marcarTelaComoEdicao(k) {
-    var titulo = document.querySelector('[data-i18n="page.newKaizenTitle"], .page-title');
-    if (titulo) {
-      titulo.textContent = txtEdicao('edit.pageTitle', 'Editar Kaizen') + ' · ' + (k.ROTULO || '');
-      titulo.removeAttribute('data-i18n');
-    }
-    var envio = document.querySelector('[data-wizard-submit] span');
-    if (envio) {
-      envio.textContent = txtEdicao('edit.submit', 'Salvar revisão');
-      envio.removeAttribute('data-i18n');
-    }
+   *  do cabeçalho e o do botão de envio.
+   *
+   *  TROCA A CHAVE em vez de escrever o texto e tirar o data-i18n: quem
+   *  traduz a tela é o translatePanel, que lê data-i18n e reescreve o
+   *  textContent. Sem a chave, o rótulo ficava congelado no idioma em
+   *  que a página abriu e voltava a "Novo Kaizen" na primeira troca de
+   *  idioma. Com a chave nova, a troca de idioma continua funcionando e
+   *  traz "Alterando Kaizen" / "Editing Kaizen". */
+  function trocarChave(el, chave, padrao) {
+    if (!el) return;
+    el.dataset.i18n = chave;
+    el.textContent = txtEdicao(chave, padrao);
+  }
+
+  function marcarTelaComoEdicao() {
+    // O título é o .wizard-header-title do cabeçalho do formulário — o
+    // seletor anterior procurava .page-title, que não existe nesta
+    // página, então o rótulo nunca mudava ao editar.
+    trocarChave(document.querySelector('.wizard-header-title'), 'edit.pageTitle', 'Alterando Kaizen');
+    trocarChave(document.querySelector('[data-wizard-submit] span'), 'edit.submit', 'Salvar revisão');
   }
 
   /** Mostra a imagem JÁ GRAVADA usando a mesma pré-visualização do
