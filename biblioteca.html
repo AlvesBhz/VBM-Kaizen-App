@@ -185,6 +185,24 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 [data-bg="dark"] .filter-view-btn i{color:#fff !important}
 [data-bg="dark"] .filter-view-btn.active,[data-bg="dark"] .filter-view-btn:hover{background:var(--vbm-blue) !important;border-color:var(--vbm-blue) !important;color:#fff !important}
 
+/* Limpar filtros — mesma linguagem dos controles ao lado: a borda, o
+   raio, a tipografia e a altura são os do .filter-select; o hover (azul
+   + fundo pálido) é o do .filter-view-btn. Discreto por padrão, só
+   ganha cor quando o mouse chega. Some da linha em telas estreitas?
+   Não: acompanha o flex-wrap do .filter-bar como os demais. */
+.filter-clear-btn{
+  display:inline-flex;align-items:center;gap:.4rem;
+  background:#fff;border:1.5px solid #e0e0e0;border-radius:.4rem;
+  padding:.45rem .8rem;font-size:.78rem;
+  font-family:'Poppins',sans-serif;font-weight:400;color:var(--vbm-mid);
+  cursor:pointer;transition:border-color .2s,color .2s,background-color .2s;
+}
+.filter-clear-btn i{font-size:.72rem}
+.filter-clear-btn:hover{border-color:var(--vbm-blue);color:var(--vbm-blue);background:var(--vbm-blue-pale)}
+.filter-clear-btn:focus-visible{outline:2px solid var(--vbm-blue);outline-offset:2px}
+[data-bg="dark"] .filter-clear-btn{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.14);color:rgba(255,255,255,.75)}
+[data-bg="dark"] .filter-clear-btn:hover{background:var(--vbm-blue);border-color:var(--vbm-blue);color:#fff}
+
 /* ══════════════════════════════════════════════════════════════
    PADRONIZAÇÃO TIPOGRÁFICA — mesma escala aplicada ao formulário
    de kaizen-novo.html: menos peso (Medium/Semibold no lugar de
@@ -599,6 +617,13 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         <select class="filter-select" id="bibFiltroPeriodo">
           <option value="" data-i18n="filter.allYears">Todos os anos</option>
         </select>
+        <!-- Depois do último filtro e antes dos botões de grade/lista —
+             que continuam encostados à direita pelo margin-left:auto. -->
+        <button type="button" class="filter-clear-btn" id="bibLimparFiltros"
+                data-i18n-title="bib.clearFilters" title="Limpar filtros">
+          <i class="fa-solid fa-filter-circle-xmark"></i>
+          <span data-i18n="bib.clearFilters">Limpar filtros</span>
+        </button>
         <div class="filter-view-toggle" style="margin-left:auto;">
           <button class="filter-view-btn active" data-view-toggle="biblioteca" data-view="grid" title="Grade" data-i18n-title="common.grid"><i class="fa-solid fa-th-large"></i></button>
           <button class="filter-view-btn" data-view-toggle="biblioteca" data-view="list" title="Lista" data-i18n-title="common.list"><i class="fa-solid fa-list"></i></button>
@@ -1053,12 +1078,53 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   selUsuario.addEventListener('input', aplicarFiltros);
   inputNome.addEventListener('input', aplicarFiltros);
 
-  /* O campo de usuário NÃO nasce preenchido. Ele antes recebia o nome de
-     quem estava logado, e isso o fazia agir diferente do campo de Nome do
-     Kaizen: a Biblioteca abria já filtrada e, quando a pessoa não era
-     líder de nenhum Kaizen, abria sem nenhum resultado — parecendo falha
-     de carregamento. Os dois campos agora fazem a mesma coisa: começam
-     vazios e filtram pelo que for digitado. */
+  /* Nome do usuário: nasce com o nome de quem está logado.
+
+     O nome vem de window.VBMAcesso.me() — o MESMO GET /api/me que o
+     cabeçalho já consulta, memorizado lá: preencher este campo não
+     custa uma requisição a mais. É o NM_USUARIO do MDM (nome amigável),
+     nunca ID nem matrícula.
+
+     O campo continua comum: dá para apagar, editar e procurar outra
+     pessoa; o filtro é o mesmo de antes, por trecho do nome do líder.
+
+     Efeito conhecido e aceito: a Biblioteca abre já filtrada, então
+     quem não é líder de nenhum Kaizen vê a lista vazia na abertura.
+     Basta apagar o campo (ou usar "Limpar filtros" e apagar) para ver
+     tudo. */
+  var nomeUsuarioLogado = '';
+  function preencherUsuarioLogado() {
+    if (!window.VBMAcesso || !window.VBMAcesso.me) return;
+    window.VBMAcesso.me().then(function (me) {
+      if (!me || !me.nome) return;
+      nomeUsuarioLogado = me.nome;
+      // Só preenche se ninguém digitou nada enquanto o /me respondia —
+      // sobrescrever o que a pessoa acabou de escrever seria pior do
+      // que não preencher.
+      if (!selUsuario.value) {
+        selUsuario.value = nomeUsuarioLogado;
+        aplicarFiltros();
+      }
+    }).catch(function () {});
+  }
+
+  /* Limpar filtros: zera os seis campos e devolve a tela ao estado de
+     abertura — o que inclui o nome do usuário logado de volta no campo,
+     e não vazio. Não refaz a consulta: a lista inteira já está em
+     memória desde o carregamento (ver carregarLista), então reaplicar
+     os filtros é o mesmo resultado sem uma ida ao servidor. */
+  var btnLimpar = document.getElementById('bibLimparFiltros');
+  if (btnLimpar) {
+    btnLimpar.addEventListener('click', function () {
+      inputNome.value = '';
+      selUnidade.value = '';
+      selCategoria.value = '';
+      selStatus.value = '';
+      selPeriodo.value = '';
+      selUsuario.value = nomeUsuarioLogado;
+      aplicarFiltros();
+    });
+  }
 
   // Categoria (única lista bilíngue do filtro): populada à parte, não
   // depende dos resultados já carregados, senão só mostraria categorias
@@ -1162,6 +1228,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       .catch(function () { document.getElementById('bibModalTitulo').textContent = 'Erro ao carregar.'; });
   });
 
+  preencherUsuarioLogado();
   carregarFiltrosDoBanco();
   carregarCategorias();
   carregarStatus();
@@ -1306,6 +1373,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       'bib.heroSubtitle': 'KAIZENS · VALE BASE METALS',
       'bib.heroDesc': 'Todos os Kaizens aprovados da organização. Consulte, inspire-se e replique melhorias em sua área.',
       'bib.unidade': 'Unidade',
+      'bib.clearFilters': 'Limpar filtros',
       'bib.searchPlaceholder': 'Nome do Kaizen...',
       'bib.showingCount': '31 Kaizens aprovados · Exibindo 6',
       'bib.countTemplate': '{total} Kaizens · Exibindo {n}',
@@ -1376,6 +1444,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       'bib.heroSubtitle': 'KAIZENS · VALE BASE METALS',
       'bib.heroDesc': 'All approved Kaizens across the organization. Browse, get inspired, and replicate improvements in your area.',
       'bib.unidade': 'Unit',
+      'bib.clearFilters': 'Clear filters',
       'bib.searchPlaceholder': 'Kaizen name...',
       'bib.showingCount': '31 approved Kaizens · Showing 6',
       'bib.countTemplate': '{total} Kaizens · Showing {n}',
