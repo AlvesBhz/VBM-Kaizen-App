@@ -539,79 +539,101 @@
 
   /* CSS do relatório — vive aqui, e não no vbm-app.css, porque a janela
      de impressão é um documento separado: puxar a folha do app traria
-     centenas de regras de tela para um papel. Tudo em `em` sobre um
-     único tamanho-base, então trocar o corpo do texto ajusta a página
-     inteira: 15px na tela, 9.4pt no papel. */
+     centenas de regras de tela para um papel.
+
+     O desenho é o MESMO do modal "Visualizar" da Biblioteca
+     (.kaizen-detail-head / .kd-section / .kd-photo-box em vbm-app.css):
+     faixa escura com a identificação do Kaizen, cartões brancos de canto
+     arredondado com cabeçalho cinza-claro e pastilha de ícone azul. Quem
+     imprime reconhece na folha a tela que acabou de ver. As medidas não
+     são copiadas dali: lá elas estão em `rem` sobre o corpo do app, aqui
+     em `em` sobre um único tamanho-base, então trocar o corpo do texto
+     reacomoda a página inteira — 15px na tela, 9.4pt no papel. */
   var PK_CSS = [
     '*{box-sizing:border-box;margin:0;padding:0}',
-    ':root{--az:#3cb5e5;--az-esc:#1a8bbf;--az-prof:#0d2640;--tinta:#1a1a1a;--cinza:#6b7280;--linha:#e5e7eb;--verde:#16a34a}',
-    'body{background:#e9edf1;font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--tinta);' +
+    ':root{--az:#3cb5e5;--az-esc:#1a8bbf;--prof:#0d2640;--navy:#041523;--pale:#e8f7fd;' +
+      '--tinta:#1a1a1a;--texto:#333;--cinza:#888;--linha:#eaeaea;--linha-fina:#f0f0f0;' +
+      '--fundo-cab:#fafafa;--off:#f6f6f6;--verde:#16a34a;' +
+      "--tit:'Poppins','Segoe UI',Roboto,Helvetica,Arial,sans-serif}",
+    'body{background:#e9edf1;font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--texto);' +
       '-webkit-print-color-adjust:exact;print-color-adjust:exact}',
 
     /* ── folha ── */
     '.folha{font-size:15px;line-height:1.45;background:#fff;width:min(96vw,1180px);margin:22px auto;' +
-      'padding:26px 30px 18px;box-shadow:0 10px 40px rgba(13,38,64,.18);border-radius:6px;display:flex;' +
-      'flex-direction:column;gap:1.1em}',
+      'padding:26px 30px 20px;box-shadow:0 10px 40px rgba(13,38,64,.18);border-radius:6px;display:flex;' +
+      'flex-direction:column;gap:1em}',
 
-    /* ── cabeçalho executivo ── */
-    '.cab{display:flex;align-items:center;gap:1.2em;background:var(--az-prof);color:#fff;' +
-      'border-radius:5px;padding:.95em 1.3em;border-left:6px solid var(--az)}',
-    '.cab-org{font-size:1.02em;font-weight:800;letter-spacing:.13em}',
-    '.cab-prog{font-size:.66em;letter-spacing:.26em;text-transform:uppercase;color:var(--az);margin-top:.2em}',
-    '.cab-cod{margin-left:auto;font-size:1.5em;font-weight:800;letter-spacing:.06em;white-space:nowrap}',
-    '.cab-dir{text-align:right;min-width:8em}',
-    '.cab-status{display:inline-block;border:1px solid var(--az);color:var(--az);border-radius:2em;' +
-      'padding:.15em .9em;font-size:.66em;font-weight:700;text-transform:uppercase;letter-spacing:.1em}',
-    '.cab-data{font-size:.7em;color:rgba(255,255,255,.65);margin-top:.35em}',
+    /* ── faixa de identificação: o .kaizen-detail-head do modal ──
+       Inclusive a trama de linhas do ::before, que é o que dá o
+       acabamento à faixa em vez de um bloco de cor chapado. */
+    '.cab{background:linear-gradient(135deg,var(--navy),#082d4f);border-radius:.75em;padding:1.4em 1.5em;' +
+      'position:relative;overflow:hidden;color:#fff}',
+    '.cab::before{content:"";position:absolute;inset:0;' +
+      'background-image:linear-gradient(rgba(60,181,229,.04) 1px,transparent 1px),' +
+      'linear-gradient(90deg,rgba(60,181,229,.04) 1px,transparent 1px);background-size:25px 25px}',
+    '.cab>*{position:relative;z-index:1}',
+    '.cab-topo{display:flex;align-items:flex-start;justify-content:space-between;gap:1em}',
+    '.cab-id{font-size:.62em;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.45)}',
+    '.cab-status{flex:none;border:1px solid var(--az);color:var(--az);border-radius:2em;padding:.2em .9em;' +
+      'font-size:.6em;font-weight:700;text-transform:uppercase;letter-spacing:.12em;white-space:nowrap}',
+    '.cab h1{font-family:var(--tit);font-weight:700;font-size:1.5em;line-height:1.25;color:#fff;' +
+      'margin:.45em 0 .6em}',
+    '.cab-metas{display:flex;flex-wrap:wrap;gap:.4em 1.4em}',
+    '.cab-meta{font-size:.72em;color:rgba(255,255,255,.55);display:flex;align-items:center;gap:.35em}',
+    '.cab-meta i{color:var(--az)}',
+    '.cab-meta strong{color:rgba(255,255,255,.8);font-weight:600}',
 
-    /* ── título + metas ── */
-    '.titulo h1{font-size:1.75em;line-height:1.2;font-weight:800;color:var(--az-prof);margin-bottom:.5em}',
-    '.metas{display:flex;flex-wrap:wrap;gap:.35em .9em;border-top:2px solid var(--linha);padding-top:.6em}',
-    '.meta{display:flex;gap:.4em;align-items:baseline;font-size:.8em}',
-    '.meta-rot{color:var(--cinza);text-transform:uppercase;letter-spacing:.07em;font-size:.85em;font-weight:700}',
-    '.meta-val{font-weight:600}',
-
-    /* ── blocos ── */
-    '.duas{display:grid;grid-template-columns:1fr 1fr;gap:1.1em}',
-    '.bloco{border:1px solid var(--linha);border-radius:5px;padding:.85em 1em;break-inside:avoid;page-break-inside:avoid}',
-    '.bloco h2{font-size:.72em;text-transform:uppercase;letter-spacing:.14em;color:var(--az-esc);' +
-      'border-left:3px solid var(--az);padding-left:.6em;margin-bottom:.6em}',
-    '.bloco p{font-size:.88em;line-height:1.55;white-space:pre-line}',
-
-    /* ── evidências: o centro do relatório ── */
-    '.ev-par{display:grid;grid-template-columns:1fr 1fr;gap:1em}',
-    '.ev{break-inside:avoid;page-break-inside:avoid}',
-    '.ev-tag{font-size:.66em;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:#fff;' +
-      'padding:.3em .8em;border-radius:3px 3px 0 0;display:block}',
-    '.ev-tag-antes{background:var(--cinza)}',
-    '.ev-tag-depois{background:var(--verde)}',
-    '.ev-img{height:17em;border:1px solid var(--linha);border-top:0;background:#f4f6f8;' +
-      'display:flex;align-items:center;justify-content:center;overflow:hidden}',
-    '.ev-img img{width:100%;height:100%;object-fit:contain}',
-    '.ev-vazia{font-size:.75em;color:var(--cinza);text-align:center;padding:1em}',
-    '.ev-desc{font-size:.82em;line-height:1.5;padding:.55em .1em 0;white-space:pre-line}',
-
-    /* ── resultados ── */
-    '.res-grade{display:grid;grid-template-columns:repeat(auto-fit,minmax(11em,1fr));gap:.7em}',
-    '.res{border:1px solid var(--linha);border-left:4px solid var(--az);border-radius:4px;padding:.7em .85em;' +
+    /* ── cartões: o .kd-section do modal ── */
+    '.duas{display:grid;grid-template-columns:1fr 1fr;gap:1em}',
+    '.sec{background:#fff;border:1px solid var(--linha);border-radius:.75em;overflow:hidden;' +
       'break-inside:avoid;page-break-inside:avoid}',
-    '.res-fin{border-left-color:var(--verde);background:#f2fbf5}',
-    '.res-num{font-size:1.35em;font-weight:800;color:var(--verde);line-height:1.15}',
-    '.res-rot{font-size:.68em;text-transform:uppercase;letter-spacing:.1em;color:var(--cinza);margin-top:.2em}',
-    '.res-tit{font-size:.9em;font-weight:700;color:var(--az-prof)}',
-    '.res-txt{font-size:.8em;color:var(--cinza);margin-top:.15em;line-height:1.45}',
+    '.sec-cab{display:flex;align-items:center;gap:.5em;padding:.7em 1.1em;background:var(--fundo-cab);' +
+      'border-bottom:1px solid var(--linha-fina)}',
+    '.sec-ico{width:1.85em;height:1.85em;flex:none;border-radius:.35em;background:var(--pale);color:var(--az);' +
+      'display:flex;align-items:center;justify-content:center;font-size:.75em}',
+    '.sec-tit{font-family:var(--tit);font-weight:600;font-size:.88em;color:var(--tinta)}',
+    // pre-line preserva os parágrafos digitados nos textos longos; as
+    // grades dentro do corpo voltam ao normal para que a quebra de linha
+    // do HTML não vire espaço visível entre os cartões.
+    '.sec-corpo{padding:1em 1.2em;font-size:.86em;line-height:1.65;white-space:pre-line}',
+    '.sec-corpo strong{color:var(--tinta)}',
+    '.sec-corpo>.fotos,.sec-corpo>.res-grade{white-space:normal}',
+
+    /* ── evidências: o .kd-photo-box do modal, com a foto inteira
+       (contain sobre fundo neutro) em vez de cortada ── */
+    '.fotos{display:grid;grid-template-columns:1fr 1fr;gap:1.4em}',
+    '.foto{border:1px solid var(--linha);border-radius:.5em;overflow:hidden;' +
+      'break-inside:avoid;page-break-inside:avoid}',
+    '.foto-img{height:17em;background:#f4f6f8;display:flex;align-items:center;justify-content:center;overflow:hidden}',
+    '.foto-img img{width:100%;height:100%;object-fit:contain}',
+    '.foto-vazia{font-size:.78em;color:var(--cinza);text-align:center;padding:1em}',
+    '.foto-corpo{padding:.7em .85em}',
+    '.foto-rot{font-size:.66em;text-transform:uppercase;letter-spacing:.15em;color:var(--cinza);' +
+      'margin-bottom:.3em;font-weight:600}',
+    '.foto-rot-depois{color:var(--verde)}',
+    '.foto-desc{font-size:.86em;line-height:1.5;color:var(--texto);white-space:pre-line}',
+
+    /* ── resultados: os mesmos cartões do modal ── */
+    '.res-grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(11.5em,1fr));gap:.75em}',
+    '.res{background:var(--off);border-radius:.5em;padding:.85em;border-left:3px solid var(--az);' +
+      'break-inside:avoid;page-break-inside:avoid}',
+    '.res-fin{border-left-color:var(--verde);text-align:center}',
+    '.res-num{font-family:var(--tit);font-weight:700;font-size:1.3em;color:var(--verde);line-height:1.2}',
+    '.res-rot{font-size:.7em;color:var(--cinza)}',
+    '.res-tit{font-family:var(--tit);font-weight:700;font-size:.82em;color:var(--tinta)}',
+    '.res-txt{font-size:.7em;color:var(--cinza);margin-top:.2em;line-height:1.45}',
 
     /* ── rodapé ── */
     '.rodape{display:flex;justify-content:space-between;gap:1em;border-top:1px solid var(--linha);' +
-      'padding-top:.55em;font-size:.66em;color:var(--cinza);letter-spacing:.06em}',
+      'padding-top:.6em;font-size:.66em;color:var(--cinza);letter-spacing:.06em}',
 
     /* ── aviso de preparação ── */
-    '.aviso{position:fixed;inset:0;background:rgba(13,38,64,.92);display:flex;align-items:center;' +
+    '.aviso{position:fixed;inset:0;background:rgba(4,21,35,.94);display:flex;align-items:center;' +
       'justify-content:center;z-index:99}',
     '.aviso-cx{text-align:center;color:#fff}',
     '.aviso-spin{width:2.4em;height:2.4em;margin:0 auto .9em;border:3px solid rgba(255,255,255,.25);' +
       'border-top-color:var(--az);border-radius:50%;animation:pkGira .8s linear infinite}',
-    '.aviso-txt{font-size:.95em;letter-spacing:.04em}',
+    '.aviso-txt{font-family:var(--tit);font-size:.95em;letter-spacing:.04em}',
     '@keyframes pkGira{to{transform:rotate(360deg)}}',
 
     /* ── papel ──
@@ -622,17 +644,17 @@
     '  @page{size:A4 portrait;margin:10mm}',
     '  body{background:#fff}',
     '  .aviso{display:none!important}',
-    '  .folha{font-size:9.4pt;width:auto;max-width:none;margin:0;padding:0;box-shadow:none;border-radius:0;gap:.85em}',
-    '  .ev-img{height:56mm}',
-    '  .cab,.titulo,.duas,.evidencias,.resultados,.rodape{break-inside:avoid;page-break-inside:avoid}',
+    '  .folha{font-size:9.4pt;width:auto;max-width:none;margin:0;padding:0;box-shadow:none;border-radius:0;gap:.8em}',
+    '  .cab{padding:1.1em 1.2em}',
+    '  .foto-img{height:56mm}',
+    '  .cab,.duas,.rodape{break-inside:avoid;page-break-inside:avoid}',
     '}',
 
     /* ── telas estreitas: a prévia empilha, o papel não muda ── */
     '@media screen and (max-width:820px){',
     '  .folha{width:100%;margin:0;border-radius:0;padding:16px}',
-    '  .duas,.ev-par{grid-template-columns:1fr}',
-    '  .cab{flex-wrap:wrap}',
-    '  .cab-cod{margin-left:0}',
+    '  .duas,.fotos{grid-template-columns:1fr}',
+    '  .cab-topo{flex-direction:column}',
     '}'
   ].join('\n');
 
@@ -677,6 +699,20 @@
       .toUpperCase().slice(0, 120);
   }
 
+  /** As folhas que o relatório herda do app: os ÍCONES (Font Awesome) e a
+   *  Poppins dos títulos — sem elas a faixa e os cabeçalhos dos cartões
+   *  não ficariam iguais ao modal. Os endereços são lidos do próprio
+   *  documento que abriu a janela, já absolutos, em vez de repetidos
+   *  aqui: o arquivo do vendor tem hash no nome e mudaria a cada build.
+   *  A folha do app NÃO entra — o relatório tem o CSS dele. */
+  function pk_folhasHerdadas() {
+    return Array.prototype.slice.call(document.querySelectorAll('link[rel~="stylesheet"]'))
+      .map(function (l) { return l.href; })
+      .filter(function (h) { return /all\.min\.css/i.test(h) || /fonts\.googleapis\.com/i.test(h); })
+      .map(function (h) { return '<link rel="stylesheet" href="' + pk_escapar(h) + '"/>'; })
+      .join('');
+  }
+
   /** "2026-08-15T00:00:00" -> "15/08/2026" (ou o formato do idioma).
    *  Lê os números do texto em vez de criar um Date: a data vem sem
    *  fuso (ver relogioLocal em server.js) e deixar o navegador
@@ -713,25 +749,39 @@
       try { return new URL(comApi(u), window.location.href).href; } catch (e) { return u; }
     };
     var foto = function (url, marca, descricao) {
-      return '<figure class="ev">' +
-        '<figcaption class="ev-tag ' + (marca === 'depois' ? 'ev-tag-depois' : 'ev-tag-antes') + '">' +
-          pk_escapar(marca === 'depois' ? r('depois', 'Depois') : r('antes', 'Antes')) + '</figcaption>' +
+      var depois = marca === 'depois';
+      return '<figure class="foto">' +
         (url
-          ? '<div class="ev-img"><img src="' + pk_escapar(absoluto(url)) + '" alt=""/></div>'
-          : '<div class="ev-img ev-vazia">' + pk_escapar(r('semImagem', 'Sem imagem registrada')) + '</div>') +
-        '<div class="ev-desc">' + pk_escapar(descricao || '—') + '</div>' +
+          ? '<div class="foto-img"><img src="' + pk_escapar(absoluto(url)) + '" alt=""/></div>'
+          : '<div class="foto-img foto-vazia">' + pk_escapar(r('semImagem', 'Sem imagem registrada')) + '</div>') +
+        '<div class="foto-corpo">' +
+          '<div class="foto-rot' + (depois ? ' foto-rot-depois' : '') + '">' +
+            pk_escapar(depois ? r('depois', 'Depois') : r('antes', 'Antes')) + '</div>' +
+          '<div class="foto-desc">' + pk_escapar(descricao || '—') + '</div>' +
+        '</div>' +
       '</figure>';
     };
 
-    var linhaMeta = function (rotulo, valor) {
+    /* Cartão: a mesma casca do .kd-section do modal — cabeçalho com
+       pastilha de ícone e título, corpo embaixo. */
+    var secao = function (icone, titulo, corpo, classe) {
+      return '<section class="sec' + (classe ? ' ' + classe : '') + '">' +
+        '<div class="sec-cab"><div class="sec-ico"><i class="fa-solid ' + icone + '"></i></div>' +
+        '<div class="sec-tit">' + pk_escapar(titulo) + '</div></div>' +
+        '<div class="sec-corpo">' + corpo + '</div></section>';
+    };
+
+    // Meta da faixa: ícone + "Rótulo: valor", igual ao meta() da Biblioteca.
+    var linhaMeta = function (icone, rotulo, valor) {
       if (!valor) return '';
-      return '<div class="meta"><span class="meta-rot">' + pk_escapar(rotulo) + '</span>' +
-             '<span class="meta-val">' + pk_escapar(valor) + '</span></div>';
+      return '<div class="cab-meta"><i class="fa-solid ' + icone + '"></i> <strong>' +
+             pk_escapar(rotulo) + ':</strong> ' + pk_escapar(valor) + '</div>';
     };
 
     var desperdicios = (k.DESPERDICIOS || []).filter(Boolean).join(' · ');
     var equipe = (k.MEMBROS || []).map(function (m) { return m.NM_USUARIO; }).filter(Boolean).join(', ');
     var dataRef = pk_data(k.DT_CONCLUSAO || k.DT_CRIACAO, idioma);
+    var identificacao = [k.ROTULO, k.NM_CATEGORIA, k.NM_SITE].filter(Boolean).join(' · ');
 
     // Resultados: o financeiro vira um destaque proprio, os demais
     // entram como cartoes. Esta e a secao que o relatorio existe para
@@ -749,9 +799,25 @@
         '</div><div class="res-txt">' + pk_escapar(x.DS_RESULTADO || '') + '</div></div>');
     });
 
+    // Aprendizados: os mesmos três itens rotulados que o modal mostra.
+    var licoes = [];
+    if (k.DS_LICOES_APRENDIDAS) {
+      licoes.push('<strong>' + pk_escapar(r('licoesAprendidas', 'Lições Aprendidas')) + ':</strong> ' +
+        pk_escapar(k.DS_LICOES_APRENDIDAS));
+    }
+    if (k.DS_RESULTADO_ESPERADO) {
+      licoes.push('<strong>' + pk_escapar(r('comparacaoMeta', 'Comparação com a meta')) + ':</strong> ' +
+        pk_escapar(k.DS_RESULTADO_ESPERADO));
+    }
+    if (desperdicios) {
+      licoes.push('<strong>' + pk_escapar(r('desperdiciosReduzidos', 'Desperdícios reduzidos')) + ':</strong> ' +
+        pk_escapar(desperdicios));
+    }
+
     var html =
       '<!doctype html><html lang="' + (idioma === 'en' ? 'en' : 'pt-BR') + '"><head><meta charset="utf-8"/>' +
       '<title>' + pk_escapar(titulo) + '</title>' +
+      pk_folhasHerdadas() +
       '<style>' + PK_CSS + '</style></head><body>' +
       '<div class="aviso" id="pkAviso"><div class="aviso-cx">' +
         '<div class="aviso-spin"></div>' +
@@ -760,51 +826,40 @@
       '<div class="folha">' +
 
         '<header class="cab">' +
-          '<div class="cab-marca">' +
-            '<div class="cab-org">VALE BASE METALS</div>' +
-            '<div class="cab-prog">' + pk_escapar(r('programa', 'Kaizen Corporativo')) + '</div>' +
-          '</div>' +
-          '<div class="cab-cod">' + pk_escapar(k.ROTULO || '') + '</div>' +
-          '<div class="cab-dir">' +
+          '<div class="cab-topo">' +
+            '<div class="cab-id">' + pk_escapar(identificacao) + '</div>' +
             (k.NM_STATUS ? '<div class="cab-status">' + pk_escapar(k.NM_STATUS) + '</div>' : '') +
-            (dataRef ? '<div class="cab-data">' + pk_escapar(dataRef) + '</div>' : '') +
+          '</div>' +
+          '<h1>' + pk_escapar(k.NM_KAIZEN || '') + '</h1>' +
+          '<div class="cab-metas">' +
+            linhaMeta('fa-tag', r('categoria', 'Categoria'), k.NM_CATEGORIA) +
+            linhaMeta('fa-globe', r('replicacao', 'Replicação'), k.NM_REPLICACAO) +
+            linhaMeta('fa-recycle', r('desperdicios', 'Redução de Desperdícios'), desperdicios) +
+            linhaMeta('fa-user', r('lider', 'Líder'), k.NM_LIDER) +
+            linhaMeta('fa-users', r('equipe', 'Equipe'), equipe) +
+            linhaMeta('fa-calendar-day', r('data', 'Data'), dataRef) +
           '</div>' +
         '</header>' +
 
-        '<section class="titulo">' +
-          '<h1>' + pk_escapar(k.NM_KAIZEN || '') + '</h1>' +
-          '<div class="metas">' +
-            linhaMeta(r('lider', 'Líder'), k.NM_LIDER) +
-            linhaMeta(r('site', 'Site'), k.NM_SITE) +
-            linhaMeta(r('categoria', 'Categoria'), k.NM_CATEGORIA) +
-            linhaMeta(r('replicacao', 'Replicação'), k.NM_REPLICACAO) +
-            linhaMeta(r('desperdicios', 'Redução de Desperdícios'), desperdicios) +
-            linhaMeta(r('equipe', 'Equipe'), equipe) +
-          '</div>' +
-        '</section>' +
+        '<div class="duas">' +
+          secao('fa-bullseye', r('problema', 'Declaração do Problema'), pk_escapar(k.DS_PROBLEMA || '—')) +
+          secao('fa-flag', r('objetivo', 'Meta / Objetivo'), pk_escapar(k.DS_OBJETIVO || '—')) +
+        '</div>' +
 
-        '<section class="duas">' +
-          '<div class="bloco"><h2>' + pk_escapar(r('problema', 'Declaração do Problema')) + '</h2>' +
-            '<p>' + pk_escapar(k.DS_PROBLEMA || '—') + '</p></div>' +
-          '<div class="bloco"><h2>' + pk_escapar(r('objetivo', 'Meta / Objetivo')) + '</h2>' +
-            '<p>' + pk_escapar(k.DS_OBJETIVO || '—') + '</p></div>' +
-        '</section>' +
-
-        '<section class="bloco evidencias"><h2>' + pk_escapar(r('evidencias', 'Evidências: Antes & Depois')) + '</h2>' +
-          '<div class="ev-par">' +
+        secao('fa-camera', r('evidencias', 'Evidências Antes & Depois'),
+          '<div class="fotos">' +
             foto(k.URL_IMG_ANTES, 'antes', k.DS_ESTADO_ANTES) +
             foto(k.URL_IMG_DEPOIS, 'depois', k.DS_ESTADO_DEPOIS) +
-          '</div>' +
-        '</section>' +
+          '</div>') +
 
         (destaques.length
-          ? '<section class="bloco resultados"><h2>' + pk_escapar(r('resultados', 'Resultados Alcançados')) + '</h2>' +
-            '<div class="res-grade">' + destaques.join('') + '</div></section>'
+          ? secao('fa-chart-bar', r('resultados', 'Resultados Alcançados'),
+              '<div class="res-grade">' + destaques.join('') + '</div>')
           : '') +
 
-        (k.DS_LICOES_APRENDIDAS
-          ? '<section class="bloco"><h2>' + pk_escapar(r('licoes', 'Aprendizados & Potencial de Replicação')) + '</h2>' +
-            '<p>' + pk_escapar(k.DS_LICOES_APRENDIDAS) + '</p></section>'
+        (licoes.length
+          ? secao('fa-lightbulb', r('licoes', 'Aprendizados & Potencial de Replicação'),
+              licoes.join('<br/><br/>'))
           : '') +
 
         '<footer class="rodape">' +
@@ -836,9 +891,17 @@
           }, { once: true });
         });
       });
+      // Os ícones e a Poppins entram por webfont: imprimir antes de a
+      // fonte chegar sairia com quadradinhos no lugar dos ícones. fonts.ready
+      // resolve tanto no sucesso quanto na falha, então uma fonte
+      // inalcançável não prende o relatório — só o deixa sem ícone.
+      var fontes = (janela.document.fonts && janela.document.fonts.ready)
+        ? Promise.resolve(janela.document.fonts.ready).catch(function () {})
+        : Promise.resolve();
+
       var acabou = false;
       var fim = function () { if (!acabou) { acabou = true; aoFim(); } };
-      Promise.all(pendentes).then(function () {
+      Promise.all(pendentes.concat([fontes])).then(function () {
         // Um quadro a mais para o layout assentar antes de medir/imprimir.
         if (janela.requestAnimationFrame) janela.requestAnimationFrame(function () { janela.requestAnimationFrame(fim); });
         else setTimeout(fim, 50);
