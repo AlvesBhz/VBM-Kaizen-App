@@ -2072,18 +2072,18 @@ const PASTA_POR_TIPO_IMG = { antes: "before", depois: "after" };
 // colisão entre pessoas diferentes enviando "foto.jpg" ao mesmo tempo e
 // evita qualquer caractere problemático vindo do sistema de arquivos de
 // quem enviou.
-const MARCA_POR_TIPO_IMG = (tipo) => (tipo === "depois" ? "DEPOIS" : "ANTES");
-
-/** Nome DEFINITIVO da foto: o ID do Kaizen, mais ANTES/DEPOIS.
+/** Nome DEFINITIVO da foto: SÓ o ID do Kaizen.
  *
- *  Ex.: 501_ANTES.png e 501_DEPOIS.jpg. Sem carimbo de tempo e sem
- *  sufixo aleatório — o nome identifica o Kaizen de fora do banco, que é
- *  exatamente o que se quer ao olhar o volume. Como o nome se repete a
- *  cada troca de foto, o upload grava POR CIMA (overwrite=true): um
- *  Kaizen tem uma foto de cada, não um histórico. */
-function nomeArquivoImagem(mimetype, idKaizen, tipo) {
+ *  Ex.: imgs/before/1.png e imgs/after/1.png. Quem separa o "antes" do
+ *  "depois" é a PASTA (before/after, ver PASTA_POR_TIPO_IMG) — o nome
+ *  não repete essa informação. Sem carimbo de tempo e sem sufixo
+ *  aleatório: olhando o volume dá para saber de qual Kaizen é a foto
+ *  sem consultar o banco. Como o nome se repete a cada troca de foto, o
+ *  upload grava POR CIMA (overwrite=true): um Kaizen tem uma foto de
+ *  cada, não um histórico. */
+function nomeArquivoImagem(mimetype, idKaizen) {
   const ext = IMG_EXT_POR_MIME[mimetype] || ".jpg";
-  return `${idKaizen}_${MARCA_POR_TIPO_IMG(tipo)}${ext}`;
+  return `${idKaizen}${ext}`;
 }
 
 /** Nome PROVISÓRIO, usado só enquanto o ID não existe.
@@ -2093,9 +2093,24 @@ function nomeArquivoImagem(mimetype, idKaizen, tipo) {
  *  definitivo assim que o número aparece (ver renomearImagemParaId). O
  *  aleatório evita que dois cadastros simultâneos escrevam no mesmo
  *  arquivo temporário. */
-function nomeArquivoTemporario(mimetype, tipo) {
+function nomeArquivoTemporario(mimetype) {
   const ext = IMG_EXT_POR_MIME[mimetype] || ".jpg";
-  return `TEMP_${MARCA_POR_TIPO_IMG(tipo)}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}${ext}`;
+  return `TEMP_${Date.now()}_${Math.random().toString(36).slice(2, 10)}${ext}`;
+}
+
+/** Apaga as fotos do mesmo Kaizen com OUTRA extensão, na mesma pasta.
+ *
+ *  Trocar um PNG por um JPG grava "1.jpg" e deixaria "1.png" para trás:
+ *  dois arquivos para o mesmo Kaizen na mesma pasta, que é justamente a
+ *  ambiguidade que nomear pelo ID veio resolver. São no máximo duas
+ *  chamadas, todas best-effort — falhar aqui não atrapalha nada além de
+ *  deixar um arquivo sobrando. */
+async function limparOutrasExtensoes(pasta, idKaizen, caminhoMantido) {
+  for (const ext of new Set(Object.values(IMG_EXT_POR_MIME))) {
+    const alvo = `${pasta}/${idKaizen}${ext}`;
+    if (alvo === caminhoMantido) continue;
+    await removerArquivoDoVolume(alvo);
+  }
 }
 
 /** Deixa a foto com o nome definitivo depois que o ID_KAIZEN existe.
@@ -2105,26 +2120,29 @@ function nomeArquivoTemporario(mimetype, tipo) {
  *  cadastro novo, lê o arquivo temporário, regrava com o nome final e
  *  apaga o provisório.
  *
+ *  A pasta é sempre a do arquivo atual: o upload já colocou o arquivo em
+ *  before/ ou after/ conforme o tipo, e é a pasta que diz qual é qual.
+ *
  *  Em qualquer falha devolve o caminho ORIGINAL: a foto existe e está
  *  gravada, e perder o cadastro inteiro por causa do nome do arquivo
  *  seria trocar um problema pequeno por um grande. O erro fica no log
  *  com o ID, para dar para renomear depois se alguém quiser. */
-async function renomearImagemParaId(caminhoAtual, idKaizen, tipo) {
+async function renomearImagemParaId(caminhoAtual, idKaizen) {
   if (!caminhoAtual || !Number.isInteger(idKaizen) || idKaizen <= 0) return caminhoAtual;
   const pasta = caminhoAtual.slice(0, caminhoAtual.lastIndexOf("/"));
   const arquivo = caminhoAtual.slice(caminhoAtual.lastIndexOf("/") + 1);
-  const marca = MARCA_POR_TIPO_IMG(tipo);
-  // Já está no padrão "<id>_ANTES.<ext>"? Então não há o que fazer.
-  if (new RegExp(`^${idKaizen}_${marca}\\.[a-z0-9]+$`, "i").test(arquivo)) return caminhoAtual;
+  // Já está no padrão "<id>.<ext>"? Então não há o que fazer.
+  if (new RegExp(`^${idKaizen}\\.[a-z0-9]+$`, "i").test(arquivo)) return caminhoAtual;
 
   try {
     const { buffer, contentType } = await baixarArquivoDoVolume(caminhoAtual);
     const ext = IMG_EXT_POR_MIME[contentType] || arquivo.slice(arquivo.lastIndexOf("."));
-    const caminhoFinal = `${pasta}/${idKaizen}_${marca}${ext}`;
+    const caminhoFinal = `${pasta}/${idKaizen}${ext}`;
     if (caminhoFinal === caminhoAtual) return caminhoAtual;
     await enviarArquivoParaVolume(caminhoFinal, buffer, contentType);
     const apagou = await removerArquivoDoVolume(caminhoAtual);
     if (!apagou) console.warn(`[imagem] ID_KAIZEN=${idKaizen}: ${caminhoAtual} ficou no volume (não foi possível apagar).`);
+    await limparOutrasExtensoes(pasta, idKaizen, caminhoFinal);
     return caminhoFinal;
   } catch (err) {
     console.error(`[imagem] ID_KAIZEN=${idKaizen}: não foi possível renomear ${caminhoAtual}: ${err.message}`);
@@ -2193,10 +2211,13 @@ apiRouter.post("/kaizens/imagem", receberImagemUnica, async (req, res) => {
       }
     }
     const nomeArquivo = temId
-      ? nomeArquivoImagem(req.file.mimetype, idKaizenArquivo, tipo)
-      : nomeArquivoTemporario(req.file.mimetype, tipo);
+      ? nomeArquivoImagem(req.file.mimetype, idKaizenArquivo)
+      : nomeArquivoTemporario(req.file.mimetype);
     const caminhoVolume = `${VOLUME_BASE_IMGS}/${pasta}/${nomeArquivo}`;
     await enviarArquivoParaVolume(caminhoVolume, req.file.buffer, req.file.mimetype);
+    // Trocar PNG por JPG deixaria o arquivo antigo para trás, com outra
+    // extensão e o mesmo ID. Some com ele.
+    if (temId) await limparOutrasExtensoes(`${VOLUME_BASE_IMGS}/${pasta}`, idKaizenArquivo, caminhoVolume);
 
     res.json({ ok: true, url: caminhoVolume });
   } catch (err) {
@@ -2604,8 +2625,8 @@ apiRouter.post("/kaizens", async (req, res) => {
       // sumir". Se o volume falhar, o caminho original é mantido e o
       // cadastro segue (ver renomearImagemParaId).
       const [caminhoAntes, caminhoDepois] = await Promise.all([
-        renomearImagemParaId(urlImgAntes, idKaizen, "antes"),
-        renomearImagemParaId(urlImgDepois, idKaizen, "depois"),
+        renomearImagemParaId(urlImgAntes, idKaizen),
+        renomearImagemParaId(urlImgDepois, idKaizen),
       ]);
 
       const reqInsert = new sql.Request(tx);
@@ -3612,8 +3633,8 @@ apiRouter.put("/kaizens/:id", async (req, res) => {
       // aba aberta desde antes desta versão, por exemplo): o nome é
       // acertado em vez de entrar torto no banco.
       const [novoAntes, novoDepois] = await Promise.all([
-        trocaAntes ? renomearImagemParaId(dados.urlImgAntes, idKaizen, "antes") : Promise.resolve(null),
-        trocaDepois ? renomearImagemParaId(dados.urlImgDepois, idKaizen, "depois") : Promise.resolve(null),
+        trocaAntes ? renomearImagemParaId(dados.urlImgAntes, idKaizen) : Promise.resolve(null),
+        trocaDepois ? renomearImagemParaId(dados.urlImgDepois, idKaizen) : Promise.resolve(null),
       ]);
       if (trocaAntes) r.input("urlImgAntes", sql.NVarChar(PVC_LIMITES.URL_IMG), novoAntes);
       if (trocaDepois) r.input("urlImgDepois", sql.NVarChar(PVC_LIMITES.URL_IMG), novoDepois);

@@ -84,11 +84,12 @@ async function obterToken() {
 
 /**
  * Grava `buffer` no caminho de volume informado (ex.:
- * "/Volumes/franquia_bmsa_insight/ci/kaizen/imgs/before/123_ANTES.png").
+ * "/Volumes/franquia_bmsa_insight/ci/kaizen/imgs/before/123.png").
  * overwrite=true é ESSENCIAL aqui: o nome do arquivo é o ID do Kaizen
  * (ver nomeArquivoImagem em server.js), então trocar a foto de um Kaizen
  * grava por cima da anterior — é o comportamento desejado, um Kaizen tem
- * uma foto de "antes" e uma de "depois", não um histórico delas.
+ * uma foto de "antes" e uma de "depois", não um histórico delas. Quem
+ * separa as duas é a PASTA: imgs/before e imgs/after.
  *
  * Lança erro (com a mensagem crua da API do Databricks) em qualquer
  * falha; quem chama decide como traduzir isso pro usuário.
