@@ -59,8 +59,25 @@
 ═══════════════════════════════════════════════════ */
 
 /* Reset sidebar-based layout */
-.app-layout { display: block; min-height: 100vh; }
+.app-layout { display: block; }
 .app-main   { margin-left: 0; }
+
+/* Altura exata da tela, sem barra de rolagem.
+   O topnav (64px) é irmão do .app-layout e vem ANTES dele no fluxo, então
+   a página inteira mede 64px + altura do .app-layout. O vbm-app.css manda
+   `min-height: 100svh` nos dois (regra pensada para as telas com sidebar),
+   o que garantia 64px de sobra e a barra de rolagem aparecia em QUALQUER
+   tamanho de tela. Aqui o piso de altura desconta o topnav. A
+   especificidade é a mesma do vbm-app.css — vence por vir depois na ordem
+   das folhas, sem precisar de !important nem mexer no arquivo comum. */
+div.app-layout, main.app-main { min-height: calc(100vh - 64px); }
+
+/* Os outros 28px de sobra vinham do padding inferior do .page-content: a
+   margem negativa da hero anula só o padding de cima (mais o topnav), e a
+   hero já alcança a base da viewport por conta própria. Nesta tela o
+   .page-content não tem nada além da hero, então o respiro de baixo não
+   cumpre função — sem ele a conta fecha em 100% da altura visível. */
+.page-content { padding-bottom: 0; }
 
 /* Hero full-bleed — estoura o padding lateral/superior do .page-content
    (1.75rem) para cobrir 100% da largura e altura da viewport, subindo
@@ -79,6 +96,10 @@ html, body { overflow-x: clip; overflow-y: auto; }
   margin-top: calc(-1.75rem - 64px);
   margin-left: -1.75rem;
   margin-right: 0;
+  /* O vbm-app.css dá 1.75rem de margem embaixo da hero para separá-la dos
+     cards que vêm a seguir. Aqui a hero é o único conteúdo da tela e
+     termina na base da viewport — a margem só sobrava como rolagem. */
+  margin-bottom: 0;
   border-radius: 0;
   height: 100vh;
   min-height: 100vh;
@@ -96,9 +117,12 @@ html, body { overflow-x: clip; overflow-y: auto; }
   }
 }
 /* Em celulares, 100vh ignora a barra do navegador e corta a arte;
-   100dvh acompanha a altura realmente visível. */
+   100dvh acompanha a altura realmente visível. O piso do layout acompanha
+   a mesma unidade da hero: se um usasse dvh e o outro vh, a diferença
+   entre as duas medidas viraria sobra — e barra de rolagem de novo. */
 @supports (height: 100dvh) {
   .dash-hero { height: 100dvh; min-height: 100dvh; }
+  div.app-layout, main.app-main { min-height: calc(100dvh - 64px); }
 }
 
 /* Arte completa da hero, já com texto embutido — zoom-in lento e
