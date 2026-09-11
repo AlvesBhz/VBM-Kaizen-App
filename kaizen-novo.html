@@ -918,11 +918,12 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
                muda isso — nem o atributo lang, nem o idioma escolhido
                aqui (testado). Como a data tem de acompanhar o idioma da
                tela, quem aparece é um campo de texto formatado por nós
-               (dd/mm/aaaa em português, mm/dd/yyyy em inglês) e o
+               (dd/mm/aaaa em português, yyyy/mm/dd em inglês) e o
                <input type="date"> fica recolhido ao lado, guardando o
                valor em ISO e servindo de calendário quando o ícone é
                clicado. O name= continua no campo de data: é dele que
-               sai o data_conclusao do envio, sempre em "YYYY-MM-DD". -->
+               sai o data_conclusao do envio, sempre em "YYYY-MM-DD".
+               Formatos: dd/mm/aaaa em português, yyyy/mm/dd em inglês. -->
           <div class="form-group">
             <div class="form-grid form-grid-2">
               <div class="form-group" style="margin-bottom:0;">
@@ -1372,7 +1373,7 @@ function rotuloPessoa(p) {
       'f.completionDate': 'Completion Date',
       'f.completionDateHelper': 'Date the Kaizen was completed. Must be earlier than today.',
       'f.completionDateInvalid': 'Completion Date (must be earlier than today)',
-      'f.completionDateFormat': 'mm/dd/yyyy',
+      'f.completionDateFormat': 'yyyy/mm/dd',
       'f.completionDateOpen': 'Open calendar',
       'wiz.title': 'New Kaizen',
       'wiz.subtitle': 'Register your continuous improvement initiative in 4 steps',
@@ -2028,7 +2029,7 @@ window.VBMDataBrasilia = {
 // e ignora tanto o atributo lang quanto o idioma escolhido na tela —
 // conferido nos dois sentidos. Como a data tem de acompanhar o idioma,
 // quem aparece é um campo de TEXTO formatado aqui (dd/mm/aaaa em
-// português, mm/dd/yyyy em inglês) e o campo de data fica recolhido ao
+// português, yyyy/mm/dd em inglês) e o campo de data fica recolhido ao
 // lado, guardando o valor em ISO, servindo de calendário e sendo o que
 // o envio lê. Os dois andam sempre juntos.
 window.VBMDataConclusao = (function () {
@@ -2040,9 +2041,12 @@ window.VBMDataConclusao = (function () {
   function idioma() {
     return (window.__i18nLang === 'en') ? 'en' : 'pt-BR';
   }
-  // Cada idioma diz só a ORDEM dos três números; o resto do tratamento
-  // é o mesmo para os dois.
-  function ordem() { return idioma() === 'en' ? ['m', 'd', 'a'] : ['d', 'm', 'a']; }
+  // Cada idioma diz só a ORDEM dos três números; todo o resto sai daí.
+  // 'a' (ano) tem 4 dígitos e os outros dois têm 2 — por isso o tamanho
+  // dos grupos é derivado da ordem, e não fixado: em português a
+  // máscara é 2/2/4 e em inglês, com o ano na frente, 4/2/2.
+  function ordem() { return idioma() === 'en' ? ['a', 'm', 'd'] : ['d', 'm', 'a']; }
+  function tamanhos() { return ordem().map(function (k) { return k === 'a' ? 4 : 2; }); }
 
   /** ISO "YYYY-MM-DD" -> texto no formato do idioma atual. */
   function formatar(valorIso) {
@@ -2051,16 +2055,25 @@ window.VBMDataConclusao = (function () {
     return ordem().map(function (k) { return p[k]; }).join('/');
   }
 
+  /** Quebra os 8 dígitos nos grupos do idioma atual. */
+  function grupos(digitos) {
+    var t = tamanhos(), fora = [], i = 0;
+    t.forEach(function (tam) {
+      if (i >= digitos.length) return;
+      fora.push(digitos.substr(i, tam));
+      i += tam;
+    });
+    return fora;
+  }
+
   /** Texto digitado -> ISO. Devolve '' quando não dá uma data real:
    *  vale tanto para "12/" quanto para "31/02/2026", que tem o formato
    *  certo mas não é dia nenhum. */
   function paraIso(valorTexto) {
     var n = String(valorTexto || '').replace(/\D/g, '');
     if (n.length !== 8) return '';
-    var o = ordem(), p = {};
-    // Os dois primeiros campos têm 2 dígitos e o ano tem 4, na ordem do
-    // idioma — por isso o fatiamento acompanha `ordem()`.
-    p[o[0]] = n.slice(0, 2); p[o[1]] = n.slice(2, 4); p[o[2]] = n.slice(4, 8);
+    var o = ordem(), g = grupos(n), p = {};
+    o.forEach(function (k, i) { p[k] = g[i]; });
     var candidato = p.a + '-' + p.m + '-' + p.d;
     var d = new Date(candidato + 'T00:00:00Z');
     if (isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== candidato) return '';
@@ -2070,9 +2083,7 @@ window.VBMDataConclusao = (function () {
   /** Máscara enquanto digita: só números, barras entram sozinhas. */
   function mascarar(valorTexto) {
     var n = String(valorTexto || '').replace(/\D/g, '').slice(0, 8);
-    if (n.length <= 2) return n;
-    if (n.length <= 4) return n.slice(0, 2) + '/' + n.slice(2);
-    return n.slice(0, 2) + '/' + n.slice(2, 4) + '/' + n.slice(4);
+    return grupos(n).join('/');
   }
 
   // texto -> ISO
