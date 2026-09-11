@@ -537,50 +537,326 @@
     });
   };
 
-  /* ── Print A4 Kaizen (single page, identical to on-screen view) ── */
-  window.printKaizen = function(id) {
-    const el = document.getElementById(id || 'printArea');
-    if (!el) { window.print(); return; }
-    const clone = el.cloneNode(true);
-    clone.querySelectorAll('.no-print').forEach(function(n) { n.remove(); });
-    clone.style.maxHeight = 'none';
-    clone.style.overflow = 'visible';
+  /* CSS do relatório — vive aqui, e não no vbm-app.css, porque a janela
+     de impressão é um documento separado: puxar a folha do app traria
+     centenas de regras de tela para um papel. Tudo em `em` sobre um
+     único tamanho-base, então trocar o corpo do texto ajusta a página
+     inteira: 15px na tela, 9.4pt no papel. */
+  var PK_CSS = [
+    '*{box-sizing:border-box;margin:0;padding:0}',
+    ':root{--az:#3cb5e5;--az-esc:#1a8bbf;--az-prof:#0d2640;--tinta:#1a1a1a;--cinza:#6b7280;--linha:#e5e7eb;--verde:#16a34a}',
+    'body{background:#e9edf1;font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--tinta);' +
+      '-webkit-print-color-adjust:exact;print-color-adjust:exact}',
 
-    const win = window.open('', '_blank');
-    win.document.write(
-      '<html><head><title>Kaizen VBM</title>' +
-      '<link rel="stylesheet" href="css/vbm-app.css"/>' +
-      '<link rel="stylesheet" href="Referencias/VBM - Design System/assets/e5e202e3c8995079_all.min.css"/>' +
-      '<style>' +
-        '@page{size:A4;margin:0;}' +
-        'html,body{width:210mm;height:297mm;background:#fff;}' +
-        'body{display:flex;align-items:flex-start;justify-content:center;}' +
-        '.print-a4-page{width:182mm;height:273mm;margin:12mm 14mm;overflow:hidden;position:relative;}' +
-        '.print-a4-scale{transform-origin:top left;}' +
-      '</style>' +
-      '</head><body>' +
-      '<div class="print-a4-page"><div class="print-a4-scale">' + clone.outerHTML + '</div></div>' +
-      '</body></html>'
-    );
+    /* ── folha ── */
+    '.folha{font-size:15px;line-height:1.45;background:#fff;width:min(96vw,1180px);margin:22px auto;' +
+      'padding:26px 30px 18px;box-shadow:0 10px 40px rgba(13,38,64,.18);border-radius:6px;display:flex;' +
+      'flex-direction:column;gap:1.1em}',
+
+    /* ── cabeçalho executivo ── */
+    '.cab{display:flex;align-items:center;gap:1.2em;background:var(--az-prof);color:#fff;' +
+      'border-radius:5px;padding:.95em 1.3em;border-left:6px solid var(--az)}',
+    '.cab-org{font-size:1.02em;font-weight:800;letter-spacing:.13em}',
+    '.cab-prog{font-size:.66em;letter-spacing:.26em;text-transform:uppercase;color:var(--az);margin-top:.2em}',
+    '.cab-cod{margin-left:auto;font-size:1.5em;font-weight:800;letter-spacing:.06em;white-space:nowrap}',
+    '.cab-dir{text-align:right;min-width:8em}',
+    '.cab-status{display:inline-block;border:1px solid var(--az);color:var(--az);border-radius:2em;' +
+      'padding:.15em .9em;font-size:.66em;font-weight:700;text-transform:uppercase;letter-spacing:.1em}',
+    '.cab-data{font-size:.7em;color:rgba(255,255,255,.65);margin-top:.35em}',
+
+    /* ── título + metas ── */
+    '.titulo h1{font-size:1.75em;line-height:1.2;font-weight:800;color:var(--az-prof);margin-bottom:.5em}',
+    '.metas{display:flex;flex-wrap:wrap;gap:.35em .9em;border-top:2px solid var(--linha);padding-top:.6em}',
+    '.meta{display:flex;gap:.4em;align-items:baseline;font-size:.8em}',
+    '.meta-rot{color:var(--cinza);text-transform:uppercase;letter-spacing:.07em;font-size:.85em;font-weight:700}',
+    '.meta-val{font-weight:600}',
+
+    /* ── blocos ── */
+    '.duas{display:grid;grid-template-columns:1fr 1fr;gap:1.1em}',
+    '.bloco{border:1px solid var(--linha);border-radius:5px;padding:.85em 1em;break-inside:avoid;page-break-inside:avoid}',
+    '.bloco h2{font-size:.72em;text-transform:uppercase;letter-spacing:.14em;color:var(--az-esc);' +
+      'border-left:3px solid var(--az);padding-left:.6em;margin-bottom:.6em}',
+    '.bloco p{font-size:.88em;line-height:1.55;white-space:pre-line}',
+
+    /* ── evidências: o centro do relatório ── */
+    '.ev-par{display:grid;grid-template-columns:1fr 1fr;gap:1em}',
+    '.ev{break-inside:avoid;page-break-inside:avoid}',
+    '.ev-tag{font-size:.66em;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:#fff;' +
+      'padding:.3em .8em;border-radius:3px 3px 0 0;display:block}',
+    '.ev-tag-antes{background:var(--cinza)}',
+    '.ev-tag-depois{background:var(--verde)}',
+    '.ev-img{height:17em;border:1px solid var(--linha);border-top:0;background:#f4f6f8;' +
+      'display:flex;align-items:center;justify-content:center;overflow:hidden}',
+    '.ev-img img{width:100%;height:100%;object-fit:contain}',
+    '.ev-vazia{font-size:.75em;color:var(--cinza);text-align:center;padding:1em}',
+    '.ev-desc{font-size:.82em;line-height:1.5;padding:.55em .1em 0;white-space:pre-line}',
+
+    /* ── resultados ── */
+    '.res-grade{display:grid;grid-template-columns:repeat(auto-fit,minmax(11em,1fr));gap:.7em}',
+    '.res{border:1px solid var(--linha);border-left:4px solid var(--az);border-radius:4px;padding:.7em .85em;' +
+      'break-inside:avoid;page-break-inside:avoid}',
+    '.res-fin{border-left-color:var(--verde);background:#f2fbf5}',
+    '.res-num{font-size:1.35em;font-weight:800;color:var(--verde);line-height:1.15}',
+    '.res-rot{font-size:.68em;text-transform:uppercase;letter-spacing:.1em;color:var(--cinza);margin-top:.2em}',
+    '.res-tit{font-size:.9em;font-weight:700;color:var(--az-prof)}',
+    '.res-txt{font-size:.8em;color:var(--cinza);margin-top:.15em;line-height:1.45}',
+
+    /* ── rodapé ── */
+    '.rodape{display:flex;justify-content:space-between;gap:1em;border-top:1px solid var(--linha);' +
+      'padding-top:.55em;font-size:.66em;color:var(--cinza);letter-spacing:.06em}',
+
+    /* ── aviso de preparação ── */
+    '.aviso{position:fixed;inset:0;background:rgba(13,38,64,.92);display:flex;align-items:center;' +
+      'justify-content:center;z-index:99}',
+    '.aviso-cx{text-align:center;color:#fff}',
+    '.aviso-spin{width:2.4em;height:2.4em;margin:0 auto .9em;border:3px solid rgba(255,255,255,.25);' +
+      'border-top-color:var(--az);border-radius:50%;animation:pkGira .8s linear infinite}',
+    '.aviso-txt{font-size:.95em;letter-spacing:.04em}',
+    '@keyframes pkGira{to{transform:rotate(360deg)}}',
+
+    /* ── papel ──
+       A folha na tela é uma prévia larga; no papel ela vira a área útil
+       do A4 e nada mais: sem sombra, sem borda, sem largura fixa. O
+       tamanho-base menor é o que reacomoda a página inteira. */
+    '@media print{',
+    '  @page{size:A4 portrait;margin:10mm}',
+    '  body{background:#fff}',
+    '  .aviso{display:none!important}',
+    '  .folha{font-size:9.4pt;width:auto;max-width:none;margin:0;padding:0;box-shadow:none;border-radius:0;gap:.85em}',
+    '  .ev-img{height:56mm}',
+    '  .cab,.titulo,.duas,.evidencias,.resultados,.rodape{break-inside:avoid;page-break-inside:avoid}',
+    '}',
+
+    /* ── telas estreitas: a prévia empilha, o papel não muda ── */
+    '@media screen and (max-width:820px){',
+    '  .folha{width:100%;margin:0;border-radius:0;padding:16px}',
+    '  .duas,.ev-par{grid-template-columns:1fr}',
+    '  .cab{flex-wrap:wrap}',
+    '  .cab-cod{margin-left:0}',
+    '}'
+  ].join('\n');
+
+  /* ── Relatório A4 do Kaizen ────────────────────────────────────────
+     Abre uma janela com um one-page executivo montado a partir dos DADOS
+     do Kaizen — não é mais uma cópia do modal reduzida por transform.
+
+     Por que mudou: a versão anterior clonava o corpo do modal, encolhia
+     tudo com scale() até caber em 182mm e mandava imprimir depois de
+     450ms fixos. Isso dava três problemas de uma vez: a folha ocupava um
+     pedaço pequeno da tela, o texto ficava minúsculo, e a impressão
+     saía antes de as imagens carregarem — daí os campos vazios e as
+     evidências quebradas.
+
+     Agora: HTML próprio, CSS próprio, e a impressão só é liberada
+     depois que TODAS as imagens terminam (ou falham, explicitamente).
+     Enquanto isso a janela mostra "Preparando relatório...".
+
+     printKaizen(dados, opcoes)
+       dados  — o mesmo objeto de GET /api/kaizens/:id
+       opcoes — { rotulos, idioma } para os títulos no idioma da tela */
+  function pk_escapar(txt) {
+    return String(txt == null ? '' : txt)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  /** Nome do arquivo sugerido ao salvar em PDF. O Chrome e o Edge usam o
+   *  <title> do documento, então é ele que vira "KZN26-001-SOSSEGO-
+   *  CRISTIAN-ARLAN-ALVES.pdf". Sem acento, sem caractere que o Windows
+   *  recusa (\ / : * ? " < > |) e sem hífen repetido ou sobrando. */
+  function pk_nomeArquivo(partes) {
+    return partes
+      .filter(Boolean)
+      .map(function (p) {
+        return String(p).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+          .replace(/[\\/:*?"<>|]/g, ' ')
+          .replace(/[^A-Za-z0-9 _-]/g, ' ')
+          .trim().replace(/\s+/g, '-');
+      })
+      .filter(Boolean).join('-').replace(/-{2,}/g, '-').replace(/^-|-$/g, '')
+      .toUpperCase().slice(0, 120);
+  }
+
+  /** "2026-08-15T00:00:00" -> "15/08/2026" (ou o formato do idioma).
+   *  Lê os números do texto em vez de criar um Date: a data vem sem
+   *  fuso (ver relogioLocal em server.js) e deixar o navegador
+   *  interpretar mudaria o dia de quem está em outro fuso. */
+  function pk_data(valor, idioma) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(valor || ''));
+    if (!m) return '';
+    return (idioma === 'en')
+      ? m[1] + '/' + m[2] + '/' + m[3]
+      : m[3] + '/' + m[2] + '/' + m[1];
+  }
+
+  window.printKaizen = function (dados, opcoes) {
+    var k = dados || {};
+    var o = opcoes || {};
+    var R = o.rotulos || {};
+    var idioma = o.idioma === 'en' ? 'en' : 'pt-BR';
+    var r = function (chave, padrao) { return R[chave] || padrao; };
+
+    var win = window.open('', '_blank');
+    if (!win) return;   // bloqueador de pop-up: nada a fazer aqui
+
+    var titulo = pk_nomeArquivo([k.ROTULO, k.NM_SITE, k.NM_LIDER]) || 'KAIZEN';
+
+    // A foto não é servida pelo caminho do volume: quem entrega os bytes
+    // é GET /api/kaizens/imagem (ver server.js). Quem chama passa a
+    // função que monta essa URL — a MESMA que a tela usa para o <img> do
+    // modal, então não há duas formas de montar o mesmo endereço.
+    // Depois disso vira absoluta: a janela nova tem base própria e um
+    // caminho relativo poderia resolver para outro lugar.
+    var comApi = typeof o.urlImagem === 'function' ? o.urlImagem : function (u) { return u; };
+    var absoluto = function (u) {
+      if (!u) return '';
+      try { return new URL(comApi(u), window.location.href).href; } catch (e) { return u; }
+    };
+    var foto = function (url, marca, descricao) {
+      return '<figure class="ev">' +
+        '<figcaption class="ev-tag ' + (marca === 'depois' ? 'ev-tag-depois' : 'ev-tag-antes') + '">' +
+          pk_escapar(marca === 'depois' ? r('depois', 'Depois') : r('antes', 'Antes')) + '</figcaption>' +
+        (url
+          ? '<div class="ev-img"><img src="' + pk_escapar(absoluto(url)) + '" alt=""/></div>'
+          : '<div class="ev-img ev-vazia">' + pk_escapar(r('semImagem', 'Sem imagem registrada')) + '</div>') +
+        '<div class="ev-desc">' + pk_escapar(descricao || '—') + '</div>' +
+      '</figure>';
+    };
+
+    var linhaMeta = function (rotulo, valor) {
+      if (!valor) return '';
+      return '<div class="meta"><span class="meta-rot">' + pk_escapar(rotulo) + '</span>' +
+             '<span class="meta-val">' + pk_escapar(valor) + '</span></div>';
+    };
+
+    var desperdicios = (k.DESPERDICIOS || []).filter(Boolean).join(' · ');
+    var equipe = (k.MEMBROS || []).map(function (m) { return m.NM_USUARIO; }).filter(Boolean).join(', ');
+    var dataRef = pk_data(k.DT_CONCLUSAO || k.DT_CRIACAO, idioma);
+
+    // Resultados: o financeiro vira um destaque proprio, os demais
+    // entram como cartoes. Esta e a secao que o relatorio existe para
+    // mostrar, entao ela ocupa a largura inteira.
+    var destaques = [];
+    if (k.VL_RESULTADO_FINANCEIRO != null) {
+      var valor = Number(k.VL_RESULTADO_FINANCEIRO)
+        .toLocaleString(idioma === 'en' ? 'en-US' : 'pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      destaques.push('<div class="res res-fin"><div class="res-num">' +
+        pk_escapar((k.SG_MOEDA || '') + ' ' + valor) + '</div><div class="res-rot">' +
+        pk_escapar(r('resultadoFinanceiro', 'Resultado financeiro')) + '</div></div>');
+    }
+    (k.RESULTADOS || []).forEach(function (x) {
+      destaques.push('<div class="res"><div class="res-tit">' + pk_escapar(x.NM_RESULTADO) +
+        '</div><div class="res-txt">' + pk_escapar(x.DS_RESULTADO || '') + '</div></div>');
+    });
+
+    var html =
+      '<!doctype html><html lang="' + (idioma === 'en' ? 'en' : 'pt-BR') + '"><head><meta charset="utf-8"/>' +
+      '<title>' + pk_escapar(titulo) + '</title>' +
+      '<style>' + PK_CSS + '</style></head><body>' +
+      '<div class="aviso" id="pkAviso"><div class="aviso-cx">' +
+        '<div class="aviso-spin"></div>' +
+        '<div class="aviso-txt">' + pk_escapar(r('preparando', 'Preparando relatório para impressão...')) + '</div>' +
+      '</div></div>' +
+      '<div class="folha">' +
+
+        '<header class="cab">' +
+          '<div class="cab-marca">' +
+            '<div class="cab-org">VALE BASE METALS</div>' +
+            '<div class="cab-prog">' + pk_escapar(r('programa', 'Kaizen Corporativo')) + '</div>' +
+          '</div>' +
+          '<div class="cab-cod">' + pk_escapar(k.ROTULO || '') + '</div>' +
+          '<div class="cab-dir">' +
+            (k.NM_STATUS ? '<div class="cab-status">' + pk_escapar(k.NM_STATUS) + '</div>' : '') +
+            (dataRef ? '<div class="cab-data">' + pk_escapar(dataRef) + '</div>' : '') +
+          '</div>' +
+        '</header>' +
+
+        '<section class="titulo">' +
+          '<h1>' + pk_escapar(k.NM_KAIZEN || '') + '</h1>' +
+          '<div class="metas">' +
+            linhaMeta(r('lider', 'Líder'), k.NM_LIDER) +
+            linhaMeta(r('site', 'Site'), k.NM_SITE) +
+            linhaMeta(r('categoria', 'Categoria'), k.NM_CATEGORIA) +
+            linhaMeta(r('replicacao', 'Replicação'), k.NM_REPLICACAO) +
+            linhaMeta(r('desperdicios', 'Redução de Desperdícios'), desperdicios) +
+            linhaMeta(r('equipe', 'Equipe'), equipe) +
+          '</div>' +
+        '</section>' +
+
+        '<section class="duas">' +
+          '<div class="bloco"><h2>' + pk_escapar(r('problema', 'Declaração do Problema')) + '</h2>' +
+            '<p>' + pk_escapar(k.DS_PROBLEMA || '—') + '</p></div>' +
+          '<div class="bloco"><h2>' + pk_escapar(r('objetivo', 'Meta / Objetivo')) + '</h2>' +
+            '<p>' + pk_escapar(k.DS_OBJETIVO || '—') + '</p></div>' +
+        '</section>' +
+
+        '<section class="bloco evidencias"><h2>' + pk_escapar(r('evidencias', 'Evidências: Antes & Depois')) + '</h2>' +
+          '<div class="ev-par">' +
+            foto(k.URL_IMG_ANTES, 'antes', k.DS_ESTADO_ANTES) +
+            foto(k.URL_IMG_DEPOIS, 'depois', k.DS_ESTADO_DEPOIS) +
+          '</div>' +
+        '</section>' +
+
+        (destaques.length
+          ? '<section class="bloco resultados"><h2>' + pk_escapar(r('resultados', 'Resultados Alcançados')) + '</h2>' +
+            '<div class="res-grade">' + destaques.join('') + '</div></section>'
+          : '') +
+
+        (k.DS_LICOES_APRENDIDAS
+          ? '<section class="bloco"><h2>' + pk_escapar(r('licoes', 'Aprendizados & Potencial de Replicação')) + '</h2>' +
+            '<p>' + pk_escapar(k.DS_LICOES_APRENDIDAS) + '</p></section>'
+          : '') +
+
+        '<footer class="rodape">' +
+          '<span>' + pk_escapar(k.ROTULO || '') + (k.NM_SITE ? ' · ' + pk_escapar(k.NM_SITE) : '') + '</span>' +
+          '<span>' + pk_escapar(r('rodape', 'VBM Problem Solving & Continuous Improvement')) + '</span>' +
+        '</footer>' +
+
+      '</div></body></html>';
+
+    win.document.open();
+    win.document.write(html);
     win.document.close();
 
-    function fitAndPrint() {
-      const page = win.document.querySelector('.print-a4-page');
-      const scaler = win.document.querySelector('.print-a4-scale');
-      if (page && scaler) {
-        const pageH = page.clientHeight;
-        const pageW = page.clientWidth;
-        const contentH = scaler.scrollHeight;
-        const contentW = scaler.scrollWidth || pageW;
-        const scale = Math.min(1, pageH / contentH, pageW / contentW);
-        scaler.style.width = (100 / scale) + '%';
-        scaler.style.transform = 'scale(' + scale + ')';
-      }
-      win.focus();
-      setTimeout(function() { win.print(); }, 150);
+    /* A impressão só é liberada quando TODAS as imagens terminam.
+       decode() resolve quando a imagem está pronta para pintar; a falha
+       é tratada como "terminou" também — uma foto que não carregou não
+       pode travar o relatório, e o lugar dela mostra o aviso. O teto de
+       tempo existe para o caso de uma requisição ficar pendurada. */
+    function quandoPronto(janela, aoFim) {
+      var imgs = Array.prototype.slice.call(janela.document.images || []);
+      var pendentes = imgs.map(function (img) {
+        if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+        return new Promise(function (resolve) {
+          img.addEventListener('load', function () { resolve(); }, { once: true });
+          img.addEventListener('error', function () {
+            var cx = img.parentNode;
+            if (cx) { cx.classList.add('ev-vazia'); cx.textContent = r('imagemFalhou', 'Imagem não disponível'); }
+            resolve();
+          }, { once: true });
+        });
+      });
+      var acabou = false;
+      var fim = function () { if (!acabou) { acabou = true; aoFim(); } };
+      Promise.all(pendentes).then(function () {
+        // Um quadro a mais para o layout assentar antes de medir/imprimir.
+        if (janela.requestAnimationFrame) janela.requestAnimationFrame(function () { janela.requestAnimationFrame(fim); });
+        else setTimeout(fim, 50);
+      });
+      setTimeout(fim, 20000);   // teto: nunca deixa a janela presa
     }
 
-    setTimeout(fitAndPrint, 450);
+    var iniciar = function () {
+      quandoPronto(win, function () {
+        var aviso = win.document.getElementById('pkAviso');
+        if (aviso) aviso.parentNode.removeChild(aviso);
+        win.focus();
+        win.print();
+      });
+    };
+
+    if (win.document.readyState === 'complete') iniciar();
+    else win.addEventListener('load', iniciar, { once: true });
   };
 
   /* ── Approval workflow ── */

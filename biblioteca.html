@@ -729,7 +729,10 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     </div>
     <div class="modal-foot no-print">
       <button class="btn btn-ghost" data-modal-close data-i18n="common.fechar">Fechar</button>
-      <button class="btn btn-outline" onclick="document.getElementById('printDate').textContent=new Date().toLocaleDateString(document.getElementById('langSelect').value||'pt-BR');document.querySelector('.print-header').style.display='block';printKaizen('bibPrint')">
+      <!-- O id do Kaizen aberto fica no botão (preenchido por
+           preencherModal): imprimir passou a ser pelo ID, não pelo que
+           estiver montado na tela. -->
+      <button class="btn btn-outline" id="bibModalImprimir" onclick="imprimirKaizen(this.dataset.kaizen)">
         <i class="fa-solid fa-print"></i> <span data-i18n="common.imprimirA4">Imprimir A4</span>
       </button>
     </div>
@@ -892,7 +895,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       '<span class="badge ' + info.classe + '">' + info.rotulo + '</span>' +
       '<div class="kaizen-card-actions">' +
       '<button class="btn-icon btn-icon-blue" title="Ver detalhe" data-ver-detalhe="' + k.ID_KAIZEN + '"><i class="fa-solid fa-eye"></i></button>' +
-      '<button class="btn-icon" title="Imprimir A4" onclick="printKaizen(\'bibPrint\')"><i class="fa-solid fa-print"></i></button>' +
+      '<button class="btn-icon" title="Imprimir A4" onclick="imprimirKaizen(' + k.ID_KAIZEN + ')"><i class="fa-solid fa-print"></i></button>' +
       botaoEditarHtml(k) +
       '</div></div></div>'
     );
@@ -910,7 +913,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       '<td><span class="badge ' + info.classe + '">' + info.rotulo + '</span></td>' +
       '<td class="table-actions">' +
       '<button class="btn-icon btn-icon-blue" title="Ver" data-ver-detalhe="' + k.ID_KAIZEN + '"><i class="fa-solid fa-eye"></i></button>' +
-      '<button class="btn-icon" onclick="printKaizen(\'bibPrint\')" title="Imprimir"><i class="fa-solid fa-print"></i></button>' +
+      '<button class="btn-icon" onclick="imprimirKaizen(' + k.ID_KAIZEN + ')" title="Imprimir"><i class="fa-solid fa-print"></i></button>' +
       botaoEditarHtml(k) +
       '</td></tr>'
     );
@@ -1178,6 +1181,10 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   // ─── Modal de detalhe ───
   function preencherModal(k) {
     document.getElementById('bibModalTitulo').textContent = k.ROTULO + ' — ' + k.NM_KAIZEN;
+    // O botão "Imprimir A4" do rodapé guarda o ID do que está aberto —
+    // é por ele que a impressão sabe qual Kaizen montar.
+    var btnImprimir = document.getElementById('bibModalImprimir');
+    if (btnImprimir) btnImprimir.dataset.kaizen = k.ID_KAIZEN;
     // Linha de cima: código · categoria · UNIDADE. A unidade é o NM_SITE
     // que vem com o Kaizen (kzn_mdm_hierarquia, pelo autor) — o mesmo
     // valor do card da lista. Antes eram cidade e estado do líder, que
@@ -1240,12 +1247,64 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     document.getElementById('bibModalTitulo').textContent = 'Carregando…';
     window.openModal('modalBibDetail');
 
-    if (detalheCache[id]) { preencherModal(detalheCache[id]); return; }
-    fetch('/api/kaizens/' + id, { headers: { Accept: 'application/json' } })
-      .then(function (r) { return r.json(); })
-      .then(function (k) { detalheCache[id] = k; preencherModal(k); })
+    carregarDetalhe(id)
+      .then(preencherModal)
       .catch(function () { document.getElementById('bibModalTitulo').textContent = 'Erro ao carregar.'; });
   });
+
+  /** Detalhe do Kaizen, do cache ou do servidor. Uma função só para as
+      duas portas de entrada — abrir o modal e imprimir —, senão cada uma
+      teria a sua cópia da mesma consulta e do mesmo cache. */
+  function carregarDetalhe(id) {
+    if (detalheCache[id]) return Promise.resolve(detalheCache[id]);
+    return fetch('/api/kaizens/' + id, { headers: { Accept: 'application/json' } })
+      .then(function (r) {
+        if (!r.ok) throw new Error('falha ao carregar o Kaizen ' + id);
+        return r.json();
+      })
+      .then(function (k) { detalheCache[id] = k; return k; });
+  }
+
+  /* Imprimir A4 — pelo ID do Kaizen, NUNCA pelo que estiver na tela.
+     Os botões da grade e da lista mandavam imprimir o conteúdo do modal
+     ('bibPrint'): quem clicasse sem ter aberto aquele Kaizen imprimia o
+     modal vazio (os "—" do formulário em branco) ou, pior, o Kaizen
+     aberto antes. Agora cada botão carrega o SEU Kaizen e só então
+     manda imprimir — o relatório monta a partir desses dados. */
+  window.imprimirKaizen = function (id) {
+    carregarDetalhe(id).then(function (k) {
+      window.printKaizen(k, {
+        idioma: idiomaDaTela(),
+        // Mesma função que o <img> do modal usa — o relatório não inventa
+        // um jeito próprio de montar o endereço da foto.
+        urlImagem: urlImagem,
+        rotulos: {
+          programa: txtI18n('print.program', 'Kaizen Corporativo'),
+          lider: txtI18n('print.leader', 'Líder'),
+          site: txtI18n('print.site', 'Site'),
+          categoria: txtI18n('bib.groupCategoria', 'Categoria'),
+          replicacao: txtI18n('bib.replication', 'Replicação'),
+          desperdicios: txtI18n('bib.groupDesperdicios', 'Redução de Desperdícios'),
+          equipe: txtI18n('print.team', 'Equipe'),
+          problema: txtI18n('kd.problemStatement', 'Declaração do Problema'),
+          objetivo: txtI18n('kd.goal', 'Meta / Objetivo'),
+          evidencias: txtI18n('kd.evidenceBeforeAfter', 'Evidências Antes & Depois'),
+          antes: txtI18n('kd.before', 'Antes'),
+          depois: txtI18n('kd.after', 'Depois'),
+          resultados: txtI18n('kd.resultsAchieved', 'Resultados Alcançados'),
+          licoes: txtI18n('kd.learningsReplication', 'Aprendizados & Potencial de Replicação'),
+          resultadoFinanceiro: txtI18n('print.financialResult', 'Resultado financeiro'),
+          semImagem: txtI18n('print.noImage', 'Sem imagem registrada'),
+          imagemFalhou: txtI18n('print.imageFailed', 'Imagem não disponível'),
+          preparando: txtI18n('print.preparing', 'Preparando relatório para impressão...'),
+          rodape: txtI18n('print.footer', 'VBM Problem Solving & Continuous Improvement'),
+        },
+      });
+    }).catch(function () {
+      showToast('error', txtI18n('print.errorTitle', 'Não foi possível imprimir'),
+        txtI18n('print.errorMsg', 'Não deu para carregar os dados deste Kaizen. Tente de novo.'), 5000);
+    });
+  };
 
   preencherUsuarioLogado();
   carregarFiltrosDoBanco();
@@ -1400,6 +1459,18 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       'bib.editKaizen': 'Editar Kaizen',
       'bib.groupCategoria': 'Categoria',
       'bib.replication': 'Replicação',
+      /* Relatório A4 (ver printKaizen em js/vbm-app.js). */
+      'print.program': 'Kaizen Corporativo',
+      'print.leader': 'Líder',
+      'print.site': 'Site',
+      'print.team': 'Equipe',
+      'print.financialResult': 'Resultado financeiro',
+      'print.noImage': 'Sem imagem registrada',
+      'print.imageFailed': 'Imagem não disponível',
+      'print.preparing': 'Preparando relatório para impressão...',
+      'print.footer': 'VBM Problem Solving & Continuous Improvement',
+      'print.errorTitle': 'Não foi possível imprimir',
+      'print.errorMsg': 'Não deu para carregar os dados deste Kaizen. Tente de novo.',
       'bib.groupDesperdicios': 'Redução de Desperdícios',
       'bib.editBlocked': 'Edição indisponível para o status atual',
       'bib.loadMore': 'Carregar mais',
@@ -1472,6 +1543,17 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       'bib.editKaizen': 'Edit Kaizen',
       'bib.groupCategoria': 'Category',
       'bib.replication': 'Replication',
+      'print.program': 'Corporate Kaizen',
+      'print.leader': 'Leader',
+      'print.site': 'Site',
+      'print.team': 'Team',
+      'print.financialResult': 'Financial result',
+      'print.noImage': 'No image on file',
+      'print.imageFailed': 'Image unavailable',
+      'print.preparing': 'Preparing the report for printing...',
+      'print.footer': 'VBM Problem Solving & Continuous Improvement',
+      'print.errorTitle': 'Could not print',
+      'print.errorMsg': 'The data for this Kaizen could not be loaded. Please try again.',
       'bib.groupDesperdicios': 'Waste Reduction',
       'bib.editBlocked': 'Editing unavailable for the current status',
       'bib.loadMore': 'Load more',
