@@ -539,8 +539,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       <div style="position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;">
         <div>
           <div style="font-size:.6rem;letter-spacing:.25em;text-transform:uppercase;color:var(--vbm-blue-light);margin-bottom:.6rem;" data-i18n="bib.officialRepo">Repositório Oficial</div>
-          <div style="font-family:'Poppins',sans-serif;font-weight:700;font-style:italic;font-size:clamp(1.8rem,4vw,3rem);color:#fff;mix-blend-mode:overlay;line-height:.9;margin-bottom:.4rem;">BIBLIOTECA</div>
-          <div style="font-family:'Poppins',sans-serif;font-weight:700;font-size:clamp(.9rem,2vw,1.3rem);color:rgba(255,255,255,.75);mix-blend-mode:overlay;margin-bottom:.75rem;">KAIZENS · VALE BASE METALS</div>
+          <div style="font-family:'Poppins',sans-serif;font-weight:700;font-style:italic;font-size:clamp(1.8rem,4vw,3rem);color:#fff;mix-blend-mode:overlay;line-height:.9;margin-bottom:.4rem;" data-i18n="bib.heroTitle">BIBLIOTECA</div>
+          <div style="font-family:'Poppins',sans-serif;font-weight:700;font-size:clamp(.9rem,2vw,1.3rem);color:rgba(255,255,255,.75);mix-blend-mode:overlay;margin-bottom:.75rem;" data-i18n="bib.heroSubtitle">KAIZENS · VALE BASE METALS</div>
           <p style="font-size:.82rem;color:rgba(255,255,255,.5);max-width:440px;line-height:1.6;" data-i18n="bib.heroDesc">Todos os Kaizens aprovados da organização. Consulte, inspire-se e replique melhorias em sua área.</p>
         </div>
         <div style="background:rgba(255,255,255,.08);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.14);border-radius:.9rem;padding:1.1rem 1.4rem;min-width:220px;box-shadow:0 8px 32px rgba(0,0,0,.18);">
@@ -920,36 +920,64 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   bibList.addEventListener('click', aoClicarEditar);
   if (bibTabela) bibTabela.addEventListener('click', aoClicarEditar);
 
-  // Ano da CRIAÇÃO do Kaizen. A data chega da API como "2026-09-09T14:30:00"
-  // (relógio, sem fuso — ver relogioLocal em server.js), então os 4
-  // primeiros caracteres já são o ano: ler assim evita depender do fuso
-  // de quem acessa, que na virada do ano mudaria o resultado.
+  // Ano do Kaizen: o da CONCLUSÃO; sem conclusão, o da última
+  // atualização. É a mesma regra que monta as opções do filtro
+  // (GET /kaizens/filtros) e que o servidor usa em ?ano= e na ordenação
+  // da lista — as três precisam concordar, senão escolher um ano do
+  // combo devolveria um recorte diferente do esperado.
+  //
+  // A data chega da API como "2026-09-09T14:30:00" (relógio, sem fuso —
+  // ver relogioLocal em server.js), então os 4 primeiros caracteres já
+  // são o ano: ler assim evita depender do fuso de quem acessa, que na
+  // virada do ano mudaria o resultado.
   function anoDe(k) {
-    return k.DT_CRIACAO ? String(k.DT_CRIACAO).slice(0, 4) : '';
+    var data = k.DT_CONCLUSAO || k.DT_CRIACAO;
+    return data ? String(data).slice(0, 4) : '';
   }
 
-  function popularOpcoesDinamicas() {
-    // Unidade, status e ano saem dos próprios registros já carregados —
-    // nenhuma chamada extra só para listar valores distintos. A base é
-    // "todos", não o recorte filtrado: senão escolher um filtro apagaria
-    // as opções dos outros.
-    var estados = [...new Set(todos.map(function (k) { return k.NM_ESTADO; }).filter(Boolean))].sort();
-    var anos = [...new Set(todos.map(anoDe).filter(Boolean))].sort().reverse();
-    // Um par ID/nome por status presente nos registros carregados.
-    var vistos = {};
-    todos.forEach(function (k) {
-      if (k.ID_STATUS != null && !vistos[k.ID_STATUS]) vistos[k.ID_STATUS] = k.NM_STATUS || String(k.ID_STATUS);
-    });
-    var status = Object.keys(vistos)
-      .sort(function (a, b) { return String(vistos[a]).localeCompare(String(vistos[b]), 'pt-BR'); });
+  /* Preenche um <select> de filtro preservando a opção "Todos…" (que é
+     sempre a primeira, com value="" e o data-i18n dela) e a escolha que
+     a pessoa já tinha feito. Os quatro combos usam esta função. */
+  function preencherFiltro(sel, itens, valorDe, textoDe) {
+    if (!sel) return;
+    var escolhido = sel.value;
+    sel.innerHTML = sel.options[0].outerHTML + (itens || []).map(function (i) {
+      return '<option value="' + valorDe(i) + '">' + textoDe(i) + '</option>';
+    }).join('');
+    sel.value = escolhido;
+  }
 
-    var estadoAtual = selUnidade.value, anoAtual = selPeriodo.value, statusAtual = selStatus.value;
-    selUnidade.innerHTML = selUnidade.options[0].outerHTML + estados.map(function (e) { return '<option value="' + e + '">' + e + '</option>'; }).join('');
-    selPeriodo.innerHTML = selPeriodo.options[0].outerHTML + anos.map(function (a) { return '<option value="' + a + '">' + a + '</option>'; }).join('');
-    selStatus.innerHTML = selStatus.options[0].outerHTML + status.map(function (s) { return '<option value="' + s + '">' + vistos[s] + '</option>'; }).join('');
-    selUnidade.value = estadoAtual;
-    selPeriodo.value = anoAtual;
-    selStatus.value = statusAtual;
+  /* Unidades e Anos — GET /api/kaizens/filtros.
+     Unidades vêm de kzn_mdm_hierarquia.NM_SITE (distintas, sem nulo nem
+     vazio, em ordem alfabética) e os anos, de kzn_pedravisaoconsolidada
+     (distintos, do mais recente para o mais antigo). Antes os dois eram
+     montados a partir dos registros já carregados na tela, o que deixava
+     a lista dependente do conteúdo da página: uma unidade sem Kaizen não
+     aparecia, e o filtro de unidade usava NM_ESTADO, não a unidade. */
+  function carregarFiltrosDoBanco() {
+    fetch('/api/kaizens/filtros', { headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : { unidades: [], anos: [] }; })
+      .then(function (dados) {
+        preencherFiltro(selUnidade, dados.unidades, function (u) { return u; }, function (u) { return u; });
+        preencherFiltro(selPeriodo, dados.anos, function (a) { return a; }, function (a) { return a; });
+      })
+      .catch(function () {});
+  }
+
+  /* Status — GET /api/status, a mesma rota da aba Administração, sobre
+     kzn_status. O VALOR da opção é o ID_STATUS (é por ele que o filtro
+     compara) e o texto é o NM_STATUS do cadastro, no idioma da tela.
+     Só os ativos: status desativado não deve ser oferecido como filtro.
+     Antes a lista saía dos registros carregados, então um status sem
+     nenhum Kaizen simplesmente não existia no combo. */
+  function carregarStatus() {
+    fetch('/api/status?idioma=' + idiomaDaTela(), { headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (itens) {
+        preencherFiltro(selStatus, (itens || []).filter(function (i) { return i.ATIVO; }),
+          function (i) { return i.ID; }, function (i) { return i.NM; });
+      })
+      .catch(function () {});
   }
 
   // Normalização usada pelos DOIS campos de busca (Nome do Kaizen e Nome
@@ -967,7 +995,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   function aplicarFiltros() {
     var nome = normalizar(inputNome.value);
     var usuario = normalizar(selUsuario.value);
-    var estado = selUnidade.value;
+    var unidade = selUnidade.value;
     var categoria = selCategoria.value;
     var status = selStatus.value;
     var ano = selPeriodo.value;
@@ -975,7 +1003,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     lote = todos.filter(function (k) {
       if (nome && normalizar(k.NM_KAIZEN).indexOf(nome) === -1) return false;
       if (usuario && normalizar(k.NM_LIDER).indexOf(usuario) === -1) return false;
-      if (estado && k.NM_ESTADO !== estado) return false;
+      // O combo passou a listar NM_SITE (a unidade de verdade); antes
+      // listava e comparava NM_ESTADO, que é o estado do líder.
+      if (unidade && k.NM_SITE !== unidade) return false;
       if (categoria && String(k.ID_CATEGORIA) !== String(categoria)) return false;
       if (status && String(k.ID_STATUS) !== String(status)) return false;
       if (ano && anoDe(k) !== ano) return false;
@@ -1006,7 +1036,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       .then(function (r) { return r.ok ? r.json() : []; })
       .then(function (itens) {
         todos = itens || [];
-        popularOpcoesDinamicas();
+        // As opções dos filtros não saem mais daqui: cada uma vem da sua
+        // tabela (ver carregarFiltrosDoBanco, carregarStatus e
+        // carregarCategorias).
         aplicarFiltros();
       })
       .catch(function () {
@@ -1130,14 +1162,19 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       .catch(function () { document.getElementById('bibModalTitulo').textContent = 'Erro ao carregar.'; });
   });
 
+  carregarFiltrosDoBanco();
   carregarCategorias();
+  carregarStatus();
   carregarResumo();
   carregarLista();
   window.addEventListener('vbm:idioma', function () {
     // O applyLang inicial também dispara este evento; recarregar aqui
     // repetiria a consulta que acabou de sair. Só refaz em troca real.
     if (idiomaDaTela() === idiomaDaLista) return;
+    // Unidade e ano não dependem do idioma (nome de site e número), então
+    // ficam de fora: seriam duas consultas para devolver a mesma lista.
     carregarCategorias();
+    carregarStatus();
     carregarLista();
   });
 })();
@@ -1261,6 +1298,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       'cat.meioAmbiente': 'Meio Ambiente',
       'cat.qualidade': 'Qualidade',
       'bib.officialRepo': 'Repositório Oficial',
+      'bib.heroTitle': 'BIBLIOTECA',
+      // O subtítulo é nome de marca (Vale Base Metals) — não se traduz;
+      // está aqui porque todo texto da hero passa pelo dicionário, e
+      // deixar um de fora era justamente o que fazia o título ficar
+      // preso em português.
+      'bib.heroSubtitle': 'KAIZENS · VALE BASE METALS',
       'bib.heroDesc': 'Todos os Kaizens aprovados da organização. Consulte, inspire-se e replique melhorias em sua área.',
       'bib.unidade': 'Unidade',
       'bib.searchPlaceholder': 'Nome do Kaizen...',
@@ -1329,6 +1372,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       'cat.meioAmbiente': 'Environment',
       'cat.qualidade': 'Quality',
       'bib.officialRepo': 'Official Repository',
+      'bib.heroTitle': 'LIBRARY',
+      'bib.heroSubtitle': 'KAIZENS · VALE BASE METALS',
       'bib.heroDesc': 'All approved Kaizens across the organization. Browse, get inspired, and replicate improvements in your area.',
       'bib.unidade': 'Unit',
       'bib.searchPlaceholder': 'Kaizen name...',

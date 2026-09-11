@@ -1091,13 +1091,19 @@ apiRouter.put("/aprovadores/:id/status", async (req, res) => {
 //
 // Mesmo recorte fixo da listagem (ID_TIPO_USUARIO = 2): o combo não
 // oferece opção que a lista nunca mostraria.
-async function opcoesDistintasDoMdm(coluna) {
+async function opcoesDistintasDoMdm(coluna, opcoes = {}) {
+  // Por padrão só os TERCEIROS: esta função nasceu para os combos da
+  // busca de terceiros do admin, onde listar unidade de gente que não é
+  // terceiro só atrapalharia. O filtro da Biblioteca precisa do
+  // contrário — todas as unidades da hierarquia —, e pede
+  // { todosOsTipos: true }.
+  const todosOsTipos = opcoes.todosOsTipos === true;
   const result = await runQuery(
     `SELECT DISTINCT ${coluna} AS VALOR
      FROM ${FULL_MDM_TABLE}
-     WHERE ID_TIPO_USUARIO = @tipo AND ${coluna} IS NOT NULL AND LTRIM(RTRIM(${coluna})) <> ''
+     WHERE ${todosOsTipos ? "" : "ID_TIPO_USUARIO = @tipo AND "}${coluna} IS NOT NULL AND LTRIM(RTRIM(${coluna})) <> ''
      ORDER BY ${coluna}`,
-    [["tipo", sql.Int, ID_TIPO_USUARIO_TERCEIRO]]
+    todosOsTipos ? [] : [["tipo", sql.Int, ID_TIPO_USUARIO_TERCEIRO]]
   );
   return result.recordset.map((r) => r.VALOR);
 }
@@ -2976,6 +2982,41 @@ apiRouter.get("/kaizens/titulo-existe", async (req, res) => {
   } catch (err) {
     console.error("[kaizens/titulo-existe] erro:", err.message);
     res.status(500).json({ error: "Erro ao verificar o título: " + err.message });
+  }
+});
+
+// GET /kaizens/filtros — o que preenche os combos da Biblioteca que
+// NÃO vêm de um cadastro próprio: Unidades e Anos.
+//
+// Categoria e Status já têm rota (/categorias e /status, sobre
+// kzn_categoria e kzn_status) e a tela usa aquelas — não há nada aqui
+// para elas. Os dois que faltavam saíam dos registros JÁ CARREGADOS na
+// tela, o que fazia a lista depender do que estava na página: uma
+// unidade sem Kaizen sumia do filtro, e um ano idem.
+//
+// Registrada ANTES de /kaizens/:id, senão "filtros" seria lido como um
+// ID (mesmo cuidado de /kaizens/resumo e /kaizens/titulo-existe).
+apiRouter.get("/kaizens/filtros", async (req, res) => {
+  try {
+    const [unidades, anos] = await Promise.all([
+      // Todas as unidades da hierarquia, não só as dos terceiros.
+      opcoesDistintasDoMdm("NM_SITE", { todosOsTipos: true }),
+      // O ano da Biblioteca é o da conclusão; sem conclusão, o da última
+      // atualização. É a MESMA expressão que o filtro ?ano= usa mais
+      // acima e que ordena a lista — se aqui fosse só DT_CONCLUSAO, a
+      // tela ofereceria anos que o filtro não sabe casar, e Kaizens sem
+      // data de conclusão ficariam fora de qualquer ano.
+      runQuery(
+        `SELECT DISTINCT YEAR(ISNULL(DT_CONCLUSAO, DT_ATUALIZACAO)) AS ANO
+           FROM ${FULL_PVC_TABLE}
+          WHERE ISNULL(DT_CONCLUSAO, DT_ATUALIZACAO) IS NOT NULL
+          ORDER BY ANO DESC`
+      ),
+    ]);
+    res.json({ unidades, anos: anos.recordset.map((r) => r.ANO) });
+  } catch (err) {
+    console.error("[kaizens/filtros] erro:", err.message);
+    res.status(500).json({ error: "Erro ao consultar os filtros: " + err.message });
   }
 });
 
