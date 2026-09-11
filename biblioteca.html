@@ -38,7 +38,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>VBM Kaizen — Biblioteca</title>
 <link href="css/fontawesome-subset.css?v=20260911-3" rel="stylesheet"/>
-<link href="css/vbm-app.css?v=20260911-2" rel="stylesheet"/>
+<link href="css/vbm-app.css?v=20260911-4" rel="stylesheet"/>
 <!-- Poppins servida pelo próprio app (css/poppins.css + assets/fonts/poppins).
      Vinha de fonts.googleapis.com: em rede sem saída para a internet o
      pedido ficava pendente e o evento load da página nunca disparava. -->
@@ -698,11 +698,13 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
                    .kd-photo-box img), o mesmo que a Aprovação usa. Um
                    style="" aqui venceria a regra e a foto continuaria
                    pequena no modal ampliado. -->
-              <img id="bibModalImgAntes" src="" alt="Antes" loading="lazy" decoding="async"/>
+              <img id="bibModalImgAntes" src="" alt="" loading="lazy" decoding="async" hidden/>
+              <div class="kd-photo-vazia" id="bibModalVazioAntes" data-i18n="kd.noImage">Sem imagem registrada</div>
               <div class="kd-photo-box-body"><div class="kd-photo-label" data-i18n="kd.before">Antes</div><div class="kd-photo-desc" id="bibModalDescAntes">—</div></div>
             </div>
             <div class="kd-photo-box">
-              <img id="bibModalImgDepois" src="" alt="Depois" loading="lazy" decoding="async"/>
+              <img id="bibModalImgDepois" src="" alt="" loading="lazy" decoding="async" hidden/>
+              <div class="kd-photo-vazia" id="bibModalVazioDepois" data-i18n="kd.noImage">Sem imagem registrada</div>
               <div class="kd-photo-box-body"><div class="kd-photo-label" data-i18n="kd.after">Depois</div><div class="kd-photo-desc" id="bibModalDescDepois">—</div></div>
             </div>
           </div>
@@ -783,6 +785,43 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
      do próprio Kaizen (chega como DT_CRIACAO na resposta), e é ela que
      autoriza o servidor a marcar a resposta como imutável — sem isso
      cada foto era rebuscada do volume do Databricks a cada minuto. */
+  /* Mostra a foto OU um aviso no lugar dela — nunca um <img src="">.
+     Com src vazio o navegador resolve para a URL da própria página,
+     baixa o HTML, não consegue decodificar e desenha o ícone de imagem
+     quebrada com o texto alternativo ao lado: parecia defeito da tela
+     quando era só um Kaizen sem a foto de "Depois".
+
+     Dois casos levam ao mesmo aviso: não há caminho gravado, e há
+     caminho mas o arquivo não voltou do volume (onerror). É o mesmo
+     tratamento que o relatório A4 já faz. */
+  function mostrarFoto(idImg, idVazio, url) {
+    var img = document.getElementById(idImg);
+    var vazio = document.getElementById(idVazio);
+    if (!img || !vazio) return;
+    var semFoto = function (chave, padrao) {
+      img.hidden = true;
+      img.removeAttribute('src');
+      vazio.hidden = false;
+      vazio.dataset.i18n = chave;
+      vazio.textContent = txtI18n(chave, padrao);
+    };
+    if (!url) { semFoto('kd.noImage', 'Sem imagem registrada'); return; }
+
+    // A foto aparece de imediato; o aviso só entra se ela FALHAR. Um
+    // estado intermediário de "carregando" não cabe aqui: a caixa já
+    // tem fundo neutro, então não há salto de layout a esconder — e ele
+    // ficava preso na tela quando o mesmo Kaizen era reaberto, porque
+    // atribuir o MESMO src não dispara 'load' de novo.
+    img.onerror = function () { semFoto('kd.imageFailed', 'Imagem não disponível'); };
+    img.onload = null;
+    img.hidden = false;
+    vazio.hidden = true;
+    if (img.getAttribute('src') !== url) img.src = url;
+    // Reabrir com a MESMA url: o load já aconteceu (ou já falhou) e não
+    // vai disparar outra vez — o estado é decidido aqui, na hora.
+    else if (img.complete && img.naturalWidth === 0) semFoto('kd.imageFailed', 'Imagem não disponível');
+  }
+
   function urlImagem(path, versao) {
     if (!path) return '';
     var url = '/api/kaizens/imagem?path=' + encodeURIComponent(path);
@@ -1248,9 +1287,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     document.getElementById('bibModalMetas').innerHTML = metas;
     document.getElementById('bibModalProblema').textContent = k.DS_PROBLEMA || '—';
     document.getElementById('bibModalObjetivo').textContent = k.DS_OBJETIVO || '—';
-    document.getElementById('bibModalImgAntes').src = urlImagem(k.URL_IMG_ANTES, k.DT_CRIACAO);
+    mostrarFoto('bibModalImgAntes', 'bibModalVazioAntes', urlImagem(k.URL_IMG_ANTES, k.DT_CRIACAO));
     document.getElementById('bibModalDescAntes').textContent = k.DS_ESTADO_ANTES || '—';
-    document.getElementById('bibModalImgDepois').src = urlImagem(k.URL_IMG_DEPOIS, k.DT_CRIACAO);
+    mostrarFoto('bibModalImgDepois', 'bibModalVazioDepois', urlImagem(k.URL_IMG_DEPOIS, k.DT_CRIACAO));
     document.getElementById('bibModalDescDepois').textContent = k.DS_ESTADO_DEPOIS || '—';
 
     var boxes = [];
@@ -1531,6 +1570,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       'bib.editBlocked': 'Edição indisponível para o status atual',
       'bib.loadMore': 'Carregar mais',
       'bib.loading': 'Carregando…',
+      'kd.noImage': 'Sem imagem registrada',
+      'kd.imageFailed': 'Imagem não disponível',
       'bib.empty': 'Nenhum Kaizen encontrado.',
       'bib.loadError': 'Erro ao carregar a Biblioteca.',
       'bib.summaryTitle': 'Resumo da Biblioteca',
@@ -1626,6 +1667,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       'bib.editBlocked': 'Editing unavailable for the current status',
       'bib.loadMore': 'Load more',
       'bib.loading': 'Loading…',
+      'kd.noImage': 'No image on file',
+      'kd.imageFailed': 'Image unavailable',
       'bib.empty': 'No Kaizen found.',
       'bib.loadError': 'The Library could not be loaded.',
       'bib.summaryTitle': 'Library Summary',

@@ -1630,6 +1630,30 @@ textarea.lang-slot-input.form-control { min-height: 1.4rem; resize: vertical; }
   border: 1px solid #eaeaea; border-radius: 0.5rem; overflow: hidden;
 }
 .kd-photo-box img { width: 100%; height: 140px; object-fit: cover; }
+/* Kaizen sem foto de "Antes"/"Depois", ou foto que não veio do volume.
+   Antes o <img> ficava com src="" — o navegador resolve isso para a
+   URL da PRÓPRIA PÁGINA, baixa o HTML, não consegue decodificar como
+   imagem e desenha o ícone de imagem quebrada com o texto alternativo
+   ao lado. Parecia defeito da tela quando era só ausência de foto.
+   Este bloco ocupa o mesmo espaço da imagem, então o cartão não muda
+   de altura conforme tenha ou não foto. */
+.kd-photo-vazia {
+  width: 100%; height: 140px;
+  display: flex; align-items: center; justify-content: center;
+  text-align: center; padding: 1rem;
+  background: #f4f6f8; color: #5f6b74;
+  font-size: 0.78rem; line-height: 1.4;
+}
+/* #5f6b74 e não --vbm-mid (#888): sobre o #f4f6f8 da caixa, o cinza do
+   token dá 3,27:1 e fica abaixo do mínimo de leitura. Este dá 5,05:1
+   sem mudar o tom da interface. */
+/* O atributo hidden PRECISA destas duas linhas. A regra do navegador é
+   [hidden]{display:none}, e qualquer display declarado aqui — o flex
+   acima, o block que .kd-photo-box img recebe — vence por vir de folha
+   de autor. Sem isto, esconder pelo atributo não esconde nada: a foto
+   quebrada e o aviso apareciam os dois, empilhados. */
+.kd-photo-vazia[hidden],
+.kd-photo-box img[hidden] { display: none !important; }
 .kd-photo-box-body { padding: 0.65rem 0.75rem; }
 .kd-photo-label {
   font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.15em;
@@ -1666,6 +1690,10 @@ textarea.lang-slot-input.form-control { min-height: 1.4rem; resize: vertical; }
   object-fit: contain;
   background: #f4f6f8;
 }
+/* O vazio acompanha a MESMA altura da foto, senão o cartão sem imagem
+   encolhe e a dupla Antes/Depois fica desalinhada. */
+#modalKaizenAmpliado .kd-photo-vazia,
+#modalBibDetail .kd-photo-vazia { height: clamp(240px, 38vh, 460px); font-size: 0.86rem; }
 @media (max-width: 900px) {
   #modalKaizenAmpliado .modal,
   #modalBibDetail .modal { width: 100%; max-height: 92vh; }
@@ -1674,7 +1702,9 @@ textarea.lang-slot-input.form-control { min-height: 1.4rem; resize: vertical; }
   #modalKaizenAmpliado .kd-section-body,
   #modalBibDetail .kd-section-body { padding: 1rem 1.1rem; }
   #modalKaizenAmpliado .kd-photo-box img,
-  #modalBibDetail .kd-photo-box img { height: clamp(180px, 30vh, 300px); }
+  #modalBibDetail .kd-photo-box img,
+  #modalKaizenAmpliado .kd-photo-vazia,
+  #modalBibDetail .kd-photo-vazia { height: clamp(180px, 30vh, 300px); }
 }
 
 /* Tema escuro do Kaizen lido por inteiro.
@@ -1695,6 +1725,9 @@ textarea.lang-slot-input.form-control { min-height: 1.4rem; resize: vertical; }
 [data-bg="dark"] .kd-section-icon { background: rgba(60,181,229,.16); color: var(--vbm-blue-light); }
 [data-bg="dark"] .kd-section-title { color: #fff; }
 [data-bg="dark"] .kd-photo-box { background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.12); }
+/* No escuro o texto compõe sobre a caixa translúcida: 60% de branco dá
+   5,87:1; os 50% que o resto do tema usa ficariam no limite. */
+[data-bg="dark"] .kd-photo-vazia { background: rgba(255,255,255,.04); color: rgba(255,255,255,.6); }
 [data-bg="dark"] .kd-photo-desc { color: rgba(255,255,255,.6); }
 /* Os cartões de "Resultados Alcançados" são montados por script com
    background:var(--vbm-off-white) no atributo style — inline vence
