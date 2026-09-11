@@ -768,21 +768,34 @@ body[data-bg="dark"] {
              recursos menos importantes;
            • decoding="async" — a decodificação sai da thread principal,
              então a interface não congela enquanto a imagem é processada.
-         ATENÇÃO (ver relatório): este arquivo embute 5 PNGs em base64 —
-         um deles é uma FOTO 2400x1145 salva como PNG (3,9 MB). Por ser
-         base64 ele quase não comprime (gzip só tira 31%) e é, disparado,
-         o maior gargalo do app. A correção de verdade é reexportar essa
-         foto como WebP/JPEG (fica na casa de 200–400 KB), o que não foi
-         feito aqui por não haver ferramenta de imagem neste ambiente e
-         por exigir conferência visual do resultado. (Tirar as duas fontes
-         embutidas de dentro dele já devolveu 1,35 MB — ver abaixo.)
+         A ARTE É O 00_COMPOSICAO_ARTE.webp (162 KB). Antes era o
+         00_COMPOSICAO_COMPLETA.svg, de 6,9 MB: um SVG que servia só de
+         embrulho para 5 PNGs em base64 — um deles uma FOTO 2400x1145
+         salva como PNG (3,9 MB) — e que, por ser base64, quase não
+         comprimia (gzip tirava 31%). Era, disparado, o maior gargalo do
+         app. Como o conteúdo já era todo raster, gerar um WebP no mesmo
+         tamanho (2400x1145) não perde nada de nitidez: o que se perde é
+         só o peso. Conferido lado a lado com a versão vetorial em
+         1920x1080, inclusive no símbolo VPS e na textura da rocha, que
+         são as partes mais sensíveis.
 
-         O TEXTO DA HERO NÃO ESTÁ MAIS DENTRO DA IMAGEM. Ele era <text>
+         Os dois arquivos antigos continuam em assets/images mas NÃO são
+         mais usados por ninguém: o 00_COMPOSICAO_COMPLETA.svg e o
+         00_COMPOSICAO_COMPLETA.webp (este último tem o texto embutido,
+         com outra fonte — se fosse usado aqui, o texto apareceria duas
+         vezes).
+
+         Limite conhecido: 2400 px de largura. Em telas maiores que isso
+         a arte é ampliada e perde um pouco de nitidez — exatamente como
+         acontecia antes, já que os PNGs dentro do SVG também tinham
+         2400 px.
+
+         O TEXTO DA HERO NÃO ESTÁ DENTRO DA IMAGEM. Ele era <text>
          dentro do SVG e, por vir por <img>, ficava fora do alcance da
          página: não dava para traduzir nem para trocar a cor. Agora a
-         arte continua no <img> e as palavras vêm no <svg> logo abaixo,
-         no MESMO sistema de coordenadas (viewBox 2400x1145) e com o
-         mesmo enquadramento do object-fit da imagem — por isso aparecem
+         arte vem no <img> e as palavras no <svg> logo abaixo, no MESMO
+         sistema de coordenadas (viewBox 2400x1145) e com o mesmo
+         enquadramento do object-fit da imagem — por isso aparecem
          exatamente onde apareciam. Sendo DOM de verdade, entram no
          data-i18n como qualquer outro texto da tela. -->
     <div class="dash-hero">
@@ -791,7 +804,7 @@ body[data-bg="dark"] {
            milissegundos de diferença para o texto descolar da arte. -->
       <div class="dash-hero-zoom">
         <img class="dash-hero-bg-img"
-             src="assets/images/00_COMPOSICAO_COMPLETA.svg"
+             src="assets/images/00_COMPOSICAO_ARTE.webp"
              fetchpriority="high"
              decoding="async"
              data-i18n-alt="hero.alt"
