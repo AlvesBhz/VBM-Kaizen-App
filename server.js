@@ -2994,25 +2994,50 @@ apiRouter.get("/kaizens", async (req, res) => {
     // Unidade e líder passaram a filtrar AQUI. Eram peneirados no
     // navegador, o que só funcionava porque a base inteira ia junto.
     if (site) { filtros.push("autor.NM_SITE = @site"); params.push(["site", sql.NVarChar(200), site]); }
-    if (lider) { filtros.push("lider.NM_USUARIO LIKE @lider"); params.push(["lider", sql.NVarChar(255), termoContem(lider)]); }
+    // COLLATE ..._CI_AI: a peneira de usuário rodava no NAVEGADOR, com
+    // normalizar() — minúsculas e SEM acento. Trazida para o SQL, ela
+    // passaria a depender da collation do banco; a padrão do Azure SQL é
+    // _CI_AS (acento-SENSÍVEL), e "Jose" deixaria de achar "José". O
+    // COLLATE explícito devolve exatamente o comportamento anterior.
+    // Não custa plano: LIKE com % à esquerda já não usa índice.
+    if (lider) {
+      filtros.push("lider.NM_USUARIO COLLATE Latin1_General_CI_AI LIKE @lider COLLATE Latin1_General_CI_AI");
+      params.push(["lider", sql.NVarChar(255), termoContem(lider)]);
+    }
     // Faixa de datas em vez de YEAR(coluna): função sobre a coluna
     // impede o uso de índice e obrigava a varrer a tabela mesmo com o
     // filtro de ano aplicado.
     if (ano != null) {
-      filtros.push(`${dataRef} >= @iniAno AND ${dataRef} < @fimAno`);
-      params.push(["iniAno", sql.DateTime2, new Date(Date.UTC(ano, 0, 1))]);
-      params.push(["fimAno", sql.DateTime2, new Date(Date.UTC(ano + 1, 0, 1))]);
+      // Limites como TEXTO 'AAAA-01-01' convertidos no próprio SQL: um
+      // objeto Date passaria pelo fuso do driver e do servidor, e a
+      // virada do ano poderia deslocar algumas horas — Kaizens do dia
+      // 1º de janeiro cairiam no ano errado.
+      filtros.push(`${dataRef} >= CONVERT(DATETIME2, @iniAno, 23) AND ${dataRef} < CONVERT(DATETIME2, @fimAno, 23)`);
+      params.push(["iniAno", sql.VarChar(10), `${ano}-01-01`]);
+      params.push(["fimAno", sql.VarChar(10), `${ano + 1}-01-01`]);
     }
     if (q) {
-      filtros.push("(p.NM_KAIZEN LIKE @q OR lider.NM_USUARIO LIKE @q OR CAST(p.ID_KAIZEN AS VARCHAR(20)) LIKE @q)");
+      // Mesma razão do filtro de líder: a busca era feita sem acento no
+      // navegador e precisa continuar assim.
+      filtros.push(
+        "(p.NM_KAIZEN COLLATE Latin1_General_CI_AI LIKE @q COLLATE Latin1_General_CI_AI" +
+        " OR lider.NM_USUARIO COLLATE Latin1_General_CI_AI LIKE @q COLLATE Latin1_General_CI_AI" +
+        " OR CAST(p.ID_KAIZEN AS VARCHAR(20)) LIKE @q)"
+      );
       params.push(["q", sql.NVarChar(255), termoContem(q)]);
     }
     params.push(["deslocamento", sql.Int, pagina * tamanho]);
     params.push(["tamanho", sql.Int, tamanho]);
 
-    // Os dois OUTER APPLY precisam existir também na contagem: "site" e
-    // "líder" filtram por colunas que vêm deles.
+    // Fonte ÚNICA para a listagem e para a contagem — as duas têm de
+    // enxergar exatamente as mesmas linhas. Os dois OUTER APPLY entram
+    // porque "site" e "líder" filtram por colunas que vêm deles; os dois
+    // LEFT JOIN entram porque a listagem seleciona cat.NM_CATEGORIA e
+    // st.NM_STATUS. São relações 1:1 (uma linha por ID e idioma), então
+    // não alteram a contagem.
     const fonte = `FROM ${FULL_PVC_TABLE} p
+       LEFT JOIN ${FULL_CATEGORIA_TABLE} cat ON cat.ID_CATEGORIA = p.ID_CATEGORIA AND cat.ID_IDIOMA = @idIdioma
+       LEFT JOIN ${FULL_STATUS_TABLE} st ON st.ID_STATUS = p.ID_STATUS AND st.ID_IDIOMA = @idIdioma
        OUTER APPLY (
          SELECT TOP (1) x.NM_USUARIO, x.NM_ESTADO, x.NM_CIDADE
            FROM ${FULL_MDM_TABLE} x
