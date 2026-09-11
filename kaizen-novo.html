@@ -346,6 +346,30 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 .campo-contador.no-limite { color: #c2770e; }
 [data-bg="dark"] .campo-contador { color: rgba(255,255,255,.55); }
 [data-bg="dark"] .campo-contador.no-limite { color: #f0b45f; }
+
+/* Data de Conclusão — o campo só precisa comportar "dd/mm/aaaa" e o
+   ícone do calendário; ocupando a coluna inteira ficava com uma sobra
+   enorme à direita. A largura é a do conteúdo, não a da coluna. */
+.campo-data { max-width: 11rem; }
+/* O ícone da esquerda aqui é um BOTÃO (abre o calendário), então precisa
+   receber clique — o .input-icon do vbm-app.css é decorativo e tem
+   pointer-events: none. O resto (posição, cor, transição no foco) vem
+   de lá e não é repetido. */
+.campo-data-botao {
+  pointer-events: auto; cursor: pointer;
+  background: none; border: 0; padding: 0; line-height: 1;
+}
+.campo-data-botao:focus-visible { outline: 2px solid var(--vbm-blue); outline-offset: 2px; border-radius: 3px; }
+/* O <input type="date"> de verdade fica recolhido: é ele que guarda o
+   valor em ISO, que o navegador valida e que abre o calendário. Não
+   pode ser display:none — o showPicker() só funciona em elemento que
+   está sendo renderizado. Encostado embaixo do campo para o calendário
+   abrir junto dele. */
+.campo-data-nativo {
+  position: absolute; left: .9rem; bottom: 0;
+  width: 1px; height: 1px; padding: 0; border: 0;
+  opacity: 0; pointer-events: none;
+}
 .field-tag-optional { font-weight: 400; }
 /* Textos dentro de componentes/"objetos" (toggle, checkbox de confirmação,
    zona de upload) estavam maiores que o restante da hierarquia — alinhados
@@ -887,12 +911,33 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
                nascem desabilitados, e a conclusão do Kaizen não depende
                de ele ter gerado um resultado ou outro.
                O `max` é acertado por script para ONTEM — ver o bloco
-               "Data de Conclusão" no final da página. -->
+               "Data de Conclusão" no final da página.
+
+               POR QUE SÃO DOIS CAMPOS: um <input type="date"> mostra a
+               data no formato do NAVEGADOR/sistema, e nada na página
+               muda isso — nem o atributo lang, nem o idioma escolhido
+               aqui (testado). Como a data tem de acompanhar o idioma da
+               tela, quem aparece é um campo de texto formatado por nós
+               (dd/mm/aaaa em português, mm/dd/yyyy em inglês) e o
+               <input type="date"> fica recolhido ao lado, guardando o
+               valor em ISO e servindo de calendário quando o ícone é
+               clicado. O name= continua no campo de data: é dele que
+               sai o data_conclusao do envio, sempre em "YYYY-MM-DD". -->
           <div class="form-group">
             <div class="form-grid form-grid-2">
               <div class="form-group" style="margin-bottom:0;">
-                <label class="form-label" data-i18n="f.completionDate">Data de Conclusão</label>
-                <input type="date" class="form-control" id="data_conclusao" name="data_conclusao"/>
+                <label class="form-label" for="data_conclusao_texto" data-i18n="f.completionDate">Data de Conclusão</label>
+                <div class="input-with-icon campo-data">
+                  <button type="button" class="input-icon campo-data-botao" id="data_conclusao_abrir"
+                          data-i18n-aria="f.completionDateOpen" aria-label="Abrir calendário">
+                    <i class="fa-solid fa-calendar"></i>
+                  </button>
+                  <input type="text" class="form-control" id="data_conclusao_texto"
+                         inputmode="numeric" autocomplete="off" maxlength="10"
+                         placeholder="dd/mm/aaaa" data-i18n-placeholder="f.completionDateFormat"/>
+                  <input type="date" id="data_conclusao" name="data_conclusao"
+                         class="campo-data-nativo" tabindex="-1" aria-hidden="true"/>
+                </div>
                 <div class="form-helper" data-i18n="f.completionDateHelper">Data em que o Kaizen foi concluído. Deve ser anterior à data de hoje.</div>
               </div>
             </div>
@@ -1177,6 +1222,8 @@ function rotuloPessoa(p) {
       'f.completionDate': 'Data de Conclusão',
       'f.completionDateHelper': 'Data em que o Kaizen foi concluído. Deve ser anterior à data de hoje.',
       'f.completionDateInvalid': 'Data de Conclusão (deve ser anterior à data de hoje)',
+      'f.completionDateFormat': 'dd/mm/aaaa',
+      'f.completionDateOpen': 'Abrir calendário',
       'wiz.title': 'Novo Kaizen',
       'wiz.subtitle': 'Registre sua iniciativa de melhoria contínua em 4 etapas',
       'wiz.step1': 'Iniciativa',
@@ -1325,6 +1372,8 @@ function rotuloPessoa(p) {
       'f.completionDate': 'Completion Date',
       'f.completionDateHelper': 'Date the Kaizen was completed. Must be earlier than today.',
       'f.completionDateInvalid': 'Completion Date (must be earlier than today)',
+      'f.completionDateFormat': 'mm/dd/yyyy',
+      'f.completionDateOpen': 'Open calendar',
       'wiz.title': 'New Kaizen',
       'wiz.subtitle': 'Register your continuous improvement initiative in 4 steps',
       'wiz.step1': 'Initiative',
@@ -1974,6 +2023,99 @@ window.VBMDataBrasilia = {
   }
 };
 
+// ─── Data de Conclusão: formato conforme o idioma ───
+// Um <input type="date"> mostra a data no formato do NAVEGADOR/sistema
+// e ignora tanto o atributo lang quanto o idioma escolhido na tela —
+// conferido nos dois sentidos. Como a data tem de acompanhar o idioma,
+// quem aparece é um campo de TEXTO formatado aqui (dd/mm/aaaa em
+// português, mm/dd/yyyy em inglês) e o campo de data fica recolhido ao
+// lado, guardando o valor em ISO, servindo de calendário e sendo o que
+// o envio lê. Os dois andam sempre juntos.
+window.VBMDataConclusao = (function () {
+  var texto = document.getElementById('data_conclusao_texto');
+  var iso = document.getElementById('data_conclusao');
+  var botao = document.getElementById('data_conclusao_abrir');
+  if (!texto || !iso) return { sincronizar: function () {} };
+
+  function idioma() {
+    return (window.__i18nLang === 'en') ? 'en' : 'pt-BR';
+  }
+  // Cada idioma diz só a ORDEM dos três números; o resto do tratamento
+  // é o mesmo para os dois.
+  function ordem() { return idioma() === 'en' ? ['m', 'd', 'a'] : ['d', 'm', 'a']; }
+
+  /** ISO "YYYY-MM-DD" -> texto no formato do idioma atual. */
+  function formatar(valorIso) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(valorIso || '')) return '';
+    var p = { a: valorIso.slice(0, 4), m: valorIso.slice(5, 7), d: valorIso.slice(8, 10) };
+    return ordem().map(function (k) { return p[k]; }).join('/');
+  }
+
+  /** Texto digitado -> ISO. Devolve '' quando não dá uma data real:
+   *  vale tanto para "12/" quanto para "31/02/2026", que tem o formato
+   *  certo mas não é dia nenhum. */
+  function paraIso(valorTexto) {
+    var n = String(valorTexto || '').replace(/\D/g, '');
+    if (n.length !== 8) return '';
+    var o = ordem(), p = {};
+    // Os dois primeiros campos têm 2 dígitos e o ano tem 4, na ordem do
+    // idioma — por isso o fatiamento acompanha `ordem()`.
+    p[o[0]] = n.slice(0, 2); p[o[1]] = n.slice(2, 4); p[o[2]] = n.slice(4, 8);
+    var candidato = p.a + '-' + p.m + '-' + p.d;
+    var d = new Date(candidato + 'T00:00:00Z');
+    if (isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== candidato) return '';
+    return candidato;
+  }
+
+  /** Máscara enquanto digita: só números, barras entram sozinhas. */
+  function mascarar(valorTexto) {
+    var n = String(valorTexto || '').replace(/\D/g, '').slice(0, 8);
+    if (n.length <= 2) return n;
+    if (n.length <= 4) return n.slice(0, 2) + '/' + n.slice(2);
+    return n.slice(0, 2) + '/' + n.slice(2, 4) + '/' + n.slice(4);
+  }
+
+  // texto -> ISO
+  texto.addEventListener('input', function () {
+    var cursorNoFim = texto.selectionStart === texto.value.length;
+    texto.value = mascarar(texto.value);
+    if (cursorNoFim) texto.setSelectionRange(texto.value.length, texto.value.length);
+    iso.value = paraIso(texto.value);
+  });
+  // Ao sair do campo, o que não virou data real é reescrito a partir do
+  // ISO (ou some, se não houver ISO): não fica meia data na tela.
+  texto.addEventListener('blur', function () { texto.value = formatar(iso.value); });
+
+  // calendário -> texto
+  iso.addEventListener('change', function () { texto.value = formatar(iso.value); });
+  if (botao) {
+    botao.addEventListener('click', function () {
+      if (typeof iso.showPicker === 'function') {
+        // showPicker lança quando o navegador não deixa abrir assim;
+        // nesse caso o campo de texto continua servindo para digitar.
+        try { iso.showPicker(); return; } catch (e) {}
+      }
+      texto.focus();
+    });
+  }
+
+  // Troca de idioma: reescreve o que já está preenchido no novo formato.
+  window.addEventListener('vbm:idioma', function () { texto.value = formatar(iso.value); });
+
+  return {
+    // Usada pela carga da edição, que preenche o ISO por script —
+    // atribuir .value não dispara 'change'.
+    sincronizar: function () { texto.value = formatar(iso.value); }
+  };
+})();
+
+// ─── Data de Conclusão: teto no calendário ───
+// A regra é "anterior à data de hoje", então o maior dia escolhível é
+// ONTEM. Acertar o `max` faz o próprio calendário do navegador
+// desabilitar hoje e o futuro — o usuário nem chega a errar. Não é a
+// barreira: digitação direta e colagem passam por cima do `max`, e por
+// isso a mesma conta é refeita no envio (dataConclusaoValida) e no
+// servidor (lerKaizenDoCorpo), que é quem de fato decide.
 (function () {
   var campo = document.getElementById('data_conclusao');
   if (!campo) return;
@@ -2493,7 +2635,9 @@ window.validacaoWizard = (function () {
      conta — mesmo critério de lerKaizenDoCorpo em server.js. */
   function dataConclusaoValida() {
     var v = valor('data_conclusao');
-    if (!v) return true;                       // campo opcional
+    // Texto preenchido sem ISO por trás = o que foi digitado não virou
+    // data (dia inexistente, data pela metade). Não é "campo vazio".
+    if (!v) return !valor('data_conclusao_texto');
     return /^\d{4}-\d{2}-\d{2}$/.test(v) && v < window.VBMDataBrasilia.hoje();
   }
 
@@ -2533,8 +2677,16 @@ window.validacaoWizard = (function () {
     // anterior a hoje. O `max` do input já impede escolher no
     // calendário, mas digitação direta e colagem passam por cima dele —
     // e o servidor confere de novo, de qualquer forma.
-    if (valor('data_conclusao') && !dataConclusaoValida()) {
-      faltando.push({ id: 'data_conclusao', chave: 'f.completionDateInvalid',
+    //
+    // A conferência olha o campo VISÍVEL: se a pessoa digitou algo que
+    // não virou data (um dia que não existe, a data pela metade), o
+    // campo de data fica vazio e o envio seguiria em silêncio, como se
+    // ela não tivesse preenchido nada.
+    if ((valor('data_conclusao_texto') || valor('data_conclusao')) && !dataConclusaoValida()) {
+      // Aponta para o campo VISÍVEL: o de data está recolhido, e
+      // destacar/focar um elemento invisível não leva a pessoa a lugar
+      // nenhum.
+      faltando.push({ id: 'data_conclusao_texto', chave: 'f.completionDateInvalid',
                       padrao: 'Data de Conclusão (deve ser anterior à data de hoje)' });
     }
 
@@ -2777,8 +2929,11 @@ function txtEdicao(chave, padrao) {
       texto('licoes_aprendidas', k.licoes_aprendidas);
       texto('comparacao_meta_inicial', k.comparacao_meta_inicial);
       // DT_CONCLUSAO volta como "YYYY-MM-DD", que é o valor que o
-      // <input type="date"> aceita. Nulo deixa o campo vazio.
+      // <input type="date"> aceita. Nulo deixa o campo vazio. O campo
+      // visível é escrito em seguida: atribuir .value não dispara
+      // 'change', então ele não se atualizaria sozinho.
       texto('data_conclusao', k.data_conclusao || '');
+      if (window.VBMDataConclusao) window.VBMDataConclusao.sincronizar();
       selecionar('id_categoria', k.id_categoria);
       selecionar('id_replicacao_potencial', k.id_replicacao);
       selecionar('id_aprovador', k.id_usuario_aprovador);
