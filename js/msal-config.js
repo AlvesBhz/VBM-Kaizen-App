@@ -41,6 +41,19 @@
   var instancia = null;
   var carregando = null;
 
+  /* Endereço de retorno do login. Precisa ser a URL da PÁGINA, sem a
+     query nem o fragmento: o Entra ID compara o redirect_uri com a
+     lista registrada por IGUALDADE EXATA, e window.location.href numa
+     tela como kaizen-novo.html?id=123 pediria o retorno para
+     ".../kaizen-novo.html?id=123" — que ninguém consegue registrar,
+     porque muda a cada Kaizen. O login falharia com AADSTS50011 logo na
+     edição, justamente onde o comunicado é enviado.
+     Assim, bastam TRÊS endereços registrados: index.html,
+     aprovacao.html e kaizen-novo.html. */
+  function enderecoDeRetorno() {
+    return window.location.origin + window.location.pathname;
+  }
+
   function estaConfigurado() {
     return CONFIG.clientId !== 'SEU_CLIENT_ID_AQUI'
       && CONFIG.authority.indexOf('SEU_TENANT_ID_AQUI') === -1;
@@ -72,7 +85,7 @@
         auth: {
           clientId: CONFIG.clientId,
           authority: CONFIG.authority,
-          redirectUri: window.location.href
+          redirectUri: enderecoDeRetorno()
         },
         cache: { cacheLocation: 'sessionStorage' }
       });
@@ -85,6 +98,7 @@
 
   window.VBMMsal = {
     config: CONFIG,
+    enderecoDeRetorno: enderecoDeRetorno,
     estaConfigurado: estaConfigurado,
     carregarMsal: carregarMsal,
     obterInstancia: obterInstancia

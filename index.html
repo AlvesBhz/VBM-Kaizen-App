@@ -831,7 +831,7 @@ body[data-bg="dark"] {
 <script src="js/usuario-graph.js?v=20260817-1"></script>
 <!-- clientId/authority do Entra ID: fonte única, usada também pela tela
      de Aprovação para enviar o aviso da decisão. -->
-<script src="js/msal-config.js?v=20260910-1"></script>
+<script src="js/msal-config.js?v=20260912-1"></script>
 <script>
 // ─── Login com conta Microsoft (MSAL.js / Azure AD - Entra ID) ───
 // PENDENTE DE CONFIGURAÇÃO: preencha clientId e authority abaixo com os
@@ -856,7 +856,9 @@ body[data-bg="dark"] {
   var MSAL_CONFIG = {
     clientId: window.VBMMsal.config.clientId,
     authority: window.VBMMsal.config.authority,
-    redirectUri: window.location.href
+    // Sem a query nem o fragmento — o Entra compara o redirect_uri por
+    // igualdade exata. Ver enderecoDeRetorno() em js/msal-config.js.
+    redirectUri: window.location.origin + window.location.pathname
   };
   var LOGIN_SCOPES = ['User.Read'];
 
