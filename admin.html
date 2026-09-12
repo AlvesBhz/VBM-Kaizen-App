@@ -187,8 +187,14 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 [data-bg="dark"] .modal-body [style*="background:var(--vbm-blue-pale)"]{background:rgba(60,181,229,.12) !important;border-color:rgba(60,181,229,.3) !important}
 
 /* ─── Admin page extras ─── */
-.admin-hero{position:relative;border-radius:1.25rem;overflow:hidden;margin-bottom:1.5rem;background:linear-gradient(135deg,#020e1c 0%,#082d4f 60%,#0d3d6b 100%);padding:2rem 2rem 3.5rem;}
-.admin-hero{background-image:url('assets/images/Fundo_VBM_2400x1145.webp');background-size:cover;background-position:center;}
+.admin-hero{position:relative;border-radius:1.25rem;overflow:hidden;margin-bottom:1.5rem;background-color:#020e1c;padding:2rem 2rem 3.5rem;}
+/* A foto e o gradiente na MESMA declaração, a foto por cima. A regra
+   anterior punha o gradiente no atalho "background" e, na linha
+   seguinte, o background-image SUBSTITUÍA o gradiente pela foto — se a
+   foto não carrega, o bloco fica sem fundo nenhum e o texto branco
+   some no branco da página. Como camadas, a foto sumir só revela o
+   gradiente escuro, e a tela continua legível. */
+.admin-hero{background-image:url('assets/images/Fundo_VBM_2400x1145.webp'),linear-gradient(135deg,#020e1c 0%,#082d4f 60%,#0d3d6b 100%);background-size:cover;background-position:center;}
 .admin-hero-orb{position:absolute;border-radius:50%;filter:blur(60px);pointer-events:none;}
 .admin-hero-orb-1{width:400px;height:400px;background:radial-gradient(circle,rgba(60,181,229,.2) 0%,transparent 65%);top:-80px;right:-80px;animation:orb1 22s ease-in-out infinite;}
 .admin-hero-orb-2{width:200px;height:200px;background:radial-gradient(circle,rgba(99,102,241,.18) 0%,transparent 65%);bottom:-40px;left:120px;animation:orb2 18s ease-in-out infinite;}

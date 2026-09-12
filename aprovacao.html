@@ -398,7 +398,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
   <div class="page-content">
 
     <!-- Hero banner — mesmo layout/linguagem do hero de biblioteca.html -->
-    <div style="position:relative;border-radius:1.25rem;overflow:hidden;margin-bottom:1.5rem;background:linear-gradient(135deg,#041523,#082d4f);background-image:url('assets/images/Fundo_Sossego_2400x1145.webp');background-size:cover;background-position:center;padding:2rem;">
+    <div style="position:relative;border-radius:1.25rem;overflow:hidden;margin-bottom:1.5rem;background-color:#041523;background-image:url('assets/images/Fundo_Sossego_2400x1145.webp'),linear-gradient(135deg,#041523,#082d4f);background-size:cover;background-position:center;padding:2rem;">
       <div style="position:absolute;width:350px;height:350px;border-radius:50%;background:radial-gradient(circle,rgba(60,181,229,.18) 0%,transparent 65%);top:-100px;right:-60px;filter:blur(50px);animation:orb1 20s ease-in-out infinite;pointer-events:none;"></div>
       <div style="position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;">
         <div>
@@ -492,11 +492,13 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
             <div class="kd-section-body">
               <div class="kd-before-after">
                 <div class="kd-photo-box">
-                  <img id="kdImgAntes" src="" alt="Antes" loading="lazy" decoding="async"/>
+                  <img id="kdImgAntes" src="" alt="" loading="lazy" decoding="async" hidden/>
+                  <div class="kd-photo-vazia" id="kdVazioAntes" data-i18n="kd.noImage">Sem imagem registrada</div>
                   <div class="kd-photo-box-body"><div class="kd-photo-label" data-i18n="kd.before">Antes</div><div class="kd-photo-desc" id="kdDescAntes">—</div></div>
                 </div>
                 <div class="kd-photo-box">
-                  <img id="kdImgDepois" src="" alt="Depois" loading="lazy" decoding="async"/>
+                  <img id="kdImgDepois" src="" alt="" loading="lazy" decoding="async" hidden/>
+                  <div class="kd-photo-vazia" id="kdVazioDepois" data-i18n="kd.noImage">Sem imagem registrada</div>
                   <div class="kd-photo-box-body"><div class="kd-photo-label" data-i18n="kd.after">Depois</div><div class="kd-photo-desc" id="kdDescDepois">—</div></div>
                 </div>
               </div>
@@ -629,6 +631,42 @@ var decisaoEmCurso = false;
 function txt(chave, padrao) {
   return (window.__i18n && window.__i18n[chave]) || padrao;
 }
+
+/* Endereço da foto, com a versão do Kaizen na URL: o arquivo se chama
+   pelo ID e não muda de nome quando a foto é trocada, então é a versão
+   que diz ao navegador que o conteúdo é outro. */
+function urlFoto(caminho, versao) {
+  if (!caminho) return '';
+  var url = '/api/kaizens/imagem?path=' + encodeURIComponent(caminho);
+  return versao ? url + '&v=' + encodeURIComponent(String(versao).slice(0, 19)) : url;
+}
+
+/* Mostra a foto OU um aviso no lugar dela — nunca um <img src="">.
+   Com src vazio o navegador resolve para a URL da própria página, baixa
+   o HTML, não consegue decodificar e desenha o ícone de imagem
+   quebrada com o texto alternativo ao lado: parecia defeito da tela
+   quando era só um Kaizen sem a foto. Mesma função da Biblioteca. */
+function mostrarFoto(idImg, idVazio, url) {
+  var img = document.getElementById(idImg);
+  var vazio = document.getElementById(idVazio);
+  if (!img || !vazio) return;
+  var semFoto = function (chave, padrao) {
+    img.hidden = true;
+    img.removeAttribute('src');
+    vazio.hidden = false;
+    vazio.dataset.i18n = chave;
+    vazio.textContent = txt(chave, padrao);
+  };
+  if (!url) { semFoto('kd.noImage', 'Sem imagem registrada'); return; }
+  img.onerror = function () { semFoto('kd.imageFailed', 'Imagem não disponível'); };
+  img.onload = null;
+  img.hidden = false;
+  vazio.hidden = true;
+  // Trocar de Kaizen na fila reusa o mesmo <img>: se a url for a MESMA,
+  // 'load' não dispara de novo e o estado precisa ser decidido aqui.
+  if (img.getAttribute('src') !== url) img.src = url;
+  else if (img.complete && img.naturalWidth === 0) semFoto('kd.imageFailed', 'Imagem não disponível');
+}
 function botoesDecisao() {
   return Array.prototype.slice.call(document.querySelectorAll('.ap-actions [data-decisao]'));
 }
@@ -727,9 +765,9 @@ function atualizarContador() {
     setText('kdHeadDate', k.DT_CRIACAO ? new Date(k.DT_CRIACAO).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }) : '—');
     setText('kdProblem', k.DS_PROBLEMA);
     setText('kdObjective', k.DS_OBJETIVO);
-    document.getElementById('kdImgAntes').src = k.URL_IMG_ANTES ? '/api/kaizens/imagem?path=' + encodeURIComponent(k.URL_IMG_ANTES) + '&v=' + encodeURIComponent(String(k.DT_CRIACAO || '').slice(0, 19)) : '';
+    mostrarFoto('kdImgAntes', 'kdVazioAntes', urlFoto(k.URL_IMG_ANTES, k.DT_CRIACAO));
     setText('kdDescAntes', k.DS_ESTADO_ANTES);
-    document.getElementById('kdImgDepois').src = k.URL_IMG_DEPOIS ? '/api/kaizens/imagem?path=' + encodeURIComponent(k.URL_IMG_DEPOIS) + '&v=' + encodeURIComponent(String(k.DT_CRIACAO || '').slice(0, 19)) : '';
+    mostrarFoto('kdImgDepois', 'kdVazioDepois', urlFoto(k.URL_IMG_DEPOIS, k.DT_CRIACAO));
     setText('kdDescDepois', k.DS_ESTADO_DEPOIS);
 
     // A fila agora tem dois status (Aguardando aprovação e Revisado), e
@@ -1093,6 +1131,8 @@ function atualizarContador() {
       'kd.problemObjective': 'Problema & Objetivo',
       'kd.beforeAfter': 'Antes & Depois',
       'kd.before': 'Antes',
+      'kd.noImage': 'Sem imagem registrada',
+      'kd.imageFailed': 'Imagem não disponível',
       'kd.after': 'Depois',
       'kd.resultsAchieved': 'Resultados Alcançados',
       'ap.eyebrow': 'Autoridade de Aprovação',
@@ -1158,6 +1198,8 @@ function atualizarContador() {
       'kd.problemObjective': 'Problem & Objective',
       'kd.beforeAfter': 'Before & After',
       'kd.before': 'Before',
+      'kd.noImage': 'No image on file',
+      'kd.imageFailed': 'Image unavailable',
       'kd.after': 'After',
       'kd.resultsAchieved': 'Results Achieved',
       'ap.eyebrow': 'Approval Authority',
