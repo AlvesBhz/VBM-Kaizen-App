@@ -315,7 +315,11 @@ window.criarCadastroBilingue = function (cfg) {
     list.innerHTML = "";
     list.appendChild(statusEl(cfg.textoCarregando, false));
 
-    fetch("/api/" + cfg.rota + "?idioma=" + encodeURIComponent(idiomaEmUso()))
+    // cache: "no-store" — esta leitura acontece logo depois de gravar e
+    // precisa refletir a gravação. Sem isso, uma resposta guardada em
+    // qualquer ponto do caminho (navegador ou proxy) faria o registro
+    // recém-criado só aparecer quando o prazo do cache vencesse.
+    fetch("/api/" + cfg.rota + "?idioma=" + encodeURIComponent(idiomaEmUso()), { cache: "no-store" })
       .then(function (res) {
         if (!res.ok) return res.json().then(function (e) { throw new Error(e.error || res.statusText); });
         return res.json();
@@ -501,6 +505,11 @@ window.criarCadastroBilingue = function (cfg) {
       .then(function () {
         reg.ATIVO = ativar;
         item.replaceWith(renderItem(reg));
+        // Redesenhar só o item deixaria a tela apoiada no estado local.
+        // Relendo a lista, o que aparece é sempre o que está gravado —
+        // mesma regra do criar e do editar. A aba não muda: a releitura
+        // acontece dentro dela.
+        carregarLista();
         avisarMudanca();
         if (window.showToast) {
           showToast("success", ativar ? "Reativado" : "Desativado",

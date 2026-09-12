@@ -1623,6 +1623,15 @@ function mensagemErroSql(err, rotuloSing, rotuloExtra) {
    o cadastro continua refletindo na tela na hora: o TTL é rede de
    segurança para alteração feita FORA do app (direto no banco).
    Mesma ideia do limiteColunaCache mais abaixo. */
+/* O cache é SÓ do servidor. Uma versão anterior também mandava
+   "Cache-Control: private, max-age=300" para o navegador, e isso
+   quebrava a Administração: depois de cadastrar, a tela relê a lista na
+   hora, mas o NAVEGADOR respondia com a cópia dele — sem nem perguntar
+   ao servidor — e o registro recém-criado só aparecia cinco minutos
+   depois. O cache do servidor é o que valia a pena (evita a ida ao
+   Azure SQL) e é invalidado na gravação; o do navegador economizava
+   pouco e escondia a gravação de quem acabou de fazê-la.
+   As respostas seguem com o "no-store" que o gate da API já aplica. */
 const CADASTRO_TTL_MS = 5 * 60 * 1000;
 const cadastroCache = new Map();
 
@@ -1802,12 +1811,7 @@ function registrarCadastroBilingue(cfg) {
     try {
       const idIdiomaPedido = idIdiomaDaRequisicao(req);
       const emCache = cadastroCacheLer(rota, idIdiomaPedido);
-      if (emCache) {
-        // private: a lista é igual para todo mundo, mas o gate de acesso
-        // vem antes — nenhum proxy compartilhado deve guardar isto.
-        res.set("Cache-Control", "private, max-age=300");
-        return res.json(emCache);
-      }
+      if (emCache) return res.json(emCache);
       const colsSelect = [`base.${pk} AS ID`, `COALESCE(tr.${colNome}, base.${colNome}) AS NM`];
       if (colDescricao) colsSelect.push(`COALESCE(tr.${colDescricao}, base.${colDescricao}) AS DS`);
       colsSelect.push(`base.${colNome} AS NM_PT`);
@@ -1866,7 +1870,6 @@ function registrarCadastroBilingue(cfg) {
           SEM_TRADUCAO: r.SEM_TRADUCAO === 1,
       }));
       cadastroCacheGravar(rota, idIdiomaPedido, corpo);
-      res.set("Cache-Control", "private, max-age=300");
       res.json(corpo);
     } catch (err) {
       console.error(`${log} erro ao consultar:`, err.message);
@@ -1919,7 +1922,6 @@ function registrarCadastroBilingue(cfg) {
   // criar do zero é só pelo POST.
   apiRouter.put(`/${rota}/:id`, async (req, res) => {
     try {
-      cadastroCacheLimpar(rota);   // a lista mudou: próxima leitura vai ao banco
       const id = parseInt(req.params.id, 10);
       if (!Number.isInteger(id)) return res.status(400).json({ error: `${pk} inválido.` });
 
@@ -1947,6 +1949,8 @@ function registrarCadastroBilingue(cfg) {
         upsertIdioma(id, ID_IDIOMA_PT, nomePt, descPt, idUsuario, extra, urlIcone),
         upsertIdioma(id, ID_IDIOMA_EN, nomeEn, descEn, idUsuario, extra, urlIcone),
       ]);
+      // Cache limpo DEPOIS da gravação — ver o comentário no POST.
+      cadastroCacheLimpar(rota);
       res.json({ ok: true });
     } catch (err) {
       console.error(`${log} erro ao atualizar:`, err.message);
@@ -1963,7 +1967,6 @@ function registrarCadastroBilingue(cfg) {
   // situação que o upsert do editar já resolve numa edição seguinte.
   apiRouter.post(`/${rota}`, async (req, res) => {
     try {
-      cadastroCacheLimpar(rota);   // a lista mudou: próxima leitura vai ao banco
       const { nomePt, descPt, nomeEn, descEn, extra, urlIcone } = lerCorpo(req);
       const erro = validarCampos(nomePt, descPt, nomeEn, descEn);
       if (erro) return res.status(400).json({ error: erro });
@@ -1981,6 +1984,10 @@ function registrarCadastroBilingue(cfg) {
         upsertIdioma(id, ID_IDIOMA_PT, nomePt, descPt, idUsuario, extra, urlIcone),
         upsertIdioma(id, ID_IDIOMA_EN, nomeEn, descEn, idUsuario, extra, urlIcone),
       ]);
+      // Limpa o cache DEPOIS da gravação, não antes: limpando antes,
+      // uma leitura que chegasse no meio do caminho repovoaria o cache
+      // com a lista ANTIGA e a novidade ficaria escondida até o TTL.
+      cadastroCacheLimpar(rota);
       res.status(201).json({ ok: true, ID: id });
     } catch (err) {
       console.error(`${log} erro ao criar:`, err.message);
@@ -1993,7 +2000,6 @@ function registrarCadastroBilingue(cfg) {
   // idiomas desse ID (o status é do registro, não de uma tradução).
   apiRouter.put(`/${rota}/:id/status`, async (req, res) => {
     try {
-      cadastroCacheLimpar(rota);   // a lista mudou: próxima leitura vai ao banco
       const id = parseInt(req.params.id, 10);
       if (!Number.isInteger(id)) return res.status(400).json({ error: `${pk} inválido.` });
       if (typeof req.body?.ativo !== "boolean") {
@@ -2010,6 +2016,8 @@ function registrarCadastroBilingue(cfg) {
       if (!result.rowsAffected[0]) {
         return res.status(404).json({ error: `Registro de ${rotuloSing} não encontrado.` });
       }
+      // Cache limpo DEPOIS da gravação — ver o comentário no POST.
+      cadastroCacheLimpar(rota);
       res.json({ ok: true, ativo: req.body.ativo });
     } catch (err) {
       console.error(`${log} erro ao atualizar status:`, err.message);
