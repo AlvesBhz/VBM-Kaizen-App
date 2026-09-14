@@ -371,6 +371,20 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 .toggle-label { font-size: .76rem; }
 .checkbox-label { font-size: .76rem; line-height: 1.5; }
 .photo-upload-text { font-size: .76rem; }
+/* Ações da foto escolhida (Visualizar / Limpar). Ficam logo abaixo da
+   pré-visualização e só aparecem quando existe imagem — o atributo
+   hidden precisa do !important porque .btn tem display próprio. */
+.photo-actions { display: flex; gap: .5rem; justify-content: center; margin-top: .6rem; flex-wrap: wrap; }
+.photo-actions[hidden] { display: none !important; }
+/* A pré-visualização da escolha não é foto de capa: cortar o miolo
+   esconde justamente o que a pessoa precisa conferir. */
+.photo-preview-img { object-fit: contain; background: #f4f6f8; }
+[data-bg="dark"] .photo-preview-img { background: rgba(255,255,255,.04); }
+/* Modal da foto ampliada: mais largo que o de validação, e a imagem
+   inteira visível sem rolagem. */
+#modalFotoAmpliada .modal { width: 92vw; max-width: 1100px; }
+#modalFotoAmpliada .modal-body { padding-top: .25rem; }
+#modalFotoAmpliada img { width: 100%; max-height: 74vh; object-fit: contain; border-radius: .5rem; display: block; }
 
 /* ── Chip de membro da equipe (lista unificada Vale) ── */
 .team-chip-list { margin-top:.6rem; display:flex; flex-direction:column; gap:.4rem; }
@@ -751,8 +765,19 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
               <div class="photo-upload-text"><strong data-i18n="f.clickAddPhoto">Clique para adicionar foto</strong><br><span data-i18n="f.photoFormats">PNG, JPG, WEBP até 10MB</span></div>
             </div>
             <img class="photo-preview-img" src="" alt="Foto do antes"/>
-            <!-- Preenchido pelo upload (POST /api/kaizens/imagem?tipo=antes) assim que o
-                 arquivo é escolhido — ver script "Upload de imagens" no fim da página. -->
+            <!-- Aparecem assim que há foto escolhida (ou já gravada, na
+                 edição): servem para conferir a imagem e para trocá-la,
+                 já que dá para escolher o arquivo errado. -->
+            <div class="photo-actions" data-acoes-foto="imagem_antes" hidden>
+              <button type="button" class="btn btn-ghost btn-sm" data-foto-ver>
+                <i class="fa-solid fa-magnifying-glass-plus"></i> <span data-i18n="f.photoView">Visualizar</span>
+              </button>
+              <button type="button" class="btn btn-ghost btn-sm" data-foto-limpar>
+                <i class="fa-solid fa-eraser"></i> <span data-i18n="f.photoClear">Limpar</span>
+              </button>
+            </div>
+            <!-- Preenchido no envio (POST /api/kaizens/imagem?tipo=antes) —
+                 ver "Upload das imagens" no fim da página. -->
             <input type="hidden" id="url_imagem_antes" name="url_imagem_antes" value=""/>
             <div class="form-helper" id="uploadAntesStatus" style="display:none;"></div>
           </div>
@@ -793,6 +818,14 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
               <div class="photo-upload-text"><strong data-i18n="f.clickAddPhoto">Clique para adicionar foto</strong><br><span data-i18n="f.photoFormats">PNG, JPG, WEBP até 10MB</span></div>
             </div>
             <img class="photo-preview-img" src="" alt="Foto do depois"/>
+            <div class="photo-actions" data-acoes-foto="imagem_depois" hidden>
+              <button type="button" class="btn btn-ghost btn-sm" data-foto-ver>
+                <i class="fa-solid fa-magnifying-glass-plus"></i> <span data-i18n="f.photoView">Visualizar</span>
+              </button>
+              <button type="button" class="btn btn-ghost btn-sm" data-foto-limpar>
+                <i class="fa-solid fa-eraser"></i> <span data-i18n="f.photoClear">Limpar</span>
+              </button>
+            </div>
             <input type="hidden" id="url_imagem_depois" name="url_imagem_depois" value=""/>
             <div class="form-helper" id="uploadDepoisStatus" style="display:none;"></div>
           </div>
@@ -921,7 +954,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="form-group">
             <div class="form-grid form-grid-2">
               <div class="form-group" style="margin-bottom:0;">
-                <label class="form-label" for="data_conclusao_texto" data-i18n="f.completionDate">Data de Conclusão</label>
+                <label class="form-label" for="data_conclusao_texto" data-i18n="f.completionDate">Data de Conclusão <span class="req">*</span></label>
                 <div class="input-with-icon campo-data">
                   <button type="button" class="input-icon campo-data-botao" id="data_conclusao_abrir"
                           data-i18n-aria="f.completionDateOpen" aria-label="Abrir calendário">
@@ -985,6 +1018,23 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
         <p id="mensagemValidacao"></p>
         <ul class="validacao-lista" id="listaValidacao"></ul>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Foto ampliada, aberta pelo "Visualizar" das Etapas 2 e 3. Fica na
+     camada .confirm-backdrop pelo mesmo motivo do modal acima: os
+     listeners de initModals() só alcançam .modal-backdrop, e aqui o
+     fechamento é controlado neste arquivo (X, Escape e clique fora). -->
+<div class="confirm-backdrop" id="modalFotoAmpliada" role="dialog" aria-modal="true" aria-labelledby="tituloFotoAmpliada">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-icon" style="--hue:60,181,229;background:var(--vbm-blue-pale);border-color:rgba(60,181,229,.28);"><i class="fa-solid fa-image" style="color:var(--vbm-blue);"></i></div>
+      <div class="modal-title" id="tituloFotoAmpliada" data-i18n="f.photoView">Visualizar</div>
+      <button class="modal-close" type="button" data-fechar-foto aria-label="Fechar" data-i18n-aria="settings.close"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <img id="fotoAmpliada" src="" alt=""/>
     </div>
   </div>
 </div>
@@ -1171,6 +1221,8 @@ function rotuloPessoa(p) {
       'f.externalTeamHelperDefault': 'Membros externos não têm acesso ao sistema. Adicione até 1.',
       'f.imageBefore': 'Imagem do Antes',
       'f.clickAddPhoto': 'Clique para adicionar foto',
+      'f.photoView': 'Visualizar',
+      'f.photoClear': 'Limpar',
       'f.photoFormats': 'PNG, JPG, WEBP até 10MB',
       'f.photoInvalidTitle': 'Formato não suportado',
       'f.photoInvalidMsg': 'Envie a imagem em PNG, JPG ou WEBP.',
@@ -1328,6 +1380,8 @@ function rotuloPessoa(p) {
       'f.externalTeamHelperDefault': 'External members don\'t have system access. Add up to 1.',
       'f.imageBefore': 'Before Image',
       'f.clickAddPhoto': 'Click to add photo',
+      'f.photoView': 'View',
+      'f.photoClear': 'Clear',
       'f.photoFormats': 'PNG, JPG, WEBP up to 10MB',
       'f.photoInvalidTitle': 'Unsupported format',
       'f.photoInvalidMsg': 'Upload the image as PNG, JPG or WEBP.',
@@ -2163,25 +2217,62 @@ window.VBMDataConclusao = (function () {
     return (window.__i18n && window.__i18n[chave]) || padrao;
   }
 
-  function limpar(input) {
-    input.value = '';
+  function previewDe(input) {
     var zona = input.closest('.photo-upload-zone');
     var preview = zona && zona.nextElementSibling;
-    if (preview && preview.classList.contains('photo-preview-img')) {
-      // Em edição existe uma foto gravada: a pré-visualização dela volta,
-      // e o campo continua valendo como preenchido.
-      var hidden = document.getElementById(input.id.replace('imagem_', 'url_imagem_'));
-      var gravada = hidden && hidden.value;
-      if (gravada) {
-        // &v= só para furar o cache do navegador — ver nota em
-        // mostrarImagemAtual, no fim da página.
-        preview.src = '/api/kaizens/imagem?path=' + encodeURIComponent(gravada) + '&v=' + Date.now();
-        input.dataset.jaGravada = '1';
-      } else {
+    return preview && preview.classList.contains('photo-preview-img') ? preview : null;
+  }
+
+  function acoesDe(input) {
+    return document.querySelector('[data-acoes-foto="' + input.id + '"]');
+  }
+
+  /* Mostra as ações (Visualizar / Limpar) do campo.
+
+     Quem desenha a pré-visualização da foto RECÉM-ESCOLHIDA é o
+     initPhotoUpload do vbm-app.js, componente compartilhado: ele lê o
+     arquivo e, de quebra, ESCONDE a zona de upload. Era daí que vinha o
+     problema relatado — sumindo a zona, some o único jeito de trocar uma
+     foto escolhida por engano, e o "Limpar" abaixo é o que devolve a
+     zona. Aqui não repetimos a leitura do arquivo; só acrescentamos as
+     ações que faltavam.
+
+     O `endereco` é opcional e só vem da EDIÇÃO, onde a foto já está
+     gravada e tem de ser buscada no servidor. */
+  function mostrarFotoEscolhida(input, endereco) {
+    var preview = previewDe(input);
+    if (preview && endereco) {
+      preview.src = endereco;
+      preview.style.display = 'block';
+    }
+    var acoes = acoesDe(input);
+    if (acoes) acoes.hidden = false;
+  }
+  window.VBMFotoCampo = { mostrar: mostrarFotoEscolhida };
+
+  /* Volta o campo ao estado "sem escolha".
+     Na EDIÇÃO existe uma foto gravada: a pré-visualização dela volta e o
+     campo continua valendo como preenchido — limpar a escolha não pode
+     apagar a foto que já está no Kaizen. */
+  function limpar(input) {
+    input.value = '';
+    var preview = previewDe(input);
+    var acoes = acoesDe(input);
+    var hidden = document.getElementById(input.id.replace('imagem_', 'url_imagem_'));
+    var gravada = hidden && hidden.value;
+    if (gravada) {
+      // &v= só para furar o cache do navegador — ver nota em
+      // mostrarImagemAtual, no fim da página.
+      input.dataset.jaGravada = '1';
+      mostrarFotoEscolhida(input, '/api/kaizens/imagem?path=' + encodeURIComponent(gravada) + '&v=' + Date.now());
+    } else {
+      if (preview) {
         preview.removeAttribute('src');
         preview.style.display = 'none';
       }
+      if (acoes) acoes.hidden = true;
     }
+    var zona = input.closest('.photo-upload-zone');
     if (zona) zona.style.display = '';
   }
 
@@ -2205,9 +2296,61 @@ window.VBMDataConclusao = (function () {
         limpar(input);
         showToast('error', txtFoto('f.photoTooBigTitle', 'Imagem muito grande'),
           txtFoto('f.photoTooBigMsg', 'O tamanho máximo é 10MB.'), 5000);
+        return;
       }
+      // A imagem em si é desenhada pelo initPhotoUpload (vbm-app.js);
+      // aqui só liberamos as ações de conferir e trocar.
+      mostrarFotoEscolhida(input);
     });
   });
+
+  /* Visualizar / Limpar. Delegado no documento: os dois blocos de ações
+     têm a mesma marcação e o alvo sai do data-acoes-foto do contêiner. */
+  document.addEventListener('click', function (e) {
+    var bloco = e.target.closest('[data-acoes-foto]');
+    if (!bloco) return;
+    var input = document.getElementById(bloco.dataset.acoesFoto);
+    if (!input) return;
+
+    if (e.target.closest('[data-foto-limpar]')) {
+      limpar(input);
+      return;
+    }
+    if (e.target.closest('[data-foto-ver]')) {
+      var preview = previewDe(input);
+      var endereco = preview && preview.getAttribute('src');
+      if (endereco) abrirFotoAmpliada(endereco, preview.alt || '');
+    }
+  });
+
+  /* Foto ampliada. Fecha pelo X, pelo Escape e pelo clique fora — o
+     mesmo que o usuário espera de qualquer modal da aplicação. */
+  var backdropFoto = document.getElementById('modalFotoAmpliada');
+  var imgAmpliada = document.getElementById('fotoAmpliada');
+
+  function abrirFotoAmpliada(endereco, descricao) {
+    if (!backdropFoto || !imgAmpliada) return;
+    imgAmpliada.src = endereco;
+    imgAmpliada.alt = descricao;
+    backdropFoto.classList.add('open');
+  }
+
+  function fecharFotoAmpliada() {
+    if (!backdropFoto) return;
+    backdropFoto.classList.remove('open');
+    // Larga a imagem ao fechar: são data: URIs de até 10MB, e manter a
+    // referência no modal guardaria isso em memória sem necessidade.
+    if (imgAmpliada) imgAmpliada.removeAttribute('src');
+  }
+
+  if (backdropFoto) {
+    backdropFoto.addEventListener('click', function (e) {
+      if (e.target === backdropFoto || e.target.closest('[data-fechar-foto]')) fecharFotoAmpliada();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && backdropFoto.classList.contains('open')) fecharFotoAmpliada();
+    });
+  }
 })();
 
 function uploadImagemSeSelecionada(inputId, hiddenId, tipo) {
@@ -2694,7 +2837,7 @@ window.validacaoWizard = (function () {
     exigir('comparacao_meta_inicial', 'f.comparisonWithGoal',
       'Comparação com a Meta Inicial / Declaração do Problema');
 
-    // Data de Conclusão é opcional; quando preenchida, tem de ser
+    // Data de Conclusão é OBRIGATÓRIA e, quando preenchida, tem de ser
     // anterior a hoje. O `max` do input já impede escolher no
     // calendário, mas digitação direta e colagem passam por cima dele —
     // e o servidor confere de novo, de qualquer forma.
@@ -2702,8 +2845,12 @@ window.validacaoWizard = (function () {
     // A conferência olha o campo VISÍVEL: se a pessoa digitou algo que
     // não virou data (um dia que não existe, a data pela metade), o
     // campo de data fica vazio e o envio seguiria em silêncio, como se
-    // ela não tivesse preenchido nada.
-    if ((valor('data_conclusao_texto') || valor('data_conclusao')) && !dataConclusaoValida()) {
+    // ela não tivesse preenchido nada. Por isso "vazio" aqui é os DOIS
+    // campos vazios, e não só o de data.
+    if (!valor('data_conclusao_texto') && !valor('data_conclusao')) {
+      faltando.push({ id: 'data_conclusao_texto', chave: 'f.completionDate',
+                      padrao: 'Data de Conclusão' });
+    } else if (!dataConclusaoValida()) {
       // Aponta para o campo VISÍVEL: o de data está recolhido, e
       // destacar/focar um elemento invisível não leva a pessoa a lugar
       // nenhum.
@@ -3082,16 +3229,18 @@ function txtEdicao(chave, padrao) {
       if (input.files && input.files.length) delete input.dataset.jaGravada;
     });
 
-    var zona = input.closest('.photo-upload-zone');
-    var preview = zona && zona.nextElementSibling;
-    if (preview && preview.classList.contains('photo-preview-img')) {
-      // O &v= não é lido pelo servidor (a rota só olha o ?path=): serve
-      // para o navegador não reaproveitar a imagem do cache. O nome do
-      // arquivo agora é o ID do Kaizen e não muda ao trocar a foto —
-      // sem isto, reabrir a edição logo depois de trocar mostraria a
-      // foto antiga.
-      preview.src = '/api/kaizens/imagem?path=' + encodeURIComponent(caminho) + '&v=' + Date.now();
-      preview.style.display = 'block';
+    // O &v= não é lido pelo servidor (a rota só olha o ?path=): serve
+    // para o navegador não reaproveitar a imagem do cache. O nome do
+    // arquivo agora é o ID do Kaizen e não muda ao trocar a foto — sem
+    // isto, reabrir a edição logo depois de trocar mostraria a foto
+    // antiga.
+    //
+    // Passa pelo mesmo caminho da foto recém-escolhida (VBMFotoCampo)
+    // para a imagem gravada aparecer com as MESMAS ações de Visualizar e
+    // Limpar — quem edita também pode ter posto o arquivo errado.
+    var endereco = '/api/kaizens/imagem?path=' + encodeURIComponent(caminho) + '&v=' + Date.now();
+    if (window.VBMFotoCampo) {
+      window.VBMFotoCampo.mostrar(input, endereco);
     }
   }
 })();

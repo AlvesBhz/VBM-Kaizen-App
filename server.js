@@ -2808,7 +2808,9 @@ function lerKaizenDoCorpo(b) {
   // "YYYY-MM-DD" (o formato que o <input type="date"> envia) e é
   // comparada como TEXTO: nesse formato a ordem alfabética é a ordem
   // cronológica, então não há Date, fuso nem hora no meio do caminho
-  // para distorcer a conta. Campo opcional; vazio grava NULL.
+  // para distorcer a conta. Campo OBRIGATÓRIO — a tela também cobra, mas
+  // quem decide é aqui: uma requisição montada fora da tela não pode
+  // gravar Kaizen sem data de conclusão.
   const dataConclusao = textoOuNuloLocal(b.data_conclusao);
   const formatoDataOk = dataConclusao == null || /^\d{4}-\d{2}-\d{2}$/.test(dataConclusao);
   // Data que existe no calendário: "2026-02-31" passa no formato acima
@@ -2861,6 +2863,9 @@ function lerKaizenDoCorpo(b) {
     maxLen(urlReferencia, PVC_LIMITES.URL_REFERENCIA, "Links / Documentos"),
     maxLen(licoesAprendidas, PVC_LIMITES.DS_LICOES_APRENDIDAS, "Lições Aprendidas"),
     maxLen(comparacaoMeta, PVC_LIMITES.DS_RESULTADO_ESPERADO, "Comparação com a meta inicial"),
+    // Mensagem escrita à mão em vez de obrigatorio(): o helper monta
+    // "<campo> é obrigatório", que erra o gênero de "Data".
+    !dataConclusao ? "Data de Conclusão é obrigatória." : null,
     !formatoDataOk || !dataExiste ? "Data de Conclusão inválida." : null,
     formatoDataOk && dataExiste && !dataAnteriorAHoje
       ? "A Data de Conclusão deve ser anterior à data de hoje." : null,
