@@ -70,14 +70,11 @@ env:
   #
   # DUAS PENDÊNCIAS neste SAS, as duas do lado do Azure:
   #
-  #   1. sp=racw não tem 'd' (delete) nem 'l' (list). O app precisa das
-  #      duas: 'l' para descobrir o maior número já gravado nas pastas
-  #      (é assim que a foto é numerada) e 'd' para apagar o arquivo
-  #      temporário e a foto com a extensão antiga quando alguém troca um
-  #      PNG por um JPG. Nada quebra sem elas — sem 'l' o número cai no
-  #      ID_KAIZEN e sem 'd' os órfãos ficam, os dois com aviso no log —
-  #      mas a numeração só segue a sequência da pasta com o SAS certo.
-  #      Reemita com sp=racwdl.
+  #   1. sp=racw NÃO tem 'd' (delete). É essa falta que deixa um arquivo
+  #      TEMP_ ao lado de cada foto salva num CADASTRO NOVO: o app copia
+  #      o provisório para "<ID_KAIZEN>.<ext>" e a remoção do provisório
+  #      volta 403. O cadastro funciona, o aviso fica no log, e o lixo se
+  #      acumula. Reemita com sp=racwd.
   #
   #   2. O valor abaixo está em TEXTO PURO e dá escrita no container
   #      inteiro até 2030. Enquanto o SEC-01 não for feito, este arquivo
