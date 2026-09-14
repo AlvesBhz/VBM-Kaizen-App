@@ -20,7 +20,7 @@ PRINT '===================================================================';
 PRINT ' 1. COMO A TABELA ESTA AMARRADA HOJE';
 PRINT '===================================================================';
 
-DECLARE @linha nvarchar(500);
+DECLARE @linha nvarchar(max);
 DECLARE c CURSOR LOCAL FAST_FORWARD FOR
   SELECT CONCAT('   ', fk.name, ' : ', cp.name, '  ->  ',
                 OBJECT_SCHEMA_NAME(fk.referenced_object_id), '.',
@@ -35,16 +35,32 @@ IF @@FETCH_STATUS <> 0 PRINT '   (nenhuma FOREIGN KEY)';
 WHILE @@FETCH_STATUS = 0 BEGIN PRINT @linha; FETCH NEXT FROM c INTO @linha; END
 CLOSE c; DEALLOCATE c;
 
-/* Gatilhos: se houver algum, ele pode estar barrando a gravacao. */
+/* Gatilhos: um gatilho quebrado barra TODA gravacao na tabela, e o erro
+   sai com o nome dele, nao com o nome da tabela. Foi o caso aqui:
+   TR_KZN_KAIZEN_HIERARQUIA_UPD referencia a coluna ID_KAIZEN_HIERARQUIA,
+   que nao existe (a PK da tabela chama ID_KAIZEN). Por isso o texto de
+   cada gatilho e impresso por inteiro: e nele que esta o defeito. */
 PRINT '';
 PRINT '   Gatilhos na tabela:';
 DECLARE t CURSOR LOCAL FAST_FORWARD FOR
-  SELECT CONCAT('   ', name, CASE WHEN is_disabled = 1 THEN ' (desabilitado)' ELSE '' END)
+  SELECT CONCAT('   ', name, CASE WHEN is_disabled = 1 THEN ' (DESABILITADO)' ELSE '' END,
+                CHAR(13), CHAR(10), '   ---------- texto ----------', CHAR(13), CHAR(10),
+                OBJECT_DEFINITION(object_id))
     FROM sys.triggers WHERE parent_id = OBJECT_ID('ci.kzn_kaizen_hierarquia');
 OPEN t; FETCH NEXT FROM t INTO @linha;
 IF @@FETCH_STATUS <> 0 PRINT '   (nenhum)';
 WHILE @@FETCH_STATUS = 0 BEGIN PRINT @linha; FETCH NEXT FROM t INTO @linha; END
 CLOSE t; DEALLOCATE t;
+
+/* Colunas reais da tabela, para comparar com o que o gatilho cita. */
+PRINT '';
+PRINT '   Colunas que a tabela REALMENTE tem:';
+DECLARE k CURSOR LOCAL FAST_FORWARD FOR
+  SELECT CONCAT('   ', name) FROM sys.columns
+   WHERE object_id = OBJECT_ID('ci.kzn_kaizen_hierarquia') ORDER BY column_id;
+OPEN k; FETCH NEXT FROM k INTO @linha;
+WHILE @@FETCH_STATUS = 0 BEGIN PRINT @linha; FETCH NEXT FROM k INTO @linha; END
+CLOSE k; DEALLOCATE k;
 
 PRINT '';
 PRINT '===================================================================';
