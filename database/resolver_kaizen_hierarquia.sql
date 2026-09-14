@@ -52,10 +52,15 @@ PRINT ' 2. O LIDER 181222 EXISTE NO MDM?';
 PRINT '===================================================================';
 IF EXISTS (SELECT 1 FROM ci.kzn_mdm_hierarquia WHERE ID_USUARIO = 181222)
 BEGIN
-    PRINT '   SIM. Hierarquia cadastrada para ele:';
-    SELECT ID_USUARIO, NM_HIERARQUIA_N1, NM_HIERARQUIA_N2, NM_HIERARQUIA_N3, NM_HIERARQUIA_N4,
+    PRINT '   SIM. Atencao ao numero de LINHAS abaixo: a PK do MDM e composta';
+    PRINT '   (ID_USUARIO + CD_MATRICULA + ID_TIPO_USUARIO), entao o mesmo';
+    PRINT '   ID_USUARIO pode aparecer varias vezes. O MERGE usa TOP (1) por';
+    PRINT '   ID_TIPO_USUARIO justamente por isso.';
+    SELECT ID_USUARIO, CD_MATRICULA, ID_TIPO_USUARIO,
+           NM_HIERARQUIA_N1, NM_HIERARQUIA_N2, NM_HIERARQUIA_N3, NM_HIERARQUIA_N4,
            NM_HIERARQUIA_N5, NM_HIERARQUIA_N6, NM_HIERARQUIA_N7, NM_HIERARQUIA_N8
-      FROM ci.kzn_mdm_hierarquia WHERE ID_USUARIO = 181222;
+      FROM ci.kzn_mdm_hierarquia WHERE ID_USUARIO = 181222
+     ORDER BY ID_TIPO_USUARIO;
 END
 ELSE
     PRINT '   NAO. Sem linha em ci.kzn_mdm_hierarquia para ID_USUARIO = 181222.';
@@ -135,7 +140,12 @@ BEGIN
         PRINT '   recriando a FK de ID_USUARIO_LIDER contra o MDM'; EXEC sys.sp_executesql @cmd;
     END
     ELSE
-        PRINT '   ID_USUARIO nao e unico no MDM: a FK do lider ficou so removida.';
+    BEGIN
+        PRINT '   ID_USUARIO NAO e unico no MDM (a PK de la e composta:';
+        PRINT '   ID_USUARIO + CD_MATRICULA + ID_TIPO_USUARIO), entao nao existe FK';
+        PRINT '   valida para ID_USUARIO_LIDER. Ela foi apenas REMOVIDA — e o certo:';
+        PRINT '   quem garante esse numero e a propria PVC, que ja tem a FK dela.';
+    END
 END
 
 PRINT '';
@@ -149,7 +159,12 @@ BEGIN TRY
                   m.NM_HIERARQUIA_N1, m.NM_HIERARQUIA_N2, m.NM_HIERARQUIA_N3, m.NM_HIERARQUIA_N4,
                   m.NM_HIERARQUIA_N5, m.NM_HIERARQUIA_N6, m.NM_HIERARQUIA_N7, m.NM_HIERARQUIA_N8
              FROM ci.kzn_pedravisaoconsolidada p
-             LEFT JOIN ci.kzn_mdm_hierarquia m ON m.ID_USUARIO = p.ID_USUARIO_LIDER) AS origem
+         OUTER APPLY (
+           SELECT TOP (1) x.NM_HIERARQUIA_N1, x.NM_HIERARQUIA_N2, x.NM_HIERARQUIA_N3, x.NM_HIERARQUIA_N4, x.NM_HIERARQUIA_N5, x.NM_HIERARQUIA_N6, x.NM_HIERARQUIA_N7, x.NM_HIERARQUIA_N8
+             FROM ci.kzn_mdm_hierarquia x
+            WHERE x.ID_USUARIO = p.ID_USUARIO_LIDER
+            ORDER BY x.ID_TIPO_USUARIO
+         ) m) AS origem
        ON alvo.ID_KAIZEN = origem.ID_KAIZEN
     WHEN MATCHED THEN UPDATE SET
            alvo.ID_USUARIO_LIDER = origem.ID_USUARIO_LIDER,

@@ -46,8 +46,12 @@ USING (SELECT p.ID_KAIZEN,
               m.NM_HIERARQUIA_N4, m.NM_HIERARQUIA_N5, m.NM_HIERARQUIA_N6,
               m.NM_HIERARQUIA_N7, m.NM_HIERARQUIA_N8
          FROM ci.kzn_pedravisaoconsolidada p
-         LEFT JOIN ci.kzn_mdm_hierarquia m
-                ON m.ID_USUARIO = p.ID_USUARIO_LIDER) AS origem
+         OUTER APPLY (
+           SELECT TOP (1) x.NM_HIERARQUIA_N1, x.NM_HIERARQUIA_N2, x.NM_HIERARQUIA_N3, x.NM_HIERARQUIA_N4, x.NM_HIERARQUIA_N5, x.NM_HIERARQUIA_N6, x.NM_HIERARQUIA_N7, x.NM_HIERARQUIA_N8
+             FROM ci.kzn_mdm_hierarquia x
+            WHERE x.ID_USUARIO = p.ID_USUARIO_LIDER
+            ORDER BY x.ID_TIPO_USUARIO
+         ) m) AS origem
    ON alvo.ID_KAIZEN = origem.ID_KAIZEN
 WHEN MATCHED THEN UPDATE SET
        alvo.ID_USUARIO_LIDER = origem.ID_USUARIO_LIDER,

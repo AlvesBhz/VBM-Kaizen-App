@@ -1031,11 +1031,20 @@ async function gravarHierarquiaDoKaizen(idKaizen) {
   for (let n = 1; n <= 8; n++) niveis.push(`NM_HIERARQUIA_N${n}`);
 
   try {
-    // LEFT JOIN no MDM, não INNER. Com INNER, um líder sem linha no MDM
-    // zerava a origem e o MERGE não gravava NADA — nem a linha do
-    // Kaizen. A linha tem de existir sempre: ID_KAIZEN e
-    // ID_USUARIO_LIDER são o que o relatório precisa, e os oito níveis
-    // são NULL-áveis justamente porque podem não estar disponíveis.
+    // OUTER APPLY com TOP (1), não LEFT JOIN direto: a PK do MDM é
+    // (ID_USUARIO, CD_MATRICULA, ID_TIPO_USUARIO), então o mesmo
+    // ID_USUARIO aparece em mais de uma linha e um join simples devolve
+    // VÁRIAS origens para o mesmo ID_KAIZEN. O MERGE recusa isso — não dá
+    // para gravar duas vezes a mesma linha de destino — e a gravação
+    // inteira morre. Foi exatamente o que aconteceu em produção: o
+    // cadastro passava, a tabela ficava vazia e o erro só aparecia no log.
+    // Mesmo TOP(1)/ORDER BY ID_TIPO_USUARIO usado no resto do arquivo,
+    // para a hierarquia bater com o líder mostrado na Biblioteca.
+    //
+    // OUTER APPLY (e não CROSS APPLY) mantém a linha quando o líder não
+    // tem nenhum registro no MDM: os oito níveis saem NULL, que é para
+    // isso que essas colunas são NULL-áveis. O que não pode faltar é a
+    // linha do Kaizen.
     //
     // O OUTPUT devolve o que foi de fato gravado. Serve para o log dizer
     // se foi INSERT ou UPDATE e com que líder — sem uma segunda consulta,
@@ -1046,7 +1055,12 @@ async function gravarHierarquiaDoKaizen(idKaizen) {
                      p.ID_USUARIO_LIDER,
                      ${niveis.map((c) => `m.${c}`).join(",\n                     ")}
                 FROM ${FULL_PVC_TABLE} p
-                LEFT JOIN ${FULL_MDM_TABLE} m ON m.ID_USUARIO = p.ID_USUARIO_LIDER
+                OUTER APPLY (
+                  SELECT TOP (1) ${niveis.map((c) => `x.${c}`).join(", ")}
+                    FROM ${FULL_MDM_TABLE} x
+                   WHERE x.ID_USUARIO = p.ID_USUARIO_LIDER
+                   ORDER BY x.ID_TIPO_USUARIO
+                ) m
                WHERE p.ID_KAIZEN = @idKaizen) AS origem
           ON alvo.ID_KAIZEN = origem.ID_KAIZEN
        WHEN MATCHED THEN UPDATE SET
