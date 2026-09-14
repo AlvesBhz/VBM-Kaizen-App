@@ -27,6 +27,12 @@ const compression = require("compression");
 const sql = require("mssql");
 const multer = require("multer");
 const { enviarArquivoParaVolume, baixarArquivoDoVolume, removerArquivoDoVolume } = require("./databricks-fs");
+const {
+  blobConfigurado,
+  enviarArquivoParaBlob,
+  baixarArquivoDoBlob,
+  removerArquivoDoBlob,
+} = require("./azure-blob");
 const { montarAviso } = require("./email-kaizen");
 
 const app = express();
@@ -2179,22 +2185,35 @@ apiRouter.get("/moedas", async (req, res) => {
 // ------------------------------------------------------------------
 // Novo Kaizen (kaizen-novo.html) — imagens (Antes/Depois) + criação
 // ------------------------------------------------------------------
-// As imagens são gravadas em Volumes do Databricks — ver
-// databricks-fs.js para a autenticação (OAuth do próprio service
-// principal do Databricks App, sem token fixo em app.yaml).
+// As imagens NOVAS são gravadas no Azure Blob Storage — ver
+// azure-blob.js. O Volume do Databricks (databricks-fs.js) continua
+// atendendo só a LEITURA das fotos gravadas antes dessa troca.
+//
+// Por que os dois: as linhas já existentes na PVC têm o caminho do
+// volume gravado em URL_IMG_ANTES/URL_IMG_DEPOIS. Apagar esse caminho
+// sem copiar os arquivos apagaria a foto de todo Kaizen já cadastrado.
+// Como a origem é reconhecível pelo próprio caminho (volume começa com
+// "/Volumes/", blob não), dá para atender os dois sem migração e sem
+// data marcada — ver armazenamentoDe() abaixo. Se um dia os arquivos
+// antigos forem copiados para o Blob e as duas colunas atualizadas,
+// basta remover o ramo do volume daqui.
 //
 // Caminho pedido no arquivo de especificação (Usuário - Novo Kaizen -
-// Aprovação.txt):
-//   Antes:  /Volumes/franquia_bmsa_insight/ci/kaizen/imgs/before/
-//   Depois: /Volumes/franquia_bmsa_insight/ci/kaizen/imgs/after/
+// Aprovação.txt), preservado dentro do Blob:
+//   Antes:  <container>/<pasta>/imgs/before/
+//   Depois: <container>/<pasta>/imgs/after/
+// que no volume eram:
+//   /Volumes/franquia_bmsa_insight/ci/kaizen/imgs/before/ (e after/)
 //
 // O upload acontece assim que a pessoa escolhe o arquivo na Etapa 2/3
 // (não espera o "Enviar para Aprovação" final) — o caminho devolvido
 // fica num campo oculto (url_imagem_antes/depois) até o POST /kaizens.
 // Consequência aceita: escolher uma foto e nunca terminar o formulário
-// deixa um arquivo órfão no volume; tolerável para o volume de uso
-// desta tela, mas fica registrado aqui caso vire problema (poda por
-// idade de arquivo, por exemplo).
+// deixa um arquivo órfão no armazenamento; tolerável para o volume de
+// uso desta tela, mas fica registrado aqui caso vire problema (poda por
+// idade de arquivo, por exemplo). Enquanto o SAS do Blob não tiver a
+// permissão de delete (sp=racwd), a limpeza do temporário também falha
+// e engrossa esse mesmo monte — ver azure-blob.js.
 const IMG_MAX_BYTES = 10 * 1024 * 1024; // 10MB — mesmo limite anunciado no formulário
 const IMG_MIME_AUTORIZADOS = new Set(["image/png", "image/jpeg", "image/webp"]);
 const IMG_EXT_POR_MIME = { "image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp" };
@@ -2218,7 +2237,57 @@ function receberImagemUnica(req, res, next) {
 }
 
 const VOLUME_BASE_IMGS = "/Volumes/franquia_bmsa_insight/ci/kaizen/imgs";
+// Base no Blob. É relativa à pasta configurada em AZURE_STORAGE_CONTAINER
+// (que azure-blob.js prefixa), então aqui fica só "imgs" — o mesmo nível
+// do volume, para as duas origens terem a mesma forma depois da base.
+const BLOB_BASE_IMGS = "imgs";
 const PASTA_POR_TIPO_IMG = { antes: "before", depois: "after" };
+
+/** De onde vem (ou para onde vai) este caminho de imagem.
+ *
+ *  O caminho se identifica sozinho: o do volume é absoluto e começa com
+ *  "/Volumes/", o do blob é relativo ("imgs/before/1.png"). Não há
+ *  ambiguidade possível entre os dois formatos, então não é preciso uma
+ *  coluna nova no banco dizendo a origem. */
+function ehCaminhoDeVolume(caminho) {
+  return String(caminho || "").startsWith("/Volumes/");
+}
+
+/** Base esperada para um caminho, conforme a origem. Usada tanto na
+ *  validação do GET quanto para montar caminhos novos. */
+function baseDoCaminho(caminho) {
+  return ehCaminhoDeVolume(caminho) ? VOLUME_BASE_IMGS : BLOB_BASE_IMGS;
+}
+
+/** Este caminho é uma imagem de Kaizen legítima?
+ *
+ *  Duas condições, as duas necessárias: estar sob a base da sua origem, e
+ *  não conter ".." em segmento nenhum. Só o prefixo não basta —
+ *  "imgs/before/../../outra-coisa" começa com a base e mesmo assim sai
+ *  dela. Como este caminho vem da querystring, quem chama escolhe o
+ *  texto, e a rota vale um proxy de leitura se a checagem for frouxa. */
+function caminhoDeImagemValido(caminho) {
+  const texto = String(caminho || "");
+  if (!texto.startsWith(baseDoCaminho(texto) + "/")) return false;
+  return !texto.split("/").includes("..");
+}
+
+// Leitura e remoção vão para a origem do caminho; a GRAVAÇÃO é sempre no
+// Blob quando ele está configurado. Assim o que já existe continua sendo
+// exibido e o que é novo já nasce no destino novo.
+async function lerImagemArmazenada(caminho) {
+  return ehCaminhoDeVolume(caminho) ? baixarArquivoDoVolume(caminho) : baixarArquivoDoBlob(caminho);
+}
+
+async function removerImagemArmazenada(caminho) {
+  return ehCaminhoDeVolume(caminho) ? removerArquivoDoVolume(caminho) : removerArquivoDoBlob(caminho);
+}
+
+async function gravarImagemArmazenada(caminho, buffer, contentType) {
+  return ehCaminhoDeVolume(caminho)
+    ? enviarArquivoParaVolume(caminho, buffer, contentType)
+    : enviarArquivoParaBlob(caminho, buffer, contentType);
+}
 
 // Nome gerado no servidor (nunca o nome original do arquivo): evita
 // colisão entre pessoas diferentes enviando "foto.jpg" ao mesmo tempo e
@@ -2261,7 +2330,7 @@ async function limparOutrasExtensoes(pasta, idKaizen, caminhoMantido) {
   for (const ext of new Set(Object.values(IMG_EXT_POR_MIME))) {
     const alvo = `${pasta}/${idKaizen}${ext}`;
     if (alvo === caminhoMantido) continue;
-    await removerArquivoDoVolume(alvo);
+    await removerImagemArmazenada(alvo);
   }
 }
 
@@ -2287,13 +2356,15 @@ async function renomearImagemParaId(caminhoAtual, idKaizen) {
   if (new RegExp(`^${idKaizen}\\.[a-z0-9]+$`, "i").test(arquivo)) return caminhoAtual;
 
   try {
-    const { buffer, contentType } = await baixarArquivoDoVolume(caminhoAtual);
+    const { buffer, contentType } = await lerImagemArmazenada(caminhoAtual);
     const ext = IMG_EXT_POR_MIME[contentType] || arquivo.slice(arquivo.lastIndexOf("."));
     const caminhoFinal = `${pasta}/${idKaizen}${ext}`;
     if (caminhoFinal === caminhoAtual) return caminhoAtual;
-    await enviarArquivoParaVolume(caminhoFinal, buffer, contentType);
-    const apagou = await removerArquivoDoVolume(caminhoAtual);
-    if (!apagou) console.warn(`[imagem] ID_KAIZEN=${idKaizen}: ${caminhoAtual} ficou no volume (não foi possível apagar).`);
+    // Origem e destino são o mesmo lugar: o arquivo temporário foi
+    // gravado no mesmo armazenamento em que o definitivo vai ficar.
+    await gravarImagemArmazenada(caminhoFinal, buffer, contentType);
+    const apagou = await removerImagemArmazenada(caminhoAtual);
+    if (!apagou) console.warn(`[imagem] ID_KAIZEN=${idKaizen}: ${caminhoAtual} ficou gravado (não foi possível apagar).`);
     await limparOutrasExtensoes(pasta, idKaizen, caminhoFinal);
     return caminhoFinal;
   } catch (err) {
@@ -2302,17 +2373,18 @@ async function renomearImagemParaId(caminhoAtual, idKaizen) {
   }
 }
 
-// GET /kaizens/imagem?path=... — serve de volta uma imagem já salva no
-// volume (a Biblioteca usa isso no <img src>, já que o caminho do
-// volume não é uma URL que o navegador acessa direto). Só aceita
-// caminhos dentro de VOLUME_BASE_IMGS: não é um proxy genérico do volume.
+// GET /kaizens/imagem?path=... — serve de volta uma imagem já gravada (a
+// Biblioteca usa isso no <img src>, já que nem o caminho do volume nem o
+// do blob são URLs que o navegador acesse direto — e no caso do blob o
+// SAS não pode sair do servidor). Atende as duas origens, cada uma
+// restrita à sua base: não é um proxy genérico de nenhuma das duas.
 apiRouter.get("/kaizens/imagem", async (req, res) => {
   try {
     const caminho = String(req.query.path || "");
-    if (!caminho.startsWith(VOLUME_BASE_IMGS + "/")) {
+    if (!caminhoDeImagemValido(caminho)) {
       return res.status(400).json({ error: "Caminho de imagem inválido." });
     }
-    const { buffer, contentType } = await baixarArquivoDoVolume(caminho);
+    const { buffer, contentType } = await lerImagemArmazenada(caminho);
     res.setHeader("Content-Type", contentType);
     // O nome do arquivo é o ID do Kaizen e NÃO muda ao trocar a foto,
     // então a URL sozinha não diz se o conteúdo mudou. Quem chama
@@ -2368,13 +2440,21 @@ apiRouter.post("/kaizens/imagem", receberImagemUnica, async (req, res) => {
     const nomeArquivo = temId
       ? nomeArquivoImagem(req.file.mimetype, idKaizenArquivo)
       : nomeArquivoTemporario(req.file.mimetype);
-    const caminhoVolume = `${VOLUME_BASE_IMGS}/${pasta}/${nomeArquivo}`;
-    await enviarArquivoParaVolume(caminhoVolume, req.file.buffer, req.file.mimetype);
+    // Destino da gravação: o Blob. O Volume só continua atendendo as
+    // fotos antigas na leitura. Sem a configuração do Blob não há para
+    // onde gravar — falhar aqui, com a causa dita, é melhor do que
+    // gravar no lugar errado e descobrir depois.
+    if (!blobConfigurado()) {
+      console.error("[imagem] AZURE_STORAGE_* não configurado — upload recusado.");
+      return res.status(500).json({ error: "Armazenamento de imagens não configurado. Avise o administrador." });
+    }
+    const caminhoImagem = `${BLOB_BASE_IMGS}/${pasta}/${nomeArquivo}`;
+    await enviarArquivoParaBlob(caminhoImagem, req.file.buffer, req.file.mimetype);
     // Trocar PNG por JPG deixaria o arquivo antigo para trás, com outra
     // extensão e o mesmo ID. Some com ele.
-    if (temId) await limparOutrasExtensoes(`${VOLUME_BASE_IMGS}/${pasta}`, idKaizenArquivo, caminhoVolume);
+    if (temId) await limparOutrasExtensoes(`${BLOB_BASE_IMGS}/${pasta}`, idKaizenArquivo, caminhoImagem);
 
-    res.json({ ok: true, url: caminhoVolume });
+    res.json({ ok: true, url: caminhoImagem });
   } catch (err) {
     console.error("[kaizens/imagem] erro ao enviar imagem:", err.message);
     res.status(500).json({ error: "Erro ao enviar a imagem: " + err.message });

@@ -41,19 +41,48 @@ env:
   - name: 'AZURE_SQL_PASSWORD'
     value: 'DEVKZN@!13'
 
-  # ── Upload de imagens (Novo Kaizen) para Volumes do Databricks ──
+  # ── Leitura das imagens ANTIGAS (Volumes do Databricks) ──
+  # As fotos passaram a ser gravadas no Azure Blob (bloco abaixo). O
+  # Volume continua sendo lido, e SÓ lido, para as fotos dos Kaizens
+  # cadastrados antes da troca: o caminho delas já está gravado em
+  # URL_IMG_ANTES/URL_IMG_DEPOIS e não foi migrado.
+  #
   # NADA a configurar aqui: DATABRICKS_HOST, DATABRICKS_CLIENT_ID e
   # DATABRICKS_CLIENT_SECRET são injetados automaticamente pelo runtime
   # do Databricks Apps (credenciais do service principal do PRÓPRIO
   # app) — ver databricks-fs.js para como são usadas.
   #
-  # O que PRECISA ser feito manualmente, uma vez, fora deste arquivo:
-  #   Catalog Explorer > franquia_bmsa_insight > ci > kaizen > Permissions
-  #   > Grant "WRITE VOLUME" para o service principal deste app (o nome
-  #   aparece em App > Authorization). Sem essa permissão o upload das
-  #   fotos de Antes/Depois falha com 403, mesmo com o token OK.
+  # A permissão no volume agora precisa ser só de LEITURA (READ VOLUME)
+  # em franquia_bmsa_insight.ci.kaizen. Se um dia os arquivos antigos
+  # forem copiados para o Blob e as duas colunas atualizadas, o volume
+  # deixa de ser necessário.
 
-
+  # ── Upload de imagens (Novo Kaizen) para o Azure Blob Storage ──
+  # AZURE_STORAGE_ACCOUNT    URL da conta JÁ COM O CONTAINER.
+  # AZURE_STORAGE_CONTAINER  apesar do nome, é a PASTA dentro do
+  #                          container: nome de container no Azure não
+  #                          aceita espaço nem maiúscula, e este tem os
+  #                          dois. As fotos ficam em <pasta>/imgs/before
+  #                          e <pasta>/imgs/after — a mesma estrutura que
+  #                          tinham no volume.
+  # AZURE_STORAGE_SAS_TOKEN  SAS do container. Ver azure-blob.js.
+  #
+  # DUAS PENDÊNCIAS neste SAS, as duas do lado do Azure:
+  #
+  #   1. sp=racw NÃO tem a permissão 'd' (delete). Sem ela o app não
+  #      consegue apagar o arquivo temporário do cadastro novo nem a
+  #      foto com a extensão antiga quando alguém troca um PNG por um
+  #      JPG. Nada quebra — a remoção é best-effort e o erro fica no log
+  #      — mas os órfãos se acumulam. Reemita com sp=racwd.
+  #
+  #   2. O valor abaixo está em TEXTO PURO e dá escrita no container
+  #      inteiro até 2030. Enquanto o SEC-01 não for feito, este arquivo
+  #      é servido publicamente por express.static(__dirname): qualquer
+  #      pessoa com a URL do app baixa o app.yaml e fica com o token.
+  #      Revogue este SAS, emita outro e traga por Secret Scope:
+  #
+  #        - name: 'AZURE_STORAGE_SAS_TOKEN'
+  #          valueFrom: 'azure-storage-sas'
 
   - name: 'AZURE_STORAGE_ACCOUNT'
     value: 'https://ibpdatalake.blob.core.windows.net/vbmdatalake'
