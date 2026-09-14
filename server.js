@@ -1016,12 +1016,15 @@ async function matriculaDoMdm(idUsuario, matriculaEscolhida) {
  *  cadastrar um Kaizen por causa dela é um problema grande. Por isso
  *  nada aqui lança: falhou, fica no log e o cadastro segue.
  *
- *  O USING também passa pela PVC: a linha de origem só existe se o
- *  Kaizen existir. Assim, se algum dia o Kaizen não estiver lá, o MERGE
- *  simplesmente não grava (e avisa) em vez de estourar a FK. */
-async function gravarHierarquiaDoKaizen(idKaizen, idUsuarioLider) {
-  if (!Number.isInteger(idKaizen) || !Number.isInteger(idUsuarioLider)) {
-    console.warn(`[hierarquia] ID_KAIZEN=${idKaizen} sem líder válido (ID_USUARIO=${idUsuarioLider}); nada gravado.`);
+ *  O USING lê tudo das TABELAS, não de variáveis do Node: o ID_KAIZEN
+ *  e o ID_USUARIO_LIDER saem da própria kzn_pedravisaoconsolidada, e a
+ *  hierarquia sai de kzn_mdm_hierarquia pelo ID_USUARIO igual a esse
+ *  líder. Assim a foto não tem como divergir do que ficou gravado no
+ *  Kaizen, e a linha de origem só existe se o Kaizen existir — se ele
+ *  não estiver lá, o MERGE não grava (e avisa) em vez de estourar a FK. */
+async function gravarHierarquiaDoKaizen(idKaizen) {
+  if (!Number.isInteger(idKaizen) || idKaizen <= 0) {
+    console.warn(`[hierarquia] ID_KAIZEN inválido (${idKaizen}); nada gravado.`);
     return false;
   }
   const niveis = [];
@@ -1034,15 +1037,16 @@ async function gravarHierarquiaDoKaizen(idKaizen, idUsuarioLider) {
     // ID_USUARIO_LIDER são o que o relatório precisa, e os oito níveis
     // são NULL-áveis justamente porque podem não estar disponíveis.
     //
-    // ID_USUARIO_LIDER sai do PARÂMETRO, não de m.ID_USUARIO: com LEFT
-    // JOIN o m pode vir nulo, e a coluna é NOT NULL no destino.
+    // O OUTPUT devolve o que foi de fato gravado. Serve para o log dizer
+    // se foi INSERT ou UPDATE e com que líder — sem uma segunda consulta,
+    // e sem depender de rowsAffected.
     const r = await runQuery(
       `MERGE INTO ${FULL_KAIZEN_HIER_TABLE} AS alvo
        USING (SELECT p.ID_KAIZEN,
-                     @idUsuarioLider AS ID_USUARIO_LIDER,
+                     p.ID_USUARIO_LIDER,
                      ${niveis.map((c) => `m.${c}`).join(",\n                     ")}
                 FROM ${FULL_PVC_TABLE} p
-                LEFT JOIN ${FULL_MDM_TABLE} m ON m.ID_USUARIO = @idUsuarioLider
+                LEFT JOIN ${FULL_MDM_TABLE} m ON m.ID_USUARIO = p.ID_USUARIO_LIDER
                WHERE p.ID_KAIZEN = @idKaizen) AS origem
           ON alvo.ID_KAIZEN = origem.ID_KAIZEN
        WHEN MATCHED THEN UPDATE SET
@@ -1052,35 +1056,31 @@ async function gravarHierarquiaDoKaizen(idKaizen, idUsuarioLider) {
        WHEN NOT MATCHED THEN
          INSERT (ID_KAIZEN, ID_USUARIO_LIDER, ${niveis.join(", ")}, DT_ATUALIZACAO)
          VALUES (origem.ID_KAIZEN, origem.ID_USUARIO_LIDER,
-                 ${niveis.map((c) => `origem.${c}`).join(", ")}, ${AGORA_BRASILIA});`,
-      [
-        ["idKaizen", sql.Int, idKaizen],
-        ["idUsuarioLider", sql.Int, idUsuarioLider],
-      ]
+                 ${niveis.map((c) => `origem.${c}`).join(", ")}, ${AGORA_BRASILIA})
+       OUTPUT $action AS ACAO, inserted.ID_USUARIO_LIDER, inserted.NM_HIERARQUIA_N1;`,
+      [["idKaizen", sql.Int, idKaizen]]
     );
 
-    const gravou = (r.rowsAffected && r.rowsAffected[0]) > 0;
-    if (gravou) {
+    const gravada = r.recordset && r.recordset[0];
+    if (gravada) {
       // Sucesso também vai para o log. Sem isto, "a tabela está vazia"
-      // não distingue "o código não rodou" de "rodou e não gravou" —
-      // e foi exatamente essa dúvida que custou uma rodada.
-      console.log(`[hierarquia] ID_KAIZEN=${idKaizen} gravado (líder ID_USUARIO=${idUsuarioLider}).`);
-    } else {
-      // Com o LEFT JOIN só sobra uma explicação: o Kaizen não está na
-      // PVC. Dizer isso direto é melhor do que listar hipóteses.
-      console.warn(
-        `[hierarquia] ID_KAIZEN=${idKaizen} não encontrado em ${FULL_PVC_TABLE}; ` +
-          `a hierarquia do líder ID_USUARIO=${idUsuarioLider} não foi gravada.`
+      // não distingue "o código não rodou" de "rodou e não gravou".
+      console.log(
+        `[hierarquia] ID_KAIZEN=${idKaizen} ${gravada.ACAO} ` +
+          `(líder ID_USUARIO=${gravada.ID_USUARIO_LIDER}, N1=${gravada.NM_HIERARQUIA_N1 ?? "NULL"}).`
       );
+      return true;
     }
-    return gravou;
+    // Com o LEFT JOIN só sobra uma explicação: o Kaizen não está na PVC.
+    console.warn(`[hierarquia] ID_KAIZEN=${idKaizen} não encontrado em ${FULL_PVC_TABLE}; nada gravado.`);
+    return false;
   } catch (err) {
     // Nunca derruba o cadastro: ver o comentário acima. O número do erro
     // vai junto porque é ele que separa "sem permissão" (229) de
     // "tabela não existe" (208) de violação de FK (547).
     console.error(
-      `[hierarquia] ID_KAIZEN=${idKaizen}, líder ID_USUARIO=${idUsuarioLider}: ` +
-        `falha ao gravar em ${FULL_KAIZEN_HIER_TABLE} (erro ${err.number || "?"}): ${err.message}`
+      `[hierarquia] ID_KAIZEN=${idKaizen}: falha ao gravar em ${FULL_KAIZEN_HIER_TABLE} ` +
+        `(erro ${err.number || "?"}): ${err.message}`
     );
     return false;
   }
@@ -3155,10 +3155,11 @@ apiRouter.post("/kaizens", async (req, res) => {
 
       await tx.commit();
 
-      // Fotografia da hierarquia do líder. Depois do commit, pelo mesmo
-      // motivo dos comunicados abaixo — e porque a FK de
-      // kzn_kaizen_hierarquia exige o Kaizen já gravado.
-      await gravarHierarquiaDoKaizen(idKaizen, idLider);
+      // Fotografia da hierarquia do líder. Lê o ID_USUARIO_LIDER da
+      // linha que acabou de ser gravada, não da variável daqui. Depois
+      // do commit, pelo mesmo motivo dos comunicados abaixo — e porque a
+      // FK de kzn_kaizen_hierarquia exige o Kaizen já gravado.
+      await gravarHierarquiaDoKaizen(idKaizen);
 
       // Só depois do commit: antes disso o Kaizen ainda pode sumir no
       // rollback, e comunicar um cadastro que não existe é pior do que
@@ -4263,9 +4264,9 @@ apiRouter.put("/kaizens/:id", async (req, res) => {
 
       // Refaz a fotografia da hierarquia: o líder pode ter mudado nesta
       // edição, e a hierarquia dele pode ter mudado no MDM desde a
-      // gravação anterior. Mesmo líder que acabou de entrar no UPDATE.
-      // Depois do commit, como no cadastro.
-      await gravarHierarquiaDoKaizen(idKaizen, dados.idUsuarioLider || idUsuario);
+      // gravação anterior. O líder sai da própria linha, já atualizada
+      // pelo UPDATE acima. Depois do commit, como no cadastro.
+      await gravarHierarquiaDoKaizen(idKaizen);
 
       // Reencaminha ao fluxo: o aprovador designado é avisado de novo,
       // pelo mesmo caminho do cadastro.
