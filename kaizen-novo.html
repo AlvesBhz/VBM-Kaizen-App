@@ -2247,17 +2247,50 @@ window.VBMDataConclusao = (function () {
     }
     var acoes = acoesDe(input);
     if (acoes) acoes.hidden = false;
+    // Com foto na tela, a zona de upload sai de cena — é o que o cadastro
+    // novo já fazia, e agora a EDIÇÃO faz igual. Mostrar as duas ao mesmo
+    // tempo dava a impressão de que faltava enviar alguma coisa. Quem
+    // devolve a zona é o "Limpar".
+    var zona = input.closest('.photo-upload-zone');
+    if (zona) zona.style.display = 'none';
   }
   window.VBMFotoCampo = { mostrar: mostrarFotoEscolhida };
 
-  /* Volta o campo ao estado "sem escolha".
-     Na EDIÇÃO existe uma foto gravada: a pré-visualização dela volta e o
-     campo continua valendo como preenchido — limpar a escolha não pode
-     apagar a foto que já está no Kaizen. */
-  function limpar(input) {
-    input.value = '';
+  /* Tira a foto da tela e devolve a zona de upload. */
+  function esvaziarCampo(input) {
     var preview = previewDe(input);
+    if (preview) {
+      preview.removeAttribute('src');
+      preview.style.display = 'none';
+    }
     var acoes = acoesDe(input);
+    if (acoes) acoes.hidden = true;
+    var zona = input.closest('.photo-upload-zone');
+    if (zona) zona.style.display = '';
+  }
+
+  /* "Limpar": tira a foto do campo, tenha ela acabado de ser escolhida ou
+     já estar gravada no Kaizen. Depois disto o campo fica vazio DE FATO e
+     o envio volta a exigir uma imagem (ela é obrigatória) — é isso que
+     torna o "Limpar" o caminho para trocar a foto na edição.
+
+     Nada é apagado no servidor: a coluna do Kaizen só muda quando o
+     cadastro é salvo, e salvar sem escolher outra foto a validação não
+     deixa. Desistir e sair da tela não altera nada. */
+  function limparCampo(input) {
+    input.value = '';
+    delete input.dataset.jaGravada;
+    var hidden = document.getElementById(input.id.replace('imagem_', 'url_imagem_'));
+    if (hidden) hidden.value = '';
+    esvaziarCampo(input);
+  }
+
+  /* Descarta uma escolha RECUSADA (formato ou tamanho errado). Diferente
+     do "Limpar": aqui a pessoa não pediu para tirar a foto, ela só errou
+     o arquivo — então o que já estava no campo tem de voltar, inclusive a
+     foto gravada de uma edição. */
+  function descartarEscolha(input) {
+    input.value = '';
     var hidden = document.getElementById(input.id.replace('imagem_', 'url_imagem_'));
     var gravada = hidden && hidden.value;
     if (gravada) {
@@ -2266,14 +2299,8 @@ window.VBMDataConclusao = (function () {
       input.dataset.jaGravada = '1';
       mostrarFotoEscolhida(input, '/api/kaizens/imagem?path=' + encodeURIComponent(gravada) + '&v=' + Date.now());
     } else {
-      if (preview) {
-        preview.removeAttribute('src');
-        preview.style.display = 'none';
-      }
-      if (acoes) acoes.hidden = true;
+      esvaziarCampo(input);
     }
-    var zona = input.closest('.photo-upload-zone');
-    if (zona) zona.style.display = '';
   }
 
   ['imagem_antes', 'imagem_depois'].forEach(function (id) {
@@ -2287,13 +2314,13 @@ window.VBMDataConclusao = (function () {
       var tipoOk = TIPOS_OK.indexOf(arquivo.type) !== -1;
       var extOk = EXT_OK.test(arquivo.name || '');
       if (!tipoOk || !extOk) {
-        limpar(input);
+        descartarEscolha(input);
         showToast('error', txtFoto('f.photoInvalidTitle', 'Formato não suportado'),
           txtFoto('f.photoInvalidMsg', 'Envie a imagem em PNG, JPG ou WEBP.'), 5000);
         return;
       }
       if (arquivo.size > MAX_BYTES) {
-        limpar(input);
+        descartarEscolha(input);
         showToast('error', txtFoto('f.photoTooBigTitle', 'Imagem muito grande'),
           txtFoto('f.photoTooBigMsg', 'O tamanho máximo é 10MB.'), 5000);
         return;
@@ -2313,7 +2340,7 @@ window.VBMDataConclusao = (function () {
     if (!input) return;
 
     if (e.target.closest('[data-foto-limpar]')) {
-      limpar(input);
+      limparCampo(input);
       return;
     }
     if (e.target.closest('[data-foto-ver]')) {
