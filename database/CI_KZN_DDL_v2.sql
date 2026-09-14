@@ -115,6 +115,16 @@
        Sem impacto na aplicação: as 2 consultas do server.js que tocam esta
        tabela não usam a coluna, e o trigger TR_KZN_RESULTADO_KAIZEN_UPD
        também não a cita.
+     - KZN_KAIZEN_HIERARQUIA (pedido do time, nesta rodada): ID_KAIZEN e
+       ID_USUARIO_LIDER passaram a ser FK pra KZN_PEDRAVISAOCONSOLIDADA. A do
+       líder é COMPOSTA (ID_KAIZEN, ID_USUARIO_LIDER) por imposição do SQL
+       Server — FK exige PK/UNIQUE no destino, e ID_USUARIO_LIDER sozinha não
+       é única na principal; torná-la única proibiria um líder de ter mais de
+       um Kaizen. O UNIQUE de apoio UQ_KZN_PVC_KAIZEN_LIDER (seção 13) é
+       inócuo, já que ID_KAIZEN é a PK. Seção 17.5 migra bancos existentes.
+       A mesma seção 17 corrige uma DIVERGÊNCIA do script em relação ao banco
+       real: a PK é ID_KAIZEN (não uma ID_KAIZEN_HIERARQUIA própria) e a
+       coluna ID_USUARIO_LIDER existe.
      - KZN_MDM_HIERARQUIA (pedido do time, nesta rodada): DS_EMAIL renomeado
        pra CD_EMAIL; novos campos de perfil (NM_SITUACAO, SG_ATIVO, NM_POSICAO,
        NM_PAIS, SG_ESTADO, NM_CIDADE, NM_SITE) inseridos logo após CD_EMAIL;
@@ -887,6 +897,9 @@ BEGIN
         ID_USUARIO_ATUALIZACAO     INT                             NOT NULL,   -- app envia a cada INSERT/UPDATE (quem está agindo)
 
         CONSTRAINT PK_KZN_PVC                      PRIMARY KEY CLUSTERED (ID_KAIZEN),
+        -- Apoio pra FK composta de CI.KZN_KAIZEN_HIERARQUIA (seção 17). Não
+        -- muda regra nenhuma: ID_KAIZEN já é a PK, então o par já era único.
+        CONSTRAINT UQ_KZN_PVC_KAIZEN_LIDER         UNIQUE (ID_KAIZEN, ID_USUARIO_LIDER),
         CONSTRAINT FK_KZN_PVC_USUARIO_CADASTRO     FOREIGN KEY (ID_USUARIO_CADASTRO)
             REFERENCES CI.KZN_MDM_HIERARQUIA (ID_USUARIO),
         CONSTRAINT FK_KZN_PVC_USUARIO_LIDER        FOREIGN KEY (ID_USUARIO_LIDER)
@@ -1093,15 +1106,29 @@ GO
 /* ------------------------------------------------------------------------------
    17. TABELA: CI.KZN_KAIZEN_HIERARQUIA
    (fotografia da hierarquia organizacional do usuário no momento do registro
-   do Kaizen — texto solto de propósito, não FK pra MDM, pra não mudar
-   retroativamente se o org chart mudar depois)
+   do Kaizen — os nomes N1…N8 são texto solto DE PROPÓSITO, não FK pra MDM,
+   pra não mudar retroativamente se o org chart mudar depois)
+
+   CORREÇÃO (constatada nesta rodada a partir da estrutura real do banco, via
+   print do SSMS): a definição anterior aqui estava DIVERGENTE do banco. Ela
+   declarava uma PK própria ID_KAIZEN_HIERARQUIA e não tinha ID_USUARIO_LIDER.
+   No banco real a PK é o próprio ID_KAIZEN (1 fotografia por Kaizen) e existe
+   a coluna ID_USUARIO_LIDER. Esta seção passa a refletir o banco.
+
+   As duas FKs apontam pra tabela principal (pedido do time, nesta rodada).
+   A do líder é COMPOSTA por necessidade: o SQL Server só aceita FK pra coluna
+   com PK/UNIQUE, e ID_USUARIO_LIDER sozinha não é única na principal (um
+   líder toca vários Kaizens) — torná-la única proibiria isso. A FK composta,
+   apoiada em UQ_KZN_PVC_KAIZEN_LIDER, resolve sem mudar regra de negócio (o
+   par já é único porque ID_KAIZEN é a PK) e ainda garante algo mais forte: o
+   líder da fotografia é o líder DAQUELE Kaizen.
    ------------------------------------------------------------------------------ */
 IF OBJECT_ID('CI.KZN_KAIZEN_HIERARQUIA', 'U') IS NULL
 BEGIN
     CREATE TABLE CI.KZN_KAIZEN_HIERARQUIA
     (
-        ID_KAIZEN_HIERARQUIA   INT                             NOT NULL,
         ID_KAIZEN              INT                             NOT NULL,
+        ID_USUARIO_LIDER       INT                             NOT NULL,
         NM_HIERARQUIA_N1       VARCHAR(80)                         NULL,
         NM_HIERARQUIA_N2       VARCHAR(80)                         NULL,
         NM_HIERARQUIA_N3       VARCHAR(80)                         NULL,
@@ -1113,13 +1140,15 @@ BEGIN
         DT_ATUALIZACAO         DATETIME2(3)                    NOT NULL
             CONSTRAINT DF_KZN_KAIZEN_HIERARQUIA_DT_ATUALIZACAO DEFAULT (SYSDATETIME()),
 
-        CONSTRAINT PK_KZN_KAIZEN_HIERARQUIA        PRIMARY KEY CLUSTERED (ID_KAIZEN_HIERARQUIA),
+        CONSTRAINT PK_KZN_KAIZEN_HIERARQUIA        PRIMARY KEY CLUSTERED (ID_KAIZEN),
         CONSTRAINT FK_KZN_KAIZEN_HIERARQUIA_KAIZEN FOREIGN KEY (ID_KAIZEN)
-            REFERENCES CI.KZN_PEDRAVISAOCONSOLIDADA (ID_KAIZEN)
+            REFERENCES CI.KZN_PEDRAVISAOCONSOLIDADA (ID_KAIZEN),
+        -- FK composta: garante que o líder da fotografia seja o líder daquele
+        -- Kaizen. Depende de UQ_KZN_PVC_KAIZEN_LIDER na seção 13.
+        CONSTRAINT FK_KZN_KAIZEN_HIERARQUIA_LIDER  FOREIGN KEY (ID_KAIZEN, ID_USUARIO_LIDER)
+            REFERENCES CI.KZN_PEDRAVISAOCONSOLIDADA (ID_KAIZEN, ID_USUARIO_LIDER)
     );
-
-    CREATE NONCLUSTERED INDEX IX_KZN_KAIZEN_HIERARQUIA_KAIZEN
-        ON CI.KZN_KAIZEN_HIERARQUIA (ID_KAIZEN);
+    -- Sem índice avulso em ID_KAIZEN: agora ele é a PK clusterizada.
 END
 GO
 
@@ -1833,6 +1862,63 @@ BEGIN
     ALTER TABLE CI.KZN_ADMIN ADD CONSTRAINT FK_KZN_ADMIN_USUARIO FOREIGN KEY (ID_USUARIO) REFERENCES CI.KZN_MDM_HIERARQUIA (ID_USUARIO);
 
     PRINT 'Migração de CI.KZN_ADMIN concluída.';
+END
+GO
+
+/* ------------------------------------------------------------------------------
+   17.5 MIGRAÇÃO — FKs de CI.KZN_KAIZEN_HIERARQUIA pra tabela principal
+   (idempotente)
+
+   Cria, em bancos já existentes, o que a seção 17 já traz no CREATE TABLE:
+   o UNIQUE de apoio na principal e as duas FKs da fotografia de hierarquia.
+
+   Só executa se os dados permitirem. Se houver hierarquia órfã (ID_KAIZEN
+   inexistente) ou com líder diferente do líder do Kaizen, a criação é pulada
+   com aviso em vez de estourar no meio do script — o diagnóstico linha a
+   linha está no script avulso database/amarrar_kaizen_hierarquia_pvc.sql.
+   ------------------------------------------------------------------------------ */
+IF OBJECT_ID('CI.KZN_KAIZEN_HIERARQUIA', 'U') IS NOT NULL
+   AND OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA', 'U') IS NOT NULL
+   AND EXISTS (SELECT 1 FROM sys.columns
+               WHERE object_id = OBJECT_ID('CI.KZN_KAIZEN_HIERARQUIA') AND name = 'ID_USUARIO_LIDER')
+BEGIN
+    DECLARE @orfaosKH INT, @lideresKH INT;
+
+    SELECT @orfaosKH = COUNT(*)
+    FROM   CI.KZN_KAIZEN_HIERARQUIA h
+    WHERE  NOT EXISTS (SELECT 1 FROM CI.KZN_PEDRAVISAOCONSOLIDADA p WHERE p.ID_KAIZEN = h.ID_KAIZEN);
+
+    SELECT @lideresKH = COUNT(*)
+    FROM        CI.KZN_KAIZEN_HIERARQUIA h
+    JOIN        CI.KZN_PEDRAVISAOCONSOLIDADA p ON p.ID_KAIZEN = h.ID_KAIZEN
+    WHERE       h.ID_USUARIO_LIDER <> p.ID_USUARIO_LIDER;
+
+    IF @orfaosKH > 0 OR @lideresKH > 0
+        PRINT 'AVISO 17.5: FKs de CI.KZN_KAIZEN_HIERARQUIA NAO criadas — dados inconsistentes ('
+            + CAST(@orfaosKH AS VARCHAR(10)) + ' orfao[s], '
+            + CAST(@lideresKH AS VARCHAR(10)) + ' lider[es] divergente[s]). Rode database/amarrar_kaizen_hierarquia_pvc.sql para o detalhe.';
+    ELSE
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM sys.key_constraints
+                       WHERE parent_object_id = OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA')
+                         AND name = 'UQ_KZN_PVC_KAIZEN_LIDER')
+            ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA
+                ADD CONSTRAINT UQ_KZN_PVC_KAIZEN_LIDER UNIQUE (ID_KAIZEN, ID_USUARIO_LIDER);
+
+        IF OBJECT_ID('CI.FK_KZN_KAIZEN_HIERARQUIA_KAIZEN', 'F') IS NULL
+            ALTER TABLE CI.KZN_KAIZEN_HIERARQUIA
+                ADD CONSTRAINT FK_KZN_KAIZEN_HIERARQUIA_KAIZEN
+                    FOREIGN KEY (ID_KAIZEN)
+                    REFERENCES CI.KZN_PEDRAVISAOCONSOLIDADA (ID_KAIZEN);
+
+        IF OBJECT_ID('CI.FK_KZN_KAIZEN_HIERARQUIA_LIDER', 'F') IS NULL
+            ALTER TABLE CI.KZN_KAIZEN_HIERARQUIA
+                ADD CONSTRAINT FK_KZN_KAIZEN_HIERARQUIA_LIDER
+                    FOREIGN KEY (ID_KAIZEN, ID_USUARIO_LIDER)
+                    REFERENCES CI.KZN_PEDRAVISAOCONSOLIDADA (ID_KAIZEN, ID_USUARIO_LIDER);
+
+        PRINT '17.5 concluida: CI.KZN_KAIZEN_HIERARQUIA amarrada a tabela principal por ID_KAIZEN e ID_USUARIO_LIDER.';
+    END
 END
 GO
 
