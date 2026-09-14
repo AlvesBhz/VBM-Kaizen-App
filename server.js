@@ -32,6 +32,7 @@ const {
   enviarArquivoParaBlob,
   baixarArquivoDoBlob,
   removerArquivoDoBlob,
+  listarNomesNoBlob,
 } = require("./azure-blob");
 const { montarAviso } = require("./email-kaizen");
 
@@ -2238,10 +2239,14 @@ function receberImagemUnica(req, res, next) {
 
 const VOLUME_BASE_IMGS = "/Volumes/franquia_bmsa_insight/ci/kaizen/imgs";
 // Base no Blob. É relativa à pasta configurada em AZURE_STORAGE_CONTAINER
-// (que azure-blob.js prefixa), então aqui fica só "imgs" — o mesmo nível
-// do volume, para as duas origens terem a mesma forma depois da base.
-const BLOB_BASE_IMGS = "imgs";
-const PASTA_POR_TIPO_IMG = { antes: "before", depois: "after" };
+// ("05 - Kaizen", que azure-blob.js prefixa). Estas pastas JÁ EXISTEM no
+// datalake e são as que o time usa — não invente outras, o caminho
+// completo é "05 - Kaizen/01 - Imagens/01 - Antes".
+const BLOB_BASE_IMGS = "01 - Imagens";
+const PASTA_POR_TIPO_IMG = { antes: "01 - Antes", depois: "02 - Depois" };
+// O volume antigo usava before/after; esse mapa vale só para o Blob,
+// porque gravação nova só acontece lá. Caminho de volume não é remontado
+// em lugar nenhum — vem pronto do banco, do jeito que foi gravado.
 
 /** De onde vem (ou para onde vai) este caminho de imagem.
  *
@@ -2253,22 +2258,28 @@ function ehCaminhoDeVolume(caminho) {
   return String(caminho || "").startsWith("/Volumes/");
 }
 
-/** Base esperada para um caminho, conforme a origem. Usada tanto na
- *  validação do GET quanto para montar caminhos novos. */
-function baseDoCaminho(caminho) {
-  return ehCaminhoDeVolume(caminho) ? VOLUME_BASE_IMGS : BLOB_BASE_IMGS;
-}
+/** Bases aceitas na LEITURA. A gravação usa só BLOB_BASE_IMGS; as outras
+ *  existem para não quebrar caminhos que JÁ ESTÃO gravados no banco:
+ *
+ *    VOLUME_BASE_IMGS  fotos anteriores à mudança para o Blob.
+ *    "imgs"            fotos gravadas pela primeira versão desta mudança,
+ *                      que criou uma pasta "imgs/before|after" em vez de
+ *                      usar "01 - Imagens/01 - Antes|02 - Depois". São
+ *                      poucas, de cadastros de teste; quando as linhas
+ *                      forem corrigidas (ou apagadas) esta entrada sai.
+ */
+const BASES_LEITURA_IMGS = [VOLUME_BASE_IMGS, BLOB_BASE_IMGS, "imgs"];
 
 /** Este caminho é uma imagem de Kaizen legítima?
  *
- *  Duas condições, as duas necessárias: estar sob a base da sua origem, e
+ *  Duas condições, as duas necessárias: estar sob uma das bases aceitas, e
  *  não conter ".." em segmento nenhum. Só o prefixo não basta —
- *  "imgs/before/../../outra-coisa" começa com a base e mesmo assim sai
+ *  "01 - Imagens/../../outra-coisa" começa com a base e mesmo assim sai
  *  dela. Como este caminho vem da querystring, quem chama escolhe o
  *  texto, e a rota vale um proxy de leitura se a checagem for frouxa. */
 function caminhoDeImagemValido(caminho) {
   const texto = String(caminho || "");
-  if (!texto.startsWith(baseDoCaminho(texto) + "/")) return false;
+  if (!BASES_LEITURA_IMGS.some((base) => texto.startsWith(base + "/"))) return false;
   return !texto.split("/").includes("..");
 }
 
@@ -2293,30 +2304,72 @@ async function gravarImagemArmazenada(caminho, buffer, contentType) {
 // colisão entre pessoas diferentes enviando "foto.jpg" ao mesmo tempo e
 // evita qualquer caractere problemático vindo do sistema de arquivos de
 // quem enviou.
-/** Nome DEFINITIVO da foto: SÓ o ID do Kaizen.
- *
- *  Ex.: imgs/before/1.png e imgs/after/1.png. Quem separa o "antes" do
- *  "depois" é a PASTA (before/after, ver PASTA_POR_TIPO_IMG) — o nome
- *  não repete essa informação. Sem carimbo de tempo e sem sufixo
- *  aleatório: olhando o volume dá para saber de qual Kaizen é a foto
- *  sem consultar o banco. Como o nome se repete a cada troca de foto, o
- *  upload grava POR CIMA (overwrite=true): um Kaizen tem uma foto de
- *  cada, não um histórico. */
-function nomeArquivoImagem(mimetype, idKaizen) {
-  const ext = IMG_EXT_POR_MIME[mimetype] || ".jpg";
-  return `${idKaizen}${ext}`;
-}
+// Nome DEFINITIVO da foto: SÓ o número do Kaizen na pasta. Ex.:
+// "01 - Imagens/01 - Antes/7.png" e "01 - Imagens/02 - Depois/7.png".
+// Quem separa o "antes" do "depois" é a PASTA — o nome não repete essa
+// informação. As duas fotos de um mesmo Kaizen levam o MESMO número: é
+// ele que amarra o par. Quem monta esse nome é renomearImagemPara(), com
+// o número que numeroParaAsImagens() decidiu uma vez só.
 
-/** Nome PROVISÓRIO, usado só enquanto o ID não existe.
+/** Nome PROVISÓRIO, usado enquanto o número não foi decidido.
  *
- *  No cadastro novo o upload acontece antes do INSERT — o ID só é
- *  gerado lá dentro. O arquivo entra com este nome e é regravado com o
- *  definitivo assim que o número aparece (ver renomearImagemParaId). O
- *  aleatório evita que dois cadastros simultâneos escrevam no mesmo
+ *  O upload acontece antes de o cadastro ser gravado, e o número vem da
+ *  pasta (maior já existente + 1) — calculá-lo em cada upload daria
+ *  números DIFERENTES para o "antes" e o "depois" do mesmo Kaizen, já
+ *  que o primeiro arquivo gravado entra na contagem do segundo. Por isso
+ *  todo upload entra com este nome e os dois são renomeados juntos, com
+ *  um número só, em nomearImagensDoKaizen().
+ *
+ *  O aleatório evita que dois cadastros simultâneos escrevam no mesmo
  *  arquivo temporário. */
 function nomeArquivoTemporario(mimetype) {
   const ext = IMG_EXT_POR_MIME[mimetype] || ".jpg";
   return `TEMP_${Date.now()}_${Math.random().toString(36).slice(2, 10)}${ext}`;
+}
+
+/** O número de um caminho de imagem, ou null se o nome não for numérico.
+ *
+ *  "01 - Imagens/01 - Antes/7.png" -> 7 ; um TEMP_... -> null. Serve para
+ *  reaproveitar o número que o Kaizen JÁ tem quando alguém troca só uma
+ *  das duas fotos. */
+function numeroDoCaminhoImagem(caminho) {
+  if (!caminho) return null;
+  const arquivo = String(caminho).slice(String(caminho).lastIndexOf("/") + 1);
+  const achado = arquivo.match(/^(\d+)\.[A-Za-z0-9]+$/);
+  return achado ? parseInt(achado[1], 10) : null;
+}
+
+/** Próximo número livre: o MAIOR já gravado nas duas pastas, mais 1.
+ *
+ *  Varre "01 - Antes" e "02 - Depois" juntas, porque o número identifica
+ *  o Kaizen e não a foto: se 7 está ocupado em qualquer uma das duas, o
+ *  próximo é 8. Arquivos que não são numéricos (os TEMP_ de cadastros
+ *  abandonados) são ignorados.
+ *
+ *  Devolve null quando não dá para listar — o SAS em uso (sp=racw) não
+ *  tem a permissão 'l'. Quem chama cai no ID_KAIZEN, que também é único;
+ *  o cadastro não pode parar por causa disso. Reemita com sp=racwdl. */
+async function proximoNumeroDeImagem() {
+  try {
+    const pastas = Object.values(PASTA_POR_TIPO_IMG);
+    const listas = await Promise.all(
+      pastas.map((p) => listarNomesNoBlob(`${BLOB_BASE_IMGS}/${p}`))
+    );
+    let maior = 0;
+    for (const nomes of listas) {
+      for (const nome of nomes) {
+        const n = numeroDoCaminhoImagem(nome);
+        if (n != null && n > maior) maior = n;
+      }
+    }
+    return maior + 1;
+  } catch (err) {
+    const motivo = err.semPermissao
+      ? "o SAS não tem a permissão de listar ('l') — reemita com sp=racwdl"
+      : err.message;
+    console.warn(`[imagem] não foi possível numerar pela pasta (${motivo}); usando o ID_KAIZEN.`);
+    return null;
+  }
 }
 
 /** Apaga as fotos do mesmo Kaizen com OUTRA extensão, na mesma pasta.
@@ -2326,51 +2379,92 @@ function nomeArquivoTemporario(mimetype) {
  *  ambiguidade que nomear pelo ID veio resolver. São no máximo duas
  *  chamadas, todas best-effort — falhar aqui não atrapalha nada além de
  *  deixar um arquivo sobrando. */
-async function limparOutrasExtensoes(pasta, idKaizen, caminhoMantido) {
+async function limparOutrasExtensoes(pasta, numero, caminhoMantido) {
   for (const ext of new Set(Object.values(IMG_EXT_POR_MIME))) {
-    const alvo = `${pasta}/${idKaizen}${ext}`;
+    const alvo = `${pasta}/${numero}${ext}`;
     if (alvo === caminhoMantido) continue;
     await removerImagemArmazenada(alvo);
   }
 }
 
-/** Deixa a foto com o nome definitivo depois que o ID_KAIZEN existe.
+/** Deixa UMA foto com o nome "<numero>.<ext>", na pasta onde ela já está.
  *
- *  Se o arquivo já está com o nome certo (caso da EDIÇÃO, em que a tela
- *  manda o ?id= no upload), não faz nada — nem uma chamada ao volume. No
- *  cadastro novo, lê o arquivo temporário, regrava com o nome final e
- *  apaga o provisório.
+ *  Se o arquivo já está com esse nome, não faz nada — nem uma chamada ao
+ *  armazenamento. Senão lê, regrava com o nome final e apaga o antigo.
  *
  *  A pasta é sempre a do arquivo atual: o upload já colocou o arquivo em
- *  before/ ou after/ conforme o tipo, e é a pasta que diz qual é qual.
+ *  "01 - Antes" ou "02 - Depois" conforme o tipo, e é a pasta que diz
+ *  qual é qual.
  *
  *  Em qualquer falha devolve o caminho ORIGINAL: a foto existe e está
  *  gravada, e perder o cadastro inteiro por causa do nome do arquivo
  *  seria trocar um problema pequeno por um grande. O erro fica no log
  *  com o ID, para dar para renomear depois se alguém quiser. */
-async function renomearImagemParaId(caminhoAtual, idKaizen) {
-  if (!caminhoAtual || !Number.isInteger(idKaizen) || idKaizen <= 0) return caminhoAtual;
+async function renomearImagemPara(caminhoAtual, numero, idKaizen) {
+  if (!caminhoAtual || !Number.isInteger(numero) || numero <= 0) return caminhoAtual;
   const pasta = caminhoAtual.slice(0, caminhoAtual.lastIndexOf("/"));
   const arquivo = caminhoAtual.slice(caminhoAtual.lastIndexOf("/") + 1);
-  // Já está no padrão "<id>.<ext>"? Então não há o que fazer.
-  if (new RegExp(`^${idKaizen}\\.[a-z0-9]+$`, "i").test(arquivo)) return caminhoAtual;
+  // Já está no padrão "<numero>.<ext>"? Então não há o que fazer.
+  if (new RegExp(`^${numero}\\.[a-z0-9]+$`, "i").test(arquivo)) return caminhoAtual;
 
   try {
     const { buffer, contentType } = await lerImagemArmazenada(caminhoAtual);
     const ext = IMG_EXT_POR_MIME[contentType] || arquivo.slice(arquivo.lastIndexOf("."));
-    const caminhoFinal = `${pasta}/${idKaizen}${ext}`;
+    const caminhoFinal = `${pasta}/${numero}${ext}`;
     if (caminhoFinal === caminhoAtual) return caminhoAtual;
     // Origem e destino são o mesmo lugar: o arquivo temporário foi
     // gravado no mesmo armazenamento em que o definitivo vai ficar.
     await gravarImagemArmazenada(caminhoFinal, buffer, contentType);
     const apagou = await removerImagemArmazenada(caminhoAtual);
     if (!apagou) console.warn(`[imagem] ID_KAIZEN=${idKaizen}: ${caminhoAtual} ficou gravado (não foi possível apagar).`);
-    await limparOutrasExtensoes(pasta, idKaizen, caminhoFinal);
+    await limparOutrasExtensoes(pasta, numero, caminhoFinal);
     return caminhoFinal;
   } catch (err) {
     console.error(`[imagem] ID_KAIZEN=${idKaizen}: não foi possível renomear ${caminhoAtual}: ${err.message}`);
     return caminhoAtual;
   }
+}
+
+/** O número que as fotos deste Kaizen devem levar.
+ *
+ *  Ordem de preferência, e o motivo de cada degrau:
+ *
+ *  1. O número que o Kaizen JÁ tem gravado (em qualquer das duas fotos).
+ *     Trocar só a foto do "depois" não pode renumerar o "antes" nem
+ *     separar o par.
+ *  2. O número que o arquivo recém-enviado já carrega — caso de uma aba
+ *     antiga que subiu com nome definitivo.
+ *  3. O maior número das duas pastas, mais 1. É a regra pedida.
+ *  4. O ID_KAIZEN, quando listar não é permitido pelo SAS. Também é
+ *     único, então nada colide; só deixa de seguir a sequência da pasta
+ *     até o SAS ganhar a permissão 'l'. */
+async function numeroParaAsImagens({ novoAntes, novoDepois, atualAntes, atualDepois, idKaizen }) {
+  const jaTem =
+    numeroDoCaminhoImagem(atualAntes) ??
+    numeroDoCaminhoImagem(atualDepois) ??
+    numeroDoCaminhoImagem(novoAntes) ??
+    numeroDoCaminhoImagem(novoDepois);
+  if (jaTem != null) return jaTem;
+  const daPasta = await proximoNumeroDeImagem();
+  return daPasta != null ? daPasta : idKaizen;
+}
+
+/** Nomeia as DUAS fotos do Kaizen com o mesmo número.
+ *
+ *  Existe como uma função só, e não duas chamadas soltas, justamente
+ *  porque o número tem de ser decidido UMA vez: calculado por foto, o
+ *  "antes" gravado como 7 faria o "depois" virar 8, e o par que o número
+ *  deveria amarrar se desfaz. */
+async function nomearImagensDoKaizen({ novoAntes, novoDepois, atualAntes, atualDepois, idKaizen }) {
+  // Sem foto nova não há o que nomear — e não vale gastar uma listagem
+  // do Blob para descobrir um número que ninguém vai usar.
+  if (!novoAntes && !novoDepois) return { numero: null, antes: null, depois: null };
+  const numero = await numeroParaAsImagens({ novoAntes, novoDepois, atualAntes, atualDepois, idKaizen });
+  const [antes, depois] = await Promise.all([
+    novoAntes ? renomearImagemPara(novoAntes, numero, idKaizen) : Promise.resolve(null),
+    novoDepois ? renomearImagemPara(novoDepois, numero, idKaizen) : Promise.resolve(null),
+  ]);
+  return { numero, antes, depois };
 }
 
 // GET /kaizens/imagem?path=... — serve de volta uma imagem já gravada (a
@@ -2414,17 +2508,18 @@ apiRouter.post("/kaizens/imagem", receberImagemUnica, async (req, res) => {
       return res.status(400).json({ error: "Formato não suportado. Envie PNG, JPG ou WEBP." });
     }
 
-    // Com ID (edição) o arquivo já nasce com o nome definitivo. Sem ID
-    // (cadastro novo) vai com nome provisório e é regravado no INSERT,
-    // quando o número existir — ver renomearImagemParaId.
+    // Todo upload entra com nome provisório, edição inclusive. O nome
+    // definitivo é o número do Kaizen na pasta, e esse número só pode ser
+    // decidido quando as DUAS fotos são conhecidas (ver
+    // nomearImagensDoKaizen): calculado por upload, o "antes" gravado
+    // como 7 faria o "depois" virar 8 e o par se desfaz. Quem batiza é o
+    // POST /kaizens e o PUT /kaizens/:id.
     //
-    // O ?id= PRECISA de autorização agora. Antes o nome do arquivo era
-    // aleatório, então o número da querystring não dava poder nenhum:
-    // no máximo gerava um nome bonito. Com o nome sendo o ID e a
-    // gravação em overwrite, mandar o ID de OUTRO Kaizen apagaria a foto
-    // dele. A permissão conferida é a mesma da edição (autor, aprovador
-    // ou admin) — o status não entra aqui: quem decide se ainda dá para
-    // salvar é o PUT.
+    // O ?id= continua exigindo autorização. Ele não decide mais nome de
+    // arquivo, mas manda enviar foto no contexto de um Kaizen, e isso é
+    // de quem pode editá-lo. A permissão é a mesma da edição (autor,
+    // aprovador ou admin) — o status não entra aqui: quem decide se ainda
+    // dá para salvar é o PUT.
     const idKaizenArquivo = parseInt(req.query.id, 10);
     const temId = Number.isInteger(idKaizenArquivo) && idKaizenArquivo > 0;
     if (temId) {
@@ -2437,9 +2532,7 @@ apiRouter.post("/kaizens/imagem", receberImagemUnica, async (req, res) => {
         return res.status(403).json({ error: "Usuário não autorizado a alterar as imagens deste Kaizen." });
       }
     }
-    const nomeArquivo = temId
-      ? nomeArquivoImagem(req.file.mimetype, idKaizenArquivo)
-      : nomeArquivoTemporario(req.file.mimetype);
+    const nomeArquivo = nomeArquivoTemporario(req.file.mimetype);
     // Destino da gravação: o Blob. O Volume só continua atendendo as
     // fotos antigas na leitura. Sem a configuração do Blob não há para
     // onde gravar — falhar aqui, com a causa dita, é melhor do que
@@ -2450,9 +2543,6 @@ apiRouter.post("/kaizens/imagem", receberImagemUnica, async (req, res) => {
     }
     const caminhoImagem = `${BLOB_BASE_IMGS}/${pasta}/${nomeArquivo}`;
     await enviarArquivoParaBlob(caminhoImagem, req.file.buffer, req.file.mimetype);
-    // Trocar PNG por JPG deixaria o arquivo antigo para trás, com outra
-    // extensão e o mesmo ID. Some com ele.
-    if (temId) await limparOutrasExtensoes(`${BLOB_BASE_IMGS}/${pasta}`, idKaizenArquivo, caminhoImagem);
 
     res.json({ ok: true, url: caminhoImagem });
   } catch (err) {
@@ -2881,18 +2971,26 @@ apiRouter.post("/kaizens", async (req, res) => {
       );
       const idKaizen = proximo.recordset[0].PROXIMO;
 
-      // Agora que o número existe, as fotos ganham o nome definitivo
-      // (<ID>_ANTES.<ext> / <ID>_DEPOIS.<ext>). Acontece ANTES do INSERT
-      // para o banco já nascer apontando para o caminho final — nunca
-      // para o temporário. É I/O no volume dentro da transação, que
-      // fica aberta um pouco mais; em troca não existe o estado
-      // intermediário "linha gravada apontando para arquivo que vai
-      // sumir". Se o volume falhar, o caminho original é mantido e o
-      // cadastro segue (ver renomearImagemParaId).
-      const [caminhoAntes, caminhoDepois] = await Promise.all([
-        renomearImagemParaId(urlImgAntes, idKaizen),
-        renomearImagemParaId(urlImgDepois, idKaizen),
-      ]);
+      // As fotos ganham o nome definitivo: o maior número das pastas
+      // "01 - Antes"/"02 - Depois" mais 1, o MESMO nas duas. Acontece
+      // ANTES do INSERT para o banco já nascer apontando para o caminho
+      // final — nunca para o temporário. É I/O no armazenamento dentro
+      // da transação, que fica aberta um pouco mais; em troca não existe
+      // o estado intermediário "linha gravada apontando para arquivo que
+      // vai sumir". Se o armazenamento falhar, o caminho original é
+      // mantido e o cadastro segue (ver renomearImagemPara).
+      //
+      // Cadastro novo: o Kaizen ainda não tem foto nenhuma, então não há
+      // número anterior a reaproveitar.
+      const nomeadas = await nomearImagensDoKaizen({
+        novoAntes: urlImgAntes,
+        novoDepois: urlImgDepois,
+        atualAntes: null,
+        atualDepois: null,
+        idKaizen,
+      });
+      const caminhoAntes = nomeadas.antes;
+      const caminhoDepois = nomeadas.depois;
 
       const reqInsert = new sql.Request(tx);
       reqInsert.input("idKaizen", sql.Int, idKaizen);
@@ -3637,9 +3735,13 @@ const SQL_STATUS_EDITAVEL = (aliasPvc) =>
 async function podeEditarKaizen(req, idKaizen) {
   const ctx = await contextoDeEdicao(req);
   const r = await runQuery(
+    // As duas colunas de imagem vêm junto de carona: o PUT precisa do
+    // número que as fotos deste Kaizen já têm para não renumerar o par
+    // quando só uma das duas é trocada. Vir aqui não custa consulta
+    // nenhuma a mais — a linha já estava sendo lida.
     `SELECT PODE_EDITAR = ${SQL_PODE_EDITAR("p")},
             STATUS_EDITAVEL = ${SQL_STATUS_EDITAVEL("p")},
-            p.ID_STATUS
+            p.ID_STATUS, p.URL_IMG_ANTES, p.URL_IMG_DEPOIS
        FROM ${FULL_PVC_TABLE} p WHERE p.ID_KAIZEN = @idKaizen`,
     ctx.params.concat([["idKaizen", sql.Int, idKaizen]])
   );
@@ -3651,6 +3753,8 @@ async function podeEditarKaizen(req, idKaizen) {
     statusPermite: linha.STATUS_EDITAVEL === 1,
     idStatus: linha.ID_STATUS,
     idUsuario: ctx.idUsuario,
+    urlImgAntes: linha.URL_IMG_ANTES,
+    urlImgDepois: linha.URL_IMG_DEPOIS,
   };
 }
 
@@ -4011,15 +4115,20 @@ apiRouter.put("/kaizens/:id", async (req, res) => {
       // texto seria perder o "antes" que ninguém consegue refazer.
       const trocaAntes = dados.urlImgAntes != null;
       const trocaDepois = dados.urlImgDepois != null;
-      // Na edição a tela manda o ?id= no upload, então o arquivo já
-      // nasce com o nome certo e a chamada abaixo não faz nada. Ela
-      // existe para o caso de chegar um caminho fora do padrão (uma
-      // aba aberta desde antes desta versão, por exemplo): o nome é
-      // acertado em vez de entrar torto no banco.
-      const [novoAntes, novoDepois] = await Promise.all([
-        trocaAntes ? renomearImagemParaId(dados.urlImgAntes, idKaizen) : Promise.resolve(null),
-        trocaDepois ? renomearImagemParaId(dados.urlImgDepois, idKaizen) : Promise.resolve(null),
-      ]);
+      // A foto nova chega com nome provisório e é batizada aqui. O
+      // número vem, nesta ordem, do que o Kaizen JÁ tem gravado e só
+      // depois da pasta: trocar apenas o "depois" não pode renumerar o
+      // "antes" nem separar o par. Por isso os caminhos atuais entram na
+      // conta — foram lidos junto da autorização, sem consulta extra.
+      const nomeadas = await nomearImagensDoKaizen({
+        novoAntes: trocaAntes ? dados.urlImgAntes : null,
+        novoDepois: trocaDepois ? dados.urlImgDepois : null,
+        atualAntes: autoriz.urlImgAntes,
+        atualDepois: autoriz.urlImgDepois,
+        idKaizen,
+      });
+      const novoAntes = nomeadas.antes;
+      const novoDepois = nomeadas.depois;
       if (trocaAntes) r.input("urlImgAntes", sql.NVarChar(PVC_LIMITES.URL_IMG), novoAntes);
       if (trocaDepois) r.input("urlImgDepois", sql.NVarChar(PVC_LIMITES.URL_IMG), novoDepois);
       // Carimbo que a tela recebeu ao abrir. Se a linha mudou desde

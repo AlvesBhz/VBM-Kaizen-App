@@ -136,9 +136,60 @@ async function removerArquivoDoBlob(caminhoRelativo) {
   }
 }
 
+/** Nomes dos arquivos sob `prefixoRelativo` (ex.: "01 - Imagens/01 - Antes").
+ *
+ *  Devolve só o nome do arquivo, sem o prefixo — é o que interessa a quem
+ *  precisa do maior número já gravado na pasta.
+ *
+ *  ATENÇÃO à permissão: listar exige 'l' no SAS, que NÃO está em racw.
+ *  Sem ela o Azure responde 403 e o erro sai daqui marcado com
+ *  semPermissao=true, para quem chama poder cair num plano B em vez de
+ *  derrubar o cadastro. Reemita o SAS com sp=racwdl.
+ *
+ *  A resposta é XML; o NextMarker é seguido até acabar. Ler <Name> por
+ *  expressão regular basta aqui porque os nomes são gerados por este
+ *  mesmo servidor ("<numero>.<ext>" ou "TEMP_..."), sem nada que escape
+ *  em XML — e os poucos caracteres que escapariam (& < >) não existem
+ *  nesse conjunto. */
+async function listarNomesNoBlob(prefixoRelativo) {
+  exigirConfig();
+  const prefixoCompleto = `${PASTA}/${String(prefixoRelativo).replace(/^\/+|\/+$/g, "")}/`;
+  const nomes = [];
+  let marcador = "";
+
+  for (let pagina = 0; pagina < 50; pagina++) {
+    const url =
+      `${CONTA}?restype=container&comp=list` +
+      `&prefix=${encodeURIComponent(prefixoCompleto)}` +
+      (marcador ? `&marker=${encodeURIComponent(marcador)}` : "") +
+      `&${SAS}`;
+    const resp = await fetch(url);
+    if (!resp.ok) {
+      const erro = new Error(`Falha ao listar o Blob (HTTP ${resp.status})`);
+      // 403 aqui é quase sempre a permissão 'l' faltando, não credencial
+      // errada: gravar e ler já funcionaram com o mesmo SAS.
+      erro.semPermissao = resp.status === 403;
+      throw erro;
+    }
+    const xml = await resp.text();
+    for (const achado of xml.matchAll(/<Name>([^<]*)<\/Name>/g)) {
+      const nome = achado[1];
+      if (nome.startsWith(prefixoCompleto)) {
+        const resto = nome.slice(prefixoCompleto.length);
+        // Só o nível imediato: um "subpasta/arquivo.png" não conta.
+        if (resto && !resto.includes("/")) nomes.push(resto);
+      }
+    }
+    marcador = (xml.match(/<NextMarker>([^<]*)<\/NextMarker>/) || [])[1] || "";
+    if (!marcador) break;
+  }
+  return nomes;
+}
+
 module.exports = {
   blobConfigurado,
   enviarArquivoParaBlob,
   baixarArquivoDoBlob,
   removerArquivoDoBlob,
+  listarNomesNoBlob,
 };

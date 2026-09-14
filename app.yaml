@@ -62,18 +62,22 @@ env:
   # AZURE_STORAGE_CONTAINER  apesar do nome, é a PASTA dentro do
   #                          container: nome de container no Azure não
   #                          aceita espaço nem maiúscula, e este tem os
-  #                          dois. As fotos ficam em <pasta>/imgs/before
-  #                          e <pasta>/imgs/after — a mesma estrutura que
-  #                          tinham no volume.
+  #                          dois. As fotos ficam nas pastas que o time
+  #                          JÁ usa no datalake:
+  #                            05 - Kaizen/01 - Imagens/01 - Antes
+  #                            05 - Kaizen/01 - Imagens/02 - Depois
   # AZURE_STORAGE_SAS_TOKEN  SAS do container. Ver azure-blob.js.
   #
   # DUAS PENDÊNCIAS neste SAS, as duas do lado do Azure:
   #
-  #   1. sp=racw NÃO tem a permissão 'd' (delete). Sem ela o app não
-  #      consegue apagar o arquivo temporário do cadastro novo nem a
-  #      foto com a extensão antiga quando alguém troca um PNG por um
-  #      JPG. Nada quebra — a remoção é best-effort e o erro fica no log
-  #      — mas os órfãos se acumulam. Reemita com sp=racwd.
+  #   1. sp=racw não tem 'd' (delete) nem 'l' (list). O app precisa das
+  #      duas: 'l' para descobrir o maior número já gravado nas pastas
+  #      (é assim que a foto é numerada) e 'd' para apagar o arquivo
+  #      temporário e a foto com a extensão antiga quando alguém troca um
+  #      PNG por um JPG. Nada quebra sem elas — sem 'l' o número cai no
+  #      ID_KAIZEN e sem 'd' os órfãos ficam, os dois com aviso no log —
+  #      mas a numeração só segue a sequência da pasta com o SAS certo.
+  #      Reemita com sp=racwdl.
   #
   #   2. O valor abaixo está em TEXTO PURO e dá escrita no container
   #      inteiro até 2030. Enquanto o SEC-01 não for feito, este arquivo
