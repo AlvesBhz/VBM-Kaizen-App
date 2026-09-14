@@ -1028,13 +1028,21 @@ async function gravarHierarquiaDoKaizen(idKaizen, idUsuarioLider) {
   for (let n = 1; n <= 8; n++) niveis.push(`NM_HIERARQUIA_N${n}`);
 
   try {
+    // LEFT JOIN no MDM, não INNER. Com INNER, um líder sem linha no MDM
+    // zerava a origem e o MERGE não gravava NADA — nem a linha do
+    // Kaizen. A linha tem de existir sempre: ID_KAIZEN e
+    // ID_USUARIO_LIDER são o que o relatório precisa, e os oito níveis
+    // são NULL-áveis justamente porque podem não estar disponíveis.
+    //
+    // ID_USUARIO_LIDER sai do PARÂMETRO, não de m.ID_USUARIO: com LEFT
+    // JOIN o m pode vir nulo, e a coluna é NOT NULL no destino.
     const r = await runQuery(
       `MERGE INTO ${FULL_KAIZEN_HIER_TABLE} AS alvo
        USING (SELECT p.ID_KAIZEN,
-                     m.ID_USUARIO AS ID_USUARIO_LIDER,
+                     @idUsuarioLider AS ID_USUARIO_LIDER,
                      ${niveis.map((c) => `m.${c}`).join(",\n                     ")}
                 FROM ${FULL_PVC_TABLE} p
-                JOIN ${FULL_MDM_TABLE} m ON m.ID_USUARIO = @idUsuarioLider
+                LEFT JOIN ${FULL_MDM_TABLE} m ON m.ID_USUARIO = @idUsuarioLider
                WHERE p.ID_KAIZEN = @idKaizen) AS origem
           ON alvo.ID_KAIZEN = origem.ID_KAIZEN
        WHEN MATCHED THEN UPDATE SET
@@ -1052,18 +1060,27 @@ async function gravarHierarquiaDoKaizen(idKaizen, idUsuarioLider) {
     );
 
     const gravou = (r.rowsAffected && r.rowsAffected[0]) > 0;
-    if (!gravou) {
+    if (gravou) {
+      // Sucesso também vai para o log. Sem isto, "a tabela está vazia"
+      // não distingue "o código não rodou" de "rodou e não gravou" —
+      // e foi exatamente essa dúvida que custou uma rodada.
+      console.log(`[hierarquia] ID_KAIZEN=${idKaizen} gravado (líder ID_USUARIO=${idUsuarioLider}).`);
+    } else {
+      // Com o LEFT JOIN só sobra uma explicação: o Kaizen não está na
+      // PVC. Dizer isso direto é melhor do que listar hipóteses.
       console.warn(
-        `[hierarquia] ID_KAIZEN=${idKaizen}: nada gravado — ou o Kaizen não está em ${FULL_PVC_TABLE}, ` +
-          `ou o líder ID_USUARIO=${idUsuarioLider} não tem linha em ${FULL_MDM_TABLE}.`
+        `[hierarquia] ID_KAIZEN=${idKaizen} não encontrado em ${FULL_PVC_TABLE}; ` +
+          `a hierarquia do líder ID_USUARIO=${idUsuarioLider} não foi gravada.`
       );
     }
     return gravou;
   } catch (err) {
-    // Nunca derruba o cadastro: ver o comentário acima.
+    // Nunca derruba o cadastro: ver o comentário acima. O número do erro
+    // vai junto porque é ele que separa "sem permissão" (229) de
+    // "tabela não existe" (208) de violação de FK (547).
     console.error(
       `[hierarquia] ID_KAIZEN=${idKaizen}, líder ID_USUARIO=${idUsuarioLider}: ` +
-        `falha ao gravar em ${FULL_KAIZEN_HIER_TABLE}: ${err.message}`
+        `falha ao gravar em ${FULL_KAIZEN_HIER_TABLE} (erro ${err.number || "?"}): ${err.message}`
     );
     return false;
   }
