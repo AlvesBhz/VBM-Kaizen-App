@@ -106,6 +106,15 @@
        server.js valida antes do banco com PVC_LIMITES.NM_KAIZEN = 30 (e usa
        sql.NVarChar(30) no INSERT, que trunca o parâmetro); enquanto esse
        limite não virar 100, a coluna maior fica sem efeito prático.
+     - KZN_RESULTADO_KAIZEN.URL_ICONE (pedido do time, nesta rodada): coluna
+       REMOVIDA — a tabela passou de 4 pra 3 colunas (ID_KAIZEN,
+       ID_RESULTADO, DT_ATUALIZACAO). Era um "override por ocorrência" do
+       ícone, que a aplicação nunca gravou nem leu; o ícone padrão de cada
+       resultado continua intacto em CI.KZN_RESULTADOS.URL_ICONE. A seção 21
+       remove a coluna em bancos já criados, de forma idempotente.
+       Sem impacto na aplicação: as 2 consultas do server.js que tocam esta
+       tabela não usam a coluna, e o trigger TR_KZN_RESULTADO_KAIZEN_UPD
+       também não a cita.
      - KZN_MDM_HIERARQUIA (pedido do time, nesta rodada): DS_EMAIL renomeado
        pra CD_EMAIL; novos campos de perfil (NM_SITUACAO, SG_ATIVO, NM_POSICAO,
        NM_PAIS, SG_ESTADO, NM_CIDADE, NM_SITE) inseridos logo após CD_EMAIL;
@@ -1056,7 +1065,8 @@ GO
 /* ------------------------------------------------------------------------------
    16. TABELA: CI.KZN_RESULTADO_KAIZEN
    (junção N:N Kaizen x Resultado padronizado — um Kaizen pode ter vários
-   resultados de KZN_RESULTADOS; URL_ICONE aqui é override por ocorrência)
+   resultados de KZN_RESULTADOS; o ícone de cada resultado vem da tabela
+   mestre CI.KZN_RESULTADOS.URL_ICONE)
    ------------------------------------------------------------------------------ */
 IF OBJECT_ID('CI.KZN_RESULTADO_KAIZEN', 'U') IS NULL
 BEGIN
@@ -1064,7 +1074,10 @@ BEGIN
     (
         ID_KAIZEN       INT                             NOT NULL,
         ID_RESULTADO    INT                             NOT NULL,
-        URL_ICONE       VARCHAR(200)                        NULL,
+        -- URL_ICONE foi REMOVIDA (pedido do time, nesta rodada). Era um
+        -- "override por ocorrência" do ícone do resultado, nunca usado pela
+        -- aplicação. O ícone padrão de cada resultado continua em
+        -- CI.KZN_RESULTADOS.URL_ICONE.
         DT_ATUALIZACAO  DATETIME2(3)                    NOT NULL
             CONSTRAINT DF_KZN_RESULTADO_KAIZEN_DT_ATUALIZACAO DEFAULT (SYSDATETIME()),
 
@@ -2262,9 +2275,32 @@ BEGIN
 END
 GO
 
+/* URL_ICONE foi removida desta tabela (pedido do time, nesta rodada) — o
+   ALTER de padronização de tamanho que existia aqui perdeu o objeto e deu
+   lugar à remoção, para que bancos já criados fiquem iguais ao CREATE TABLE
+   da seção 16. SQL dinâmico: numa 2ª execução a coluna já não existe, e a
+   referência estática quebraria a compilação do batch inteiro.
+   Para bancos em uso há o script avulso, mais detalhado e com proteção
+   contra perda de dado, em database/remover_url_icone_resultado_kaizen.sql. */
 IF OBJECT_ID('CI.KZN_RESULTADO_KAIZEN', 'U') IS NOT NULL
+   AND EXISTS (SELECT 1 FROM sys.columns
+               WHERE object_id = OBJECT_ID('CI.KZN_RESULTADO_KAIZEN') AND name = 'URL_ICONE')
 BEGIN
-    ALTER TABLE CI.KZN_RESULTADO_KAIZEN ALTER COLUMN URL_ICONE VARCHAR(200) NULL;
+    DECLARE @dfIcone SYSNAME, @sqlIcone NVARCHAR(MAX);
+
+    SELECT @dfIcone = dc.name
+    FROM   sys.default_constraints dc
+    WHERE  dc.parent_object_id = OBJECT_ID('CI.KZN_RESULTADO_KAIZEN')
+      AND  dc.parent_column_id = COLUMNPROPERTY(OBJECT_ID('CI.KZN_RESULTADO_KAIZEN'), 'URL_ICONE', 'ColumnId');
+
+    IF @dfIcone IS NOT NULL
+    BEGIN
+        SET @sqlIcone = N'ALTER TABLE CI.KZN_RESULTADO_KAIZEN DROP CONSTRAINT ' + QUOTENAME(@dfIcone) + N';';
+        EXEC sp_executesql @sqlIcone;
+    END
+
+    EXEC sp_executesql N'ALTER TABLE CI.KZN_RESULTADO_KAIZEN DROP COLUMN URL_ICONE;';
+    PRINT 'CI.KZN_RESULTADO_KAIZEN: coluna URL_ICONE removida.';
 END
 GO
 
