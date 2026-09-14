@@ -175,29 +175,55 @@ END
 ELSE
     PRINT '  E2.1 - UQ_KZN_PVC_KAIZEN_LIDER ja existia.';
 
-/* 2.2 - FK simples: ID_KAIZEN -> principal */
+/* 2.2 - FK simples: ID_KAIZEN -> principal
+   WITH CHECK explicito: valida os dados existentes e deixa a constraint
+   CONFIAVEL (is_not_trusted = 0). Uma FK nao-confiavel continua barrando
+   INSERT/UPDATE novos, mas o otimizador a ignora ao montar planos, e ela
+   nao prova nada sobre o que ja esta gravado.
+
+   O ELSE IF abaixo cobre o caso que a versao anterior deste script
+   deixava passar: a FK JA EXISTIR, porem nao-confiavel (criada com
+   WITH NOCHECK em algum momento). Como o guard so olhava existencia, o
+   script dava "ja existia" e seguia, sem nunca revalidar - era preciso
+   dropar e recriar a mao. Agora ele revalida no lugar. */
 IF OBJECT_ID('CI.FK_KZN_KAIZEN_HIERARQUIA_KAIZEN', 'F') IS NULL
 BEGIN
-    ALTER TABLE CI.KZN_KAIZEN_HIERARQUIA
+    ALTER TABLE CI.KZN_KAIZEN_HIERARQUIA WITH CHECK
         ADD CONSTRAINT FK_KZN_KAIZEN_HIERARQUIA_KAIZEN
             FOREIGN KEY (ID_KAIZEN)
             REFERENCES CI.KZN_PEDRAVISAOCONSOLIDADA (ID_KAIZEN);
-    PRINT '  E2.2 ok - FK_KZN_KAIZEN_HIERARQUIA_KAIZEN criada.';
+    PRINT '  E2.2 ok - FK_KZN_KAIZEN_HIERARQUIA_KAIZEN criada (confiavel).';
 END
-ELSE
-    PRINT '  E2.2 - FK_KZN_KAIZEN_HIERARQUIA_KAIZEN ja existia.';
-
-/* 2.3 - FK composta: (ID_KAIZEN, ID_USUARIO_LIDER) -> principal */
-IF OBJECT_ID('CI.FK_KZN_KAIZEN_HIERARQUIA_LIDER', 'F') IS NULL
+ELSE IF EXISTS (SELECT 1 FROM sys.foreign_keys
+                WHERE name = 'FK_KZN_KAIZEN_HIERARQUIA_KAIZEN' AND is_not_trusted = 1)
 BEGIN
     ALTER TABLE CI.KZN_KAIZEN_HIERARQUIA
+        WITH CHECK CHECK CONSTRAINT FK_KZN_KAIZEN_HIERARQUIA_KAIZEN;
+    PRINT '  E2.2 ok - FK_KZN_KAIZEN_HIERARQUIA_KAIZEN ja existia mas NAO era confiavel; revalidada.';
+END
+ELSE
+    PRINT '  E2.2 - FK_KZN_KAIZEN_HIERARQUIA_KAIZEN ja existia e e confiavel.';
+
+/* 2.3 - FK composta: (ID_KAIZEN, ID_USUARIO_LIDER) -> principal
+   Mesmo tratamento da 2.2: cria confiavel, ou revalida se ja existir
+   nao-confiavel. */
+IF OBJECT_ID('CI.FK_KZN_KAIZEN_HIERARQUIA_LIDER', 'F') IS NULL
+BEGIN
+    ALTER TABLE CI.KZN_KAIZEN_HIERARQUIA WITH CHECK
         ADD CONSTRAINT FK_KZN_KAIZEN_HIERARQUIA_LIDER
             FOREIGN KEY (ID_KAIZEN, ID_USUARIO_LIDER)
             REFERENCES CI.KZN_PEDRAVISAOCONSOLIDADA (ID_KAIZEN, ID_USUARIO_LIDER);
-    PRINT '  E2.3 ok - FK_KZN_KAIZEN_HIERARQUIA_LIDER criada.';
+    PRINT '  E2.3 ok - FK_KZN_KAIZEN_HIERARQUIA_LIDER criada (confiavel).';
+END
+ELSE IF EXISTS (SELECT 1 FROM sys.foreign_keys
+                WHERE name = 'FK_KZN_KAIZEN_HIERARQUIA_LIDER' AND is_not_trusted = 1)
+BEGIN
+    ALTER TABLE CI.KZN_KAIZEN_HIERARQUIA
+        WITH CHECK CHECK CONSTRAINT FK_KZN_KAIZEN_HIERARQUIA_LIDER;
+    PRINT '  E2.3 ok - FK_KZN_KAIZEN_HIERARQUIA_LIDER ja existia mas NAO era confiavel; revalidada.';
 END
 ELSE
-    PRINT '  E2.3 - FK_KZN_KAIZEN_HIERARQUIA_LIDER ja existia.';
+    PRINT '  E2.3 - FK_KZN_KAIZEN_HIERARQUIA_LIDER ja existia e e confiavel.';
 GO
 
 /* =====================================================================

@@ -125,6 +125,9 @@
        A mesma seção 17 corrige uma DIVERGÊNCIA do script em relação ao banco
        real: a PK é ID_KAIZEN (não uma ID_KAIZEN_HIERARQUIA própria) e a
        coluna ID_USUARIO_LIDER existe.
+       As duas FKs nascem com WITH CHECK (confiáveis), e a 17.5 revalida uma
+       FK pré-existente que esteja não-confiável em vez de só constatar que
+       ela já existe.
      - KZN_MDM_HIERARQUIA (pedido do time, nesta rodada): DS_EMAIL renomeado
        pra CD_EMAIL; novos campos de perfil (NM_SITUACAO, SG_ATIVO, NM_POSICAO,
        NM_PAIS, SG_ESTADO, NM_CIDADE, NM_SITE) inseridos logo após CD_EMAIL;
@@ -1905,17 +1908,29 @@ BEGIN
             ALTER TABLE CI.KZN_PEDRAVISAOCONSOLIDADA
                 ADD CONSTRAINT UQ_KZN_PVC_KAIZEN_LIDER UNIQUE (ID_KAIZEN, ID_USUARIO_LIDER);
 
+        /* WITH CHECK explícito: valida o que já está gravado e deixa a FK
+           CONFIÁVEL (is_not_trusted = 0). Os ELSE IF cobrem o caso de a FK
+           já existir porém não-confiável (criada com WITH NOCHECK): um guard
+           que só olha existência daria "já existe" e seguiria sem revalidar. */
         IF OBJECT_ID('CI.FK_KZN_KAIZEN_HIERARQUIA_KAIZEN', 'F') IS NULL
-            ALTER TABLE CI.KZN_KAIZEN_HIERARQUIA
+            ALTER TABLE CI.KZN_KAIZEN_HIERARQUIA WITH CHECK
                 ADD CONSTRAINT FK_KZN_KAIZEN_HIERARQUIA_KAIZEN
                     FOREIGN KEY (ID_KAIZEN)
                     REFERENCES CI.KZN_PEDRAVISAOCONSOLIDADA (ID_KAIZEN);
+        ELSE IF EXISTS (SELECT 1 FROM sys.foreign_keys
+                        WHERE name = 'FK_KZN_KAIZEN_HIERARQUIA_KAIZEN' AND is_not_trusted = 1)
+            ALTER TABLE CI.KZN_KAIZEN_HIERARQUIA
+                WITH CHECK CHECK CONSTRAINT FK_KZN_KAIZEN_HIERARQUIA_KAIZEN;
 
         IF OBJECT_ID('CI.FK_KZN_KAIZEN_HIERARQUIA_LIDER', 'F') IS NULL
-            ALTER TABLE CI.KZN_KAIZEN_HIERARQUIA
+            ALTER TABLE CI.KZN_KAIZEN_HIERARQUIA WITH CHECK
                 ADD CONSTRAINT FK_KZN_KAIZEN_HIERARQUIA_LIDER
                     FOREIGN KEY (ID_KAIZEN, ID_USUARIO_LIDER)
                     REFERENCES CI.KZN_PEDRAVISAOCONSOLIDADA (ID_KAIZEN, ID_USUARIO_LIDER);
+        ELSE IF EXISTS (SELECT 1 FROM sys.foreign_keys
+                        WHERE name = 'FK_KZN_KAIZEN_HIERARQUIA_LIDER' AND is_not_trusted = 1)
+            ALTER TABLE CI.KZN_KAIZEN_HIERARQUIA
+                WITH CHECK CHECK CONSTRAINT FK_KZN_KAIZEN_HIERARQUIA_LIDER;
 
         PRINT '17.5 concluida: CI.KZN_KAIZEN_HIERARQUIA amarrada a tabela principal por ID_KAIZEN e ID_USUARIO_LIDER.';
     END
