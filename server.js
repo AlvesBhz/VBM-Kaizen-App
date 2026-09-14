@@ -994,19 +994,32 @@ async function matriculaDoMdm(idUsuario, matriculaEscolhida) {
  *  cadastro e edição —, porque o líder pode mudar na edição e a própria
  *  hierarquia dele pode ter mudado no MDM desde a última vez.
  *
- *  Tudo em UMA instrução: os oito níveis são lidos de
- *  kzn_mdm_hierarquia dentro do próprio MERGE. Trazer a hierarquia para
- *  o Node e devolvê-la ao banco seria uma ida e volta a mais, com uma
- *  janela no meio em que o MDM pode mudar.
+ *  Os oito níveis são lidos de kzn_mdm_hierarquia dentro do próprio
+ *  MERGE. Trazer a hierarquia para o Node e devolvê-la ao banco seria
+ *  uma ida e volta a mais, com uma janela no meio em que o MDM pode
+ *  mudar.
  *
- *  Roda na MESMA transação do INSERT/UPDATE do Kaizen: ou as duas
- *  tabelas ficam coerentes, ou nenhuma das duas é gravada.
+ *  RODA DEPOIS DO COMMIT do Kaizen, e de propósito. A primeira versão
+ *  rodava dentro da transação e quebrou o cadastro em produção:
  *
- *  Líder sem linha no MDM: o USING não devolve nada e o MERGE não grava
- *  — não dá para inventar uma hierarquia, e ID_USUARIO_LIDER é NOT NULL
- *  no destino. Não é erro (o Kaizen continua válido), mas fica no log,
- *  porque significa uma foto de hierarquia que não existe. */
-async function gravarHierarquiaDoKaizen(tx, idKaizen, idUsuarioLider) {
+ *    The MERGE statement conflicted with the FOREIGN KEY constraint
+ *    "FK_KZN_KAIZEN_HIERARQUIA_KAIZEN" ... table
+ *    "CI.KZN_PEDRAVISAOCONSOLIDADA", column 'ID_KAIZEN'.
+ *
+ *  Ou seja: na hora do MERGE o Kaizen recém-inserido ainda não estava
+ *  visível para a checagem da FK. Depois do commit ele está, e a FK não
+ *  tem como falhar.
+ *
+ *  O preço é a gravação não ser atômica com o Kaizen — e é o preço
+ *  certo: esta tabela é uma FOTOGRAFIA para relatório. Deixar de
+ *  registrar a hierarquia é um problema pequeno; impedir alguém de
+ *  cadastrar um Kaizen por causa dela é um problema grande. Por isso
+ *  nada aqui lança: falhou, fica no log e o cadastro segue.
+ *
+ *  O USING também passa pela PVC: a linha de origem só existe se o
+ *  Kaizen existir. Assim, se algum dia o Kaizen não estiver lá, o MERGE
+ *  simplesmente não grava (e avisa) em vez de estourar a FK. */
+async function gravarHierarquiaDoKaizen(idKaizen, idUsuarioLider) {
   if (!Number.isInteger(idKaizen) || !Number.isInteger(idUsuarioLider)) {
     console.warn(`[hierarquia] ID_KAIZEN=${idKaizen} sem líder válido (ID_USUARIO=${idUsuarioLider}); nada gravado.`);
     return false;
@@ -1014,34 +1027,46 @@ async function gravarHierarquiaDoKaizen(tx, idKaizen, idUsuarioLider) {
   const niveis = [];
   for (let n = 1; n <= 8; n++) niveis.push(`NM_HIERARQUIA_N${n}`);
 
-  const req = new sql.Request(tx);
-  req.input("idKaizen", sql.Int, idKaizen);
-  req.input("idUsuarioLider", sql.Int, idUsuarioLider);
-  const r = await req.query(`
-    MERGE INTO ${FULL_KAIZEN_HIER_TABLE} AS alvo
-    USING (SELECT @idKaizen AS ID_KAIZEN,
-                  m.ID_USUARIO AS ID_USUARIO_LIDER,
-                  ${niveis.map((c) => `m.${c}`).join(",\n                  ")}
-             FROM ${FULL_MDM_TABLE} m
-            WHERE m.ID_USUARIO = @idUsuarioLider) AS origem
-       ON alvo.ID_KAIZEN = origem.ID_KAIZEN
-    WHEN MATCHED THEN UPDATE SET
-           alvo.ID_USUARIO_LIDER = origem.ID_USUARIO_LIDER,
-           ${niveis.map((c) => `alvo.${c} = origem.${c}`).join(",\n           ")},
-           alvo.DT_ATUALIZACAO = ${AGORA_BRASILIA}
-    WHEN NOT MATCHED THEN
-      INSERT (ID_KAIZEN, ID_USUARIO_LIDER, ${niveis.join(", ")}, DT_ATUALIZACAO)
-      VALUES (origem.ID_KAIZEN, origem.ID_USUARIO_LIDER,
-              ${niveis.map((c) => `origem.${c}`).join(", ")}, ${AGORA_BRASILIA});`);
-
-  const gravou = (r.rowsAffected && r.rowsAffected[0]) > 0;
-  if (!gravou) {
-    console.warn(
-      `[hierarquia] ID_KAIZEN=${idKaizen}: líder ID_USUARIO=${idUsuarioLider} sem linha em ` +
-        `${FULL_MDM_TABLE}; a hierarquia do Kaizen não foi gravada.`
+  try {
+    const r = await runQuery(
+      `MERGE INTO ${FULL_KAIZEN_HIER_TABLE} AS alvo
+       USING (SELECT p.ID_KAIZEN,
+                     m.ID_USUARIO AS ID_USUARIO_LIDER,
+                     ${niveis.map((c) => `m.${c}`).join(",\n                     ")}
+                FROM ${FULL_PVC_TABLE} p
+                JOIN ${FULL_MDM_TABLE} m ON m.ID_USUARIO = @idUsuarioLider
+               WHERE p.ID_KAIZEN = @idKaizen) AS origem
+          ON alvo.ID_KAIZEN = origem.ID_KAIZEN
+       WHEN MATCHED THEN UPDATE SET
+              alvo.ID_USUARIO_LIDER = origem.ID_USUARIO_LIDER,
+              ${niveis.map((c) => `alvo.${c} = origem.${c}`).join(",\n              ")},
+              alvo.DT_ATUALIZACAO = ${AGORA_BRASILIA}
+       WHEN NOT MATCHED THEN
+         INSERT (ID_KAIZEN, ID_USUARIO_LIDER, ${niveis.join(", ")}, DT_ATUALIZACAO)
+         VALUES (origem.ID_KAIZEN, origem.ID_USUARIO_LIDER,
+                 ${niveis.map((c) => `origem.${c}`).join(", ")}, ${AGORA_BRASILIA});`,
+      [
+        ["idKaizen", sql.Int, idKaizen],
+        ["idUsuarioLider", sql.Int, idUsuarioLider],
+      ]
     );
+
+    const gravou = (r.rowsAffected && r.rowsAffected[0]) > 0;
+    if (!gravou) {
+      console.warn(
+        `[hierarquia] ID_KAIZEN=${idKaizen}: nada gravado — ou o Kaizen não está em ${FULL_PVC_TABLE}, ` +
+          `ou o líder ID_USUARIO=${idUsuarioLider} não tem linha em ${FULL_MDM_TABLE}.`
+      );
+    }
+    return gravou;
+  } catch (err) {
+    // Nunca derruba o cadastro: ver o comentário acima.
+    console.error(
+      `[hierarquia] ID_KAIZEN=${idKaizen}, líder ID_USUARIO=${idUsuarioLider}: ` +
+        `falha ao gravar em ${FULL_KAIZEN_HIER_TABLE}: ${err.message}`
+    );
+    return false;
   }
-  return gravou;
 }
 
 // ID_APROVADOR (PK própria de kzn_aprovador) a partir do ID_USUARIO
@@ -3058,9 +3083,6 @@ apiRouter.post("/kaizens", async (req, res) => {
            @vlResultado, @idMoeda, @dsResultadoEsperado, CONVERT(DATE, @dtConclusao, 23), ${AGORA_BRASILIA},
            @idUsuarioCadastro)`);
 
-      // Fotografia da hierarquia do líder, na mesma transação do Kaizen.
-      await gravarHierarquiaDoKaizen(tx, idKaizen, idLider);
-
       for (const idMembro of membros) {
         const reqM = new sql.Request(tx);
         reqM.input("idKaizen", sql.Int, idKaizen);
@@ -3115,6 +3137,12 @@ apiRouter.post("/kaizens", async (req, res) => {
       }
 
       await tx.commit();
+
+      // Fotografia da hierarquia do líder. Depois do commit, pelo mesmo
+      // motivo dos comunicados abaixo — e porque a FK de
+      // kzn_kaizen_hierarquia exige o Kaizen já gravado.
+      await gravarHierarquiaDoKaizen(idKaizen, idLider);
+
       // Só depois do commit: antes disso o Kaizen ainda pode sumir no
       // rollback, e comunicar um cadastro que não existe é pior do que
       // não comunicar. Os comunicados vão MONTADOS na resposta; quem
@@ -4185,11 +4213,6 @@ apiRouter.put("/kaizens/:id", async (req, res) => {
         });
       }
 
-      // Refaz a fotografia da hierarquia: o líder pode ter mudado nesta
-      // edição, e a hierarquia dele pode ter mudado no MDM desde a
-      // gravação anterior. Mesmo líder que acabou de entrar no UPDATE.
-      await gravarHierarquiaDoKaizen(tx, idKaizen, dados.idUsuarioLider || idUsuario);
-
       // Equipe e desperdícios: listas de junção, trocadas por completo
       // dentro da MESMA transação — some tudo, entra o que veio da tela.
       const reqDelM = new sql.Request(tx);
@@ -4220,6 +4243,12 @@ apiRouter.put("/kaizens/:id", async (req, res) => {
 
       await tx.commit();
       console.log(`[edicao] ID_KAIZEN=${idKaizen} atualizado por ${idUsuario}; ID_STATUS=${revisado.id}.`);
+
+      // Refaz a fotografia da hierarquia: o líder pode ter mudado nesta
+      // edição, e a hierarquia dele pode ter mudado no MDM desde a
+      // gravação anterior. Mesmo líder que acabou de entrar no UPDATE.
+      // Depois do commit, como no cadastro.
+      await gravarHierarquiaDoKaizen(idKaizen, dados.idUsuarioLider || idUsuario);
 
       // Reencaminha ao fluxo: o aprovador designado é avisado de novo,
       // pelo mesmo caminho do cadastro.
