@@ -77,10 +77,12 @@ env:
   #      acumula. Reemita com sp=racwd.
   #
   #   2. O valor abaixo está em TEXTO PURO e dá escrita no container
-  #      inteiro até 2030. Enquanto o SEC-01 não for feito, este arquivo
-  #      é servido publicamente por express.static(__dirname): qualquer
-  #      pessoa com a URL do app baixa o app.yaml e fica com o token.
-  #      Revogue este SAS, emita outro e traga por Secret Scope:
+  #      inteiro até 2030. O DOWNLOAD deste arquivo já foi fechado — o
+  #      server.js agora recusa servir app.yaml, server.js, node_modules
+  #      e companhia (ver ARQUIVOS_DO_SERVIDOR) —, mas o token esteve
+  #      exposto enquanto isso não existia e continua em texto puro num
+  #      arquivo versionado. Revogue este SAS, emita outro com sp=racwd
+  #      e traga por Secret Scope:
   #
   #        - name: 'AZURE_STORAGE_SAS_TOKEN'
   #          valueFrom: 'azure-storage-sas'
@@ -126,3 +128,44 @@ env:
   #
   #   - name: 'KAIZEN_EMAIL_DO_USUARIO'
   #     value: 'true'
+
+  # ── Envio de e-mail PELA APLICAÇÃO (aba "E-mail" do admin.html) ──
+  # Caminho DIFERENTE do de cima. Ali o e-mail é automático, montado no
+  # servidor e enviado pelo NAVEGADOR com o token do aprovador. Aqui a
+  # pessoa escreve a mensagem na tela e quem envia é o SERVIDOR, por
+  # SMTP, autenticado numa conta de serviço. Ver email-smtp.js.
+  #
+  # SMTP_HOST       ex.: smtp.office365.com
+  # SMTP_PORT       587 (STARTTLS, padrão) ou 465 (TLS direto)
+  # SMTP_USER       conta de serviço que autentica
+  # SMTP_PASSWORD   senha/app password dessa conta
+  # SMTP_FROM       endereço do "De:". Padrão: o mesmo do SMTP_USER.
+  #                 Um "De:" diferente da conta autenticada exige
+  #                 "Enviar Como" no Exchange — sem isso o próprio
+  #                 servidor de e-mail recusa.
+  # SMTP_FROM_NOME  nome exibido. Padrão: 'Programa Kaizen'.
+  #
+  # A SENHA TEM DE VIR DE SECRET SCOPE, não de texto puro aqui. É o
+  # requisito central desta funcionalidade: a credencial não pode ser
+  # vista por ninguém, nem pelo navegador. O servidor já recusa servir
+  # este arquivo (ver ARQUIVOS_DO_SERVIDOR em server.js), mas segredo em
+  # texto puro num arquivo versionado continua sendo segredo vazado.
+  #
+  #   - name: 'SMTP_HOST'
+  #     value: 'smtp.office365.com'
+  #   - name: 'SMTP_PORT'
+  #     value: '587'
+  #   - name: 'SMTP_USER'
+  #     valueFrom: 'smtp-user'
+  #   - name: 'SMTP_PASSWORD'
+  #     valueFrom: 'smtp-password'
+  #   - name: 'SMTP_FROM'
+  #     value: 'PCI.Base.Metals@Vale.com'
+  #
+  # Enquanto as quatro não existirem, a aba "E-mail" aparece com o aviso
+  # "não está configurado" e a rota devolve 503 — nada quebra.
+  #
+  # ANTES DE USAR: rode database/criar_kzn_email_log.sql uma vez. É a
+  # tabela de auditoria (quem enviou, quando, para quem, com que
+  # assunto, com que resultado). Sem ela o e-mail sai do mesmo jeito,
+  # mas a auditoria fica só no log do app.

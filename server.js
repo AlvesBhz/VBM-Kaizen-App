@@ -34,6 +34,11 @@ const {
   removerArquivoDoBlob,
 } = require("./azure-blob");
 const { montarAviso } = require("./email-kaizen");
+// Envio de e-mail DIGITADO por uma pessoa, pelo servidor. Não confundir
+// com o email-kaizen.js acima, que só monta os comunicados automáticos e
+// deixa o envio para o navegador. Aqui a credencial fica no servidor e
+// nunca sai dele — ver o cabeçalho de email-smtp.js.
+const emailSmtp = require("./email-smtp");
 
 const app = express();
 
@@ -204,6 +209,13 @@ const FULL_MEMBROS_TABLE = `[${DB_SCHEMA}].[${DB_MEMBROS_TABLE}]`;
 // só no cadastro.
 const DB_KAIZEN_HIER_TABLE = safeIdentifier(process.env.AZURE_SQL_KAIZEN_HIER_TABLE, "kzn_kaizen_hierarquia");
 const FULL_KAIZEN_HIER_TABLE = `[${DB_SCHEMA}].[${DB_KAIZEN_HIER_TABLE}]`;
+
+// Auditoria dos e-mails enviados pela tela (REQUISITO 4). Criada por
+// database/criar_kzn_email_log.sql. Guarda quem enviou, quando, para
+// quem, o assunto e o resultado — nunca o corpo da mensagem e nunca
+// credencial.
+const DB_EMAIL_LOG_TABLE = safeIdentifier(process.env.AZURE_SQL_EMAIL_LOG_TABLE, "kzn_email_log");
+const FULL_EMAIL_LOG_TABLE = `[${DB_SCHEMA}].[${DB_EMAIL_LOG_TABLE}]`;
 
 // kzn_moeda NÃO é bilíngue (sem ID_IDIOMA no DER) — por isso não passa
 // por registrarCadastroBilingue() como as outras 6 tabelas de cadastro;
@@ -473,6 +485,41 @@ app.use(async (req, res, next) => {
   res.status(403).set("Cache-Control", "no-store").type("html").send(paginaAcessoNegado(papel));
 });
 
+// Arquivos que NUNCA devem ser baixáveis pelo navegador.
+//
+// express.static(__dirname) serve a PASTA DO PROJETO INTEIRA, e o
+// projeto tem o código do servidor e a configuração no mesmo diretório
+// das páginas. Sem este filtro, GET /app.yaml devolve o arquivo com a
+// senha do Azure SQL, o SAS do Blob e — agora que existe envio de
+// e-mail pelo servidor — a senha da conta SMTP, em texto puro, para
+// quem tiver a URL do app.
+//
+// É o que o REQUISITO 1 do envio de e-mail proíbe de forma direta:
+// "as credenciais não devem estar visíveis ... por inspeção através do
+// navegador". Guardar a senha em variável de ambiente não adianta se o
+// arquivo que a define é servido como página.
+//
+// Lista de negação por PADRÃO, não por nome, para um arquivo novo do
+// servidor já nascer protegido. Nada do que a tela carrega casa com
+// estes padrões — as páginas usam css/, js/ e assets/.
+const ARQUIVOS_DO_SERVIDOR = [
+  /^\/(server|email-smtp|email-kaizen|azure-blob|databricks-fs)\.js$/i,
+  /^\/app\.ya?ml$/i,
+  /^\/package(-lock)?\.json$/i,
+  /^\/\.env/i,
+  /^\/node_modules\//i,
+  /^\/database\//i,
+  /^\/docs\//i,
+];
+
+app.use((req, res, next) => {
+  const caminho = req.path;
+  if (!ARQUIVOS_DO_SERVIDOR.some((p) => p.test(caminho))) return next();
+  console.warn(`[acesso] bloqueado o download de ${caminho} (arquivo do servidor)`);
+  // 404, e não 403: para quem sonda, o arquivo simplesmente não existe.
+  res.status(404).set("Cache-Control", "no-store").json({ error: "Não encontrado." });
+});
+
 app.use(
   express.static(__dirname, {
     etag: true,
@@ -545,6 +592,9 @@ const ROTAS_LEITURA_AUTENTICADA = [
   /^\/aprovadores$/,
   /^\/aprovadores\/mdm(\/\d+)?$/,
   /^\/aprovacoes\/contagem$/,
+  // Só os LIMITES de envio (tamanho de anexo, nº de destinatários) e o
+  // endereço que aparece no "De:". Nada de credencial — ver a rota.
+  /^\/email\/config$/,
 ];
 
 // Faixa 1 — escrita do PRÓPRIO Kaizen. A permissão por linha é
@@ -555,6 +605,16 @@ const ROTAS_ESCRITA_AUTENTICADA = [
   { metodo: "PUT", padrao: /^\/kaizens\/\d+$/ },
   { metodo: "POST", padrao: /^\/kaizens\/imagem$/ },
 ];
+
+// POST /email NÃO está em nenhuma lista acima, de propósito: cai na
+// faixa ADMIN por ser o padrão de quem não é exceção. O motivo é que a
+// mensagem sai pela CONTA DE SERVIÇO da empresa — quem envia empresta o
+// endereço institucional —, e a tela que compõe o e-mail está na aba
+// "E-mail" de admin.html, que só kzn_admin abre. Deixar a rota aberta a
+// qualquer autenticado abriria uma porta que a tela não abre.
+// Para liberar a qualquer pessoa identificada, basta acrescentar
+// { metodo: "POST", padrao: /^\/email$/ } à lista acima — a rota já
+// resolve remetente, Reply-To e auditoria a partir do usuário logado.
 
 // Faixa 2 — aprovação. Fila e decisões.
 const ROTAS_APROVADOR = [
@@ -4432,6 +4492,293 @@ apiRouter.post("/kaizens/:id/aviso", (req, res) => {
     console.error(`[email] ${chave || idKaizen}: NAO enviado — ${motivo || "sem detalhe"}`);
   }
   res.json({ ok: true });
+});
+
+// ------------------------------------------------------------------
+// Envio de e-mail pela aplicação (mensagem digitada por uma pessoa)
+// ------------------------------------------------------------------
+// A credencial SMTP vive em email-smtp.js, lida de variáveis de
+// ambiente. NADA dela passa por aqui: esta rota recebe destinatários,
+// assunto, texto e anexos, e é só isso que ela tem para dar. Em
+// particular, um campo "de"/"from"/"usuario"/"senha" no corpo da
+// requisição é simplesmente IGNORADO — o remetente é sempre o
+// configurado no servidor. Era esse o caminho óbvio para alguém mandar
+// e-mail em nome de outra pessoa com a conta da empresa.
+//
+// A identidade de quem envia vem de X-Forwarded-Email (o proxy do
+// Databricks Apps reescreve o cabeçalho a cada requisição, logo não é
+// forjável pelo navegador), a mesma fonte que já autoriza toda a API.
+
+const EMAIL_LIMITES = emailSmtp.LIMITES;
+
+const uploadAnexos = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: EMAIL_LIMITES.anexoBytes,
+    files: EMAIL_LIMITES.maxAnexos,
+    // Trava do tamanho do formulário inteiro. Sem ela, um corpo de
+    // mensagem de 500MB ocuparia a memória do processo antes de
+    // qualquer validação nossa rodar.
+    fieldSize: EMAIL_LIMITES.corpoChars * 4,
+  },
+});
+
+/** Igual ao receberImagemUnica: multer como middleware direto devolveria
+ *  HTML cru quando o limite estoura, e a tela espera { error }. */
+function receberAnexos(req, res, next) {
+  uploadAnexos.array("anexos", EMAIL_LIMITES.maxAnexos)(req, res, (err) => {
+    if (!err) return next();
+    const mb = Math.round(EMAIL_LIMITES.anexoBytes / (1024 * 1024));
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res.status(400).json({ error: `Cada anexo deve ter no máximo ${mb}MB.`, codigo: "anexo" });
+    }
+    if (err.code === "LIMIT_FILE_COUNT") {
+      return res.status(400).json({ error: `No máximo ${EMAIL_LIMITES.maxAnexos} anexos por e-mail.`, codigo: "anexo" });
+    }
+    if (err.code === "LIMIT_FIELD_VALUE") {
+      return res.status(400).json({ error: "A mensagem é longa demais.", codigo: "corpo" });
+    }
+    console.warn("[email] upload recusado:", err.message);
+    return res.status(400).json({ error: "Não foi possível ler os anexos.", codigo: "anexo" });
+  });
+}
+
+// Endereço de e-mail. Deliberadamente mais restrito que a RFC: recusa
+// espaço, aspas, "<", ">", ";" e "," — os caracteres com que se constrói
+// uma lista ou um cabeçalho dentro de um endereço só. Endereço corporativo
+// nenhum usa isso, e cada um deles é um vetor de injeção de cabeçalho.
+const EMAIL_VALIDO = /^[^\s@<>",;:\\]+@[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$/;
+
+/** Lê um campo de destinatários aceitando o que a tela manda (uma string
+ *  com vírgula/ponto-e-vírgula/quebra de linha) ou uma lista JSON.
+ *  Devolve { lista, invalidos }: os inválidos voltam para a tela dizer
+ *  QUAL endereço está errado, em vez de um "e-mail inválido" sem alvo. */
+function lerDestinatarios(valor) {
+  const cru = Array.isArray(valor) ? valor : String(valor == null ? "" : valor).split(/[;,\r\n]+/);
+  const vistos = new Set();
+  const lista = [];
+  const invalidos = [];
+  cru.forEach((item) => {
+    const email = String(item == null ? "" : item).trim();
+    if (!email) return;
+    if (!EMAIL_VALIDO.test(email) || email.length > 254) {
+      if (invalidos.length < 5) invalidos.push(email.slice(0, 80));
+      return;
+    }
+    const chave = email.toLowerCase();
+    if (vistos.has(chave)) return; // o mesmo endereço em Para e CC vira um envio só
+    vistos.add(chave);
+    lista.push(email);
+  });
+  return { lista, invalidos };
+}
+
+// Extensões que o Exchange e a maioria dos antivírus corporativos já
+// bloqueiam na entrada: o e-mail sairia daqui para ser barrado adiante,
+// e o remetente (nossa conta de serviço) é que ganharia a reputação
+// ruim. Lista de NEGAÇÃO, não de permissão: as pessoas anexam formatos
+// legítimos demais para uma lista branca dar conta sem virar suporte
+// toda semana.
+const ANEXO_EXT_BLOQUEADAS = new Set([
+  "exe", "com", "bat", "cmd", "scr", "pif", "msi", "msp", "cpl", "dll",
+  "js", "jse", "vbs", "vbe", "wsf", "wsh", "ps1", "psm1", "hta", "jar",
+  "lnk", "reg", "scf", "inf", "chm", "app",
+]);
+
+/** Escapa a mensagem digitada e a transforma em HTML.
+ *
+ *  Nada do que a pessoa escreveu vira marcação: "<b>" chega como texto
+ *  "<b>" na caixa de quem recebe. É a sanitização do REQUISITO 6 levada
+ *  ao ponto certo — impedir a ENTRADA de HTML é mais seguro do que
+ *  tentar limpar HTML depois, e ninguém precisa de HTML num formulário
+ *  de mensagem simples. */
+function corpoEmHtml(texto) {
+  const escapado = String(texto)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/\r?\n/g, "<br>");
+  return `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#222;line-height:1.55;">${escapado}</div>`;
+}
+
+/** Grava a auditoria. NUNCA lança: o e-mail já saiu quando isto roda, e
+ *  derrubar a resposta por causa do log faria a pessoa reenviar uma
+ *  mensagem que já foi entregue — duplicando o e-mail para consertar um
+ *  problema que é só nosso. */
+async function registrarEnvioDeEmail(dados) {
+  try {
+    await runQuery(
+      `INSERT INTO ${FULL_EMAIL_LOG_TABLE}
+              (ID_USUARIO, CD_EMAIL_USUARIO, DT_ENVIO, DS_DESTINATARIOS, DS_COPIA,
+               DS_COPIA_OCULTA, DS_ASSUNTO, QT_ANEXOS, NR_BYTES_ANEXOS,
+               SG_ENVIADO, DS_ERRO, DS_MESSAGE_ID)
+       VALUES (@idUsuario, @emailUsuario, ${AGORA_BRASILIA}, @para, @cc,
+               @cco, @assunto, @qtAnexos, @bytesAnexos,
+               @enviado, @erro, @messageId)`,
+      [
+        ["idUsuario", sql.Int, dados.idUsuario],
+        ["emailUsuario", sql.NVarChar(255), dados.emailUsuario],
+        ["para", sql.NVarChar(sql.MAX), dados.para.join("; ")],
+        ["cc", sql.NVarChar(sql.MAX), dados.cc.length ? dados.cc.join("; ") : null],
+        ["cco", sql.NVarChar(sql.MAX), dados.cco.length ? dados.cco.join("; ") : null],
+        ["assunto", sql.NVarChar(400), dados.assunto.slice(0, 400)],
+        ["qtAnexos", sql.Int, dados.qtAnexos],
+        ["bytesAnexos", sql.BigInt, dados.bytesAnexos],
+        ["enviado", sql.Char(1), dados.enviado ? "S" : "N"],
+        ["erro", sql.NVarChar(500), dados.erro ? String(dados.erro).slice(0, 500) : null],
+        ["messageId", sql.NVarChar(255), dados.messageId ? String(dados.messageId).slice(0, 255) : null],
+      ]
+    );
+  } catch (err) {
+    // Fica visível no log do Databricks App, que é onde alguém repara
+    // que a auditoria parou — sem transformar isso em erro para a tela.
+    console.error(`[email] FALHA AO AUDITAR o envio de ${dados.emailUsuario}: ${err.message}`);
+  }
+}
+
+// Um envio por pessoa de cada vez. A tela já desabilita o botão
+// (REQUISITO 7), mas a tela é do outro lado da rede: dois cliques
+// rápidos, um F5 no meio do envio ou uma chamada feita à mão passariam
+// direto. Guardar o ID de quem está enviando é o suficiente — o Set vive
+// no processo, e um envio dura segundos.
+const ENVIOS_EM_ANDAMENTO = new Set();
+
+/** Só o que a TELA precisa saber para validar antes de subir arquivo:
+ *  limites (números) e o endereço que aparecerá no "De:". Nenhum desses
+ *  valores é segredo; host, usuário e senha do SMTP não estão aqui e não
+ *  existe rota que os devolva. */
+apiRouter.get("/email/config", (req, res) => {
+  res.json({
+    disponivel: emailSmtp.estaConfigurado(),
+    remetente: emailSmtp.estaConfigurado() ? emailSmtp.remetente() : null,
+    limites: EMAIL_LIMITES,
+  });
+});
+
+apiRouter.post("/email", receberAnexos, async (req, res) => {
+  const perfil = await perfilDeAcesso(req);
+  const emailUsuario = req.get("X-Forwarded-Email") || null;
+
+  if (!emailSmtp.estaConfigurado()) {
+    return res.status(503).json({
+      error: "O envio de e-mail não está configurado nesta aplicação. Procure a área de TI.",
+      codigo: "indisponivel",
+    });
+  }
+
+  const corpoReq = req.body || {};
+  const para = lerDestinatarios(corpoReq.para);
+  const cc = lerDestinatarios(corpoReq.cc);
+  const cco = lerDestinatarios(corpoReq.cco);
+
+  const invalidos = [...para.invalidos, ...cc.invalidos, ...cco.invalidos];
+  if (invalidos.length) {
+    return res.status(400).json({
+      error: `Endereço de e-mail inválido: ${invalidos.join(", ")}.`,
+      codigo: "destinatario",
+    });
+  }
+  if (!para.lista.length) {
+    return res.status(400).json({ error: "Informe pelo menos um destinatário.", codigo: "destinatario" });
+  }
+  const total = para.lista.length + cc.lista.length + cco.lista.length;
+  if (total > EMAIL_LIMITES.maxDestinatarios) {
+    return res.status(400).json({
+      error: `No máximo ${EMAIL_LIMITES.maxDestinatarios} destinatários por e-mail (somando Para, CC e CCO).`,
+      codigo: "destinatario",
+    });
+  }
+
+  const assunto = String(corpoReq.assunto == null ? "" : corpoReq.assunto).replace(/[\r\n]+/g, " ").trim();
+  if (!assunto) {
+    return res.status(400).json({ error: "O assunto é obrigatório.", codigo: "assunto" });
+  }
+  if (assunto.length > EMAIL_LIMITES.assuntoChars) {
+    return res.status(400).json({
+      error: `O assunto deve ter no máximo ${EMAIL_LIMITES.assuntoChars} caracteres.`,
+      codigo: "assunto",
+    });
+  }
+
+  // Mensagem vazia quase sempre é engano (clicou em Enviar antes de
+  // escrever), e um e-mail em branco saindo pela conta da empresa é
+  // constrangedor de um jeito que não tem desfazer.
+  const mensagem = String(corpoReq.mensagem == null ? "" : corpoReq.mensagem);
+  if (!mensagem.trim()) {
+    return res.status(400).json({ error: "Escreva a mensagem do e-mail.", codigo: "corpo" });
+  }
+  if (mensagem.length > EMAIL_LIMITES.corpoChars) {
+    return res.status(400).json({
+      error: `A mensagem deve ter no máximo ${EMAIL_LIMITES.corpoChars} caracteres.`,
+      codigo: "corpo",
+    });
+  }
+
+  const arquivos = req.files || [];
+  let bytesAnexos = 0;
+  for (const arquivo of arquivos) {
+    bytesAnexos += arquivo.size || 0;
+    const ext = String(arquivo.originalname || "").split(".").pop().toLowerCase();
+    if (ANEXO_EXT_BLOQUEADAS.has(ext)) {
+      return res.status(400).json({
+        error: `O anexo "${arquivo.originalname}" é de um tipo que não pode ser enviado por e-mail.`,
+        codigo: "anexo",
+      });
+    }
+  }
+  if (bytesAnexos > EMAIL_LIMITES.totalBytes) {
+    const mb = Math.round(EMAIL_LIMITES.totalBytes / (1024 * 1024));
+    return res.status(400).json({ error: `Os anexos somam mais de ${mb}MB.`, codigo: "anexo" });
+  }
+
+  const travaId = String(perfil.idUsuario);
+  if (ENVIOS_EM_ANDAMENTO.has(travaId)) {
+    return res.status(429).json({ error: "Já existe um envio em andamento. Aguarde a conclusão.", codigo: "emandamento" });
+  }
+  ENVIOS_EM_ANDAMENTO.add(travaId);
+
+  const auditoria = {
+    idUsuario: perfil.idUsuario,
+    emailUsuario,
+    para: para.lista,
+    cc: cc.lista,
+    cco: cco.lista,
+    assunto,
+    qtAnexos: arquivos.length,
+    bytesAnexos,
+  };
+
+  try {
+    const info = await emailSmtp.enviarEmail({
+      para: para.lista,
+      cc: cc.lista,
+      cco: cco.lista,
+      assunto,
+      texto: mensagem,
+      html: corpoEmHtml(mensagem),
+      // Reply-To de quem escreveu: a resposta chega na caixa da pessoa,
+      // sem que o "De:" deixe de ser a conta de serviço. Só vai se o
+      // proxy informou um e-mail válido — nunca o que veio no corpo.
+      responderPara: emailUsuario && EMAIL_VALIDO.test(emailUsuario) ? emailUsuario : undefined,
+      anexos: arquivos.map((a) => ({
+        nomeArquivo: a.originalname,
+        conteudo: a.buffer,
+        tipo: a.mimetype,
+      })),
+    });
+
+    await registrarEnvioDeEmail({ ...auditoria, enviado: true, erro: null, messageId: info.messageId });
+    console.log(`[email] enviado por ${emailUsuario} para ${para.lista.length} destinatário(s).`);
+    res.json({ ok: true, mensagem: "Mensagem enviada com sucesso.", recusados: info.recusados });
+  } catch (err) {
+    // err.publico é a frase já traduzida por email-smtp.js; o erro cru
+    // (com host, porta e conta de serviço) não sai do servidor.
+    const publico = err && err.publico ? err.publico : "Não foi possível enviar o e-mail.";
+    const codigo = (err && err.codigo) || "falha";
+    await registrarEnvioDeEmail({ ...auditoria, enviado: false, erro: publico, messageId: null });
+    res.status((err && err.status) || 502).json({ error: publico, codigo });
+  } finally {
+    ENVIOS_EM_ANDAMENTO.delete(travaId);
+  }
 });
 
 app.use("/api", apiRouter);
