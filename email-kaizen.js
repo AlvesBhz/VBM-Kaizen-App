@@ -16,11 +16,26 @@
  *   alcance da tela: o corpo do e-mail é gerado a partir da linha do
  *   banco, não do que foi digitado.
  *
- * CAIXA REMETENTE
- *   PCI.Base.Metals@Vale.com (KAIZEN_EMAIL_REMETENTE sobrescreve). Quem
- *   decide precisa ter "Enviar Como" (ou "Enviar em Nome De") nessa
- *   caixa compartilhada, e o app registration do MSAL precisa do escopo
- *   delegado Mail.Send.Shared — ver js/msal-config.js.
+ * CAIXA REMETENTE — duas formas, escolhidas por variável de ambiente.
+ *
+ *   PADRÃO: sai pela caixa compartilhada PCI.Base.Metals@Vale.com
+ *   (KAIZEN_EMAIL_REMETENTE sobrescreve o endereço). Exige que quem
+ *   cadastra/decide tenha "Enviar Como" nessa caixa — liberação do time
+ *   de Exchange, fora do alcance deste projeto.
+ *
+ *   KAIZEN_EMAIL_DO_USUARIO=true: sai pela caixa da PRÓPRIA pessoa que
+ *   está usando o sistema. Não depende de liberação nenhuma no Exchange,
+ *   porque ninguém está enviando por caixa alheia — cada um envia pela
+ *   sua. É a saída para destravar o envio enquanto o "Enviar Como" não
+ *   sai, e para voltar atrás basta remover a variável.
+ *
+ *   Nos dois casos o escopo delegado é o mesmo, Mail.Send.Shared: ele
+ *   cobre "enviar como o usuário logado" E "enviar em nome de outra
+ *   caixa" (é o que diz a própria descrição da permissão no Entra).
+ *   Nenhuma permissão nova precisa ser concedida para alternar.
+ *
+ *   Quem traduz isso em endereço do Graph é js/envio-email.js: com "de"
+ *   preenchido chama /users/<caixa>/sendMail; sem "de", chama /me/sendMail.
  *
  * IDIOMA
  *   Não existe idioma cadastrado por pessoa: kzn_mdm_hierarquia não tem
@@ -32,6 +47,9 @@
  */
 
 const REMETENTE = process.env.KAIZEN_EMAIL_REMETENTE || "PCI.Base.Metals@Vale.com";
+// Enviar pela caixa de quem está logado, em vez da compartilhada. Ver a
+// nota "CAIXA REMETENTE" acima.
+const ENVIAR_PELA_CAIXA_DO_USUARIO = String(process.env.KAIZEN_EMAIL_DO_USUARIO || "").toLowerCase() === "true";
 const APP_URL = (process.env.KAIZEN_APP_URL ||
   "https://kaizen-7405608945147182.2.azure.databricksapps.com").replace(/\/+$/, "");
 
@@ -319,7 +337,8 @@ function montarAviso(momento, destinatarios, dados) {
     // Identifica o comunicado: a tela usa para não enviar duas vezes o
     // mesmo aviso e o servidor usa no log.
     chave: `${dados.idKaizen}:${dados.idStatus}:${momento}`,
-    de: REMETENTE,
+    // null = "a caixa de quem está logado" (ver ENVIAR_PELA_CAIXA_DO_USUARIO).
+    de: ENVIAR_PELA_CAIXA_DO_USUARIO ? null : REMETENTE,
     para,
     assunto,
     html,

@@ -112,3 +112,17 @@ env:
   #   KAIZEN_EMAIL_REMETENTE  padrão 'PCI.Base.Metals@Vale.com'
   #   KAIZEN_APP_URL          padrão o endereço deste app (usado nos
   #                           links de aprovacao.html e biblioteca.html)
+  #
+  #   KAIZEN_EMAIL_DO_USUARIO  'true' faz o comunicado sair pela caixa
+  #                            de QUEM ESTÁ USANDO o sistema, em vez da
+  #                            compartilhada. Serve para destravar o
+  #                            envio enquanto o "Enviar Como" em
+  #                            PCI.Base.Metals@Vale.com não é liberado
+  #                            pelo time de Exchange: cada um envia pela
+  #                            própria caixa, então não há permissão a
+  #                            pedir. Mesma permissão delegada dos dois
+  #                            jeitos (Mail.Send.Shared cobre os dois).
+  #                            Para voltar ao normal, remova a variável.
+  #
+  #   - name: 'KAIZEN_EMAIL_DO_USUARIO'
+  #     value: 'true'

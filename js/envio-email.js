@@ -72,7 +72,15 @@
     return window.VBMMsal.obterInstancia()
       .then(obterToken)
       .then(function (token) {
-        return fetch(GRAPH + '/users/' + encodeURIComponent(aviso.de) + '/sendMail', {
+        // Com "de" preenchido, a mensagem sai pela caixa COMPARTILHADA —
+        // e quem envia precisa ter "Enviar Como" nela. Sem "de", sai
+        // pela caixa da PRÓPRIA pessoa logada (/me), que não depende de
+        // liberação nenhuma no Exchange. Quem decide é o servidor, pela
+        // variável KAIZEN_EMAIL_DO_USUARIO — ver email-kaizen.js.
+        var destino = aviso.de
+          ? '/users/' + encodeURIComponent(aviso.de) + '/sendMail'
+          : '/me/sendMail';
+        return fetch(GRAPH + destino, {
           method: 'POST',
           headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
           body: JSON.stringify({
