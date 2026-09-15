@@ -306,6 +306,39 @@ function montarMensagem(momento, dados) {
   return { assunto: `${pt.assunto} / ${en.assunto}`, html };
 }
 
+/** Uma mensagem ESCRITA À MÃO, no mesmo material dos comunicados
+ *  automáticos: mesma família tipográfica, mesmo corpo, mesma cor, mesma
+ *  entrelinha e a mesma assinatura do programa.
+ *
+ *  Usada pela aba "E-mail" do admin.html (POST /api/email). A razão de
+ *  existir é que um e-mail escrito na tela sairia como texto solto, sem
+ *  nada que o ligue aos comunicados que a mesma caixa já manda — quem
+ *  recebe veria duas identidades diferentes vindas do mesmo remetente.
+ *
+ *  O texto é ESCAPADO, não interpretado: "<b>" chega como "<b>" na
+ *  caixa de quem recebe. Quem escreve na tela não injeta marcação no
+ *  e-mail de ninguém.
+ *
+ *  @param {string} texto    o que a pessoa digitou
+ *  @param {string} [idioma] 'pt' (padrão) ou 'en' — só muda a assinatura
+ */
+function montarMensagemLivre(texto, idioma) {
+  const lingua = idioma === "en" ? "en" : "pt";
+  const paragrafos = String(texto == null ? "" : texto)
+    .split(/\r?\n\s*\r?\n/)                       // linha em branco separa parágrafos
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) => `<p style="margin:0 0 12px;">${paraHtml(p)}</p>`)
+    .join("");
+
+  const rodape = RODAPE[lingua].map((l) => `<div>${escapar(l)}</div>`).join("");
+
+  return `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#222;line-height:1.55;">` +
+           (paragrafos || `<p style="margin:0 0 12px;"></p>`) +
+           `<div style="margin-top:20px;color:#555;">${rodape}</div>` +
+         `</div>`;
+}
+
 // ------------------------------------------------------------------
 // Montagem do aviso
 // ------------------------------------------------------------------
@@ -345,4 +378,4 @@ function montarAviso(momento, destinatarios, dados) {
   };
 }
 
-module.exports = { montarAviso, TEMPLATES, montarMensagem, formatarData, REMETENTE };
+module.exports = { montarAviso, montarMensagemLivre, TEMPLATES, montarMensagem, formatarData, REMETENTE };

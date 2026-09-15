@@ -33,7 +33,7 @@ const {
   baixarArquivoDoBlob,
   removerArquivoDoBlob,
 } = require("./azure-blob");
-const { montarAviso } = require("./email-kaizen");
+const { montarAviso, montarMensagemLivre } = require("./email-kaizen");
 // Envio de e-mail DIGITADO por uma pessoa, pelo servidor. Não confundir
 // com o email-kaizen.js acima, que só monta os comunicados automáticos e
 // deixa o envio para o navegador. Aqui a credencial fica no servidor e
@@ -3237,10 +3237,12 @@ apiRouter.post("/kaizens", async (req, res) => {
 
       // Só depois do commit: antes disso o Kaizen ainda pode sumir no
       // rollback, e comunicar um cadastro que não existe é pior do que
-      // não comunicar. Os comunicados vão MONTADOS na resposta; quem
-      // entrega ao Graph é a tela, com o token de quem está logado
-      // (ver js/envio-email.js).
-      const avisos = await avisosDoCadastro(idKaizen, idUsuarioCadastro);
+      // não comunicar. Com SMTP configurado, quem entrega é o SERVIDOR;
+      // sem ele, os comunicados vão montados na resposta e a tela
+      // entrega ao Graph, como sempre (ver entregarAvisosPeloServidor e
+      // js/envio-email.js).
+      const avisos = await entregarAvisosPeloServidor(
+        await avisosDoCadastro(idKaizen, idUsuarioCadastro), req);
       res.status(201).json({ ok: true, ID_KAIZEN: idKaizen, ID_STATUS: idStatusNovo, AVISOS: avisos });
     } catch (errTx) {
       await tx.rollback().catch(() => {});
@@ -4035,6 +4037,77 @@ async function avisosDoCadastro(idKaizen, idUsuario) {
   }
 }
 
+/** Entrega os comunicados JÁ MONTADOS (os cinco templates de
+ *  email-kaizen.js) pelo servidor, quando há SMTP configurado.
+ *
+ *  POR QUE ISTO EXISTE
+ *    Os comunicados sempre foram montados aqui e ENTREGUES PELA TELA,
+ *    com o token do Microsoft Graph de quem está logado. Esse caminho
+ *    depende de três coisas fora do alcance deste projeto: o MSAL
+ *    carregar, o consentimento estar dado e a pessoa ter "Enviar Como"
+ *    na caixa compartilhada. Faltando qualquer uma, o Kaizen é gravado
+ *    e o e-mail não sai.
+ *
+ *    Com SMTP configurado, o servidor entrega. O conteúdo é o MESMO —
+ *    os templates não mudaram e nem precisam mudar; o que muda é quem
+ *    põe na rede.
+ *
+ *  FALLBACK, de propósito
+ *    Sem SMTP configurado, a lista volta intacta e a tela continua
+ *    fazendo o que fazia. Com SMTP configurado e falha no envio, o
+ *    `html` também fica onde está e a tela ainda tenta — o que não pode
+ *    acontecer é o comunicado morrer entre os dois caminhos.
+ *
+ *    Quando o servidor ENVIA, o `html` sai da resposta e o aviso vai
+ *    marcado: a tela vê `enviadoPeloServidor` e não repete o envio (ver
+ *    js/envio-email.js). Tirar o corpo também enxuga a resposta, que
+ *    carregava alguns KB de HTML por comunicado sem necessidade.
+ *
+ *  Nunca lança: a esta altura o Kaizen (ou a decisão) já está gravado, e
+ *  derrubar a resposta por causa do e-mail desfaria na tela algo que no
+ *  banco já aconteceu. */
+async function entregarAvisosPeloServidor(avisos, req) {
+  const lista = Array.isArray(avisos) ? avisos : [];
+  if (!lista.length || !emailSmtp.estaConfigurado()) return lista;
+
+  const perfil = await perfilDeAcesso(req);
+  const emailUsuario = req.get("X-Forwarded-Email") || null;
+  const responderPara = emailUsuario && EMAIL_VALIDO.test(emailUsuario) ? emailUsuario : undefined;
+
+  for (const aviso of lista) {
+    if (!aviso || aviso.erro || !Array.isArray(aviso.para) || !aviso.para.length) continue;
+    try {
+      const info = await emailSmtp.enviarEmail({
+        para: aviso.para,
+        assunto: aviso.assunto,
+        html: aviso.html,
+        responderPara,
+      });
+      aviso.enviadoPeloServidor = true;
+      delete aviso.html;
+      console.log(`[email] comunicado "${aviso.chave}" enviado pelo servidor para ${aviso.para.length} destinatário(s).`);
+      await registrarEnvioDeEmail({
+        idUsuario: perfil.idUsuario, emailUsuario,
+        para: aviso.para, cc: [], cco: [], assunto: aviso.assunto,
+        qtAnexos: 0, bytesAnexos: 0,
+        enviado: true, erro: null, messageId: info.messageId,
+      });
+    } catch (err) {
+      const publico = (err && err.publico) || "Não foi possível enviar o e-mail.";
+      aviso.enviadoPeloServidor = false;
+      aviso.motivoServidor = publico;
+      console.error(`[email] comunicado "${aviso.chave}" NAO saiu pelo servidor — ${publico}`);
+      await registrarEnvioDeEmail({
+        idUsuario: perfil.idUsuario, emailUsuario,
+        para: aviso.para, cc: [], cco: [], assunto: aviso.assunto,
+        qtAnexos: 0, bytesAnexos: 0,
+        enviado: false, erro: publico, messageId: null,
+      });
+    }
+  }
+  return lista;
+}
+
 /** Registra uma decisão do aprovador. Aprovar, reprovar e solicitar
  *  alteração só diferem em três coisas — o status gravado, se o motivo
  *  é obrigatório e se a decisão encerra o Kaizen —, então dividem o
@@ -4136,11 +4209,11 @@ async function registrarDecisao(req, res, opcoes) {
 
     // Só aqui: a gravação terminou e afetou a linha. Antes disso não há
     // decisão para avisar, e um erro no caminho acima devolve sem
-    // chegar nesta linha. O aviso vai MONTADO na resposta; quem entrega
-    // ao Graph é a tela, com o token do aprovador logado (ver
-    // js/envio-email.js). Montar aqui mantém o conteúdo preso ao que
-    // está gravado no banco.
-    const avisos = await avisosDaDecisao(opcoes.momento, idKaizen, idUsuario);
+    // chegar nesta linha. Montar aqui mantém o conteúdo preso ao que
+    // está gravado no banco; a entrega é do servidor quando há SMTP, e
+    // da tela (Graph) quando não há.
+    const avisos = await entregarAvisosPeloServidor(
+      await avisosDaDecisao(opcoes.momento, idKaizen, idUsuario), req);
     res.json({ ok: true, ID_STATUS: idStatus, AVISOS: avisos });
   } catch (err) {
     console.error(`[${opcoes.momento}] erro:`, err.message);
@@ -4344,7 +4417,8 @@ apiRouter.put("/kaizens/:id", async (req, res) => {
 
       // Reencaminha ao fluxo: o aprovador designado é avisado de novo,
       // pelo mesmo caminho do cadastro.
-      const avisos = await avisosDaRevisao(idKaizen, idUsuario);
+      const avisos = await entregarAvisosPeloServidor(
+        await avisosDaRevisao(idKaizen, idUsuario), req);
       res.json({ ok: true, ID_KAIZEN: idKaizen, ID_STATUS: revisado.id, AVISOS: avisos });
     } catch (errTx) {
       await tx.rollback().catch(() => {});
@@ -4585,21 +4659,6 @@ const ANEXO_EXT_BLOQUEADAS = new Set([
   "lnk", "reg", "scf", "inf", "chm", "app",
 ]);
 
-/** Escapa a mensagem digitada e a transforma em HTML.
- *
- *  Nada do que a pessoa escreveu vira marcação: "<b>" chega como texto
- *  "<b>" na caixa de quem recebe. É a sanitização do REQUISITO 6 levada
- *  ao ponto certo — impedir a ENTRADA de HTML é mais seguro do que
- *  tentar limpar HTML depois, e ninguém precisa de HTML num formulário
- *  de mensagem simples. */
-function corpoEmHtml(texto) {
-  const escapado = String(texto)
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/\r?\n/g, "<br>");
-  return `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#222;line-height:1.55;">${escapado}</div>`;
-}
-
 /** Grava a auditoria. NUNCA lança: o e-mail já saiu quando isto roda, e
  *  derrubar a resposta por causa do log faria a pessoa reenviar uma
  *  mensagem que já foi entregue — duplicando o e-mail para consertar um
@@ -4754,7 +4813,11 @@ apiRouter.post("/email", receberAnexos, async (req, res) => {
       cco: cco.lista,
       assunto,
       texto: mensagem,
-      html: corpoEmHtml(mensagem),
+      // MESMO material dos comunicados automáticos (email-kaizen.js):
+      // tipografia, corpo, cor e a assinatura do programa. Um e-mail
+      // escrito na tela chega com a mesma cara dos que a mesma caixa já
+      // manda, em vez de texto solto. O texto vai escapado lá dentro.
+      html: montarMensagemLivre(mensagem),
       // Reply-To de quem escreveu: a resposta chega na caixa da pessoa,
       // sem que o "De:" deixe de ser a conta de serviço. Só vai se o
       // proxy informou um e-mail válido — nunca o que veio no corpo.

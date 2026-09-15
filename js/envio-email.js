@@ -14,6 +14,13 @@
  * partir da linha já gravada no banco (email-kaizen.js). Esta camada só
  * entrega ao Graph e informa o resultado de volta, para o log ficar no
  * servidor como o dos demais fluxos.
+ *
+ * ESTE CAMINHO VIROU O PLANO B. Havendo SMTP configurado (ver
+ * email-smtp.js), quem entrega é o SERVIDOR, e os comunicados chegam
+ * aqui marcados com `enviadoPeloServidor` — este arquivo os ignora.
+ * O caminho do Graph continua inteiro para dois casos: instalação sem
+ * SMTP configurado, e comunicado que o servidor tentou e não conseguiu
+ * entregar (aí vem `motivoServidor` e o corpo junto).
  */
 (function () {
   'use strict';
@@ -56,6 +63,21 @@
     if (!aviso || aviso.erro) {
       if (aviso && aviso.erro) avisarServidor(idKaizen, null, false, aviso.erro);
       return Promise.resolve({ enviado: false, motivo: (aviso && aviso.erro) || 'sem aviso' });
+    }
+    // O SERVIDOR já entregou este comunicado por SMTP. Nada a fazer
+    // aqui: repetir o envio seria um segundo e-mail idêntico na caixa de
+    // quem recebe. Quando isso acontece o servidor tira o `html` da
+    // resposta, então nem haveria corpo para mandar.
+    if (aviso.enviadoPeloServidor) {
+      return Promise.resolve({ enviado: true, motivo: 'enviado pelo servidor' });
+    }
+    // O servidor TENTOU e não conseguiu; o corpo continua aqui, então
+    // ainda vale tentar pelo Graph. Se este caminho também falhar, o
+    // motivo que aparece na tela é o do Graph — o do servidor já está no
+    // log e na auditoria.
+    if (aviso.motivoServidor) {
+      console.warn('[VBMEmail] o servidor nao conseguiu enviar "' + aviso.chave +
+                   '" (' + aviso.motivoServidor + '); tentando pelo navegador.');
     }
     if (enviados[aviso.chave]) {
       return Promise.resolve({ enviado: false, motivo: 'já enviado' });
