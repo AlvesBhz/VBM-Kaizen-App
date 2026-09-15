@@ -245,7 +245,13 @@
   function initPhotoUpload() {
     document.querySelectorAll('.photo-upload-zone').forEach(function(zone) {
       const input = zone.querySelector('input[type=file]');
-      const preview = zone.nextElementSibling;
+      // A pré-visualização era SEMPRE a irmã seguinte da zona. Deixou de
+      // ser: no Novo Kaizen a <img> passou a morar dentro do palco
+      // (.foto-palco), que envolve imagem, ações e legenda. Procurar no
+      // grupo do campo cobre os dois arranjos — o antigo, em que a irmã
+      // seguinte é a própria imagem, e o novo.
+      const grupo = zone.closest('.form-group') || zone.parentElement;
+      const preview = (grupo && grupo.querySelector('.photo-preview-img')) || zone.nextElementSibling;
       if (!input) return;
       input.addEventListener('change', function() {
         const file = input.files[0];

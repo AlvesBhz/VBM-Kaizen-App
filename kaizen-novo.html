@@ -352,6 +352,14 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 .campo-data-botao {
   pointer-events: auto; cursor: pointer;
   background: none; border: 0; padding: 0; line-height: 1;
+  /* O z-index NÃO é enfeite. No MODO ESCURO o .form-control recebe
+     backdrop-filter, e backdrop-filter cria um contexto de empilhamento:
+     o input passa a pintar SOBRE este botão, que é posicionado e vem
+     antes dele no DOM. O clique parava no campo de texto e o calendário
+     não abria — só no escuro, porque no claro não há backdrop-filter.
+     Medido com elementFromPoint no centro do ícone: claro devolvia o
+     <i> do calendário, escuro devolvia #data_conclusao_texto. */
+  z-index: 2;
 }
 .campo-data-botao:focus-visible { outline: 2px solid var(--vbm-blue); outline-offset: 2px; border-radius: 3px; }
 /* O <input type="date"> de verdade fica recolhido: é ele que guarda o
@@ -371,15 +379,83 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 .toggle-label { font-size: .76rem; }
 .checkbox-label { font-size: .76rem; line-height: 1.5; }
 .photo-upload-text { font-size: .76rem; }
-/* Ações da foto escolhida (Visualizar / Limpar). Ficam logo abaixo da
-   pré-visualização e só aparecem quando existe imagem — o atributo
-   hidden precisa do !important porque .btn tem display próprio. */
-.photo-actions { display: flex; gap: .5rem; justify-content: center; margin-top: .6rem; flex-wrap: wrap; }
-.photo-actions[hidden] { display: none !important; }
-/* A pré-visualização da escolha não é foto de capa: cortar o miolo
-   esconde justamente o que a pessoa precisa conferir. */
+/* ── Campo de imagem: o PALCO ──────────────────────────────────────
+   A evidência do Kaizen é quase sempre uma captura de sistema, densa e
+   larga. O desenho anterior punha essa captura numa moldura de altura
+   fixa que ela não preenchia (sobrava faixa vazia dos dois lados) e
+   jogava "Visualizar" e "Limpar" centralizados abaixo, soltos da imagem
+   que controlavam. Aqui a moldura é 16:9 e acompanha a imagem, as ações
+   flutuam SOBRE ela, e a legenda identifica o arquivo — nome, dimensão
+   e peso — antes do envio, que é quando os 10MB ainda dá para resolver.
+
+   Trocar deixou de exigir limpar antes: há um botão Substituir, e
+   arrastar outro arquivo sobre a imagem também troca. */
+.foto-palco[hidden] { display: none !important; }
+.foto-quadro {
+  position: relative; overflow: hidden;
+  border: 1px solid #e3e9ee; border-radius: .65rem .65rem 0 0;
+  /* Xadrez claro: revela a margem branca do print em vez de fingir que
+     a imagem preenche a moldura. */
+  background: repeating-conic-gradient(#f4f7f9 0 25%, #eceff2 0 50%) 0 0/16px 16px;
+}
+.foto-quadro .photo-preview-img {
+  display: block; width: 100%; aspect-ratio: 16/9; max-height: none;
+  object-fit: contain; background: transparent; border-radius: 0;
+}
+.foto-barra {
+  position: absolute; top: .55rem; right: .55rem; z-index: 2;
+  display: flex; gap: .3rem; padding: .28rem;
+  background: rgba(255,255,255,.94); border: 1px solid #e3e9ee;
+  border-radius: .5rem; box-shadow: 0 2px 10px rgba(13,38,64,.12);
+}
+@supports (backdrop-filter: blur(1px)) { .foto-barra { backdrop-filter: blur(6px); } }
+.foto-bt {
+  width: 30px; height: 30px; border-radius: .4rem; cursor: pointer;
+  border: 1px solid transparent; background: transparent;
+  color: var(--vbm-blue-dark); font-size: .78rem;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background .15s, color .15s;
+}
+.foto-bt:hover { background: var(--vbm-blue-pale); }
+.foto-bt:focus-visible { outline: 2px solid var(--vbm-blue); outline-offset: 2px; }
+.foto-bt-perigo { color: #a32b2b; }
+.foto-bt-perigo:hover { background: #fdf2f2; }
+.foto-legenda {
+  display: flex; flex-wrap: wrap; gap: .3rem 1rem; align-items: center;
+  justify-content: space-between; padding: .5rem .7rem;
+  background: #fff; border: 1px solid #e3e9ee; border-top: 0;
+  border-radius: 0 0 .65rem .65rem; font-size: .7rem; color: var(--vbm-mid);
+}
+.foto-nome {
+  color: var(--vbm-text); font-weight: 500; font-size: .74rem; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.foto-dados { font-variant-numeric: tabular-nums; flex-shrink: 0; }
+/* Arrastar por cima da imagem substitui direto — sem passar pelo vazio. */
+.foto-quadro.arrastando { border-color: var(--vbm-blue-dark); }
+.foto-solta {
+  position: absolute; inset: 0; z-index: 3; display: grid; place-items: center;
+  background: rgba(232,247,253,.9); color: var(--vbm-blue-dark);
+  font-weight: 600; font-size: .8rem;
+}
+.foto-solta[hidden] { display: none !important; }
+/* A pré-visualização não é foto de capa: cortar o miolo esconde
+   justamente o que a pessoa precisa conferir. */
 .photo-preview-img { object-fit: contain; background: #f4f6f8; }
 [data-bg="dark"] .photo-preview-img { background: rgba(255,255,255,.04); }
+[data-bg="dark"] .foto-quadro {
+  border-color: rgba(255,255,255,.14);
+  background: repeating-conic-gradient(rgba(255,255,255,.05) 0 25%, rgba(255,255,255,.02) 0 50%) 0 0/16px 16px;
+}
+[data-bg="dark"] .foto-quadro .photo-preview-img { background: transparent; }
+[data-bg="dark"] .foto-legenda { background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.14); color: rgba(255,255,255,.55); }
+[data-bg="dark"] .foto-nome { color: var(--vbm-white); }
+[data-bg="dark"] .foto-barra { background: rgba(8,26,42,.9); border-color: rgba(255,255,255,.16); }
+[data-bg="dark"] .foto-bt { color: var(--vbm-blue-light); }
+[data-bg="dark"] .foto-bt:hover { background: rgba(60,181,229,.16); }
+[data-bg="dark"] .foto-bt-perigo { color: #e97b7b; }
+[data-bg="dark"] .foto-bt-perigo:hover { background: rgba(233,123,123,.16); }
+[data-bg="dark"] .foto-solta { background: rgba(13,38,64,.9); color: var(--vbm-blue-light); }
 /* Modal da foto ampliada: mais largo que o de validação, e a imagem
    inteira visível sem rolagem. */
 #modalFotoAmpliada .modal { width: 92vw; max-width: 1100px; }
@@ -764,17 +840,29 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
               <i class="fa-solid fa-camera photo-upload-icon"></i>
               <div class="photo-upload-text"><strong data-i18n="f.clickAddPhoto">Clique para adicionar foto</strong><br><span data-i18n="f.photoFormats">PNG, JPG, WEBP até 10MB</span></div>
             </div>
-            <img class="photo-preview-img" src="" alt="Foto do antes"/>
-            <!-- Aparecem assim que há foto escolhida (ou já gravada, na
-                 edição): servem para conferir a imagem e para trocá-la,
-                 já que dá para escolher o arquivo errado. -->
-            <div class="photo-actions" data-acoes-foto="imagem_antes" hidden>
-              <button type="button" class="btn btn-ghost btn-sm" data-foto-ver>
-                <i class="fa-solid fa-magnifying-glass-plus"></i> <span data-i18n="f.photoView">Visualizar</span>
-              </button>
-              <button type="button" class="btn btn-ghost btn-sm" data-foto-limpar>
-                <i class="fa-solid fa-eraser"></i> <span data-i18n="f.photoClear">Limpar</span>
-              </button>
+            <!-- Aparece assim que há foto escolhida (ou já gravada, na
+                 edição). As ações ficam SOBRE a imagem, encostadas no
+                 que controlam; a legenda identifica o arquivo. -->
+            <div class="foto-palco" data-acoes-foto="imagem_antes" hidden>
+              <div class="foto-quadro">
+                <img class="photo-preview-img" src="" alt="Foto do antes"/>
+                <div class="foto-barra">
+                  <button type="button" class="foto-bt" data-foto-ver
+                          data-i18n-title="f.photoZoom" data-i18n-aria="f.photoZoom"
+                          title="Ampliar" aria-label="Ampliar"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
+                  <button type="button" class="foto-bt" data-foto-trocar
+                          data-i18n-title="f.photoReplace" data-i18n-aria="f.photoReplace"
+                          title="Substituir" aria-label="Substituir"><i class="fa-solid fa-rotate-right"></i></button>
+                  <button type="button" class="foto-bt foto-bt-perigo" data-foto-limpar
+                          data-i18n-title="f.photoRemove" data-i18n-aria="f.photoRemove"
+                          title="Remover" aria-label="Remover"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="foto-solta" data-foto-solta hidden><span data-i18n="f.photoDrop">Solte para substituir</span></div>
+              </div>
+              <div class="foto-legenda">
+                <span class="foto-nome" data-foto-nome></span>
+                <span class="foto-dados" data-foto-dados></span>
+              </div>
             </div>
             <!-- Preenchido no envio (POST /api/kaizens/imagem?tipo=antes) —
                  ver "Upload das imagens" no fim da página. -->
@@ -817,14 +905,26 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
               <i class="fa-solid fa-camera photo-upload-icon"></i>
               <div class="photo-upload-text"><strong data-i18n="f.clickAddPhoto">Clique para adicionar foto</strong><br><span data-i18n="f.photoFormats">PNG, JPG, WEBP até 10MB</span></div>
             </div>
-            <img class="photo-preview-img" src="" alt="Foto do depois"/>
-            <div class="photo-actions" data-acoes-foto="imagem_depois" hidden>
-              <button type="button" class="btn btn-ghost btn-sm" data-foto-ver>
-                <i class="fa-solid fa-magnifying-glass-plus"></i> <span data-i18n="f.photoView">Visualizar</span>
-              </button>
-              <button type="button" class="btn btn-ghost btn-sm" data-foto-limpar>
-                <i class="fa-solid fa-eraser"></i> <span data-i18n="f.photoClear">Limpar</span>
-              </button>
+            <div class="foto-palco" data-acoes-foto="imagem_depois" hidden>
+              <div class="foto-quadro">
+                <img class="photo-preview-img" src="" alt="Foto do depois"/>
+                <div class="foto-barra">
+                  <button type="button" class="foto-bt" data-foto-ver
+                          data-i18n-title="f.photoZoom" data-i18n-aria="f.photoZoom"
+                          title="Ampliar" aria-label="Ampliar"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
+                  <button type="button" class="foto-bt" data-foto-trocar
+                          data-i18n-title="f.photoReplace" data-i18n-aria="f.photoReplace"
+                          title="Substituir" aria-label="Substituir"><i class="fa-solid fa-rotate-right"></i></button>
+                  <button type="button" class="foto-bt foto-bt-perigo" data-foto-limpar
+                          data-i18n-title="f.photoRemove" data-i18n-aria="f.photoRemove"
+                          title="Remover" aria-label="Remover"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="foto-solta" data-foto-solta hidden><span data-i18n="f.photoDrop">Solte para substituir</span></div>
+              </div>
+              <div class="foto-legenda">
+                <span class="foto-nome" data-foto-nome></span>
+                <span class="foto-dados" data-foto-dados></span>
+              </div>
             </div>
             <input type="hidden" id="url_imagem_depois" name="url_imagem_depois" value=""/>
             <div class="form-helper" id="uploadDepoisStatus" style="display:none;"></div>
@@ -1225,6 +1325,10 @@ function rotuloPessoa(p) {
       'email.failMsg': 'O registro foi salvo normalmente, mas o comunicado não saiu.',
       'f.photoView': 'Visualizar',
       'f.photoClear': 'Limpar',
+      'f.photoZoom': 'Ampliar',
+      'f.photoReplace': 'Substituir',
+      'f.photoRemove': 'Remover',
+      'f.photoDrop': 'Solte para substituir',
       'f.photoFormats': 'PNG, JPG, WEBP até 10MB',
       'f.photoInvalidTitle': 'Formato não suportado',
       'f.photoInvalidMsg': 'Envie a imagem em PNG, JPG ou WEBP.',
@@ -1386,6 +1490,10 @@ function rotuloPessoa(p) {
       'email.failMsg': 'The record was saved normally, but the notice did not go out.',
       'f.photoView': 'View',
       'f.photoClear': 'Clear',
+      'f.photoZoom': 'Zoom in',
+      'f.photoReplace': 'Replace',
+      'f.photoRemove': 'Remove',
+      'f.photoDrop': 'Drop to replace',
       'f.photoFormats': 'PNG, JPG, WEBP up to 10MB',
       'f.photoInvalidTitle': 'Unsupported format',
       'f.photoInvalidMsg': 'Upload the image as PNG, JPG or WEBP.',
@@ -2221,14 +2329,58 @@ window.VBMDataConclusao = (function () {
     return (window.__i18n && window.__i18n[chave]) || padrao;
   }
 
-  function previewDe(input) {
-    var zona = input.closest('.photo-upload-zone');
-    var preview = zona && zona.nextElementSibling;
-    return preview && preview.classList.contains('photo-preview-img') ? preview : null;
-  }
-
   function acoesDe(input) {
     return document.querySelector('[data-acoes-foto="' + input.id + '"]');
+  }
+
+  /* A <img> mora DENTRO do palco, não mais colada ao lado da zona de
+     upload — por isso a busca é pelo palco, e não por nextElementSibling. */
+  function previewDe(input) {
+    var palco = acoesDe(input);
+    return palco ? palco.querySelector('.photo-preview-img') : null;
+  }
+
+  /* Nome, dimensão e peso do arquivo, na legenda abaixo da imagem.
+     Existe para a pessoa conferir ANTES de enviar que subiu o arquivo
+     certo — e para os 10MB aparecerem enquanto ainda dá para trocar.
+
+     `arquivo` só existe na escolha local. Na EDIÇÃO a foto já está
+     gravada e vem do servidor: sobra o nome tirado do caminho, e a
+     dimensão é lida da própria imagem quando ela carrega. */
+  function preencherLegenda(input, arquivo) {
+    var palco = acoesDe(input);
+    if (!palco) return;
+    var elNome = palco.querySelector('[data-foto-nome]');
+    var elDados = palco.querySelector('[data-foto-dados]');
+    var preview = previewDe(input);
+
+    if (elNome) {
+      var nome = arquivo ? arquivo.name : '';
+      if (!nome) {
+        var guardado = document.getElementById(input.id.replace('imagem_', 'url_imagem_'));
+        nome = guardado && guardado.value ? String(guardado.value).split('/').pop() : '';
+      }
+      elNome.textContent = nome;
+      elNome.title = nome;
+    }
+
+    function escrever() {
+      if (!elDados) return;
+      var partes = [];
+      if (preview && preview.naturalWidth) {
+        partes.push(preview.naturalWidth.toLocaleString('pt-BR') + ' × ' +
+                    preview.naturalHeight.toLocaleString('pt-BR'));
+      }
+      if (arquivo) {
+        var kb = arquivo.size / 1024;
+        partes.push(kb >= 1024 ? (kb / 1024).toFixed(1) + ' MB' : Math.round(kb) + ' KB');
+      }
+      elDados.textContent = partes.join(' · ');
+    }
+    escrever();
+    // A dimensão só existe depois que a imagem carrega — e ela chega
+    // por FileReader (assíncrono) ou pelo servidor.
+    if (preview) preview.addEventListener('load', escrever, { once: true });
   }
 
   /* Mostra as ações (Visualizar / Limpar) do campo.
@@ -2248,6 +2400,9 @@ window.VBMDataConclusao = (function () {
     if (preview && endereco) {
       preview.src = endereco;
       preview.style.display = 'block';
+      // Só no caminho da EDIÇÃO/restauração: na escolha local quem
+      // preenche é o 'change', que tem o File em mãos (nome e peso).
+      preencherLegenda(input, null);
     }
     var acoes = acoesDe(input);
     if (acoes) acoes.hidden = false;
@@ -2268,7 +2423,13 @@ window.VBMDataConclusao = (function () {
       preview.style.display = 'none';
     }
     var acoes = acoesDe(input);
-    if (acoes) acoes.hidden = true;
+    if (acoes) {
+      acoes.hidden = true;
+      var elNome = acoes.querySelector('[data-foto-nome]');
+      var elDados = acoes.querySelector('[data-foto-dados]');
+      if (elNome) { elNome.textContent = ''; elNome.removeAttribute('title'); }
+      if (elDados) elDados.textContent = '';
+    }
     var zona = input.closest('.photo-upload-zone');
     if (zona) zona.style.display = '';
   }
@@ -2332,6 +2493,49 @@ window.VBMDataConclusao = (function () {
       // A imagem em si é desenhada pelo initPhotoUpload (vbm-app.js);
       // aqui só liberamos as ações de conferir e trocar.
       mostrarFotoEscolhida(input);
+      preencherLegenda(input, arquivo);
+    });
+  });
+
+  /* Arrastar um arquivo SOBRE a imagem já escolhida troca por ele, sem
+     passar pelo estado vazio. A zona de upload some quando há foto, e
+     era só por ela que o arrastar funcionava — então o palco precisa
+     tratar isso por conta própria. */
+  ['imagem_antes', 'imagem_depois'].forEach(function (id) {
+    var input = document.getElementById(id);
+    var palco = input && acoesDe(input);
+    var quadro = palco && palco.querySelector('.foto-quadro');
+    var aviso = palco && palco.querySelector('[data-foto-solta]');
+    if (!quadro) return;
+
+    function realcar(ligado) {
+      quadro.classList.toggle('arrastando', ligado);
+      if (aviso) aviso.hidden = !ligado;
+    }
+    ['dragenter', 'dragover'].forEach(function (evt) {
+      quadro.addEventListener(evt, function (e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        realcar(true);
+      });
+    });
+    ['dragleave', 'dragend'].forEach(function (evt) {
+      quadro.addEventListener(evt, function (e) {
+        // Só apaga o realce ao sair do quadro DE VERDADE: passar sobre a
+        // barra de ações dispara dragleave no quadro e piscaria.
+        if (evt === 'dragleave' && quadro.contains(e.relatedTarget)) return;
+        realcar(false);
+      });
+    });
+    quadro.addEventListener('drop', function (e) {
+      e.preventDefault();
+      realcar(false);
+      var arquivos = e.dataTransfer && e.dataTransfer.files;
+      if (!arquivos || !arquivos.length) return;
+      // Atribuir o FileList ao input mantém UM só caminho de validação:
+      // o 'change' abaixo confere tipo e tamanho como em qualquer escolha.
+      input.files = arquivos;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
     });
   });
 
@@ -2345,6 +2549,14 @@ window.VBMDataConclusao = (function () {
 
     if (e.target.closest('[data-foto-limpar]')) {
       limparCampo(input);
+      return;
+    }
+    /* Substituir: abre o seletor direto, sem obrigar a limpar antes.
+       Era a queixa central do desenho anterior — trocar exigia dois
+       passos e um estado vazio no meio. Se a pessoa desistir, o input
+       volta sem 'change' e nada muda na tela. */
+    if (e.target.closest('[data-foto-trocar]')) {
+      input.click();
       return;
     }
     if (e.target.closest('[data-foto-ver]')) {
