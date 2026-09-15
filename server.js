@@ -212,6 +212,44 @@ const MATRICULA_IGUAL = (a, b) =>
   `(TRY_CAST(${a} AS BIGINT) = TRY_CAST(${b} AS BIGINT)` +
   ` OR CAST(${a} AS VARCHAR(30)) = CAST(${b} AS VARCHAR(30)))`;
 
+/**
+ * Casa uma linha de kzn_aprovador com a PESSOA dela em kzn_mdm_hierarquia.
+ *
+ * Existe porque o aprovador é o ÚNICO papel do sistema que não chega ao
+ * MDM por ID_USUARIO. Dono do Kaizen e membros da equipe vão diretos
+ * (ID_USUARIO_CADASTRO / ID_USUARIO_LIDER / kzn_membros_equipe.ID_USUARIO);
+ * o aprovador vem de kzn_aprovador.CD_MATRICULA. E kzn_aprovador.ID_USUARIO
+ * NÃO serve de atalho: nas linhas novas ele é QUEM CONCEDEU o direito,
+ * não quem aprova (ver POST /aprovadores e idAprovadorPorUsuario).
+ *
+ * Consequência prática, e foi o que quebrou o comunicado: matrícula
+ * errada, em branco ou fora do MDM => CD_EMAIL nulo => o e-mail de
+ * "aguardando sua aprovação" fica sem destinatário e não sai.
+ *
+ * As duas condições, nesta ordem de prioridade:
+ *
+ *   1. CD_MATRICULA casando com a do MDM. É o caminho oficial.
+ *   2. a.ID_USUARIO = x.ID_USUARIO, e SOMENTE quando a.CD_MATRICULA
+ *      está vazia. Linha sem matrícula nenhuma é das ANTIGAS, de quando
+ *      a coluna ID_USUARIO ainda guardava o próprio aprovador.
+ *
+ * O ramo 2 é estreito de propósito. Matrícula PREENCHIDA que não casa é
+ * erro de dado, não linha antiga — e ali ID_USUARIO é o concedente.
+ * Cair nele mandaria o "aprove este Kaizen" para a pessoa errada, o que
+ * é pior que não mandar. Nesse caso o comunicado fica sem destinatário e
+ * o log diz exatamente isso (ver dadosDoComunicado).
+ */
+const PESSOA_DO_APROVADOR = (a) =>
+  `(${MATRICULA_IGUAL("x.CD_MATRICULA", `${a}.CD_MATRICULA`)}
+     OR (x.ID_USUARIO = ${a}.ID_USUARIO
+         AND (${a}.CD_MATRICULA IS NULL OR LTRIM(RTRIM(CAST(${a}.CD_MATRICULA AS VARCHAR(30)))) = '')))`;
+
+/** Ordem que põe o casamento por MATRÍCULA na frente do casamento por
+ *  ID_USUARIO — para a linha que satisfaz os dois vencer pelo caminho
+ *  oficial. Vai junto com PESSOA_DO_APROVADOR em todo OUTER APPLY. */
+const ORDEM_PESSOA_DO_APROVADOR = (a) =>
+  `CASE WHEN ${MATRICULA_IGUAL("x.CD_MATRICULA", `${a}.CD_MATRICULA`)} THEN 0 ELSE 1 END, x.ID_TIPO_USUARIO`;
+
 // Mesmo schema dos aprovadores; tabela própria, também sobrescrevível
 // por env var caso o nome real divirja do padrão.
 const DB_CATEGORIA_TABLE = safeIdentifier(process.env.AZURE_SQL_CATEGORIA_TABLE, "kzn_categoria");
@@ -907,8 +945,8 @@ apiRouter.get("/aprovadores", async (req, res) => {
          SELECT TOP (1) x.ID_USUARIO, x.NM_USUARIO, x.CD_EMAIL,
                         x.NM_POSICAO, x.NM_ESTADO, x.NM_CIDADE
          FROM ${FULL_MDM_TABLE} x
-         WHERE ${MATRICULA_IGUAL("x.CD_MATRICULA", "a.CD_MATRICULA")}
-         ORDER BY x.ID_TIPO_USUARIO
+         WHERE ${PESSOA_DO_APROVADOR("a")}
+         ORDER BY ${ORDEM_PESSOA_DO_APROVADOR("a")}
        ) m
        ORDER BY m.NM_USUARIO, a.ID_APROVADOR`,
       [["limite", sql.Int, limite]]
@@ -3981,6 +4019,8 @@ async function dadosDoComunicado(idKaizen, idUsuarioAcao) {
             autor.NM_USUARIO AS NM_AUTOR, autor.CD_EMAIL AS EMAIL_AUTOR,
             autor.NM_SITE, autor.NM_CIDADE, autor.NM_ESTADO,
             aprov.NM_USUARIO AS NM_APROVADOR, aprov.CD_EMAIL AS EMAIL_APROVADOR,
+            aprov.ID_USUARIO AS ID_USUARIO_APROVADOR, aprov.MATRICULA_APROVADOR,
+            p.ID_APROVADOR, ISNULL(p.ID_USUARIO_CADASTRO, p.ID_USUARIO_LIDER) AS ID_USUARIO_AUTOR,
             acao.NM_USUARIO AS NM_ACAO,
             catPt.NM_CATEGORIA AS CATEGORIA_PT, catEn.NM_CATEGORIA AS CATEGORIA_EN,
             stPt.NM_STATUS AS STATUS_PT, stEn.NM_STATUS AS STATUS_EN
@@ -3992,11 +4032,11 @@ async function dadosDoComunicado(idKaizen, idUsuarioAcao) {
           ORDER BY x.ID_TIPO_USUARIO
        ) autor
        OUTER APPLY (
-         SELECT TOP (1) z.NM_USUARIO, z.CD_EMAIL
+         SELECT TOP (1) x.NM_USUARIO, x.CD_EMAIL, x.ID_USUARIO, a.CD_MATRICULA AS MATRICULA_APROVADOR
            FROM ${FULL_TABLE_NAME} a
-           JOIN ${FULL_MDM_TABLE} z ON ${MATRICULA_IGUAL("z.CD_MATRICULA", "a.CD_MATRICULA")}
+           JOIN ${FULL_MDM_TABLE} x ON ${PESSOA_DO_APROVADOR("a")}
           WHERE a.ID_APROVADOR = p.ID_APROVADOR
-          ORDER BY z.ID_TIPO_USUARIO
+          ORDER BY ${ORDEM_PESSOA_DO_APROVADOR("a")}
        ) aprov
        OUTER APPLY (
          SELECT TOP (1) y.NM_USUARIO FROM ${FULL_MDM_TABLE} y
@@ -4012,6 +4052,29 @@ async function dadosDoComunicado(idKaizen, idUsuarioAcao) {
   );
   const k = r.recordset[0];
   if (!k) return null;
+
+  // Sem estas linhas, "o e-mail não chegou" não tinha como ser
+  // investigado: o comunicado sem destinatário era descartado em
+  // silêncio, e do lado de fora isso é idêntico a "o servidor nem
+  // tentou". Cada aviso abaixo diz QUEM ficou sem e-mail e por quê.
+  if (!k.EMAIL_AUTOR) {
+    console.warn(
+      `[email] ID_KAIZEN=${idKaizen}: o AUTOR (ID_USUARIO=${k.ID_USUARIO_AUTOR}) não tem CD_EMAIL em ` +
+      `${FULL_MDM_TABLE}. Confira: SELECT CD_EMAIL FROM ${FULL_MDM_TABLE} WHERE ID_USUARIO = ${k.ID_USUARIO_AUTOR}`
+    );
+  }
+  if (!k.EMAIL_APROVADOR) {
+    const m = k.MATRICULA_APROVADOR;
+    const pista = m == null || String(m).trim() === ""
+      ? `a linha ID_APROVADOR=${k.ID_APROVADOR} de ${FULL_TABLE_NAME} está SEM CD_MATRICULA`
+      : `a CD_MATRICULA "${m}" da linha ID_APROVADOR=${k.ID_APROVADOR} não existe em ${FULL_MDM_TABLE}`;
+    console.warn(
+      `[email] ID_KAIZEN=${idKaizen}: o APROVADOR ficou sem e-mail — ${pista}. ` +
+      `O aprovador é o único papel que chega ao MDM pela matrícula, não pelo ID_USUARIO ` +
+      `(kzn_aprovador.ID_USUARIO é quem CONCEDEU o direito). ` +
+      `Confira: SELECT a.ID_APROVADOR, a.CD_MATRICULA, a.ID_USUARIO FROM ${FULL_TABLE_NAME} a WHERE a.ID_APROVADOR = ${k.ID_APROVADOR}`
+    );
+  }
 
   const equipe = await runQuery(
     `SELECT DISTINCT m.CD_EMAIL FROM ${FULL_MEMBROS_TABLE} me
@@ -4138,7 +4201,17 @@ async function entregarAvisosPeloServidor(avisos, req) {
   const responderPara = emailUsuario && EMAIL_VALIDO.test(emailUsuario) ? emailUsuario : undefined;
 
   for (const aviso of lista) {
-    if (!aviso || aviso.erro || !Array.isArray(aviso.para) || !aviso.para.length) continue;
+    // Comunicado sem destinatário era PULADO EM SILÊNCIO aqui. Do lado
+    // de fora, isso é indistinguível de "o servidor nem tentou enviar" —
+    // e foi o que escondeu a falta de e-mail do aprovador. Agora diz.
+    if (!aviso || aviso.erro) {
+      console.warn(`[email] comunicado descartado sem enviar: ${(aviso && aviso.erro) || "aviso vazio"}`);
+      continue;
+    }
+    if (!Array.isArray(aviso.para) || !aviso.para.length) {
+      console.warn(`[email] comunicado "${aviso.chave}" sem destinatário — nada a enviar.`);
+      continue;
+    }
     try {
       const info = await transporte.enviarEmail({
         para: aviso.para,
@@ -4537,8 +4610,8 @@ apiRouter.get("/kaizens/:id/edicao", async (req, res) => {
            OUTER APPLY (
              SELECT TOP (1) x.ID_USUARIO, x.NM_USUARIO
                FROM ${FULL_MDM_TABLE} x
-              WHERE ${MATRICULA_IGUAL("x.CD_MATRICULA", "apr.CD_MATRICULA")}
-              ORDER BY x.ID_TIPO_USUARIO
+              WHERE ${PESSOA_DO_APROVADOR("apr")}
+              ORDER BY ${ORDEM_PESSOA_DO_APROVADOR("apr")}
            ) aprPessoa
            LEFT JOIN ${FULL_STATUS_TABLE} st ON st.ID_STATUS = p.ID_STATUS AND st.ID_IDIOMA = @idIdioma
           WHERE p.ID_KAIZEN = @idKaizen`,
