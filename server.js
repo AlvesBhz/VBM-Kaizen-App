@@ -4796,11 +4796,30 @@ apiRouter.post("/kaizens/:id/aviso", (req, res) => {
   const chave = String((req.body && req.body.chave) || "").slice(0, 60);
   const enviado = !!(req.body && req.body.enviado);
   const motivo = String((req.body && req.body.motivo) || "").slice(0, 300);
+  // Destinatários vêm da tela só para o diagnóstico; são filtrados
+  // porque é conteúdo de requisição, não dado de confiança.
+  const para = (Array.isArray(req.body && req.body.para) ? req.body.para : [])
+    .slice(0, 50)
+    .map((e) => String(e || "").trim().slice(0, 254))
+    .filter((e) => e.includes("@"));
+
   if (enviado) {
-    console.log(`[email] ${chave || idKaizen}: enviado pela tela (perfil do aprovador).`);
+    console.log(`[email] ${chave || idKaizen}: enviado pela tela (perfil do usuário logado).`);
   } else {
-    console.error(`[email] ${chave || idKaizen}: NAO enviado — ${motivo || "sem detalhe"}`);
+    console.error(`[email] ${chave || idKaizen}: NAO enviado pela tela — ${motivo || "sem detalhe"}`);
   }
+  // Entra no MESMO histórico dos envios do servidor. Sem isto, o plano B
+  // (envio pela tela) seria o único caminho invisível em
+  // GET /api/email/status — justamente o que está em uso enquanto as
+  // liberações do service principal não saem.
+  registrarNoHistorico({
+    origem: "tela (Graph do usuário logado)",
+    chave: chave || null,
+    destinatarios: para,
+    assunto: null,
+    enviado,
+    motivo: enviado ? null : (motivo || "sem detalhe"),
+  });
   res.json({ ok: true });
 });
 

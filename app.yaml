@@ -126,8 +126,18 @@ env:
   #                            jeitos (Mail.Send.Shared cobre os dois).
   #                            Para voltar ao normal, remova a variável.
   #
-  #   - name: 'KAIZEN_EMAIL_DO_USUARIO'
-  #     value: 'true'
+  # ATIVO — PLANO B, enquanto as liberações do service principal não saem.
+  # Com 'true', o comunicado sai pela caixa de QUEM ESTÁ USANDO o sistema
+  # (/me/sendMail), pelo navegador. Não depende de "Enviar Como", de
+  # permissão de aplicação nem de consentimento de administrador: cada
+  # pessoa envia pela própria caixa e autoriza por si, uma vez por sessão,
+  # na faixa "Autorize o envio de e-mails" que aparece na tela.
+  #
+  # Para voltar ao envio pelo servidor, preencha o bloco GRAPH_* abaixo:
+  # ele tem prioridade, e aí esta variável deixa de ter efeito sobre os
+  # comunicados (o remetente passa a ser a caixa do programa).
+  - name: 'KAIZEN_EMAIL_DO_USUARIO'
+    value: 'true'
 
   # ══ ENVIO DE E-MAIL PELO SERVIDOR — ESCOLHA UM DOS DOIS BLOCOS ══
   #
