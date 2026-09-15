@@ -90,6 +90,14 @@ DECLARE @i INT, @n INT, @tab SYSNAME, @viaLog BIT,
    DISTINCT importa: desde que a hierarquia ganhou também a FK composta
    (ID_KAIZEN, ID_USUARIO_LIDER), uma mesma tabela aparece mais de uma vez
    em sys.foreign_keys.
+
+   COLLATE DATABASE_DEFAULT nas comparações de nome é OBRIGATÓRIO, não
+   estilo: OBJECT_SCHEMA_NAME()/OBJECT_NAME() devolvem texto na collation
+   do CATÁLOGO (ex.: Latin1_General_CI_AS), enquanto a coluna SYSNAME da
+   variável de tabela herda a collation do BANCO (ex.:
+   SQL_Latin1_General_CP1_CI_AS). Sem o COLLATE, o '=' falha com
+   "Cannot resolve the collation conflict" em qualquer servidor onde as
+   duas difiram.
    ===================================================================== */
 SELECT @naoCobertas = COUNT(*)
 FROM (
@@ -98,7 +106,8 @@ FROM (
     WHERE  fk.referenced_object_id = OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA')
       AND  fk.parent_object_id <> OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA')
 ) x
-WHERE NOT EXISTS (SELECT 1 FROM @dependentes d WHERE UPPER(d.TABELA) = UPPER(x.TAB));
+WHERE NOT EXISTS (SELECT 1 FROM @dependentes d
+                  WHERE UPPER(d.TABELA) COLLATE DATABASE_DEFAULT = UPPER(x.TAB) COLLATE DATABASE_DEFAULT);
 
 IF @naoCobertas > 0
 BEGIN
@@ -108,7 +117,8 @@ BEGIN
     WHERE  fk.referenced_object_id = OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA')
       AND  fk.parent_object_id <> OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA')
       AND  NOT EXISTS (SELECT 1 FROM @dependentes d
-                       WHERE UPPER(d.TABELA) = UPPER(OBJECT_SCHEMA_NAME(fk.parent_object_id) + '.' + OBJECT_NAME(fk.parent_object_id)));
+                       WHERE UPPER(d.TABELA) COLLATE DATABASE_DEFAULT
+                           = UPPER(OBJECT_SCHEMA_NAME(fk.parent_object_id) + '.' + OBJECT_NAME(fk.parent_object_id)) COLLATE DATABASE_DEFAULT);
 
     RAISERROR('Abortado: %d tabela(s) têm FK pra CI.KZN_PEDRAVISAOCONSOLIDADA e NÃO estão na lista deste script (listada[s] acima). Excluir assim falharia por violação de FK no passo final. Acrescente-a(s) a @dependentes.', 16, 1, @naoCobertas);
     RETURN;

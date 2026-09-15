@@ -86,7 +86,12 @@ BEGIN
     RETURN;
 END
 
-/* Ordem-alvo: as 24 colunas exatamente como aparecem no DER.
+/* COLLATE DATABASE_DEFAULT nas comparacoes com sys.columns.name e
+   OBRIGATORIO: o catalogo usa a collation do CATALOGO e a coluna SYSNAME
+   desta variavel de tabela herda a do BANCO. Onde as duas diferem, o '='
+   falha com "Cannot resolve the collation conflict".
+
+   Ordem-alvo: as 24 colunas exatamente como aparecem no DER.
    DT_CRIACAO nao esta aqui: foi removida da tabela (ver
    remover_dt_criacao_pvc.sql), e com isso DS_MOTIVO passou da 23a para a
    22a posicao. RODE O remover_dt_criacao_pvc.sql ANTES DESTE: com a
@@ -111,22 +116,22 @@ INSERT INTO @ordem (POS, NM) VALUES
    descompasso (coluna faltando ou coluna extra que a lista nao preve)
    significaria perda silenciosa de dados na copia - entao aborta. */
 SELECT @qt = COUNT(*) FROM @ordem o
-WHERE NOT EXISTS (SELECT 1 FROM sys.columns c WHERE c.object_id = @objId AND c.name = o.NM);
+WHERE NOT EXISTS (SELECT 1 FROM sys.columns c WHERE c.object_id = @objId AND c.name COLLATE DATABASE_DEFAULT = o.NM COLLATE DATABASE_DEFAULT);
 IF @qt > 0
 BEGIN
     SELECT COLUNA_ESPERADA_QUE_NAO_EXISTE = o.NM FROM @ordem o
-    WHERE NOT EXISTS (SELECT 1 FROM sys.columns c WHERE c.object_id = @objId AND c.name = o.NM)
+    WHERE NOT EXISTS (SELECT 1 FROM sys.columns c WHERE c.object_id = @objId AND c.name COLLATE DATABASE_DEFAULT = o.NM COLLATE DATABASE_DEFAULT)
     ORDER BY o.POS;
     RAISERROR('Abortado: %d coluna(s) da ordem-alvo nao existem na tabela (lista acima). Rode o atualizar_pvc_e_logs_in_place.sql antes.', 16, 1, @qt);
     RETURN;
 END
 
 SELECT @qt = COUNT(*) FROM sys.columns c
-WHERE c.object_id = @objId AND NOT EXISTS (SELECT 1 FROM @ordem o WHERE o.NM = c.name);
+WHERE c.object_id = @objId AND NOT EXISTS (SELECT 1 FROM @ordem o WHERE o.NM COLLATE DATABASE_DEFAULT = c.name COLLATE DATABASE_DEFAULT);
 IF @qt > 0
 BEGIN
     SELECT COLUNA_NA_TABELA_FORA_DA_ORDEM_ALVO = c.name FROM sys.columns c
-    WHERE c.object_id = @objId AND NOT EXISTS (SELECT 1 FROM @ordem o WHERE o.NM = c.name)
+    WHERE c.object_id = @objId AND NOT EXISTS (SELECT 1 FROM @ordem o WHERE o.NM COLLATE DATABASE_DEFAULT = c.name COLLATE DATABASE_DEFAULT)
     ORDER BY c.column_id;
     RAISERROR('Abortado: a tabela tem %d coluna(s) que a ordem-alvo nao preve (lista acima). Copiar assim perderia esses dados - atualize a lista @ordem antes.', 16, 1, @qt);
     RETURN;
@@ -160,7 +165,7 @@ END
 
 /* E0.4 - idempotencia: ja esta na ordem certa? */
 IF NOT EXISTS (
-    SELECT 1 FROM sys.columns c JOIN @ordem o ON o.NM = c.name
+    SELECT 1 FROM sys.columns c JOIN @ordem o ON o.NM COLLATE DATABASE_DEFAULT = c.name COLLATE DATABASE_DEFAULT
     WHERE c.object_id = @objId AND c.column_id <> o.POS)
 BEGIN
     PRINT 'Nada a fazer - as 24 colunas ja estao na ordem do DER (ID_STATUS na 9a, DS_MOTIVO na 22a).';
@@ -305,7 +310,7 @@ SELECT @cols = STUFF((
            + ISNULL(' COLLATE ' + c.collation_name, '')
            + CASE WHEN c.is_nullable = 1 THEN ' NULL' ELSE ' NOT NULL' END
     FROM   @ordem o
-    JOIN   sys.columns c ON c.object_id = @objId AND c.name = o.NM
+    JOIN   sys.columns c ON c.object_id = @objId AND c.name COLLATE DATABASE_DEFAULT = o.NM COLLATE DATABASE_DEFAULT
     JOIN   sys.types   ty ON ty.user_type_id = c.user_type_id
     ORDER BY o.POS
     FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 1, '');
