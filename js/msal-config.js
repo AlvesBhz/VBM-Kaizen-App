@@ -7,17 +7,19 @@
  * perfil de quem aprovou), preenchê-los em dois lugares seria pedir
  * para as duas telas divergirem. Este arquivo é o único lugar a editar.
  *
- * PENDENTE DE CONFIGURAÇÃO — preencha abaixo com os dados do app
- * registrado em Entra ID > App registrations:
- *   • clientId  = "Application (client) ID"
- *   • authority = "https://login.microsoftonline.com/<TENANT_ID>"
+ * CONFIGURADO com o app registration "IBP" do tenant Vale S.A.
+ *   clientId  = Application (client) ID do IBP
+ *   authority = https://login.microsoftonline.com/<Directory (tenant) ID>
  *
- * No mesmo app registration:
- *   • Authentication > Redirect URI do tipo SPA com a URL das páginas
- *     que usam login (index.html e aprovacao.html).
+ * Nesse app registration já estão cadastrados:
+ *   • Authentication > Redirect URI do tipo SPA para index.html,
+ *     aprovacao.html, kaizen-novo.html e a raiz com barra final (o
+ *     servidor entrega o index.html no domínio puro).
  *   • API permissions (Microsoft Graph, DELEGADAS):
  *       User.Read          — perfil de quem está logado
  *       Mail.Send.Shared    — enviar pela caixa compartilhada
+ *     As duas com "Admin consent required = No": cada usuário autoriza
+ *     por si no primeiro login, sem depender de administrador.
  *
  * A permissão é DELEGADA de propósito: quem autentica é o próprio
  * aprovador, não uma identidade de aplicação. Por isso não há client
@@ -25,16 +27,16 @@
  * precisa ter "Enviar Como" (ou "Enviar em Nome De") na caixa
  * PCI.Base.Metals@Vale.com; sem isso o Graph recusa o envio.
  *
- * Enquanto os placeholders estiverem aqui, nada quebra: o login não é
- * tentado e o aviso da decisão apenas não é enviado (a decisão em si é
+ * Se estes valores voltarem a ser placeholders, nada quebra: o login
+ * não é tentado e o aviso apenas não é enviado (a decisão em si é
  * gravada normalmente).
  */
 (function () {
   'use strict';
 
   var CONFIG = {
-    clientId: 'SEU_CLIENT_ID_AQUI',
-    authority: 'https://login.microsoftonline.com/SEU_TENANT_ID_AQUI'
+    clientId: '9bdd9e46-25fe-4968-b861-ac654cfd046c',
+    authority: 'https://login.microsoftonline.com/7893571b-6c2c-4cef-b4da-7d4b266a0626'
   };
 
   var MSAL_CDN = 'https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js';
