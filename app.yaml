@@ -77,10 +77,16 @@ env:
   #      acumula. Reemita com sp=racwd.
   #
   #   2. O valor abaixo está em TEXTO PURO e dá escrita no container
-  #      inteiro até 2030. Enquanto o SEC-01 não for feito, este arquivo
-  #      é servido publicamente por express.static(__dirname): qualquer
-  #      pessoa com a URL do app baixa o app.yaml e fica com o token.
-  #      Revogue este SAS, emita outro e traga por Secret Scope:
+  #      inteiro até 2030. O DOWNLOAD deste arquivo já foi fechado — o
+  #      server.js recusa servir app.yaml, os .js da raiz, node_modules,
+  #      database e docs (ver ARQUIVOS_DO_SERVIDOR). Antes disso, qualquer
+  #      pessoa com a URL do app baixava este arquivo e ficava com o SAS
+  #      e com a senha do banco.
+  #
+  #      Fechar o download NÃO substitui rotacionar: o token esteve
+  #      exposto enquanto a trava não existia, e segredo em texto puro
+  #      num arquivo versionado continua sendo segredo vazado. Revogue
+  #      este SAS, emita outro com sp=racwd e traga por Secret Scope:
   #
   #        - name: 'AZURE_STORAGE_SAS_TOKEN'
   #          valueFrom: 'azure-storage-sas'
@@ -115,14 +121,42 @@ env:
   #
   #   KAIZEN_EMAIL_DO_USUARIO  'true' faz o comunicado sair pela caixa
   #                            de QUEM ESTÁ USANDO o sistema, em vez da
-  #                            compartilhada. Serve para destravar o
-  #                            envio enquanto o "Enviar Como" em
-  #                            PCI.Base.Metals@Vale.com não é liberado
-  #                            pelo time de Exchange: cada um envia pela
-  #                            própria caixa, então não há permissão a
-  #                            pedir. Mesma permissão delegada dos dois
-  #                            jeitos (Mail.Send.Shared cobre os dois).
+  #                            compartilhada. Evita o "Enviar Como" em
+  #                            PCI.Base.Metals@Vale.com, que depende do
+  #                            time de Exchange: cada um envia pela
+  #                            própria caixa. Mesma permissão delegada
+  #                            dos dois jeitos.
   #                            Para voltar ao normal, remova a variável.
   #
   #   - name: 'KAIZEN_EMAIL_DO_USUARIO'
   #     value: 'true'
+  #
+  # ── O QUE TRAVA O ENVIO HOJE (verificado em 15/09/2026) ──
+  # Nenhum comunicado sai, nem pela caixa compartilhada nem pela própria.
+  # Ao clicar em autorizar, o Entra responde:
+  #
+  #     "Necessidade de aprovação de administrador — IBP precisa de
+  #      permissão para acesso aos recursos em sua organização que
+  #      apenas o administrador pode conceder."
+  #
+  # Ou seja: o LOCATÁRIO não permite que cada pessoa consinta por si,
+  # mesmo para enviar pela própria caixa. KAIZEN_EMAIL_DO_USUARIO='true'
+  # NÃO contorna isso — não adianta declará-la esperando destravar.
+  # (A observação "Admin consent required = No" em js/msal-config.js é
+  # sobre a permissão em si; a política do locatário vem por cima dela.)
+  #
+  # Não há nada a mudar neste arquivo nem no código: a saída é um
+  # administrador do Entra conceder o consentimento. Duas formas:
+  #
+  #   a) DELEGADA — consentimento de administrador para User.Read e
+  #      Mail.Send (ou Mail.Send.Shared) no app registration IBP. Vale
+  #      para todos os usuários, e o envio continua saindo do navegador,
+  #      só quando alguém está com a tela aberta.
+  #
+  #   b) DE APLICAÇÃO — o app envia sozinho, sem ninguém logado. Exige
+  #      um service principal com permissão de APLICAÇÃO Mail.Send
+  #      (consentida por administrador) e uma ApplicationAccessPolicy no
+  #      Exchange restringindo esse SP à caixa do programa. É o caminho
+  #      mais robusto, mas o código dele NÃO está mais neste projeto —
+  #      foi removido no rollback de 15/09/2026 e está no histórico do
+  #      git, na tag 'ponto-antes-do-rollback'.
