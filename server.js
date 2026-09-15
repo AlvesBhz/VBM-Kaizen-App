@@ -38,11 +38,32 @@ const { montarAviso, montarMensagemLivre } = require("./email-kaizen");
 // com o email-kaizen.js acima, que só monta os comunicados automáticos e
 // deixa o envio para o navegador. Aqui a credencial fica no servidor e
 // nunca sai dele — ver o cabeçalho de email-smtp.js.
-const emailSmtp = require("./email-smtp");
+/** Carrega um módulo de envio de e-mail SEM poder derrubar o app.
+ *
+ *  O deploy deste app é upload de arquivos, um a um. Esquecer de subir
+ *  um módulo, ou subir uma versão pela metade, não pode tirar do ar a
+ *  Biblioteca, o Novo Kaizen e as aprovações — que não têm nada a ver
+ *  com e-mail. O canal que faltar simplesmente não entra na escolha de
+ *  transporteDeEmail(), e o motivo fica gritando no log.
+ *
+ *  O dublê devolvido diz "não estou configurado", que é a verdade. */
+function carregarCanalDeEmail(caminho) {
+  try {
+    return require(caminho);
+  } catch (err) {
+    console.error(
+      `[email] canal "${caminho}" indisponível: ${err.message}. ` +
+        `O app continua no ar; só este canal de envio fica fora.`
+    );
+    return { estaConfigurado: () => false, remetente: () => null, LIMITES: null };
+  }
+}
+
+const emailSmtp = carregarCanalDeEmail("./email-smtp");
 // Mesmo papel do email-smtp.js, por outro canal: Microsoft Graph com a
 // identidade de um service principal. É o caminho preferido quando
 // existe — ver transporteDeEmail() abaixo e o cabeçalho de email-graph.js.
-const emailGraph = require("./email-graph");
+const emailGraph = carregarCanalDeEmail("./email-graph");
 
 /** Por onde o servidor envia e-mail, ou null se não há como enviar.
  *
@@ -4630,7 +4651,13 @@ apiRouter.post("/kaizens/:id/aviso", (req, res) => {
 // é bem menor) — e a tela precisa saber o número certo para avisar antes
 // de subir o arquivo. A escolha do canal vem do ambiente e não muda em
 // tempo de execução, por isso resolver uma vez aqui basta.
-const EMAIL_LIMITES = (transporteDeEmail() || emailSmtp).LIMITES;
+// Os limites literais no fim são o caso "nenhum canal disponível": a aba
+// continua abrindo e recusando o envio com "não configurado" em vez de o
+// multer estourar por ler limite de um módulo que não carregou.
+const EMAIL_LIMITES = (transporteDeEmail() || emailSmtp).LIMITES || {
+  maxAnexos: 5, anexoBytes: 3 * 1024 * 1024, totalBytes: 3 * 1024 * 1024,
+  maxDestinatarios: 50, assuntoChars: 200, corpoChars: 20000,
+};
 
 const uploadAnexos = multer({
   storage: multer.memoryStorage(),

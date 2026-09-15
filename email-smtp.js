@@ -45,7 +45,38 @@
  *   internos da infraestrutura".
  */
 
-const nodemailer = require("nodemailer");
+// O nodemailer é OPCIONAL e carregado só quando o SMTP vai ser usado de
+// verdade.
+//
+// Por que não um require no topo: o Databricks App é implantado por
+// UPLOAD DE ARQUIVOS, e não há garantia de que um `npm install` rode com
+// o package.json novo. Com o require aqui em cima, a falta do pacote
+// derrubava o processo inteiro no arranque — a aplicação toda fora do ar
+// (Biblioteca, Novo Kaizen, aprovações) por causa de um canal de e-mail
+// que talvez nem esteja em uso. Foi exatamente o que aconteceu.
+//
+// Agora a ausência do pacote significa só "o canal SMTP não está
+// disponível": estaConfigurado() devolve false, o servidor escolhe outro
+// canal (ver transporteDeEmail em server.js) e o app sobe normalmente.
+let nodemailer = null;
+let nodemailerIndisponivel = null;
+
+function carregarNodemailer() {
+  if (nodemailer) return nodemailer;
+  if (nodemailerIndisponivel) return null;
+  try {
+    nodemailer = require("nodemailer");
+    return nodemailer;
+  } catch (err) {
+    nodemailerIndisponivel = err;
+    console.error(
+      "[email-smtp] o pacote 'nodemailer' não está instalado — o canal SMTP fica indisponível. " +
+        "Rode 'npm install' no ambiente do app (ele está declarado em package.json). " +
+        "Isto NÃO impede o app de funcionar: só o envio por SMTP."
+    );
+    return null;
+  }
+}
 
 const HOST = String(process.env.SMTP_HOST || "").trim();
 const PORTA = Number(process.env.SMTP_PORT || 587);
@@ -68,9 +99,13 @@ const LIMITES = {
 };
 
 /** Está tudo configurado para enviar? A rota usa isto para responder
- *  "recurso indisponível" em vez de estourar na primeira conexão. */
+ *  "recurso indisponível" em vez de estourar na primeira conexão.
+ *
+ *  Inclui a existência do nodemailer: sem o pacote não há como enviar,
+ *  então declarar-se "configurado" faria o servidor escolher este canal
+ *  e falhar no primeiro e-mail, em vez de cair para o canal seguinte. */
 function estaConfigurado() {
-  return Boolean(HOST && USUARIO && SENHA && DE_ENDERECO);
+  return Boolean(HOST && USUARIO && SENHA && DE_ENDERECO && carregarNodemailer());
 }
 
 /** Endereço e nome que vão no "De:". Público de propósito: a tela mostra
@@ -93,8 +128,13 @@ let transporte = null;
  *  Office 365, conta para o limite de autenticações por minuto. */
 function obterTransporte() {
   if (transporte) return transporte;
+  const lib = carregarNodemailer();
+  if (!lib) {
+    throw new ErroDeEnvio("indisponivel",
+      "O envio de e-mail não está configurado nesta aplicação. Procure a área de TI.", 503);
+  }
   const seguro = PORTA === 465; // 465 = TLS desde o primeiro byte
-  transporte = nodemailer.createTransport({
+  transporte = lib.createTransport({
     host: HOST,
     port: PORTA,
     secure: seguro,
