@@ -119,5 +119,46 @@
     }, Promise.resolve([]));
   }
 
-  window.VBMEmail = { enviar: enviar, enviarTodos: enviarTodos };
+  /** Mostra na TELA o motivo de um comunicado não ter saído.
+   *
+   *  Até aqui a falha ia só para o log do servidor (POST .../aviso) e
+   *  quem estava usando o sistema não via nada: o Kaizen era gravado, a
+   *  tela trocava e o e-mail simplesmente não chegava. Sem esse aviso,
+   *  descobrir a causa exigia acesso ao log do app — que quem usa o
+   *  sistema não tem.
+   *
+   *  Não é erro de gravação, e por isso é um toast de ATENÇÃO: o Kaizen
+   *  (ou a decisão) já está salvo. O texto traz o motivo cru vindo do
+   *  Graph ou da MSAL, porque é ele que diz o que fazer — falta de
+   *  consentimento, falta de "Enviar Como", CDN bloqueado. */
+  function avisarNaTela(resultados) {
+    if (typeof showToast !== 'function') return resultados;
+    var falhas = (resultados || []).filter(function (r) {
+      return r && r.enviado === false && r.motivo
+        && r.motivo !== 'já enviado' && r.motivo !== 'sem aviso';
+    });
+    if (!falhas.length) return resultados;
+    var motivo = falhas[0].motivo;
+    var titulo = (window.__i18n && window.__i18n['email.failTitle']) || 'E-mail não enviado';
+    var texto = (window.__i18n && window.__i18n['email.failMsg'])
+      || 'O registro foi salvo normalmente, mas o comunicado não saiu.';
+    showToast('warning', titulo, texto + ' Motivo: ' + motivo, 12000);
+    return resultados;
+  }
+
+  window.VBMEmail = { enviar: enviar, enviarTodos: function (avisos, idKaizen) {
+    // Rastro no console do navegador (F12). O log do servidor já
+    // registra cada envio, mas quem usa o sistema não tem acesso a ele —
+    // e é sempre a primeira pergunta quando "o e-mail não chegou":
+    // quantos comunicados vieram e o que aconteceu com cada um.
+    var lista = Array.isArray(avisos) ? avisos : (avisos ? [avisos] : []);
+    console.info('[VBMEmail] comunicados recebidos do servidor:', lista.length, lista);
+    if (!lista.length) {
+      console.warn('[VBMEmail] o servidor não devolveu comunicado nenhum — nada a enviar.');
+    }
+    return enviarTodos(avisos, idKaizen).then(function (resultados) {
+      console.info('[VBMEmail] resultado do envio:', resultados);
+      return avisarNaTela(resultados);
+    });
+  } };
 })();

@@ -614,7 +614,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 <!-- Aviso da decisão por e-mail: o servidor devolve a mensagem pronta e
      estes dois enviam pelo Graph com o token do aprovador logado. -->
 <script src="js/msal-config.js?v=20260915-1"></script>
-<script src="js/envio-email.js?v=20260910-1"></script>
+<script src="js/envio-email.js?v=20260915-1"></script>
 <script>
 // ─── Aprovação: fila + decisão, ligado ao banco (era mock) ───
 var kaizenSelecionadoId = null;
@@ -1136,6 +1136,8 @@ function atualizarContador() {
       'kd.after': 'Depois',
       'kd.resultsAchieved': 'Resultados Alcançados',
       'ap.eyebrow': 'Autoridade de Aprovação',
+      'email.failTitle': 'E-mail não enviado',
+      'email.failMsg': 'A decisão foi registrada normalmente, mas o comunicado não saiu.',
       'ap.heroTitle': 'APROVAÇÃO',
       'ap.expand': 'Ampliar',
       'ap.expandedTitle': 'Kaizen ampliado',
@@ -1203,6 +1205,8 @@ function atualizarContador() {
       'kd.after': 'After',
       'kd.resultsAchieved': 'Results Achieved',
       'ap.eyebrow': 'Approval Authority',
+      'email.failTitle': 'E-mail not sent',
+      'email.failMsg': 'The decision was recorded normally, but the notice did not go out.',
       'ap.heroTitle': 'APPROVAL',
       'ap.expand': 'Expand',
       'ap.expandedTitle': 'Expanded Kaizen',

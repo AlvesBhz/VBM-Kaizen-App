@@ -1046,7 +1046,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 <!-- Comunicados do cadastro: o servidor devolve as mensagens prontas e
      estes dois enviam pelo Graph com o token de quem está logado. -->
 <script src="js/msal-config.js?v=20260915-1"></script>
-<script src="js/envio-email.js?v=20260910-1"></script>
+<script src="js/envio-email.js?v=20260915-1"></script>
 <script>
 // Garante que a página sempre abra rolada para o topo, exibindo o
 // cabeçalho do wizard por completo (evita restauração de scroll do navegador).
@@ -1221,6 +1221,8 @@ function rotuloPessoa(p) {
       'f.externalTeamHelperDefault': 'Membros externos não têm acesso ao sistema. Adicione até 1.',
       'f.imageBefore': 'Imagem do Antes',
       'f.clickAddPhoto': 'Clique para adicionar foto',
+      'email.failTitle': 'E-mail não enviado',
+      'email.failMsg': 'O registro foi salvo normalmente, mas o comunicado não saiu.',
       'f.photoView': 'Visualizar',
       'f.photoClear': 'Limpar',
       'f.photoFormats': 'PNG, JPG, WEBP até 10MB',
@@ -1380,6 +1382,8 @@ function rotuloPessoa(p) {
       'f.externalTeamHelperDefault': 'External members don\'t have system access. Add up to 1.',
       'f.imageBefore': 'Before Image',
       'f.clickAddPhoto': 'Click to add photo',
+      'email.failTitle': 'E-mail not sent',
+      'email.failMsg': 'The record was saved normally, but the notice did not go out.',
       'f.photoView': 'View',
       'f.photoClear': 'Clear',
       'f.photoFormats': 'PNG, JPG, WEBP up to 10MB',
@@ -3059,10 +3063,20 @@ window.validacaoWizard = (function () {
         var enviando = window.VBMEmail
           ? window.VBMEmail.enviarTodos(resultado.corpo.AVISOS, resultado.corpo.ID_KAIZEN)
           : Promise.resolve([]);
-        var espera = new Promise(function (r) { setTimeout(r, 1800); });
-        Promise.all([enviando.catch(function () {}), espera]).then(function () {
-          window.location.href = 'biblioteca.html';
-        });
+        // 1,8 s quando tudo correu bem — só para o aviso na tela ser
+        // lido. Se algum comunicado NÃO saiu, o VBMEmail mostra um toast
+        // com o motivo, e trocar de página em 1,8 s o cortaria antes de
+        // alguém conseguir ler: nesse caso a espera sobe para 12 s.
+        enviando
+          .catch(function () { return []; })
+          .then(function (resultados) {
+            var falhou = (resultados || []).some(function (r) {
+              return r && r.enviado === false && r.motivo
+                && r.motivo !== 'já enviado' && r.motivo !== 'sem aviso';
+            });
+            return new Promise(function (r) { setTimeout(r, falhou ? 12000 : 1800); });
+          })
+          .then(function () { window.location.href = 'biblioteca.html'; });
       })
       .catch(function (err) {
         showToast('error', 'Erro ao enviar', err.message || 'Não foi possível enviar o Kaizen.');
