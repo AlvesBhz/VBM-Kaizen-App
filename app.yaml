@@ -129,11 +129,59 @@ env:
   #   - name: 'KAIZEN_EMAIL_DO_USUARIO'
   #     value: 'true'
 
-  # ── Envio de e-mail PELA APLICAÇÃO (aba "E-mail" do admin.html) ──
-  # Caminho DIFERENTE do de cima. Ali o e-mail é automático, montado no
-  # servidor e enviado pelo NAVEGADOR com o token do aprovador. Aqui a
-  # pessoa escreve a mensagem na tela e quem envia é o SERVIDOR, por
-  # SMTP, autenticado numa conta de serviço. Ver email-smtp.js.
+  # ══ ENVIO DE E-MAIL PELO SERVIDOR — ESCOLHA UM DOS DOIS BLOCOS ══
+  #
+  # O servidor tenta, nesta ordem: GRAPH_* (service principal), depois
+  # SMTP_*. Não achando nenhum, os comunicados voltam montados para a
+  # TELA, que tenta entregar pelo Graph com o token de quem está logado —
+  # o comportamento antigo, e o que faz o e-mail simplesmente não sair
+  # quando falta "Enviar Como" ou consentimento.
+  #
+  # A linha "[email] canal de envio: ..." no início do log do app diz
+  # qual caminho está valendo. Se ela disser "nenhum", nenhuma variável
+  # abaixo foi lida.
+
+  # ── OPÇÃO 1 (recomendada): Microsoft Graph com SERVICE PRINCIPAL ──
+  # O app envia com a PRÓPRIA identidade: não depende de usuário logado,
+  # de navegador aberto nem de SMTP AUTH (que a Microsoft aposentou no
+  # Exchange Online). É o que faz o comunicado sair no cadastro de um
+  # Kaizen mesmo com ninguém na tela.
+  #
+  # GRAPH_TENANT_ID      diretório (tenant) do Entra
+  # GRAPH_CLIENT_ID      Application (client) ID do service principal
+  # GRAPH_CLIENT_SECRET  segredo do service principal — SEMPRE valueFrom
+  # GRAPH_REMETENTE      caixa de onde o e-mail sai
+  #
+  # ANTES DE FUNCIONAR, duas liberações no Entra/Exchange (não dá para
+  # fazer por código, e sem elas o envio volta "sem permissão"):
+  #   1. Permissão de APLICAÇÃO (não delegada) Mail.Send do Microsoft
+  #      Graph no app registration, COM consentimento do administrador.
+  #   2. Uma ApplicationAccessPolicy no Exchange restringindo este
+  #      service principal à caixa do programa. Mail.Send de aplicação
+  #      vale para TODAS as caixas do locatário por padrão — peça a
+  #      política junto, é o que costuma destravar a aprovação da
+  #      segurança da informação.
+  #
+  #   - name: 'GRAPH_TENANT_ID'
+  #     value: '7893571b-6c2c-4cef-b4da-7d4b266a0626'
+  #   - name: 'GRAPH_CLIENT_ID'
+  #     value: '<Application (client) ID do service principal>'
+  #   - name: 'GRAPH_CLIENT_SECRET'
+  #     valueFrom: 'graph-client-secret'
+  #   - name: 'GRAPH_REMETENTE'
+  #     value: 'PCI.Base.Metals@Vale.com'
+  #
+  # O segredo já está num Azure Key Vault? Então NÃO copie o valor para
+  # cá. O Azure Databricks cria Secret Scope APOIADO EM KEY VAULT: o
+  # scope aponta para o cofre e o valor continua lá, com a rotação e a
+  # auditoria do cofre. Depois é só referenciar o scope no valueFrom.
+
+  # ── OPÇÃO 2: SMTP (aba "E-mail" do admin.html e comunicados) ──
+  # Só vale se o bloco GRAPH_* acima NÃO estiver preenchido. Serve para
+  # instalação com relay SMTP próprio (um host interno da empresa). Com
+  # Exchange Online, confirme antes com o time de Exchange se a submissão
+  # autenticada por senha ainda é aceita — a Microsoft aposentou a
+  # autenticação básica nesse canal, e nesse caso a OPÇÃO 1 é o caminho.
   #
   # SMTP_HOST       ex.: smtp.office365.com
   # SMTP_PORT       587 (STARTTLS, padrão) ou 465 (TLS direto)

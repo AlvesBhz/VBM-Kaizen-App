@@ -39,6 +39,40 @@ const { montarAviso, montarMensagemLivre } = require("./email-kaizen");
 // deixa o envio para o navegador. Aqui a credencial fica no servidor e
 // nunca sai dele — ver o cabeçalho de email-smtp.js.
 const emailSmtp = require("./email-smtp");
+// Mesmo papel do email-smtp.js, por outro canal: Microsoft Graph com a
+// identidade de um service principal. É o caminho preferido quando
+// existe — ver transporteDeEmail() abaixo e o cabeçalho de email-graph.js.
+const emailGraph = require("./email-graph");
+
+/** Por onde o servidor envia e-mail, ou null se não há como enviar.
+ *
+ *  ORDEM, e o porquê dela:
+ *
+ *    1. Graph com service principal. É o canal suportado hoje pela
+ *       Microsoft para "a aplicação envia sozinha": não depende de
+ *       usuário logado, não depende do navegador e não depende de SMTP
+ *       AUTH — que a Microsoft aposentou e que em muitos locatários já
+ *       não aceita senha nenhuma.
+ *    2. SMTP. Fica para instalação que tenha um relay próprio (um host
+ *       interno da empresa, por exemplo) em vez do Exchange Online.
+ *    3. null. Aí os comunicados voltam montados na resposta e a TELA
+ *       entrega pelo Graph com o token de quem está logado, como sempre
+ *       foi (ver js/envio-email.js).
+ *
+ *  Os dois módulos expõem a mesma interface de propósito — quem chama
+ *  não sabe, e não precisa saber, qual está em uso. */
+function transporteDeEmail() {
+  if (emailGraph.estaConfigurado()) return emailGraph;
+  if (emailSmtp.estaConfigurado()) return emailSmtp;
+  return null;
+}
+
+/** Nome do canal, só para log e diagnóstico. */
+function nomeDoTransporte() {
+  if (emailGraph.estaConfigurado()) return "Graph (service principal)";
+  if (emailSmtp.estaConfigurado()) return "SMTP";
+  return "nenhum (a tela entrega pelo Graph do usuário logado)";
+}
 
 const app = express();
 
@@ -502,8 +536,15 @@ app.use(async (req, res, next) => {
 // Lista de negação por PADRÃO, não por nome, para um arquivo novo do
 // servidor já nascer protegido. Nada do que a tela carrega casa com
 // estes padrões — as páginas usam css/, js/ e assets/.
+//
+// A primeira regra é a que importa mais: QUALQUER .js solto na raiz. A
+// versão anterior desta lista nomeava os módulos um a um, e bastou
+// acrescentar o email-graph.js para ele nascer baixável — o teste pegou.
+// Nome de arquivo é a coisa errada para basear uma trava de segurança:
+// a lista envelhece em silêncio. Todo script que a TELA usa vive em
+// js/, então "raiz = servidor" é a regra certa aqui.
 const ARQUIVOS_DO_SERVIDOR = [
-  /^\/(server|email-smtp|email-kaizen|azure-blob|databricks-fs)\.js$/i,
+  /^\/[^/]+\.js$/i,
   /^\/app\.ya?ml$/i,
   /^\/package(-lock)?\.json$/i,
   /^\/\.env/i,
@@ -4068,7 +4109,8 @@ async function avisosDoCadastro(idKaizen, idUsuario) {
  *  banco já aconteceu. */
 async function entregarAvisosPeloServidor(avisos, req) {
   const lista = Array.isArray(avisos) ? avisos : [];
-  if (!lista.length || !emailSmtp.estaConfigurado()) return lista;
+  const transporte = transporteDeEmail();
+  if (!lista.length || !transporte) return lista;
 
   const perfil = await perfilDeAcesso(req);
   const emailUsuario = req.get("X-Forwarded-Email") || null;
@@ -4077,7 +4119,7 @@ async function entregarAvisosPeloServidor(avisos, req) {
   for (const aviso of lista) {
     if (!aviso || aviso.erro || !Array.isArray(aviso.para) || !aviso.para.length) continue;
     try {
-      const info = await emailSmtp.enviarEmail({
+      const info = await transporte.enviarEmail({
         para: aviso.para,
         assunto: aviso.assunto,
         html: aviso.html,
@@ -4583,7 +4625,12 @@ apiRouter.post("/kaizens/:id/aviso", (req, res) => {
 // Databricks Apps reescreve o cabeçalho a cada requisição, logo não é
 // forjável pelo navegador), a mesma fonte que já autoriza toda a API.
 
-const EMAIL_LIMITES = emailSmtp.LIMITES;
+// Limites do canal EM USO. Graph e SMTP não aceitam o mesmo tamanho de
+// anexo (o Graph manda o arquivo em base64 dentro do JSON, então o teto
+// é bem menor) — e a tela precisa saber o número certo para avisar antes
+// de subir o arquivo. A escolha do canal vem do ambiente e não muda em
+// tempo de execução, por isso resolver uma vez aqui basta.
+const EMAIL_LIMITES = (transporteDeEmail() || emailSmtp).LIMITES;
 
 const uploadAnexos = multer({
   storage: multer.memoryStorage(),
@@ -4706,9 +4753,10 @@ const ENVIOS_EM_ANDAMENTO = new Set();
  *  valores é segredo; host, usuário e senha do SMTP não estão aqui e não
  *  existe rota que os devolva. */
 apiRouter.get("/email/config", (req, res) => {
+  const transporte = transporteDeEmail();
   res.json({
-    disponivel: emailSmtp.estaConfigurado(),
-    remetente: emailSmtp.estaConfigurado() ? emailSmtp.remetente() : null,
+    disponivel: !!transporte,
+    remetente: transporte ? transporte.remetente() : null,
     limites: EMAIL_LIMITES,
   });
 });
@@ -4716,8 +4764,9 @@ apiRouter.get("/email/config", (req, res) => {
 apiRouter.post("/email", receberAnexos, async (req, res) => {
   const perfil = await perfilDeAcesso(req);
   const emailUsuario = req.get("X-Forwarded-Email") || null;
+  const transporte = transporteDeEmail();
 
-  if (!emailSmtp.estaConfigurado()) {
+  if (!transporte) {
     return res.status(503).json({
       error: "O envio de e-mail não está configurado nesta aplicação. Procure a área de TI.",
       codigo: "indisponivel",
@@ -4807,7 +4856,7 @@ apiRouter.post("/email", receberAnexos, async (req, res) => {
   };
 
   try {
-    const info = await emailSmtp.enviarEmail({
+    const info = await transporte.enviarEmail({
       para: para.lista,
       cc: cc.lista,
       cco: cco.lista,
@@ -4866,4 +4915,10 @@ const PORT = process.env.DATABRICKS_APP_PORT || process.env.PORT || 8000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`[kaizen] servidor rodando em 0.0.0.0:${PORT}`);
   console.log(`[kaizen] tabela alvo: ${FULL_TABLE_NAME} @ ${DB_SERVER || "(AZURE_SQL_SERVER não configurado)"}`);
+  // Sem esta linha, "o e-mail não chegou" e "o servidor nem tentou
+  // enviar" ficam indistinguíveis no log — e foi exatamente essa dúvida
+  // que custou tempo no cadastro que não disparou comunicado.
+  const canal = transporteDeEmail();
+  console.log(`[email] canal de envio: ${nomeDoTransporte()}` +
+              (canal ? ` — caixa ${canal.remetente().endereco}` : ""));
 });
