@@ -89,12 +89,50 @@
   // ------------------------------------------------------------------
 
   var faixa = null;
+  var CHAVE_BLOQUEIO = 'vbm-consentimento-bloqueado';
+
+  /** O locatário exige aprovação de administrador? Guardado na sessão
+   *  para a faixa não reaparecer a cada página pedindo algo que esta
+   *  pessoa não tem como conceder. */
+  function consentimentoBloqueado() {
+    try { return sessionStorage.getItem(CHAVE_BLOQUEIO) === '1'; }
+    catch (e) { return false; }
+  }
+  function marcarConsentimentoBloqueado() {
+    try { sessionStorage.setItem(CHAVE_BLOQUEIO, '1'); } catch (e) { /* modo privado */ }
+  }
+
+  /** O erro é "só um administrador pode conceder", ou é a falta de
+   *  sessão de sempre?
+   *
+   *  A diferença importa e é fácil de errar: `interaction_required` e
+   *  `login_required` são o caso NORMAL de quem ainda não entrou — quem
+   *  os tratasse como bloqueio esconderia a faixa de autorização de
+   *  todo mundo no primeiro acesso, e aí ninguém mais conseguiria
+   *  autorizar. Por isso só os códigos de CONSENTIMENTO entram aqui.
+   *
+   *  AADSTS65001 é o código do Entra para "o usuário ou o administrador
+   *  não consentiu"; com o consentimento de usuário desligado no
+   *  locatário, é o que aparece como "Necessidade de aprovação de
+   *  administrador". */
+  function ehConsentimentoDeAdministrador(msg) {
+    var t = String(msg || '');
+    // AADSTS65004 / access_denied = a pessoa clicou em "Retornar ao
+    // aplicativo sem conceder autorização" na tela de consentimento.
+    // Contam como bloqueio: é o que sobra para quem vê "Necessidade de
+    // aprovação de administrador" e não tem como concedê-la.
+    // user_cancelled (fechou a janela) NÃO conta — pode ser engano, e a
+    // faixa deve continuar disponível para tentar de novo.
+    if (/user_cancelled|user_canceled/i.test(t)) return false;
+    return /AADSTS65001|AADSTS65004|AADSTS90094|consent_required|admin[_ ]consent|access_denied|aprova(ç|c)(ã|a)o de administrador/i
+      .test(t);
+  }
 
   /** Faixa discreta no rodapé pedindo a autorização. Montada em
    *  JavaScript de propósito: assim vale nas duas telas que enviam
    *  e-mail sem precisar mexer no HTML de nenhuma delas. */
   function mostrarFaixaAutorizacao(motivo) {
-    if (faixa) return;
+    if (faixa || consentimentoBloqueado()) return;
     faixa = document.createElement('div');
     faixa.id = 'faixaAutorizacaoEmail';
     faixa.style.cssText =
@@ -130,11 +168,29 @@
           }
         })
         .catch(function (err) {
+          var msg = String((err && err.message) || '');
+          // O Entra recusa a autorização quando o LOCATÁRIO não deixa
+          // cada pessoa consentir por si ("Necessidade de aprovação de
+          // administrador"). Não adianta tentar de novo: é liberação de
+          // administrador, não erro de quem está usando. A faixa some
+          // pelo resto da sessão e o comunicado passa a sair pelo envio
+          // manual (ver mostrarEnvioManual).
+          if (ehConsentimentoDeAdministrador(msg)) {
+            marcarConsentimentoBloqueado();
+            esconderFaixa();
+            if (typeof showToast === 'function') {
+              showToast('warning', 'Autorização pendente na TI',
+                'Sua organização exige aprovação de um administrador para o aplicativo enviar e-mails. ' +
+                'Até lá, ao salvar um Kaizen o sistema abre o comunicado pronto para você copiar e enviar pelo Outlook.',
+                14000);
+            }
+            return;
+          }
           botao.disabled = false;
           botao.textContent = 'Autorizar';
           if (typeof showToast === 'function') {
             showToast('error', 'Não foi possível autorizar',
-              'Verifique se o navegador bloqueou a janela do Microsoft. Motivo: ' + err.message, 12000);
+              'Verifique se o navegador bloqueou a janela da Microsoft. Motivo: ' + msg, 12000);
           }
         });
     });
@@ -180,7 +236,10 @@
     window.VBMMsal.obterInstancia()
       .then(function (app) { return obterTokenSilencioso(app, ESCOPO_PROPRIA_CAIXA); })
       .then(function () { console.info('[VBMEmail] autorizacao de e-mail ja concedida nesta sessao.'); })
-      .catch(function (err) { mostrarFaixaAutorizacao(err && err.message); });
+      .catch(function (err) {
+        if (ehConsentimentoDeAdministrador(err && err.message)) marcarConsentimentoBloqueado();
+        mostrarFaixaAutorizacao(err && err.message);
+      });
   }
 
   /**
@@ -228,6 +287,11 @@
         // Mostra a faixa para a pessoa autorizar e reenviar — e solta a
         // chave, senão o comunicado ficaria travado como "já enviado".
         delete enviados[aviso.chave];
+        // Vindo daqui o erro também revela o bloqueio do locatário — e
+        // é o caminho mais comum, porque o envio acontece antes de
+        // alguém clicar na faixa. Sem marcar aqui, a faixa continuaria
+        // pedindo, a cada página, algo que esta pessoa não pode conceder.
+        if (ehConsentimentoDeAdministrador(err && err.message)) marcarConsentimentoBloqueado();
         mostrarFaixaAutorizacao(err && err.message);
         throw new Error('envio não autorizado nesta sessão: ' + (err && err.message));
       })
@@ -277,14 +341,176 @@
 
   /** Envia a lista de comunicados que veio na resposta (cadastro manda
    *  dois: equipe e aprovador; decisão manda um). Em sequência, não em
-   *  paralelo: o token é o mesmo e o primeiro envio já o deixa em cache. */
+   *  paralelo: o token é o mesmo e o primeiro envio já o deixa em cache.
+   *
+   *  Cada resultado carrega o AVISO junto: quando o envio automático
+   *  falha, é dele que sai o conteúdo do envio manual. */
   function enviarTodos(avisos, idKaizen) {
     var lista = Array.isArray(avisos) ? avisos : (avisos ? [avisos] : []);
     return lista.reduce(function (fila, aviso) {
       return fila.then(function (acc) {
-        return enviar(aviso, idKaizen).then(function (r) { return acc.concat([r]); });
+        return enviar(aviso, idKaizen).then(function (r) {
+          r.aviso = aviso;
+          return acc.concat([r]);
+        });
       });
     }, Promise.resolve([]));
+  }
+
+  // ------------------------------------------------------------------
+  // Envio MANUAL — a saída quando o automático não é permitido
+  // ------------------------------------------------------------------
+  // Não depende de token, de consentimento nem de liberação nenhuma: a
+  // pessoa copia o comunicado pronto e cola no Outlook. É o suficiente
+  // para o programa não parar enquanto a autorização do Entra não sai.
+
+  function textoSimples(html) {
+    var d = document.createElement('div');
+    d.innerHTML = String(html || '');
+    return (d.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
+  }
+
+  /** Copia o comunicado COM FORMATAÇÃO, para colar no Outlook do jeito
+   *  que ele foi desenhado. O caminho moderno (ClipboardItem) preserva o
+   *  HTML; o antigo (execCommand sobre uma seleção) é a reserva para
+   *  navegador que não o tenha. */
+  function copiarComFormatacao(html) {
+    var texto = textoSimples(html);
+    if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
+      try {
+        return navigator.clipboard.write([new ClipboardItem({
+          'text/html': new Blob([html], { type: 'text/html' }),
+          'text/plain': new Blob([texto], { type: 'text/plain' })
+        })]);
+      } catch (e) { /* cai na reserva abaixo */ }
+    }
+    return new Promise(function (resolve, reject) {
+      var area = document.createElement('div');
+      area.contentEditable = 'true';
+      area.innerHTML = html;
+      area.style.cssText = 'position:fixed;left:-9999px;top:0;white-space:pre-wrap;';
+      document.body.appendChild(area);
+      try {
+        var faixaSel = document.createRange();
+        faixaSel.selectNodeContents(area);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(faixaSel);
+        var deu = document.execCommand('copy');
+        sel.removeAllRanges();
+        deu ? resolve() : reject(new Error('o navegador recusou a cópia'));
+      } catch (e) {
+        reject(e);
+      } finally {
+        document.body.removeChild(area);
+      }
+    });
+  }
+
+  var modalManual = null;
+
+  function fecharManual() {
+    if (modalManual && modalManual.parentNode) modalManual.parentNode.removeChild(modalManual);
+    modalManual = null;
+  }
+
+  /** Mostra o comunicado pronto para copiar. `pendentes` são os avisos
+   *  que não conseguiram sair sozinhos. */
+  function mostrarEnvioManual(pendentes) {
+    fecharManual();
+    var indice = 0;
+
+    var el = document.createElement('div');
+    el.className = 'confirm-backdrop open';
+    el.id = 'modalEnvioManual';
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-modal', 'true');
+    el.innerHTML =
+      '<div class="modal" style="max-width:720px;width:min(720px,calc(100vw - 32px));">' +
+        '<div class="modal-head">' +
+          '<div class="modal-icon" style="--hue:194,119,14;background:rgba(194,119,14,.12);border-color:rgba(194,119,14,.28);">' +
+            '<i class="fa-solid fa-paper-plane" style="color:#c2770e;"></i></div>' +
+          '<div class="modal-title">Enviar o comunicado manualmente</div>' +
+          '<button class="modal-close" type="button" data-fechar aria-label="Fechar">' +
+            '<i class="fa-solid fa-xmark"></i></button>' +
+        '</div>' +
+        '<div class="modal-body" style="padding:1.25rem;">' +
+          '<p style="margin:0 0 1rem;font-size:.85rem;color:var(--vbm-mid,#666);line-height:1.5;">' +
+            'O registro foi salvo normalmente. O envio automático ainda não foi liberado pela TI, ' +
+            'então copie o comunicado abaixo e cole no Outlook — o conteúdo já vai formatado.</p>' +
+          '<div data-contador style="font-size:.72rem;color:var(--vbm-mid,#666);margin-bottom:.5rem;"></div>' +
+          '<label class="form-label" style="font-size:.72rem;">Para</label>' +
+          '<input class="form-control" data-para readonly style="margin-bottom:.75rem;font-size:.8rem;">' +
+          '<label class="form-label" style="font-size:.72rem;">Assunto</label>' +
+          '<input class="form-control" data-assunto readonly style="margin-bottom:.75rem;font-size:.8rem;">' +
+          '<label class="form-label" style="font-size:.72rem;">Mensagem</label>' +
+          '<iframe data-corpo sandbox="" title="Pré-visualização do comunicado" ' +
+            'style="width:100%;height:260px;border:1px solid #e0e0e0;border-radius:8px;background:#fff;"></iframe>' +
+        '</div>' +
+        '<div class="modal-foot" style="gap:.5rem;flex-wrap:wrap;">' +
+          '<button class="btn btn-outline btn-sm" type="button" data-anterior hidden>Anterior</button>' +
+          '<button class="btn btn-outline btn-sm" type="button" data-proximo hidden>Próximo</button>' +
+          '<button class="btn btn-outline btn-sm" type="button" data-outlook>' +
+            '<i class="fa-solid fa-envelope"></i> Abrir no Outlook</button>' +
+          '<button class="btn btn-primary btn-sm" type="button" data-copiar>' +
+            '<i class="fa-solid fa-copy"></i> Copiar e-mail</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(el);
+    modalManual = el;
+
+    var campoPara = el.querySelector('[data-para]');
+    var campoAssunto = el.querySelector('[data-assunto]');
+    var quadro = el.querySelector('[data-corpo]');
+    var contador = el.querySelector('[data-contador]');
+    var btnCopiar = el.querySelector('[data-copiar]');
+    var btnAnterior = el.querySelector('[data-anterior]');
+    var btnProximo = el.querySelector('[data-proximo]');
+
+    function pintar() {
+      var a = pendentes[indice];
+      campoPara.value = destinatarios(a.para).join('; ');
+      campoAssunto.value = a.assunto || '';
+      quadro.srcdoc = a.html || '';
+      contador.textContent = pendentes.length > 1
+        ? 'Comunicado ' + (indice + 1) + ' de ' + pendentes.length + ' — copie e envie um de cada vez.'
+        : '';
+      btnAnterior.hidden = pendentes.length < 2;
+      btnProximo.hidden = pendentes.length < 2;
+      btnAnterior.disabled = indice === 0;
+      btnProximo.disabled = indice === pendentes.length - 1;
+      btnCopiar.innerHTML = '<i class="fa-solid fa-copy"></i> Copiar e-mail';
+    }
+
+    btnAnterior.addEventListener('click', function () { if (indice > 0) { indice--; pintar(); } });
+    btnProximo.addEventListener('click', function () { if (indice < pendentes.length - 1) { indice++; pintar(); } });
+
+    btnCopiar.addEventListener('click', function () {
+      copiarComFormatacao(pendentes[indice].html || '')
+        .then(function () {
+          btnCopiar.innerHTML = '<i class="fa-solid fa-check"></i> Copiado';
+        })
+        .catch(function () {
+          if (typeof showToast === 'function') {
+            showToast('warning', 'Não foi possível copiar',
+              'Selecione o texto da pré-visualização e copie com Ctrl+C.', 9000);
+          }
+        });
+    });
+
+    // Abre o Outlook já com destinatários e assunto. O CORPO não vai no
+    // mailto: de propósito — o formato não aceita HTML e tem limite de
+    // tamanho, então o corpo é o que se cola com o botão ao lado.
+    el.querySelector('[data-outlook]').addEventListener('click', function () {
+      var a = pendentes[indice];
+      window.location.href = 'mailto:' + encodeURIComponent(destinatarios(a.para).join(';')) +
+        '?subject=' + encodeURIComponent(a.assunto || '');
+    });
+
+    el.querySelector('[data-fechar]').addEventListener('click', fecharManual);
+    el.addEventListener('click', function (e) { if (e.target === el) fecharManual(); });
+
+    pintar();
   }
 
   /** Mostra na TELA o motivo de um comunicado não ter saído.
@@ -306,6 +532,18 @@
         && r.motivo !== 'já enviado' && r.motivo !== 'sem aviso';
     });
     if (!falhas.length) return resultados;
+
+    // Falhou, mas o CONTEÚDO está aqui: em vez de só informar, abre o
+    // envio manual. Enquanto a autorização do Entra não sai, este é o
+    // caminho que realmente entrega o comunicado.
+    var comCorpo = falhas
+      .map(function (f) { return f.aviso; })
+      .filter(function (a) { return a && a.html && a.para && a.para.length; });
+    if (comCorpo.length) {
+      mostrarEnvioManual(comCorpo);
+      return resultados;
+    }
+
     var motivo = falhas[0].motivo;
     var titulo = (window.__i18n && window.__i18n['email.failTitle']) || 'E-mail não enviado';
     var texto = (window.__i18n && window.__i18n['email.failMsg'])
