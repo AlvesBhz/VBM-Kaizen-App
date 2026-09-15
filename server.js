@@ -95,6 +95,46 @@ function nomeDoTransporte() {
   return "nenhum (a tela entrega pelo Graph do usuário logado)";
 }
 
+/** Últimas tentativas de envio, em memória, para GET /api/email/status.
+ *
+ *  Existe porque o log do app (/logz) não está à mão de quem opera o
+ *  sistema, e sem ele "o e-mail não chegou" não tem como ser investigado:
+ *  não dá para distinguir canal não configurado, destinatário ausente e
+ *  recusa do servidor de e-mail. Esta lista responde isso por uma URL.
+ *
+ *  Só metadado: para quem, com que assunto e o que aconteceu. Nunca o
+ *  corpo da mensagem, nunca credencial. Some quando o app reinicia — é
+ *  diagnóstico, não auditoria (a auditoria é kzn_email_log). */
+const HISTORICO_EMAIL = [];
+const HISTORICO_EMAIL_MAX = 30;
+
+function registrarNoHistorico(evento) {
+  HISTORICO_EMAIL.unshift({ quando: new Date().toISOString().slice(0, 19), ...evento });
+  if (HISTORICO_EMAIL.length > HISTORICO_EMAIL_MAX) HISTORICO_EMAIL.length = HISTORICO_EMAIL_MAX;
+}
+
+/** Quais variáveis de cada canal estão DECLARADAS. Só isso: "definida"
+ *  ou "AUSENTE", nunca o valor. Saber que SMTP_PASSWORD existe não
+ *  revela a senha; é o suficiente para achar a variável que faltou. */
+function situacaoDasVariaveis() {
+  const estado = (nome) => (String(process.env[nome] || "").trim() ? "definida" : "AUSENTE");
+  return {
+    graph: {
+      GRAPH_TENANT_ID: estado("GRAPH_TENANT_ID"),
+      GRAPH_CLIENT_ID: estado("GRAPH_CLIENT_ID"),
+      GRAPH_CLIENT_SECRET: estado("GRAPH_CLIENT_SECRET"),
+      GRAPH_REMETENTE: estado("GRAPH_REMETENTE"),
+    },
+    smtp: {
+      SMTP_HOST: estado("SMTP_HOST"),
+      SMTP_PORT: estado("SMTP_PORT"),
+      SMTP_USER: estado("SMTP_USER"),
+      SMTP_PASSWORD: estado("SMTP_PASSWORD"),
+      SMTP_FROM: estado("SMTP_FROM"),
+    },
+  };
+}
+
 const app = express();
 
 // gzip em tudo que é texto (HTML/CSS/JS/JSON/SVG). Já estava no
@@ -4223,7 +4263,27 @@ async function avisosDoCadastro(idKaizen, idUsuario) {
 async function entregarAvisosPeloServidor(avisos, req) {
   const lista = Array.isArray(avisos) ? avisos : [];
   const transporte = transporteDeEmail();
-  if (!lista.length || !transporte) return lista;
+  if (!transporte) {
+    // O caso mais comum de "o e-mail não chegou", e o mais invisível:
+    // não há canal, então o servidor não tentou nada. Fica registrado
+    // para GET /api/email/status poder dizer isso.
+    lista.forEach((aviso) => registrarNoHistorico({
+      origem: "comunicado automático",
+      chave: (aviso && aviso.chave) || null,
+      destinatarios: (aviso && aviso.para) || [],
+      assunto: (aviso && aviso.assunto) || null,
+      enviado: false,
+      motivo: "nenhum canal de envio configurado no servidor — declare GRAPH_* (ou SMTP_*) no app.yaml",
+    }));
+    if (lista.length) {
+      console.warn(
+        `[email] ${lista.length} comunicado(s) NÃO enviado(s): o servidor não tem canal configurado. ` +
+        `A tela vai tentar pelo Graph do usuário logado.`
+      );
+    }
+    return lista;
+  }
+  if (!lista.length) return lista;
 
   const perfil = await perfilDeAcesso(req);
   const emailUsuario = req.get("X-Forwarded-Email") || null;
@@ -4234,11 +4294,16 @@ async function entregarAvisosPeloServidor(avisos, req) {
     // de fora, isso é indistinguível de "o servidor nem tentou enviar" —
     // e foi o que escondeu a falta de e-mail do aprovador. Agora diz.
     if (!aviso || aviso.erro) {
-      console.warn(`[email] comunicado descartado sem enviar: ${(aviso && aviso.erro) || "aviso vazio"}`);
+      const motivo = (aviso && aviso.erro) || "aviso vazio";
+      console.warn(`[email] comunicado descartado sem enviar: ${motivo}`);
+      registrarNoHistorico({ origem: "comunicado automático", chave: null, destinatarios: [],
+                             assunto: null, enviado: false, motivo });
       continue;
     }
     if (!Array.isArray(aviso.para) || !aviso.para.length) {
       console.warn(`[email] comunicado "${aviso.chave}" sem destinatário — nada a enviar.`);
+      registrarNoHistorico({ origem: "comunicado automático", chave: aviso.chave, destinatarios: [],
+                             assunto: aviso.assunto, enviado: false, motivo: "sem destinatário" });
       continue;
     }
     try {
@@ -4251,6 +4316,9 @@ async function entregarAvisosPeloServidor(avisos, req) {
       aviso.enviadoPeloServidor = true;
       delete aviso.html;
       console.log(`[email] comunicado "${aviso.chave}" enviado pelo servidor para ${aviso.para.length} destinatário(s).`);
+      registrarNoHistorico({ origem: "comunicado automático", chave: aviso.chave,
+                             destinatarios: aviso.para, assunto: aviso.assunto,
+                             enviado: true, motivo: null });
       await registrarEnvioDeEmail({
         idUsuario: perfil.idUsuario, emailUsuario,
         para: aviso.para, cc: [], cco: [], assunto: aviso.assunto,
@@ -4262,6 +4330,9 @@ async function entregarAvisosPeloServidor(avisos, req) {
       aviso.enviadoPeloServidor = false;
       aviso.motivoServidor = publico;
       console.error(`[email] comunicado "${aviso.chave}" NAO saiu pelo servidor — ${publico}`);
+      registrarNoHistorico({ origem: "comunicado automático", chave: aviso.chave,
+                             destinatarios: aviso.para, assunto: aviso.assunto,
+                             enviado: false, motivo: publico });
       await registrarEnvioDeEmail({
         idUsuario: perfil.idUsuario, emailUsuario,
         para: aviso.para, cc: [], cco: [], assunto: aviso.assunto,
@@ -4890,6 +4961,49 @@ apiRouter.get("/email/config", (req, res) => {
   });
 });
 
+/** Diagnóstico do envio de e-mail, para abrir no NAVEGADOR.
+ *
+ *  Faixa ADMIN (não está em nenhuma lista de exceção do gate).
+ *
+ *  Responde, sem precisar do /logz: qual canal está ativo, quais
+ *  variáveis de cada canal estão declaradas e o que aconteceu nas
+ *  últimas tentativas de envio. Existe porque "o e-mail não chegou" tem
+ *  três causas muito diferentes — não há canal, não há destinatário, ou
+ *  o serviço de e-mail recusou — e de fora as três são idênticas.
+ *
+ *  NÃO devolve valor de variável nenhuma: só "definida" ou "AUSENTE".
+ *  Nem corpo de mensagem. */
+apiRouter.get("/email/status", (req, res) => {
+  const transporte = transporteDeEmail();
+  const variaveis = situacaoDasVariaveis();
+
+  // Um diagnóstico em português, para a resposta se explicar sozinha.
+  let diagnostico;
+  if (transporte) {
+    diagnostico = `O servidor envia por ${nomeDoTransporte()}. Se ainda assim o e-mail não chegar, ` +
+      `veja "ultimasTentativas" abaixo: o motivo de cada falha está lá.`;
+  } else {
+    const faltando = Object.entries(variaveis.graph)
+      .filter(([, v]) => v === "AUSENTE").map(([k]) => k);
+    diagnostico =
+      "NENHUM canal de envio configurado: o servidor não tenta enviar, e os comunicados dependem da tela " +
+      "(Microsoft Graph com o token de quem está logado), que é o caminho que costuma falhar por falta de " +
+      "consentimento ou de \"Enviar Como\". " +
+      (faltando.length
+        ? `Para o servidor enviar, declare no app.yaml: ${faltando.join(", ")}.`
+        : "As variáveis do Graph estão declaradas — reinicie o app para ele relê-las.");
+  }
+
+  res.json({
+    canal: nomeDoTransporte(),
+    enviaPeloServidor: !!transporte,
+    remetente: transporte ? transporte.remetente() : null,
+    diagnostico,
+    variaveis,
+    ultimasTentativas: HISTORICO_EMAIL,
+  });
+});
+
 apiRouter.post("/email", receberAnexos, async (req, res) => {
   const perfil = await perfilDeAcesso(req);
   const emailUsuario = req.get("X-Forwarded-Email") || null;
@@ -5009,6 +5123,8 @@ apiRouter.post("/email", receberAnexos, async (req, res) => {
 
     await registrarEnvioDeEmail({ ...auditoria, enviado: true, erro: null, messageId: info.messageId });
     console.log(`[email] enviado por ${emailUsuario} para ${para.lista.length} destinatário(s).`);
+    registrarNoHistorico({ origem: "aba E-mail", chave: null, destinatarios: para.lista,
+                           assunto, enviado: true, motivo: null });
     res.json({ ok: true, mensagem: "Mensagem enviada com sucesso.", recusados: info.recusados });
   } catch (err) {
     // err.publico é a frase já traduzida por email-smtp.js; o erro cru
@@ -5016,6 +5132,8 @@ apiRouter.post("/email", receberAnexos, async (req, res) => {
     const publico = err && err.publico ? err.publico : "Não foi possível enviar o e-mail.";
     const codigo = (err && err.codigo) || "falha";
     await registrarEnvioDeEmail({ ...auditoria, enviado: false, erro: publico, messageId: null });
+    registrarNoHistorico({ origem: "aba E-mail", chave: null, destinatarios: para.lista,
+                           assunto, enviado: false, motivo: publico });
     res.status((err && err.status) || 502).json({ error: publico, codigo });
   } finally {
     ENVIOS_EM_ANDAMENTO.delete(travaId);
