@@ -215,40 +215,58 @@ const MATRICULA_IGUAL = (a, b) =>
 /**
  * Casa uma linha de kzn_aprovador com a PESSOA dela em kzn_mdm_hierarquia.
  *
- * Existe porque o aprovador é o ÚNICO papel do sistema que não chega ao
- * MDM por ID_USUARIO. Dono do Kaizen e membros da equipe vão diretos
- * (ID_USUARIO_CADASTRO / ID_USUARIO_LIDER / kzn_membros_equipe.ID_USUARIO);
- * o aprovador vem de kzn_aprovador.CD_MATRICULA. E kzn_aprovador.ID_USUARIO
- * NÃO serve de atalho: nas linhas novas ele é QUEM CONCEDEU o direito,
- * não quem aprova (ver POST /aprovadores e idAprovadorPorUsuario).
+ * Existe porque o aprovador é o único papel que não tem uma coluna
+ * ID_USUARIO apontando para ele. Dono do Kaizen e membros da equipe vão
+ * diretos (ID_USUARIO_CADASTRO / ID_USUARIO_LIDER /
+ * kzn_membros_equipe.ID_USUARIO). O aprovador sai de
+ * kzn_aprovador.CD_MATRICULA — e essa coluna, NA PRÁTICA, guarda coisas
+ * diferentes conforme a época em que a linha foi gravada.
  *
- * Consequência prática, e foi o que quebrou o comunicado: matrícula
- * errada, em branco ou fora do MDM => CD_EMAIL nulo => o e-mail de
- * "aguardando sua aprovação" fica sem destinatário e não sai.
+ * O QUE HÁ DE VERDADE EM kzn_aprovador.CD_MATRICULA
  *
- * As duas condições, nesta ordem de prioridade:
+ *   (a) um ID_USUARIO. É o caso do banco em produção: a linha
+ *       ID_APROVADOR = 1 tem CD_MATRICULA = 181222, que é o ID_USUARIO
+ *       da pessoa no MDM, não a matrícula dela. Comparar esse valor com
+ *       MDM.CD_MATRICULA não acha ninguém — e era essa a causa de o
+ *       comunicado "aguardando sua aprovação" nunca sair.
+ *   (b) uma matrícula de verdade, inclusive com letra ('FG002634').
+ *   (c) nada (NULL ou vazio), nas linhas mais antigas — e aí quem
+ *       identifica o aprovador é kzn_aprovador.ID_USUARIO.
  *
- *   1. CD_MATRICULA casando com a do MDM. É o caminho oficial.
- *   2. a.ID_USUARIO = x.ID_USUARIO, e SOMENTE quando a.CD_MATRICULA
- *      está vazia. Linha sem matrícula nenhuma é das ANTIGAS, de quando
- *      a coluna ID_USUARIO ainda guardava o próprio aprovador.
+ * kzn_aprovador.ID_USUARIO NÃO serve de atalho geral: nas linhas novas
+ * ele é QUEM CONCEDEU o direito, não quem aprova (ver POST /aprovadores).
+ * Por isso o ramo (c) exige a matrícula vazia.
  *
- * O ramo 2 é estreito de propósito. Matrícula PREENCHIDA que não casa é
- * erro de dado, não linha antiga — e ali ID_USUARIO é o concedente.
- * Cair nele mandaria o "aprove este Kaizen" para a pessoa errada, o que
- * é pior que não mandar. Nesse caso o comunicado fica sem destinatário e
- * o log diz exatamente isso (ver dadosDoComunicado).
+ * Os três ramos, na ordem de prioridade que o ORDEM_* abaixo aplica:
+ *
+ *   0. CD_MATRICULA casa com MDM.CD_MATRICULA          -> caso (b)
+ *   1. CD_MATRICULA casa com MDM.ID_USUARIO            -> caso (a)
+ *   2. kzn_aprovador.ID_USUARIO = MDM.ID_USUARIO,
+ *      e SOMENTE com CD_MATRICULA vazia                -> caso (c)
+ *
+ * A ordem importa só quando mais de um ramo acha alguém — aí o caminho
+ * oficial (matrícula) vence, preservando o comportamento de quem já
+ * grava matrícula de verdade. Quando só um ramo acha, ele é a resposta,
+ * que é o que destrava o banco de produção.
+ *
+ * Sobrando NADA, o comunicado fica sem destinatário e o log diz por quê
+ * (ver dadosDoComunicado) — nunca se chuta o concedente no lugar do
+ * aprovador, porque mandar "aprove este Kaizen" para a pessoa errada é
+ * pior do que não mandar.
  */
 const PESSOA_DO_APROVADOR = (a) =>
   `(${MATRICULA_IGUAL("x.CD_MATRICULA", `${a}.CD_MATRICULA`)}
+     OR x.ID_USUARIO = TRY_CAST(${a}.CD_MATRICULA AS BIGINT)
      OR (x.ID_USUARIO = ${a}.ID_USUARIO
          AND (${a}.CD_MATRICULA IS NULL OR LTRIM(RTRIM(CAST(${a}.CD_MATRICULA AS VARCHAR(30)))) = '')))`;
 
-/** Ordem que põe o casamento por MATRÍCULA na frente do casamento por
- *  ID_USUARIO — para a linha que satisfaz os dois vencer pelo caminho
- *  oficial. Vai junto com PESSOA_DO_APROVADOR em todo OUTER APPLY. */
+/** Prioridade dos três ramos do PESSOA_DO_APROVADOR, mais o desempate
+ *  por ID_TIPO_USUARIO (a PK do MDM é composta, então a mesma pessoa
+ *  aparece em mais de uma linha). Vai junto em todo OUTER APPLY. */
 const ORDEM_PESSOA_DO_APROVADOR = (a) =>
-  `CASE WHEN ${MATRICULA_IGUAL("x.CD_MATRICULA", `${a}.CD_MATRICULA`)} THEN 0 ELSE 1 END, x.ID_TIPO_USUARIO`;
+  `CASE WHEN ${MATRICULA_IGUAL("x.CD_MATRICULA", `${a}.CD_MATRICULA`)} THEN 0
+        WHEN x.ID_USUARIO = TRY_CAST(${a}.CD_MATRICULA AS BIGINT) THEN 1
+        ELSE 2 END, x.ID_TIPO_USUARIO`;
 
 // Mesmo schema dos aprovadores; tabela própria, também sobrescrevível
 // por env var caso o nome real divirja do padrão.
@@ -1267,26 +1285,35 @@ async function gravarHierarquiaDoKaizen(idKaizen) {
 // para ID_USUARIO, então resolvemos aqui, sempre no servidor, e de
 // quebra confirmamos que o aprovador escolhido está ATIVO.
 async function idAprovadorPorUsuario(idUsuario) {
-  // Quem RECEBE o direito de aprovar é identificado por CD_MATRICULA —
-  // kzn_aprovador.ID_USUARIO é quem CONCEDEU (ver POST /aprovadores).
-  // A tela manda o ID_USUARIO da pessoa (é o que /api/aprovadores
-  // devolve), então o caminho oficial é pela matrícula do MDM.
+  // Caminho INVERSO do PESSOA_DO_APROVADOR: a tela manda o ID_USUARIO da
+  // pessoa (é o que /api/aprovadores devolve) e aqui se acha a linha de
+  // kzn_aprovador correspondente. Os ramos têm de ser OS MESMOS dos de
+  // lá, na mesma prioridade — senão o Kaizen é gravado apontando para um
+  // ID_APROVADOR cuja pessoa o comunicado depois não consegue resolver,
+  // que é o pior dos dois mundos.
   //
-  // O segundo ramo (ID_USUARIO) cobre as linhas antigas, gravadas quando
-  // a coluna ainda era usada como "o aprovador": sem ele, um Kaizen
-  // apontando para uma dessas linhas deixaria de salvar.
+  //   0. a matrícula da linha casa com a matrícula do MDM;
+  //   1. a "matrícula" da linha É o ID_USUARIO (caso do banco atual:
+  //      ID_APROVADOR = 1 com CD_MATRICULA = 181222);
+  //   2. a linha não tem matrícula e o ID_USUARIO dela é o aprovador
+  //      (linhas antigas).
+  const CASA_POR_MATRICULA =
+    `EXISTS (SELECT 1 FROM ${FULL_MDM_TABLE} m
+              WHERE m.ID_USUARIO = @id
+                AND ${MATRICULA_IGUAL("m.CD_MATRICULA", "a.CD_MATRICULA")})`;
+  const CASA_POR_ID_NA_MATRICULA = `TRY_CAST(a.CD_MATRICULA AS BIGINT) = @id`;
+  const CASA_POR_ID_LEGADO =
+    `(a.ID_USUARIO = @id
+      AND (a.CD_MATRICULA IS NULL OR LTRIM(RTRIM(CAST(a.CD_MATRICULA AS VARCHAR(30)))) = ''))`;
+
   const r = await runQuery(
     `SELECT TOP (1) a.ID_APROVADOR
        FROM ${FULL_TABLE_NAME} a
       WHERE a.SG_ATIVO = 'S'
-        AND (EXISTS (SELECT 1 FROM ${FULL_MDM_TABLE} m
-                      WHERE m.ID_USUARIO = @id
-                        AND ${MATRICULA_IGUAL("m.CD_MATRICULA", "a.CD_MATRICULA")})
-             OR a.ID_USUARIO = @id)
-      ORDER BY CASE WHEN EXISTS (SELECT 1 FROM ${FULL_MDM_TABLE} m2
-                                  WHERE m2.ID_USUARIO = @id
-                                    AND ${MATRICULA_IGUAL("m2.CD_MATRICULA", "a.CD_MATRICULA")})
-                    THEN 0 ELSE 1 END, a.ID_APROVADOR`,
+        AND (${CASA_POR_MATRICULA} OR ${CASA_POR_ID_NA_MATRICULA} OR ${CASA_POR_ID_LEGADO})
+      ORDER BY CASE WHEN ${CASA_POR_MATRICULA} THEN 0
+                    WHEN ${CASA_POR_ID_NA_MATRICULA} THEN 1
+                    ELSE 2 END, a.ID_APROVADOR`,
     [["id", sql.Int, idUsuario]]
   );
   return r.recordset.length ? r.recordset[0].ID_APROVADOR : null;
@@ -4065,14 +4092,16 @@ async function dadosDoComunicado(idKaizen, idUsuarioAcao) {
   }
   if (!k.EMAIL_APROVADOR) {
     const m = k.MATRICULA_APROVADOR;
-    const pista = m == null || String(m).trim() === ""
-      ? `a linha ID_APROVADOR=${k.ID_APROVADOR} de ${FULL_TABLE_NAME} está SEM CD_MATRICULA`
-      : `a CD_MATRICULA "${m}" da linha ID_APROVADOR=${k.ID_APROVADOR} não existe em ${FULL_MDM_TABLE}`;
+    const pista = k.ID_APROVADOR == null
+      ? `o Kaizen não aponta para nenhuma linha de ${FULL_TABLE_NAME}`
+      : m == null || String(m).trim() === ""
+        ? `a linha ID_APROVADOR=${k.ID_APROVADOR} está sem CD_MATRICULA e o ID_USUARIO dela não existe no MDM`
+        : `o valor "${m}" da CD_MATRICULA (linha ID_APROVADOR=${k.ID_APROVADOR}) não bate com nenhuma ` +
+          `CD_MATRICULA nem com nenhum ID_USUARIO em ${FULL_MDM_TABLE}`;
     console.warn(
       `[email] ID_KAIZEN=${idKaizen}: o APROVADOR ficou sem e-mail — ${pista}. ` +
-      `O aprovador é o único papel que chega ao MDM pela matrícula, não pelo ID_USUARIO ` +
-      `(kzn_aprovador.ID_USUARIO é quem CONCEDEU o direito). ` +
-      `Confira: SELECT a.ID_APROVADOR, a.CD_MATRICULA, a.ID_USUARIO FROM ${FULL_TABLE_NAME} a WHERE a.ID_APROVADOR = ${k.ID_APROVADOR}`
+      `Confira: SELECT a.ID_APROVADOR, a.CD_MATRICULA, a.ID_USUARIO FROM ${FULL_TABLE_NAME} a WHERE a.ID_APROVADOR = ${k.ID_APROVADOR}; ` +
+      `SELECT ID_USUARIO, CD_MATRICULA, CD_EMAIL FROM ${FULL_MDM_TABLE} WHERE ID_USUARIO = ${m == null ? "<a matrícula acima>" : m}`
     );
   }
 

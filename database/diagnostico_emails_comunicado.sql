@@ -14,17 +14,25 @@
                                              ID_USUARIO_LIDER)
      Equipe          ci.kzn_mdm_hierarquia.CD_EMAIL
                      por ID_USUARIO = kzn_membros_equipe.ID_USUARIO
-     Aprovador       NÃO é por ID_USUARIO. Vai por
-                     ci.kzn_aprovador.CD_MATRICULA -> MDM.CD_MATRICULA.
+     Aprovador       ci.kzn_aprovador.CD_MATRICULA, que na prática
+                     guarda uma de três coisas — e por isso a busca tenta
+                     as três, nesta ordem:
+                       1. a matrícula, casando com MDM.CD_MATRICULA;
+                       2. um ID_USUARIO, casando com MDM.ID_USUARIO. É o
+                          caso do banco atual: ID_APROVADOR = 1 tem
+                          CD_MATRICULA = 181222, que é um ID_USUARIO;
+                       3. nada — e aí vale kzn_aprovador.ID_USUARIO, que
+                          só nas linhas ANTIGAS é o próprio aprovador.
 
-   Por que o aprovador é diferente: ci.kzn_aprovador.ID_USUARIO é quem
-   CONCEDEU o direito de aprovar, não quem aprova. Usar essa coluna como
-   atalho mandaria o "aprove este Kaizen" para a pessoa errada.
+   Repare na diferença entre os ramos 2 e 3. No 2, o VALOR guardado em
+   CD_MATRICULA é um ID_USUARIO e aponta para o próprio aprovador. No 3,
+   quem aponta é a coluna ID_USUARIO da linha — e ela só vale quando a
+   matrícula está vazia, porque nas linhas NOVAS ci.kzn_aprovador.ID_USUARIO
+   é quem CONCEDEU o direito de aprovar, não quem aprova. Usar essa coluna
+   como atalho geral mandaria o "aprove este Kaizen" para a pessoa errada.
 
-   A aplicação só aceita ID_USUARIO no lugar da matrícula quando a linha
-   do aprovador está SEM CD_MATRICULA — aí ela é das antigas, de quando a
-   coluna ainda guardava o próprio aprovador. Matrícula PREENCHIDA que
-   não casa é erro de dado, e a ETAPA 3 aponta quais são.
+   Valor preenchido que não é nem matrícula nem ID_USUARIO do MDM é erro
+   de dado, e a ETAPA 3 aponta quais são.
 
    TOP (1) com ORDER BY em toda busca ao MDM: a PK de lá é
    (ID_USUARIO, CD_MATRICULA, ID_TIPO_USUARIO) e a mesma pessoa aparece
@@ -68,7 +76,7 @@ SELECT  'Aprovador',
              WHEN a.CD_MATRICULA IS NULL
                OR LTRIM(RTRIM(CAST(a.CD_MATRICULA AS VARCHAR(30)))) = ''
                                              THEN 'SEM E-MAIL: a linha do aprovador esta sem CD_MATRICULA'
-             ELSE 'SEM E-MAIL: a CD_MATRICULA do aprovador nao existe no MDM'
+             ELSE 'SEM E-MAIL: o valor da CD_MATRICULA nao e matricula nem ID_USUARIO do MDM'
         END
 FROM        ci.kzn_pedravisaoconsolidada p
 LEFT JOIN   ci.kzn_aprovador a ON a.ID_APROVADOR = p.ID_APROVADOR
@@ -76,12 +84,15 @@ OUTER APPLY (SELECT TOP (1) x.ID_USUARIO, x.NM_USUARIO, x.CD_EMAIL
                FROM ci.kzn_mdm_hierarquia x
               WHERE (TRY_CAST(x.CD_MATRICULA AS BIGINT) = TRY_CAST(a.CD_MATRICULA AS BIGINT)
                      OR CAST(x.CD_MATRICULA AS VARCHAR(30)) = CAST(a.CD_MATRICULA AS VARCHAR(30))
+                     OR x.ID_USUARIO = TRY_CAST(a.CD_MATRICULA AS BIGINT)
                      OR (x.ID_USUARIO = a.ID_USUARIO
                          AND (a.CD_MATRICULA IS NULL
                               OR LTRIM(RTRIM(CAST(a.CD_MATRICULA AS VARCHAR(30)))) = '')))
               ORDER BY CASE WHEN (TRY_CAST(x.CD_MATRICULA AS BIGINT) = TRY_CAST(a.CD_MATRICULA AS BIGINT)
                                   OR CAST(x.CD_MATRICULA AS VARCHAR(30)) = CAST(a.CD_MATRICULA AS VARCHAR(30)))
-                            THEN 0 ELSE 1 END, x.ID_TIPO_USUARIO) aprov
+                            THEN 0
+                            WHEN x.ID_USUARIO = TRY_CAST(a.CD_MATRICULA AS BIGINT) THEN 1
+                            ELSE 2 END, x.ID_TIPO_USUARIO) aprov
 WHERE       p.ID_KAIZEN = @ID_KAIZEN
 
 UNION ALL
@@ -114,17 +125,22 @@ SELECT      p.ID_KAIZEN,
                           WHEN a.CD_MATRICULA IS NULL
                             OR LTRIM(RTRIM(CAST(a.CD_MATRICULA AS VARCHAR(30)))) = ''
                                THEN 'linha do aprovador sem CD_MATRICULA'
-                          ELSE 'CD_MATRICULA do aprovador nao existe no MDM' END
+                          ELSE 'o valor da CD_MATRICULA nao e matricula nem ID_USUARIO do MDM' END
 FROM        ci.kzn_pedravisaoconsolidada p
 LEFT JOIN   ci.kzn_aprovador a ON a.ID_APROVADOR = p.ID_APROVADOR
 OUTER APPLY (SELECT TOP (1) x.CD_EMAIL
                FROM ci.kzn_mdm_hierarquia x
               WHERE (TRY_CAST(x.CD_MATRICULA AS BIGINT) = TRY_CAST(a.CD_MATRICULA AS BIGINT)
                      OR CAST(x.CD_MATRICULA AS VARCHAR(30)) = CAST(a.CD_MATRICULA AS VARCHAR(30))
+                     OR x.ID_USUARIO = TRY_CAST(a.CD_MATRICULA AS BIGINT)
                      OR (x.ID_USUARIO = a.ID_USUARIO
                          AND (a.CD_MATRICULA IS NULL
                               OR LTRIM(RTRIM(CAST(a.CD_MATRICULA AS VARCHAR(30)))) = '')))
-              ORDER BY x.ID_TIPO_USUARIO) aprov
+              ORDER BY CASE WHEN (TRY_CAST(x.CD_MATRICULA AS BIGINT) = TRY_CAST(a.CD_MATRICULA AS BIGINT)
+                                  OR CAST(x.CD_MATRICULA AS VARCHAR(30)) = CAST(a.CD_MATRICULA AS VARCHAR(30)))
+                            THEN 0
+                            WHEN x.ID_USUARIO = TRY_CAST(a.CD_MATRICULA AS BIGINT) THEN 1
+                            ELSE 2 END, x.ID_TIPO_USUARIO) aprov
 WHERE       aprov.CD_EMAIL IS NULL
 ORDER BY    p.ID_KAIZEN DESC;
 
@@ -143,16 +159,21 @@ SELECT      a.ID_APROVADOR,
             DIAGNOSTICO = CASE WHEN a.CD_MATRICULA IS NULL
                                  OR LTRIM(RTRIM(CAST(a.CD_MATRICULA AS VARCHAR(30)))) = ''
                                THEN 'sem CD_MATRICULA — a aplicacao usa o ID_USUARIO como aprovador (linha antiga)'
-                               ELSE 'CD_MATRICULA preenchida mas ausente do MDM — ERRO DE DADO, corrigir' END
+                               ELSE 'valor preenchido que nao e matricula nem ID_USUARIO do MDM — ERRO DE DADO, corrigir' END
 FROM        ci.kzn_aprovador a
 OUTER APPLY (SELECT TOP (1) x.CD_EMAIL
                FROM ci.kzn_mdm_hierarquia x
               WHERE (TRY_CAST(x.CD_MATRICULA AS BIGINT) = TRY_CAST(a.CD_MATRICULA AS BIGINT)
                      OR CAST(x.CD_MATRICULA AS VARCHAR(30)) = CAST(a.CD_MATRICULA AS VARCHAR(30))
+                     OR x.ID_USUARIO = TRY_CAST(a.CD_MATRICULA AS BIGINT)
                      OR (x.ID_USUARIO = a.ID_USUARIO
                          AND (a.CD_MATRICULA IS NULL
                               OR LTRIM(RTRIM(CAST(a.CD_MATRICULA AS VARCHAR(30)))) = '')))
-              ORDER BY x.ID_TIPO_USUARIO) pessoa
+              ORDER BY CASE WHEN (TRY_CAST(x.CD_MATRICULA AS BIGINT) = TRY_CAST(a.CD_MATRICULA AS BIGINT)
+                                  OR CAST(x.CD_MATRICULA AS VARCHAR(30)) = CAST(a.CD_MATRICULA AS VARCHAR(30)))
+                            THEN 0
+                            WHEN x.ID_USUARIO = TRY_CAST(a.CD_MATRICULA AS BIGINT) THEN 1
+                            ELSE 2 END, x.ID_TIPO_USUARIO) pessoa
 OUTER APPLY (SELECT TOP (1) y.NM_USUARIO FROM ci.kzn_mdm_hierarquia y
               WHERE y.ID_USUARIO = a.ID_USUARIO ORDER BY y.ID_TIPO_USUARIO) conc
 WHERE       pessoa.CD_EMAIL IS NULL
