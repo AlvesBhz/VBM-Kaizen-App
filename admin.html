@@ -623,7 +623,6 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
         <button class="admin-tab" data-admin-tab="resultados"><i class="fa-solid fa-trophy"></i> <span data-i18n="adm.tabResultados">Resultados</span></button>
         <button class="admin-tab" data-admin-tab="status"><i class="fa-solid fa-circle-check"></i> <span data-i18n="adm.tabStatus">Status Kaizen</span></button>
         <button class="admin-tab" data-admin-tab="usuarios"><i class="fa-solid fa-users-gear"></i> <span data-i18n="adm.tabUsuarios">Usuários</span></button>
-        <button class="admin-tab" data-admin-tab="email"><i class="fa-solid fa-paper-plane"></i> <span data-i18n="adm.tabEmail">E-mail</span></button>
       </div>
     </div>
 
@@ -768,67 +767,6 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           </tbody>
         </table>
       </div>
-    </div>
-
-    <!-- ═══ E-MAIL ═══
-         Composição de uma mensagem avulsa. NENHUMA credencial aparece
-         aqui: o formulário manda destinatários, assunto, texto e anexos
-         para POST /api/email, e é o servidor que autentica no serviço de
-         e-mail (ver email-smtp.js). Não há campo de usuário/senha para
-         preencher, não há token guardado no navegador e o "De:" é
-         decidido no servidor — o endereço exibido abaixo vem de
-         GET /api/email/config e é só informativo.
-         Lógica em js/email-formulario.js. -->
-    <div class="admin-panel section-card reveal" id="panel-email">
-      <div class="section-head" style="padding:1.25rem;">
-        <div class="section-title"><i class="fa-solid fa-paper-plane" style="color:var(--vbm-blue);"></i> <span data-i18n="adm.emailTitle">Envio de E-mail</span></div>
-        <div id="emailRemetente" style="font-size:.75rem;color:var(--vbm-mid);"></div>
-      </div>
-
-      <div id="emailIndisponivel" style="padding:1.25rem;color:var(--vbm-mid);font-size:.85rem;" hidden>
-        O envio de e-mail não está configurado nesta aplicação. Procure a área de TI.
-      </div>
-
-      <form id="emailForm" style="padding:0 1.25rem 1.25rem;" novalidate>
-        <div class="form-grid form-grid-2">
-          <div class="form-group" style="grid-column:1/-1;">
-            <label for="emailPara" class="form-label" data-i18n="adm.emailTo">Destinatário <span class="req">*</span></label>
-            <input type="text" class="form-control" id="emailPara" autocomplete="off"
-                   placeholder="nome@vale.com; outro@vale.com" data-i18n-placeholder="adm.emailToHint"/>
-          </div>
-          <div class="form-group">
-            <label for="emailCc" class="form-label" data-i18n="adm.emailCc">Cópia (CC)</label>
-            <input type="text" class="form-control" id="emailCc" autocomplete="off" placeholder="Opcional"/>
-          </div>
-          <div class="form-group">
-            <label for="emailCco" class="form-label" data-i18n="adm.emailBcc">Cópia Oculta (CCO)</label>
-            <input type="text" class="form-control" id="emailCco" autocomplete="off" placeholder="Opcional"/>
-          </div>
-          <div class="form-group" style="grid-column:1/-1;">
-            <label for="emailAssunto" class="form-label" data-i18n="adm.emailSubject">Assunto <span class="req">*</span></label>
-            <input type="text" class="form-control" id="emailAssunto" autocomplete="off" maxlength="200"/>
-          </div>
-          <div class="form-group" style="grid-column:1/-1;">
-            <label for="emailMensagem" class="form-label" data-i18n="adm.emailBody">Corpo do e-mail <span class="req">*</span></label>
-            <textarea class="form-control" id="emailMensagem" rows="8" style="min-height:180px;"></textarea>
-          </div>
-          <div class="form-group" style="grid-column:1/-1;">
-            <label for="emailAnexos" class="form-label" data-i18n="adm.emailAttachments">Anexos</label>
-            <input type="file" class="form-control" id="emailAnexos" multiple/>
-            <div id="emailAnexosInfo" style="margin-top:.4rem;font-size:.72rem;color:var(--vbm-mid);"></div>
-          </div>
-        </div>
-
-        <div style="display:flex;align-items:center;gap:.75rem;margin-top:1rem;">
-          <button type="submit" class="btn btn-primary btn-md" id="emailEnviar">
-            <i class="fa-solid fa-paper-plane"></i> <span data-i18n="adm.emailSend">Enviar</span>
-          </button>
-          <button type="button" class="btn btn-outline btn-md" id="emailLimpar" data-i18n="common.limpar">Limpar</button>
-          <!-- Indicador do REQUISITO 7. Fica ao lado do botão, e não num
-               aviso modal, para continuar visível durante todo o envio. -->
-          <span id="emailStatus" style="font-size:.8rem;color:var(--vbm-mid);" hidden></span>
-        </div>
-      </form>
     </div>
 
   </div>
@@ -1676,9 +1614,6 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 <script src="js/resultados.js?v=20260912-1"></script>
 <script src="js/tiporesultados.js?v=20260912-1"></script>
 <script src="js/status.js?v=20260912-1"></script>
-<!-- Aba "E-mail". Só monta a requisição e cuida da UX do envio; quem
-     autentica no serviço de e-mail é o servidor. -->
-<script src="js/email-formulario.js?v=20260915-1"></script>
 <script>
 (function(){
   var tabs = document.querySelectorAll('[data-admin-tab]');
@@ -1941,17 +1876,6 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       'adm.tabResultados': 'Resultados',
       'adm.tabStatus': 'Status Kaizen',
       'adm.tabUsuarios': 'Usuários',
-      'adm.tabEmail': 'E-mail',
-      'adm.emailTitle': 'Envio de E-mail',
-      'adm.emailTo': 'Destinatário',
-      'adm.emailToHint': 'nome@vale.com; outro@vale.com',
-      'adm.emailCc': 'Cópia (CC)',
-      'adm.emailBcc': 'Cópia Oculta (CCO)',
-      'adm.emailSubject': 'Assunto',
-      'adm.emailBody': 'Corpo do e-mail',
-      'adm.emailAttachments': 'Anexos',
-      'adm.emailSend': 'Enviar',
-      'common.limpar': 'Limpar',
       'adm.approversByUnit': 'Aprovadores por Unidade',
       'adm.approversTitle': 'Aprovadores',
       'adm.newApprover': 'Novo Aprovador',
@@ -2102,17 +2026,6 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       'adm.tabResultados': 'Results',
       'adm.tabStatus': 'Kaizen Status',
       'adm.tabUsuarios': 'Users',
-      'adm.tabEmail': 'E-mail',
-      'adm.emailTitle': 'Send E-mail',
-      'adm.emailTo': 'Recipient',
-      'adm.emailToHint': 'name@vale.com; other@vale.com',
-      'adm.emailCc': 'Copy (CC)',
-      'adm.emailBcc': 'Blind Copy (BCC)',
-      'adm.emailSubject': 'Subject',
-      'adm.emailBody': 'Message body',
-      'adm.emailAttachments': 'Attachments',
-      'adm.emailSend': 'Send',
-      'common.limpar': 'Clear',
       'adm.approversByUnit': 'Approvers by Unit',
       'adm.approversTitle': 'Approvers',
       'adm.newApprover': 'New Approver',

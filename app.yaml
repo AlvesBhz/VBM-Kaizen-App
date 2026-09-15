@@ -77,12 +77,10 @@ env:
   #      acumula. Reemita com sp=racwd.
   #
   #   2. O valor abaixo está em TEXTO PURO e dá escrita no container
-  #      inteiro até 2030. O DOWNLOAD deste arquivo já foi fechado — o
-  #      server.js agora recusa servir app.yaml, server.js, node_modules
-  #      e companhia (ver ARQUIVOS_DO_SERVIDOR) —, mas o token esteve
-  #      exposto enquanto isso não existia e continua em texto puro num
-  #      arquivo versionado. Revogue este SAS, emita outro com sp=racwd
-  #      e traga por Secret Scope:
+  #      inteiro até 2030. Enquanto o SEC-01 não for feito, este arquivo
+  #      é servido publicamente por express.static(__dirname): qualquer
+  #      pessoa com a URL do app baixa o app.yaml e fica com o token.
+  #      Revogue este SAS, emita outro e traga por Secret Scope:
   #
   #        - name: 'AZURE_STORAGE_SAS_TOKEN'
   #          valueFrom: 'azure-storage-sas'
@@ -126,104 +124,5 @@ env:
   #                            jeitos (Mail.Send.Shared cobre os dois).
   #                            Para voltar ao normal, remova a variável.
   #
-  # ATIVO — PLANO B, enquanto as liberações do service principal não saem.
-  # Com 'true', o comunicado sai pela caixa de QUEM ESTÁ USANDO o sistema
-  # (/me/sendMail), pelo navegador. Não depende de "Enviar Como", de
-  # permissão de aplicação nem de consentimento de administrador: cada
-  # pessoa envia pela própria caixa e autoriza por si, uma vez por sessão,
-  # na faixa "Autorize o envio de e-mails" que aparece na tela.
-  #
-  # Para voltar ao envio pelo servidor, preencha o bloco GRAPH_* abaixo:
-  # ele tem prioridade, e aí esta variável deixa de ter efeito sobre os
-  # comunicados (o remetente passa a ser a caixa do programa).
-  - name: 'KAIZEN_EMAIL_DO_USUARIO'
-    value: 'true'
-
-  # ══ ENVIO DE E-MAIL PELO SERVIDOR — ESCOLHA UM DOS DOIS BLOCOS ══
-  #
-  # O servidor tenta, nesta ordem: GRAPH_* (service principal), depois
-  # SMTP_*. Não achando nenhum, os comunicados voltam montados para a
-  # TELA, que tenta entregar pelo Graph com o token de quem está logado —
-  # o comportamento antigo, e o que faz o e-mail simplesmente não sair
-  # quando falta "Enviar Como" ou consentimento.
-  #
-  # A linha "[email] canal de envio: ..." no início do log do app diz
-  # qual caminho está valendo. Se ela disser "nenhum", nenhuma variável
-  # abaixo foi lida.
-
-  # ── OPÇÃO 1 (recomendada): Microsoft Graph com SERVICE PRINCIPAL ──
-  # O app envia com a PRÓPRIA identidade: não depende de usuário logado,
-  # de navegador aberto nem de SMTP AUTH (que a Microsoft aposentou no
-  # Exchange Online). É o que faz o comunicado sair no cadastro de um
-  # Kaizen mesmo com ninguém na tela.
-  #
-  # GRAPH_TENANT_ID      diretório (tenant) do Entra
-  # GRAPH_CLIENT_ID      Application (client) ID do service principal
-  # GRAPH_CLIENT_SECRET  segredo do service principal — SEMPRE valueFrom
-  # GRAPH_REMETENTE      caixa de onde o e-mail sai
-  #
-  # ANTES DE FUNCIONAR, duas liberações no Entra/Exchange (não dá para
-  # fazer por código, e sem elas o envio volta "sem permissão"):
-  #   1. Permissão de APLICAÇÃO (não delegada) Mail.Send do Microsoft
-  #      Graph no app registration, COM consentimento do administrador.
-  #   2. Uma ApplicationAccessPolicy no Exchange restringindo este
-  #      service principal à caixa do programa. Mail.Send de aplicação
-  #      vale para TODAS as caixas do locatário por padrão — peça a
-  #      política junto, é o que costuma destravar a aprovação da
-  #      segurança da informação.
-  #
-  #   - name: 'GRAPH_TENANT_ID'
-  #     value: '7893571b-6c2c-4cef-b4da-7d4b266a0626'
-  #   - name: 'GRAPH_CLIENT_ID'
-  #     value: '<Application (client) ID do service principal>'
-  #   - name: 'GRAPH_CLIENT_SECRET'
-  #     valueFrom: 'graph-client-secret'
-  #   - name: 'GRAPH_REMETENTE'
-  #     value: 'PCI.Base.Metals@Vale.com'
-  #
-  # O segredo já está num Azure Key Vault? Então NÃO copie o valor para
-  # cá. O Azure Databricks cria Secret Scope APOIADO EM KEY VAULT: o
-  # scope aponta para o cofre e o valor continua lá, com a rotação e a
-  # auditoria do cofre. Depois é só referenciar o scope no valueFrom.
-
-  # ── OPÇÃO 2: SMTP (aba "E-mail" do admin.html e comunicados) ──
-  # Só vale se o bloco GRAPH_* acima NÃO estiver preenchido. Serve para
-  # instalação com relay SMTP próprio (um host interno da empresa). Com
-  # Exchange Online, confirme antes com o time de Exchange se a submissão
-  # autenticada por senha ainda é aceita — a Microsoft aposentou a
-  # autenticação básica nesse canal, e nesse caso a OPÇÃO 1 é o caminho.
-  #
-  # SMTP_HOST       ex.: smtp.office365.com
-  # SMTP_PORT       587 (STARTTLS, padrão) ou 465 (TLS direto)
-  # SMTP_USER       conta de serviço que autentica
-  # SMTP_PASSWORD   senha/app password dessa conta
-  # SMTP_FROM       endereço do "De:". Padrão: o mesmo do SMTP_USER.
-  #                 Um "De:" diferente da conta autenticada exige
-  #                 "Enviar Como" no Exchange — sem isso o próprio
-  #                 servidor de e-mail recusa.
-  # SMTP_FROM_NOME  nome exibido. Padrão: 'Programa Kaizen'.
-  #
-  # A SENHA TEM DE VIR DE SECRET SCOPE, não de texto puro aqui. É o
-  # requisito central desta funcionalidade: a credencial não pode ser
-  # vista por ninguém, nem pelo navegador. O servidor já recusa servir
-  # este arquivo (ver ARQUIVOS_DO_SERVIDOR em server.js), mas segredo em
-  # texto puro num arquivo versionado continua sendo segredo vazado.
-  #
-  #   - name: 'SMTP_HOST'
-  #     value: 'smtp.office365.com'
-  #   - name: 'SMTP_PORT'
-  #     value: '587'
-  #   - name: 'SMTP_USER'
-  #     valueFrom: 'smtp-user'
-  #   - name: 'SMTP_PASSWORD'
-  #     valueFrom: 'smtp-password'
-  #   - name: 'SMTP_FROM'
-  #     value: 'PCI.Base.Metals@Vale.com'
-  #
-  # Enquanto as quatro não existirem, a aba "E-mail" aparece com o aviso
-  # "não está configurado" e a rota devolve 503 — nada quebra.
-  #
-  # ANTES DE USAR: rode database/criar_kzn_email_log.sql uma vez. É a
-  # tabela de auditoria (quem enviou, quando, para quem, com que
-  # assunto, com que resultado). Sem ela o e-mail sai do mesmo jeito,
-  # mas a auditoria fica só no log do app.
+  #   - name: 'KAIZEN_EMAIL_DO_USUARIO'
+  #     value: 'true'

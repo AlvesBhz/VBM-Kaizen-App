@@ -39,24 +39,9 @@
     authority: 'https://login.microsoftonline.com/7893571b-6c2c-4cef-b4da-7d4b266a0626'
   };
 
-  /* A biblioteca da Microsoft, servida pelo PRÓPRIO app, com o CDN só
-     como reserva.
-
-     A ordem era a inversa, e essa é a falha mais provável do envio pela
-     tela: rede corporativa costuma bloquear CDN externo, e um
-     alcdn.msauth.net barrado significa MSAL que nunca carrega, token que
-     nunca sai e comunicado que nunca é enviado — sem erro visível, porque
-     o <script> simplesmente não executa.
-
-     O arquivo local é o pacote @azure/msal-browser 2.38.3 (MIT), a MESMA
-     versão que estava no CDN, com hash no nome para cair na regra de
-     cache imutável do servidor. O CDN fica como segunda tentativa: se um
-     dia o arquivo local sumir de um upload, o envio continua de pé. */
-  var MSAL_LOCAL = 'js/vendor/595c0a2dd235b955_msal-browser-2.38.3.min.js';
   var MSAL_CDN = 'https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js';
   var instancia = null;
   var carregando = null;
-  var origemDaMsal = null;
 
   /* Endereço de retorno do login. Precisa ser a URL da PÁGINA, sem a
      query nem o fragmento: o Entra ID compara o redirect_uri com a
@@ -76,42 +61,19 @@
       && CONFIG.authority.indexOf('SEU_TENANT_ID_AQUI') === -1;
   }
 
-  function baixarScript(url) {
-    return new Promise(function (resolve, reject) {
-      var s = document.createElement('script');
-      s.src = url;
-      s.onload = function () {
-        // onload dispara mesmo quando o servidor devolveu um HTML de
-        // erro com status 200. Só vale se o global apareceu.
-        if (typeof msal !== 'undefined') resolve(url);
-        else reject(new Error('script carregado mas sem o objeto msal: ' + url));
-      };
-      s.onerror = function () { reject(new Error('falha ao baixar ' + url)); };
-      document.head.appendChild(s);
-    });
-  }
-
-  // A msal-browser.min.js (~370 KB) só é baixada quando o login está de
-  // fato configurado — e uma vez só por página, mesmo que duas partes do
-  // código peçam ao mesmo tempo. Local primeiro, CDN como reserva.
+  // A msal-browser.min.js (~200 KB, CDN externo) só é baixada quando o
+  // login está de fato configurado — e uma vez só por página, mesmo que
+  // duas partes do código peçam ao mesmo tempo.
   function carregarMsal() {
     if (typeof msal !== 'undefined') return Promise.resolve();
     if (carregando) return carregando;
-    carregando = baixarScript(MSAL_LOCAL)
-      .then(function () { origemDaMsal = 'local'; })
-      .catch(function (err) {
-        console.warn('[msal] copia local indisponivel (' + err.message + '); tentando o CDN.');
-        return baixarScript(MSAL_CDN).then(function () { origemDaMsal = 'cdn'; });
-      })
-      .catch(function (err) {
-        origemDaMsal = null;
-        // Mensagem que diz o que fazer, em vez de "falha ao carregar".
-        throw new Error(
-          'Não foi possível carregar a biblioteca de login da Microsoft. ' +
-          'Confira se js/vendor/ subiu junto no deploy; se subiu, a rede pode estar ' +
-          'bloqueando o arquivo. Detalhe: ' + err.message
-        );
-      });
+    carregando = new Promise(function (resolve, reject) {
+      var s = document.createElement('script');
+      s.src = MSAL_CDN;
+      s.onload = function () { resolve(); };
+      s.onerror = function () { reject(new Error('Falha ao carregar a MSAL.')); };
+      document.head.appendChild(s);
+    });
     return carregando;
   }
 
@@ -141,9 +103,6 @@
     enderecoDeRetorno: enderecoDeRetorno,
     estaConfigurado: estaConfigurado,
     carregarMsal: carregarMsal,
-    obterInstancia: obterInstancia,
-    /** 'local', 'cdn' ou null — para o diagnóstico dizer de onde veio a
-     *  biblioteca quando alguém perguntar por que o e-mail não saiu. */
-    origemDaMsal: function () { return origemDaMsal; }
+    obterInstancia: obterInstancia
   };
 })();
