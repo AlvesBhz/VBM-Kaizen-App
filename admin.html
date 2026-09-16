@@ -255,10 +255,31 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
    align-items:start é o que deixa cada bloco ter a sua altura: uma
    unidade de 3 aprovadores não estica a de 1 ao lado. */
 .admin-grupos{
-  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
-  gap:1.5rem 1rem;align-items:start;padding:1.25rem;
+  /* Colunas de TEXTO, e não grade: numa grade as duas colunas formam
+     LINHAS, e a linha toda fica com a altura do bloco mais alto. Com
+     MANITOBA (2 aprovadores) ao lado de ONTARIO (13), sobravam 1.247px
+     de buraco embaixo do MANITOBA — 1.727px de vazio na tela inteira,
+     medidos. Em multicol não existe linha: cada bloco escorre para a
+     coluna onde couber, e o navegador equilibra as duas alturas.
+
+     É masonry de verdade, sem JavaScript, sem altura fixa e sem
+     grid-template-rows: masonry (que ainda não tem suporte amplo). */
+  display:block;padding:1.25rem;
+  /* column-width manda, column-count só LIMITA: "no máximo 2 colunas,
+     cada uma com pelo menos 800px". Assim a tela decide sozinha, sem
+     media query — e 780px é medido, não escolhido: é o que uma coluna
+     precisa para caber dois cards de 370px. E 370 também é medido:
+     encolhendo um card com os textos REAIS da tela (nomes e e-mails
+     copiados da produção), o reticenciamento começa em 350px. Com um
+     fixture de nomes inventados, mais longos, esse limite dava 380 e
+     eu quase calibrei a tela pelo artefato do teste.
+     Com column-count:2 fixo, o notebook de 1366px ficava com 4 cards
+     lado a lado e 50 de 50 com texto reticenciado. */
+  column-width:780px;column-count:2;column-gap:1rem;
 }
-@media(max-width:900px){.admin-grupos{grid-template-columns:minmax(0,1fr);}}
+/* Um bloco NUNCA é partido no meio: cabeçalho e cards de uma unidade
+   ficam juntos, ou a coluna quebraria a unidade ao meio. */
+.admin-grupo{break-inside:avoid;-webkit-column-break-inside:avoid;margin-bottom:1.5rem;}
 /* Os cards de um bloco ficam um embaixo do outro, alinhados com o
    cabeçalho: o recuo lateral agora é da .admin-grupos, não de cada
    grade. minmax(0,1fr) e não 1fr porque a trilha 1fr tem mínimo
@@ -268,7 +289,23 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
    mínimo em zero a trilha encolhe, e o nome e o cargo usam o
    ellipsis/clamp que o .admin-item já tem. */
 .admin-grupo .admin-list{
-  grid-template-columns:minmax(0,1fr);
+  /* DOIS aprovadores por linha dentro do bloco.
+     max(390px, 45%) com auto-fit em vez de "repeat(2,...)" fixo: o 45%
+     limita a DOIS por linha (dois de 45% mais o vão já ocupam a faixa),
+     e o piso de 370px derruba para um quando o bloco fica estreito.
+     370px não é chute: o corte do texto começa em 350px (medido
+     encolhendo um card de 460px até reticenciar), e 370 dá a folga. A conta é sobre a largura do
+     BLOCO, que muda com o número de colunas, então o mesmo declarativo
+     serve o desktop e o telefone sem media query.
+
+     A última linha ímpar não precisa de tratamento: o card fica na
+     primeira trilha, com a largura de sempre, e a segunda fica vazia —
+     sem placeholder, sem centralizar, sem esticar. */
+  /* O min(...,100%) externo não é enfeite: o piso de 370px é RÍGIDO, e
+     num celular de 390px o contêiner tem 316px — a trilha ficava com
+     370 e o card transbordava a tela. Limitar o piso a 100% faz ele
+     ceder quando não há espaço. */
+  grid-template-columns:repeat(auto-fit,minmax(min(max(370px,45%),100%),1fr));
   padding:.6rem 0 0;grid-auto-rows:auto;
 }
 .admin-grupo-cab{
@@ -279,7 +316,12 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 }
 .admin-grupo-nome{
   font-family:'Poppins',sans-serif;font-weight:600;font-size:.74rem;
-  letter-spacing:.06em;text-transform:uppercase;color:var(--vbm-blue-dark);
+  letter-spacing:.06em;text-transform:uppercase;
+  /* --vbm-blue-deep, e não --vbm-blue-dark: o #1a8bbf que eu havia posto
+     aqui dá 2,2:1 sobre a própria faixa azul-clara do cabeçalho —
+     medido por pixel, abaixo do mínimo de 4,5:1 para texto pequeno. O
+     tema escuro não tinha o problema porque lá a cor já é outra. */
+  color:var(--vbm-blue-deep);
 }
 /* A contagem vai para o CANTO DIREITO, encostada na borda direita dos
    cards — antes ficava colada no nome, no meio de uma faixa larga, e o
