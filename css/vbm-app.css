@@ -1482,6 +1482,58 @@ textarea.lang-slot-input.form-control { min-height: 1.4rem; resize: vertical; }
   display: flex; gap: 0.65rem; justify-content: flex-end; flex-shrink: 0;
 }
 
+/* ── A CAIXA do modal no tema escuro ──────────────────
+   .modal nasce com background:#fff, e essa era a única peça do modal
+   sem contraparte escura AQUI. Duas telas (Administração e Biblioteca)
+   remendavam no <style> da própria página; Aprovação, Novo Kaizen e o
+   Painel não. Resultado: na Aprovação o "Kaizen ampliado" abria numa
+   caixa branca — e como TODO o conteúdo dentro dela já é correto (as
+   .kd-* são translúcidas e os textos usam os tokens do tema, que no
+   escuro são quase brancos), o efeito era texto branco sobre branco.
+   Medido antes da correção: 1 elemento claro (esta caixa) e 29 textos
+   entre 1,00:1 e 1,36:1. Não eram 29 defeitos — era um só, e a caixa
+   que os continha.
+
+   Escrita aqui, a regra vale para todo modal de toda tela, presente e
+   futuro. O conteúdo não precisa de nada: ele já herda o tema porque
+   vive dentro de body[data-bg="dark"], inclusive quando o modal recebe
+   um CLONE do painel, como o "Kaizen ampliado" faz.
+
+   Os cartões de runtime (.confirm-backdrop .modal — showToast e
+   confirmarAcao) mantêm o gradiente próprio: aquela regra é mais
+   específica e vem logo abaixo. */
+[data-bg="dark"] .modal {
+  background: var(--vbm-blue-deep);
+  box-shadow: 0 32px 80px rgba(0,0,0,.5);
+}
+[data-bg="dark"] .modal-head { border-bottom-color: rgba(255,255,255,.1); }
+[data-bg="dark"] .modal-foot { border-top-color: rgba(255,255,255,.1); }
+[data-bg="dark"] .modal-title { color: #fff; }
+
+/* ── Faixa de atenção dentro de um modal ──────────────
+   O aviso "como aprovador, você pode editar…" vinha com as cores no
+   atributo style (#fff4e5 / #92400e). Estilo inline vence qualquer
+   classe e não sabe que existe um tema: a faixa continuava âmbar-clara
+   dentro do modal escuro. Em vez de cobri-la com um !important, as
+   cores saem do HTML e vêm para cá, onde cada tema diz a sua — que é o
+   que o resto do sistema já faz.
+
+   Mesmo âmbar do .badge-pending/.stat-icon-orange, para o aviso não
+   inventar uma terceira cor de atenção. */
+.callout-atencao {
+  display: flex; align-items: flex-start; gap: .6rem;
+  padding: .85rem; margin-bottom: 1.25rem;
+  border-radius: .5rem;
+  background: #fff4e5; border: 1px solid rgba(194,119,14,.2);
+  font-size: .8rem; color: #92400e; line-height: 1.55;
+}
+.callout-atencao > i { color: #c2770e; margin-top: .05rem; flex-shrink: 0; }
+[data-bg="dark"] .callout-atencao {
+  background: rgba(194,119,14,.16); border-color: rgba(194,119,14,.4);
+  color: #f0c88a;
+}
+[data-bg="dark"] .callout-atencao > i { color: #f0a94a; }
+
 /* ═══════════════════════════════════════════════════
    CARTÕES DE RUNTIME — confirmação (window.confirmarAcao) e
    aviso (window.showToast)
@@ -1756,6 +1808,14 @@ textarea.lang-slot-input.form-control { min-height: 1.4rem; resize: vertical; }
 [data-bg="dark"] .kd-section-icon { background: rgba(60,181,229,.16); color: var(--vbm-blue-light); }
 [data-bg="dark"] .kd-section-title { color: #fff; }
 [data-bg="dark"] .kd-photo-box { background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.12); }
+/* A TARJA ao redor da foto ampliada, não a foto.
+   Com object-fit:contain a imagem não preenche a caixa, e o que sobra
+   nas bordas é o background do próprio <img> — #f4f6f8, claro, sem
+   contraparte escura. No modal escuro isso virava duas faixas brancas
+   emoldurando cada evidência. Trocar esse fundo não toca em um pixel da
+   imagem: nada de filter, opacity ou mix-blend-mode aqui. */
+[data-bg="dark"] #modalKaizenAmpliado .kd-photo-box img,
+[data-bg="dark"] #modalBibDetail .kd-photo-box img { background: rgba(255,255,255,.04); }
 /* No escuro o texto compõe sobre a caixa translúcida: 60% de branco dá
    5,87:1; os 50% que o resto do tema usa ficariam no limite. */
 [data-bg="dark"] .kd-photo-vazia { background: rgba(255,255,255,.04); color: rgba(255,255,255,.6); }

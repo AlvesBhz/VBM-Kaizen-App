@@ -38,7 +38,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>VBM Kaizen — Aprovação</title>
 <link href="css/fontawesome-subset.css?v=20260911-3" rel="stylesheet"/>
-<link href="css/vbm-app.css?v=20260916-1" rel="stylesheet"/>
+<link href="css/vbm-app.css?v=20260916-2" rel="stylesheet"/>
 <!-- Poppins servida pelo próprio app (css/poppins.css + assets/fonts/poppins).
      Vinha de fonts.googleapis.com: em rede sem saída para a internet o
      pedido ficava pendente e o evento load da página nunca disparava. -->
@@ -575,9 +575,12 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       <button class="modal-close" data-modal-close><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
-      <div style="background:#fff4e5;border-radius:.5rem;padding:.85rem;margin-bottom:1.25rem;border:1px solid rgba(194,119,14,.2);display:flex;align-items:flex-start;gap:.6rem;">
-        <i class="fa-solid fa-triangle-exclamation" style="color:#c2770e;margin-top:.05rem;"></i>
-        <div style="font-size:.8rem;color:#92400e;line-height:1.55;" data-i18n="ap.editWarning">Como aprovador, você pode editar os campos deste Kaizen antes de aprová-lo. Suas alterações serão registradas no histórico.</div>
+      <!-- As cores saíram do atributo style para .callout-atencao, em
+           css/vbm-app.css: inline não sabe que existe tema, e a faixa
+           ficava âmbar-clara dentro do modal escuro. -->
+      <div class="callout-atencao">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <div data-i18n="ap.editWarning">Como aprovador, você pode editar os campos deste Kaizen antes de aprová-lo. Suas alterações serão registradas no histórico.</div>
       </div>
       <div class="form-group">
         <label class="form-label" data-i18n="ap.titulo">Título</label>

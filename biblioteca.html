@@ -38,7 +38,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>VBM Kaizen — Biblioteca</title>
 <link href="css/fontawesome-subset.css?v=20260911-3" rel="stylesheet"/>
-<link href="css/vbm-app.css?v=20260916-1" rel="stylesheet"/>
+<link href="css/vbm-app.css?v=20260916-2" rel="stylesheet"/>
 <!-- Poppins servida pelo próprio app (css/poppins.css + assets/fonts/poppins).
      Vinha de fonts.googleapis.com: em rede sem saída para a internet o
      pedido ficava pendente e o evento load da página nunca disparava. -->
@@ -383,10 +383,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 /* Modal — vidro fosco e sombra profunda, igual ao .ds-modal do Design System */
 .modal-backdrop { backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 .modal { border-radius: 1.25rem; box-shadow: 0 32px 80px rgba(0,0,0,.2); }
-[data-bg="dark"] .modal { background: var(--vbm-blue-deep); box-shadow: 0 32px 80px rgba(0,0,0,.45); }
-[data-bg="dark"] .modal-head { border-bottom-color: rgba(255,255,255,.1); }
-[data-bg="dark"] .modal-title { color: #fff; }
-[data-bg="dark"] .modal-foot { border-top-color: rgba(255,255,255,.1); }
+/* O modal no tema escuro vem de css/vbm-app.css (regra única). */
 
 /* Tabela — linhas com hover sutil e tipografia mais legível */
 .data-table tbody tr { transition: background .2s var(--ease-out); }
