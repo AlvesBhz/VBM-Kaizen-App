@@ -1445,6 +1445,37 @@ textarea.lang-slot-input.form-control { min-height: 1.4rem; resize: vertical; }
   transition: all 0.2s; flex-shrink: 0;
 }
 .modal-close:hover { background: var(--vbm-blue); color: #fff; }
+
+/* ── O "X" no tema escuro ─────────────────────────────
+   Aqui mora um cruzamento que apagava o ícone: .modal-close pinta o
+   glifo com var(--vbm-mid), e no tema escuro o body REDEFINE esse token
+   para rgba(244,247,251,.55) — quase branco, porque lá ele é texto
+   secundário sobre fundo escuro. Só que o FUNDO da pílula continuava
+   sendo o #f5f5f5 do tema claro: branco sobre branco, contraste medido
+   de 1.01:1. O X não estava "meio apagado", estava invisível.
+
+   Três telas tinham conserto próprio no <style> da página e duas não —
+   por isso o defeito aparecia em umas e não em outras. A regra passa a
+   viver aqui, uma vez só, valendo para os modais fixos no HTML e para
+   os cartões criados em runtime (showToast/confirmarAcao), que usam o
+   mesmo .modal-close.
+
+   O glifo vem em #f4f7fb cheio, não em branco esmaecido: o alvo é o
+   mesmo peso visual do tema claro (#888 sobre #f5f5f5), e meia
+   transparência sobre a pílula translúcida devolvia justamente o
+   cinza apagado que o usuário apontou. */
+[data-bg="dark"] .modal-close,
+[data-bg="dark"] .settings-close {
+  background: rgba(255,255,255,.12);
+  color: #f4f7fb;
+}
+[data-bg="dark"] .modal-close:hover,
+[data-bg="dark"] .settings-close:hover { background: var(--vbm-blue); color: #fff; }
+/* O toast de canto não tem pílula — o glifo fica direto sobre o cartão
+   escuro, e var(--vbm-mid) a 55% o deixava rente ao fundo. */
+[data-bg="dark"] .toast-close { color: rgba(244,247,251,.85); }
+[data-bg="dark"] .toast-close:hover { color: #fff; }
+
 .modal-body { padding: 2rem; overflow-y: auto; flex: 1; }
 .modal-foot {
   padding: 1.2rem 2rem; border-top: 1px solid #f0f0f0;

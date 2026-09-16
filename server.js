@@ -3422,10 +3422,23 @@ apiRouter.get("/kaizens", async (req, res) => {
               PODE_EDITAR = ${SQL_PODE_EDITAR("p")},
               STATUS_EDITAVEL = ${SQL_STATUS_EDITAVEL("p")}
        ${fonte}
-       -- ID_KAIZEN como desempate: sem ele, dois Kaizens com a mesma
-       -- data poderiam trocar de lugar entre uma página e outra e um
-       -- deles sumiria da listagem.
-       ORDER BY ${dataRef} DESC, p.ID_KAIZEN DESC
+       -- Do mais recente para o mais antigo, pelo ID_KAIZEN.
+       --
+       -- Antes a ordem era ISNULL(DT_CONCLUSAO, DT_ATUALIZACAO) DESC, e
+       -- na tela ela não parecia ordem nenhuma: a Biblioteca mostra
+       -- KZN26-004, 003, 007, 006, 005, 001, 002. O rótulo do card é o
+       -- próprio ID_KAIZEN (ver rotuloIdKaizen), então ordenar por data
+       -- de CONCLUSÃO embaralha a numeração que o usuário lê — e a data
+       -- de conclusão é digitada no formulário, podendo ser anterior ao
+       -- cadastro ou igual em vários Kaizens.
+       --
+       -- ID_KAIZEN é sequencial no cadastro e ÚNICO, então também
+       -- estabiliza a paginação sozinho: com chave única no ORDER BY,
+       -- nenhum Kaizen se repete ou some entre uma página e a próxima.
+       -- O filtro por ano continua usando a expressão de data de
+       -- referência — quem ordena e quem peneira são perguntas
+       -- diferentes.
+       ORDER BY p.ID_KAIZEN DESC
        OFFSET @deslocamento ROWS FETCH NEXT @tamanho ROWS ONLY`,
       params
     );

@@ -38,7 +38,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>VBM Kaizen — Novo Kaizen</title>
 <link href="css/fontawesome-subset.css?v=20260911-3" rel="stylesheet"/>
-<link href="css/vbm-app.css?v=20260911-4" rel="stylesheet"/>
+<link href="css/vbm-app.css?v=20260916-1" rel="stylesheet"/>
 <!-- Poppins servida pelo próprio app (css/poppins.css + assets/fonts/poppins).
      Vinha de fonts.googleapis.com: em rede sem saída para a internet o
      pedido ficava pendente e o evento load da página nunca disparava. -->
@@ -119,8 +119,7 @@
 [data-bg="dark"] .settings-panel{background:var(--vbm-blue-deep);box-shadow:-16px 0 48px rgba(0,0,0,.45)}
 [data-bg="dark"] .settings-panel-head{border-bottom-color:rgba(255,255,255,.1)}
 [data-bg="dark"] .settings-panel-head h2{color:#fff}
-[data-bg="dark"] .settings-close{background:rgba(255,255,255,.08);color:rgba(255,255,255,.6)}
-[data-bg="dark"] .settings-close:hover{background:var(--vbm-blue);color:#fff}
+/* O fechar no tema escuro vem de css/vbm-app.css (regra única). */
 [data-bg="dark"] .settings-section-title{color:#fff}
 [data-bg="dark"] .settings-info{border-color:rgba(255,255,255,.25);color:rgba(255,255,255,.5)}
 [data-bg="dark"] .settings-divider{background:rgba(255,255,255,.1)}
@@ -1129,7 +1128,16 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 <div class="confirm-backdrop" id="modalFotoAmpliada" role="dialog" aria-modal="true" aria-labelledby="tituloFotoAmpliada">
   <div class="modal">
     <div class="modal-head">
-      <div class="modal-icon" style="--hue:60,181,229;background:var(--vbm-blue-pale);border-color:rgba(60,181,229,.28);"><i class="fa-solid fa-image" style="color:var(--vbm-blue);"></i></div>
+      <!-- fa-camera, e não fa-image: o projeto serve um SUBCONJUNTO do
+           Font Awesome (70 ícones, css/fontawesome-subset.css). Classe
+           de fora do subconjunto não dá erro nenhum — rende um
+           quadradinho vazio, que foi o que apareceu no cabeçalho deste
+           modal. fa-camera está no subconjunto e é o mesmo ícone da
+           zona de upload deste campo. Antes de trocar uma classe fa-*,
+           confira a lista; database/README-subset-fontawesome.md
+           explica como regerar o subconjunto, se um ícone novo for
+           mesmo necessário. -->
+      <div class="modal-icon" style="--hue:60,181,229;background:var(--vbm-blue-pale);border-color:rgba(60,181,229,.28);"><i class="fa-solid fa-camera" style="color:var(--vbm-blue);"></i></div>
       <div class="modal-title" id="tituloFotoAmpliada" data-i18n="f.photoView">Visualizar</div>
       <button class="modal-close" type="button" data-fechar-foto aria-label="Fechar" data-i18n-aria="settings.close"><i class="fa-solid fa-xmark"></i></button>
     </div>
