@@ -390,10 +390,8 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
    Trocar deixou de exigir limpar antes: há um botão Substituir, e
    arrastar outro arquivo sobre a imagem também troca. */
 .foto-palco[hidden] { display: none !important; }
-/* Referência da barra flutuante. A barra saiu de dentro do quadro para
-   poder virar coluna na ficha (ver .e-ficha, adiante); ancorada aqui ela
-   cai no mesmo pixel de antes, porque o quadro é o primeiro filho e o
-   palco não tem recuo. */
+/* Âncora do aviso "Solte para substituir", que cobre a ficha inteira
+   (ver .e-ficha .foto-quadro { position: static }, adiante). */
 .foto-palco { position: relative; }
 .foto-quadro {
   position: relative; overflow: hidden;
@@ -461,18 +459,16 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 [data-bg="dark"] .foto-bt-perigo:hover { background: rgba(233,123,123,.16); }
 [data-bg="dark"] .foto-solta { background: rgba(13,38,64,.9); color: var(--vbm-blue-light); }
 
-/* ── Campo de imagem: a FICHA (edição) ─────────────────────────────
-   Mesma marcação do palco, outro desenho. Quem cadastra precisa
-   conferir que o print certo subiu, e a evidência do Kaizen é quase
-   sempre uma captura densa: no cadastro vale o palco 16:9. Quem EDITA
-   um Kaizen já gravado quer trocar um arquivo entre muitos campos de um
-   formulário de quatro etapas, e aí a altura é que custa — a ficha
-   resolve o campo em 102 px contra os ~300 do palco, com nome,
-   dimensão e peso na mesma linha e as três ações ao lado.
+/* ── Campo de imagem: a FICHA ──────────────────────────────────────
+   Uma linha só: miniatura à esquerda, nome e dimensão no centro, as
+   três ações à direita. É o layout de referência, e vale nos DOIS
+   modos — cadastro e edição. A classe vem na marcação; o
+   window.VBMFotoCampo.usarFicha() continua existindo para o modo de
+   edição e virou idempotente.
 
-   É a recomendação do comparativo das duas propostas: B no cadastro,
-   A na edição. A classe é posta por JavaScript, e só depois de o
-   servidor autorizar a edição (ver window.VBMFotoCampo.usarFicha).
+   O palco 16:9 custava ~300 px por imagem. Em um formulário de quatro
+   etapas com duas imagens eram ~600 px de rolagem para dizer o que a
+   ficha diz em 102 px. Ler o print é trabalho do Ampliar.
 
    Nenhum elemento é criado ou removido: a grade recoloca os três que já
    existem. Por isso os manipuladores de Ampliar/Substituir/Remover, o
@@ -491,6 +487,12 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
      SEGUNDA linha. A ficha ia a 154 px em vez dos ~104 que justificam
      ela existir. Fixar a linha põe os três lado a lado. */
   grid-column: 1; grid-row: 1; height: 78px; border-radius: .45rem;
+  /* static de propósito: o "Solte para substituir" é position:absolute
+     com inset:0 e se ancora no primeiro ancestral posicionado. Com o
+     quadro relativo, o aviso cabia nos 104 px da miniatura — um alvo
+     que ninguém acerta. Solto, ele se ancora em .foto-palco e cobre a
+     ficha inteira, que é a área onde o arrastar já era aceito. */
+  position: static;
 }
 .e-ficha .foto-quadro .photo-preview-img {
   /* contain, e não o "cover" do estudo: cortar o miolo de uma captura
@@ -920,18 +922,16 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
               <div class="photo-upload-text"><strong data-i18n="f.clickAddPhoto">Clique para adicionar foto</strong><br><span data-i18n="f.photoFormats">PNG, JPG, WEBP até 10MB</span></div>
             </div>
             <!-- Aparece assim que há foto escolhida (ou já gravada, na
-                 edição). As ações ficam SOBRE a imagem, encostadas no
-                 que controlam; a legenda identifica o arquivo. -->
-            <div class="foto-palco" data-acoes-foto="imagem_antes" hidden>
+                 edição). Ficha de UMA LINHA: miniatura à esquerda,
+                 arquivo no centro, as três ações à direita. -->
+            <div class="foto-palco e-ficha" data-acoes-foto="imagem_antes" hidden>
               <div class="foto-quadro">
                 <img class="photo-preview-img" src="" alt="Foto do antes"/>
                 <div class="foto-solta" data-foto-solta hidden><span data-i18n="f.photoDrop">Solte para substituir</span></div>
               </div>
-              <!-- A barra de ações é IRMÃ do quadro, e não filha dele: no
-                   palco ela flutua sobre a imagem (position:absolute, com
-                   .foto-palco de referência) e na ficha da edição ela vira
-                   a terceira coluna da grade, ao lado do arquivo. Mesma
-                   marcação, mesmos manipuladores, dois desenhos. -->
+              <!-- A barra de ações é IRMÃ do quadro, e não filha dele:
+                   assim ela é a TERCEIRA COLUNA da ficha, ao lado do
+                   arquivo, em vez de flutuar sobre a miniatura. -->
               <div class="foto-barra">
                 <button type="button" class="foto-bt" data-foto-ver
                         data-i18n-title="f.photoZoom" data-i18n-aria="f.photoZoom"
@@ -989,16 +989,14 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
               <i class="fa-solid fa-camera photo-upload-icon"></i>
               <div class="photo-upload-text"><strong data-i18n="f.clickAddPhoto">Clique para adicionar foto</strong><br><span data-i18n="f.photoFormats">PNG, JPG, WEBP até 10MB</span></div>
             </div>
-            <div class="foto-palco" data-acoes-foto="imagem_depois" hidden>
+            <div class="foto-palco e-ficha" data-acoes-foto="imagem_depois" hidden>
               <div class="foto-quadro">
                 <img class="photo-preview-img" src="" alt="Foto do depois"/>
                 <div class="foto-solta" data-foto-solta hidden><span data-i18n="f.photoDrop">Solte para substituir</span></div>
               </div>
-              <!-- A barra de ações é IRMÃ do quadro, e não filha dele: no
-                   palco ela flutua sobre a imagem (position:absolute, com
-                   .foto-palco de referência) e na ficha da edição ela vira
-                   a terceira coluna da grade, ao lado do arquivo. Mesma
-                   marcação, mesmos manipuladores, dois desenhos. -->
+              <!-- A barra de ações é IRMÃ do quadro, e não filha dele:
+                   assim ela é a TERCEIRA COLUNA da ficha, ao lado do
+                   arquivo, em vez de flutuar sobre a miniatura. -->
               <div class="foto-barra">
                 <button type="button" class="foto-bt" data-foto-ver
                         data-i18n-title="f.photoZoom" data-i18n-aria="f.photoZoom"
@@ -2350,8 +2348,8 @@ createTeamPicker({
     descricao_depois: 300,          // DS_ESTADO_DEPOIS
     links_documentos: 300,          // URL_REFERENCIA
     licoes_aprendidas: 300,         // DS_LICOES_APRENDIDAS
-    comparacao_meta_inicial: 300,   // DS_RESULTADO_ESPERADO
-    descricao_resultado_outros: 100 // kzn_resultados.DS_RESULTADO
+    comparacao_meta_inicial: 300,   // DS_COMPARA_META
+    descricao_resultado_outros: 100 // DS_RESULTADO_ALCANCADO
   };
 
   var campos = [];
@@ -2594,18 +2592,25 @@ window.VBMDataConclusao = (function () {
       elNome.title = nome;
     }
 
+    /* A linha visível é NOME e DIMENSÃO, como o layout de referência.
+       O peso não sai de cena: vai para o title, porque é o que explica
+       uma recusa por 10MB — só deixa de disputar espaço com o nome do
+       arquivo, que é o que identifica o print. */
     function escrever() {
       if (!elDados) return;
-      var partes = [];
-      if (preview && preview.naturalWidth) {
-        partes.push(preview.naturalWidth.toLocaleString('pt-BR') + ' × ' +
-                    preview.naturalHeight.toLocaleString('pt-BR'));
-      }
+      var dimensao = preview && preview.naturalWidth
+        ? preview.naturalWidth.toLocaleString('pt-BR') + ' × ' +
+          preview.naturalHeight.toLocaleString('pt-BR')
+        : '';
+      elDados.textContent = dimensao;
+
       if (arquivo) {
         var kb = arquivo.size / 1024;
-        partes.push(kb >= 1024 ? (kb / 1024).toFixed(1) + ' MB' : Math.round(kb) + ' KB');
+        var peso = kb >= 1024 ? (kb / 1024).toFixed(1) + ' MB' : Math.round(kb) + ' KB';
+        elDados.title = dimensao ? dimensao + ' · ' + peso : peso;
+      } else {
+        elDados.removeAttribute('title');
       }
-      elDados.textContent = partes.join(' · ');
     }
     escrever();
     // A dimensão só existe depois que a imagem carrega — e ela chega
@@ -2643,10 +2648,10 @@ window.VBMDataConclusao = (function () {
     var zona = input.closest('.photo-upload-zone');
     if (zona) zona.style.display = 'none';
   }
-  /* Troca o palco pela ficha compacta nos dois campos. Chamada só pelo
-     modo de edição, e só DEPOIS de o servidor autorizar — ver o bloco
-     "MODO DE EDIÇÃO" no fim da página. É uma classe de CSS: a marcação,
-     os manipuladores e a legenda são os mesmos. */
+  /* Garante a ficha nos dois campos. Hoje a classe já vem na marcação
+     — os dois modos usam o mesmo layout —, então isto é idempotente e
+     fica como rede: a chamada do modo de edição segue valendo, e se
+     algum caminho futuro montar o campo sem a classe, ela entra aqui. */
   function usarFicha() {
     document.querySelectorAll('[data-acoes-foto]').forEach(function (palco) {
       palco.classList.add('e-ficha');
@@ -3589,12 +3594,8 @@ function txtEdicao(chave, padrao) {
       window.VBMEdicao = { id: k.ID_KAIZEN, dtAtualizacao: k.DT_ATUALIZACAO };
       texto('id_kaizen', k.ID_KAIZEN);
 
-      // Campo de imagem na FICHA compacta (Proposta A), e não no palco
-      // 16:9 do cadastro: aqui a pessoa está revendo um formulário de
-      // quatro etapas inteiro, e cada imagem custar ~300 px de rolagem
-      // atrapalha mais do que ajuda. A leitura do print fica no Ampliar.
-      // Só entra depois do 'ok' do servidor — sem autorização, a tela
-      // continua sendo um cadastro novo e mantém o palco.
+      // A ficha já vem na marcação, nos dois modos. A chamada fica como
+      // rede — é idempotente e não custa nada.
       if (window.VBMFotoCampo && window.VBMFotoCampo.usarFicha) window.VBMFotoCampo.usarFicha();
 
       texto('titulo_kaizen', k.titulo);

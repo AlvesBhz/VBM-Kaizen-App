@@ -2945,6 +2945,12 @@ const PVC_LIMITES = {
   DS_ESTADO_DEPOIS: 300,
   URL_REFERENCIA: 300,
   DS_LICOES_APRENDIDAS: 300,
+  // DS_COMPARA_META é o novo destino da "Comparação com a Meta Inicial";
+  // DS_RESULTADO_ESPERADO é onde ela morava e continua sendo o destino
+  // enquanto o ALTER TABLE não roda. Mesmo limite nos dois, porque é o
+  // MESMO campo da tela — validar por um e gravar no outro deixaria
+  // passar um texto que o banco recusa.
+  DS_COMPARA_META: 300,
   DS_RESULTADO_ESPERADO: 300,
   URL_IMG: 300,
   // DS_MOTIVO: texto da reprovação, gravado direto na linha do Kaizen.
@@ -2974,30 +2980,69 @@ const PVC_LIMITES = {
    a mesma consulta passa a usá-la sem precisar de novo deploy. A
    verificação é feita uma vez e guardada. */
 let colunaReferenciaExiste = null;
-// DS_RESULTADO em kzn_pedravisaoconsolidada guarda a "Descrição dos
-// Resultados Alcançados" — texto livre do KAIZEN, não do catálogo (ver
-// database/adicionar_ds_resultado_pvc.sql). A coluna é NOVA: o código
-// pode chegar ao ar antes do script rodar, e um INSERT citando coluna
-// inexistente derrubaria o cadastro inteiro. Checa uma vez, guarda a
-// resposta e diz no log o que decidiu — "não gravou a descrição" e
-// "gravou" não podem ser indistinguíveis de fora.
+// DS_RESULTADO_ALCANCADO em kzn_pedravisaoconsolidada guarda a
+// "Descrição dos Resultados Alcançados" — texto livre do KAIZEN, não do
+// catálogo (ver database/adicionar_colunas_texto_pvc.sql). Não confundir
+// com kzn_resultados.DS_RESULTADO, que é a descrição do ITEM DE
+// CATÁLOGO e continua existindo, intocada.
+//
+// A coluna é NOVA: o código pode chegar ao ar antes do script rodar, e
+// um INSERT citando coluna inexistente derrubaria o cadastro inteiro.
+// Checa uma vez, guarda a resposta e diz no log o que decidiu — "não
+// gravou a descrição" e "gravou" não podem ser indistinguíveis de fora.
+// Este campo é OPCIONAL, então sem a coluna o texto é descartado com
+// aviso; o obrigatório (Comparação com a Meta) tem tratamento próprio,
+// logo abaixo.
 let colunaDsResultadoExiste = null;
 async function temColunaDsResultado() {
   if (colunaDsResultadoExiste !== null) return colunaDsResultadoExiste;
   try {
     const r = await runQuery(
       `SELECT 1 AS OK FROM INFORMATION_SCHEMA.COLUMNS
-        WHERE TABLE_SCHEMA = @esquema AND TABLE_NAME = @tabela AND COLUMN_NAME = 'DS_RESULTADO'`,
+        WHERE TABLE_SCHEMA = @esquema AND TABLE_NAME = @tabela
+          AND COLUMN_NAME = 'DS_RESULTADO_ALCANCADO'`,
       [["esquema", sql.NVarChar(128), DB_SCHEMA], ["tabela", sql.NVarChar(128), DB_PVC_TABLE]]
     );
     colunaDsResultadoExiste = r.recordset.length > 0;
   } catch (err) {
     colunaDsResultadoExiste = false;
   }
-  console.log(`[resultados] DS_RESULTADO ${colunaDsResultadoExiste ? "disponível" : "AUSENTE"} em ` +
+  console.log(`[resultados] DS_RESULTADO_ALCANCADO ${colunaDsResultadoExiste ? "disponível" : "AUSENTE"} em ` +
     `${FULL_PVC_TABLE}` + (colunaDsResultadoExiste ? "." :
-      " — a descrição dos resultados não será gravada; rode database/adicionar_ds_resultado_pvc.sql."));
+      " — a descrição dos resultados não será gravada; rode database/adicionar_colunas_texto_pvc.sql."));
   return colunaDsResultadoExiste;
+}
+
+/* DS_COMPARA_META passa a guardar a "Comparação com a Meta Inicial /
+   Declaração do Problema" — o campo obrigatório do fim da etapa 4. Até
+   aqui esse texto morava em DS_RESULTADO_ESPERADO.
+   Ver database/adicionar_colunas_texto_pvc.sql.
+
+   Enquanto o script não roda, a coluna NÃO EXISTE, e este campo é
+   OBRIGATÓRIO: descartá-lo como se faz com a descrição dos resultados
+   (que é opcional) perderia o que a pessoa escreveu. Por isso a falta
+   da coluna aqui não descarta nada — mantém a gravação em
+   DS_RESULTADO_ESPERADO, que é onde o campo está hoje, e o app troca
+   sozinho de coluna assim que o ALTER TABLE for aplicado. */
+let colunaDsComparaMetaExiste = null;
+async function colunaDaComparacaoMeta() {
+  if (colunaDsComparaMetaExiste === null) {
+    try {
+      const r = await runQuery(
+        `SELECT 1 AS OK FROM INFORMATION_SCHEMA.COLUMNS
+          WHERE TABLE_SCHEMA = @esquema AND TABLE_NAME = @tabela AND COLUMN_NAME = 'DS_COMPARA_META'`,
+        [["esquema", sql.NVarChar(128), DB_SCHEMA], ["tabela", sql.NVarChar(128), DB_PVC_TABLE]]
+      );
+      colunaDsComparaMetaExiste = r.recordset.length > 0;
+    } catch (err) {
+      colunaDsComparaMetaExiste = false;
+    }
+    console.log("[comparacao] " + (colunaDsComparaMetaExiste
+      ? `DS_COMPARA_META disponível em ${FULL_PVC_TABLE}.`
+      : `DS_COMPARA_META AUSENTE em ${FULL_PVC_TABLE} — a Comparação com a Meta continua` +
+        " gravando em DS_RESULTADO_ESPERADO; rode database/adicionar_colunas_texto_pvc.sql."));
+  }
+  return colunaDsComparaMetaExiste ? "DS_COMPARA_META" : "DS_RESULTADO_ESPERADO";
 }
 
 /** Troca por completo os vínculos Kaizen ↔ Resultado, dentro da
@@ -3239,7 +3284,7 @@ function lerKaizenDoCorpo(b) {
     Number.isInteger(idUsuarioAprovador) ? null : "Aprovador é obrigatório.",
     maxLen(urlReferencia, PVC_LIMITES.URL_REFERENCIA, "Links / Documentos"),
     maxLen(licoesAprendidas, PVC_LIMITES.DS_LICOES_APRENDIDAS, "Lições Aprendidas"),
-    maxLen(comparacaoMeta, PVC_LIMITES.DS_RESULTADO_ESPERADO, "Comparação com a meta inicial"),
+    maxLen(comparacaoMeta, PVC_LIMITES.DS_COMPARA_META, "Comparação com a meta inicial"),
     // Mensagem escrita à mão em vez de obrigatorio(): o helper monta
     // "<campo> é obrigatório", que erra o gênero de "Data".
     !dataConclusao ? "Data de Conclusão é obrigatória." : null,
@@ -3346,7 +3391,11 @@ apiRouter.post("/kaizens", async (req, res) => {
       reqInsert.input("dsLicoes", sql.NVarChar(PVC_LIMITES.DS_LICOES_APRENDIDAS), licoesAprendidas);
       reqInsert.input("vlResultado", sql.Decimal(18, 2), valorResultadoFinanceiro);
       reqInsert.input("idMoeda", sql.Int, idMoeda);
-      reqInsert.input("dsResultadoEsperado", sql.NVarChar(PVC_LIMITES.DS_RESULTADO_ESPERADO), comparacaoMeta);
+      // A Comparação com a Meta vai para DS_COMPARA_META, ou para
+      // DS_RESULTADO_ESPERADO enquanto a coluna nova não existir. O
+      // parâmetro é o mesmo; só o NOME DA COLUNA muda.
+      const colComparaMeta = await colunaDaComparacaoMeta();
+      reqInsert.input("dsComparaMeta", sql.NVarChar(PVC_LIMITES.DS_COMPARA_META), comparacaoMeta);
       // Coluna nova: só entra no comando se existir no banco (ver
       // temColunaDsResultado). Sem ela, o Kaizen grava igual e o log diz
       // por que a descrição ficou de fora.
@@ -3363,13 +3412,13 @@ apiRouter.post("/kaizens", async (req, res) => {
           (ID_KAIZEN, ID_USUARIO_CADASTRO, ID_USUARIO_LIDER, NM_KAIZEN, ID_CATEGORIA, ID_REPLICACAO,
            DS_PROBLEMA, DS_OBJETIVO,${gravaStatus ? " ID_STATUS," : ""} ID_APROVADOR, URL_IMG_ANTES, DS_ESTADO_ANTES,
            URL_IMG_DEPOIS, DS_ESTADO_DEPOIS, URL_REFERENCIA, ID_DESPERDICIO, DS_LICOES_APRENDIDAS,
-           VL_RESULTADO_FINANCEIRO, ID_MOEDA, DS_RESULTADO_ESPERADO,${gravaDsResultado ? " DS_RESULTADO," : ""} DT_CONCLUSAO, DT_ATUALIZACAO,
+           VL_RESULTADO_FINANCEIRO, ID_MOEDA, ${colComparaMeta},${gravaDsResultado ? " DS_RESULTADO_ALCANCADO," : ""} DT_CONCLUSAO, DT_ATUALIZACAO,
            ID_USUARIO_ATUALIZACAO)
         VALUES
           (@idKaizen, @idUsuarioCadastro, @idUsuarioLider, @nmKaizen, @idCategoria, @idReplicacao,
            @dsProblema, @dsObjetivo,${gravaStatus ? " @idStatus," : ""} @idAprovador, @urlImgAntes, @dsEstadoAntes,
            @urlImgDepois, @dsEstadoDepois, @urlReferencia, @idDesperdicio, @dsLicoes,
-           @vlResultado, @idMoeda, @dsResultadoEsperado,${gravaDsResultado ? " @dsResultado," : ""} CONVERT(DATE, @dtConclusao, 23), ${AGORA_BRASILIA},
+           @vlResultado, @idMoeda, @dsComparaMeta,${gravaDsResultado ? " @dsResultado," : ""} CONVERT(DATE, @dtConclusao, 23), ${AGORA_BRASILIA},
            @idUsuarioCadastro)`);
 
       for (const idMembro of membros) {
@@ -4430,7 +4479,9 @@ apiRouter.put("/kaizens/:id", async (req, res) => {
       r.input("dsEstadoDepois", sql.NVarChar(PVC_LIMITES.DS_ESTADO_DEPOIS), dados.descricaoDepois);
       r.input("urlReferencia", sql.NVarChar(PVC_LIMITES.URL_REFERENCIA), dados.urlReferencia);
       r.input("dsLicoes", sql.NVarChar(PVC_LIMITES.DS_LICOES_APRENDIDAS), dados.licoesAprendidas);
-      r.input("dsResultadoEsperado", sql.NVarChar(PVC_LIMITES.DS_RESULTADO_ESPERADO), dados.comparacaoMeta);
+      // Mesma troca de coluna do cadastro (ver colunaDaComparacaoMeta).
+      const colComparaMeta = await colunaDaComparacaoMeta();
+      r.input("dsComparaMeta", sql.NVarChar(PVC_LIMITES.DS_COMPARA_META), dados.comparacaoMeta);
       r.input("vlResultado", sql.Decimal(18, 2), dados.valorResultadoFinanceiro);
       r.input("idMoeda", sql.Int, dados.idMoeda);
       // Mesma coluna opcional do cadastro. Desligar o bloco "Outros" na
@@ -4478,9 +4529,9 @@ apiRouter.put("/kaizens/:id", async (req, res) => {
                 DS_ESTADO_DEPOIS = @dsEstadoDepois,
                 URL_REFERENCIA = @urlReferencia,
                 DS_LICOES_APRENDIDAS = @dsLicoes,
-                DS_RESULTADO_ESPERADO = @dsResultadoEsperado,
+                ${colComparaMeta} = @dsComparaMeta,
                 VL_RESULTADO_FINANCEIRO = @vlResultado,
-                ID_MOEDA = @idMoeda,${gravaDsResultado ? "\n                DS_RESULTADO = @dsResultado," : ""}
+                ID_MOEDA = @idMoeda,${gravaDsResultado ? "\n                DS_RESULTADO_ALCANCADO = @dsResultado," : ""}
                 DT_CONCLUSAO = CONVERT(DATE, @dtConclusao, 23),${trocaAntes ? "\n                URL_IMG_ANTES = @urlImgAntes," : ""}${trocaDepois ? "\n                URL_IMG_DEPOIS = @urlImgDepois," : ""}
                 ID_STATUS = @idStatus,
                 DT_ATUALIZACAO = ${AGORA_BRASILIA},
@@ -4661,7 +4712,12 @@ apiRouter.get("/kaizens/:id/edicao", async (req, res) => {
       url_imagem_depois: k.URL_IMG_DEPOIS,
       links_documentos: k.URL_REFERENCIA,
       licoes_aprendidas: k.DS_LICOES_APRENDIDAS,
-      comparacao_meta_inicial: k.DS_RESULTADO_ESPERADO,
+      // DS_COMPARA_META é o destino novo; DS_RESULTADO_ESPERADO é onde
+      // o texto está nos Kaizens gravados até aqui. O SELECT é p.*, então
+      // as duas vêm e a escolha é feita aqui: reabrir um Kaizen antigo
+      // continua mostrando o que a pessoa escreveu, com ou sem o ALTER
+      // TABLE aplicado e com ou sem a cópia dos dados.
+      comparacao_meta_inicial: k.DS_COMPARA_META ?? k.DS_RESULTADO_ESPERADO ?? null,
       // DATE puro, do jeito que o <input type="date"> espera.
       data_conclusao: somenteData(k.DT_CONCLUSAO),
       valor_resultado_financeiro: k.VL_RESULTADO_FINANCEIRO,
@@ -4671,7 +4727,10 @@ apiRouter.get("/kaizens/:id/edicao", async (req, res) => {
       // ID_TIPO_RESULTADO do catálogo (1 = financeiro, 2 = outros).
       id_resultado_financeiro: (resultados.recordset.find((x) => x.ID_TIPO_RESULTADO === 1) || {}).ID_RESULTADO ?? null,
       id_resultado_outros: (resultados.recordset.find((x) => x.ID_TIPO_RESULTADO === 2) || {}).ID_RESULTADO ?? null,
-      descricao_resultado_outros: k.DS_RESULTADO ?? null,
+      // Mesma leitura tolerante da Comparação: DS_RESULTADO_ALCANCADO é
+      // o destino; DS_RESULTADO só aparece em quem chegou a rodar o
+      // script anterior, e é lida como reserva para nada sumir da tela.
+      descricao_resultado_outros: k.DS_RESULTADO_ALCANCADO ?? k.DS_RESULTADO ?? null,
       ID_STATUS: k.ID_STATUS,
       NM_STATUS: k.NM_STATUS,
       // Carimbo da última gravação: volta no salvamento para o servidor
