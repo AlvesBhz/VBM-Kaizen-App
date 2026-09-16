@@ -555,22 +555,18 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
             <!-- Uma linha por ano, montada em carregarResumo(). -->
             <div id="bibResumoAnos" style="display:flex;flex-direction:column;gap:.55rem;"></div>
             <div style="height:1px;background:rgba(255,255,255,.1);"></div>
-            <!-- Ponto colorido antes do nome, igual às linhas de status do
-                 Resumo da Aprovação; as cores são as mesmas do COR_STATUS
-                 daquela tela. As linhas de total por ano não levam ponto:
+            <!-- Uma linha por status CADASTRADO, montada em
+                 carregarResumo() a partir da mesma lista que enche o
+                 filtro "Todos os status": os dois têm de oferecer os
+                 mesmos itens. Eram três linhas fixas aqui (Aprovados,
+                 Reprovados, Aguardando), e o painel escondia "Revisado"
+                 e "Solicitado alterações" enquanto o filtro logo abaixo
+                 os mostrava.
+
+                 Ponto colorido antes do nome, igual ao Resumo da
+                 Aprovação. As linhas de total por ano não levam ponto:
                  ano não é status. -->
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
-              <span style="font-size:.72rem;color:rgba(255,255,255,.55);display:flex;align-items:center;gap:.4rem;"><span style="width:7px;height:7px;border-radius:50%;background:#16a34a;display:inline-block;"></span> <span data-i18n="badge.aprovados">Aprovados</span></span>
-              <span style="font-family:'Poppins', sans-serif;font-weight:700;font-size:.85rem;color:#fff;" id="bibQtdAprovado">—</span>
-            </div>
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
-              <span style="font-size:.72rem;color:rgba(255,255,255,.55);display:flex;align-items:center;gap:.4rem;"><span style="width:7px;height:7px;border-radius:50%;background:#dc2626;display:inline-block;"></span> <span data-i18n="badge.reprovados">Reprovados</span></span>
-              <span style="font-family:'Poppins', sans-serif;font-weight:700;font-size:.85rem;color:#fff;" id="bibQtdReprovado">—</span>
-            </div>
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
-              <span style="font-size:.72rem;color:rgba(255,255,255,.55);display:flex;align-items:center;gap:.4rem;"><span style="width:7px;height:7px;border-radius:50%;background:#c2770e;display:inline-block;"></span> <span data-i18n="badge.aguardando">Aguardando</span></span>
-              <span style="font-family:'Poppins', sans-serif;font-weight:700;font-size:.85rem;color:#fff;" id="bibQtdAguardando">—</span>
-            </div>
+            <div id="bibResumoStatus" style="display:flex;flex-direction:column;gap:.55rem;"></div>
           </div>
         </div>
       </div>
@@ -1219,31 +1215,55 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       .catch(function () {});
   }
 
+  /* Cor do pontinho de cada status, a mesma tabela do Resumo da
+     Aprovação (COR_STATUS em aprovacao.html): as duas telas listam os
+     mesmos status e mostrá-los em cores diferentes só confundiria.
+     O cadastro não tem coluna de cor, então o casamento é pelo nome sem
+     acento, nos dois idiomas, com queda para um cinza neutro — status
+     novo aparece na lista mesmo sem cor combinada. */
+  var COR_RESUMO_STATUS = {
+    'aprovado': '#16a34a', 'approved': '#16a34a', 'concluido': '#16a34a',
+    'reprovado': '#dc2626', 'rejeitado': '#dc2626', 'reject': '#dc2626', 'rejected': '#dc2626',
+    'aguardando aprovacao': '#c2770e', 'awaiting approval': '#c2770e',
+    'em aprovacao': '#c2770e', 'aguardando': '#c2770e',
+    'revisado': '#7c3aed', 'reviewed': '#7c3aed',
+    'solicitado alteracoes': '#3cb5e5', 'solicitado alteracao': '#3cb5e5',
+    'solicitar alteracoes': '#3cb5e5', 'solicitar alteracao': '#3cb5e5',
+    'request changes': '#3cb5e5', 'requested changes': '#3cb5e5', 'change requested': '#3cb5e5',
+  };
+
   // ─── Resumo (hero) ───
   function carregarResumo() {
-    fetch('/api/kaizens/resumo', { headers: { Accept: 'application/json' } })
-      .then(function (r) { return r.ok ? r.json() : { porAno: {}, porStatus: {} }; })
+    // ?idioma= porque os NOMES dos status vêm daqui e têm de sair no
+    // idioma da tela, igual aos do filtro.
+    fetch('/api/kaizens/resumo?idioma=' + idiomaDaTela(), { headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (resumo) {
+        if (!resumo) return;
         var anos = Object.keys(resumo.porAno || {}).sort().reverse();
         document.getElementById('bibResumoAnos').innerHTML = anos.map(function (a) {
           return '<div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">' +
-            '<span style="font-size:.72rem;color:rgba(255,255,255,.55);">Total ' + a + '</span>' +
+            '<span style="font-size:.72rem;color:rgba(255,255,255,.55);">Total ' + escaparHtml(a) + '</span>' +
             '<span style="font-family:\'Poppins\',sans-serif;font-weight:700;font-size:.85rem;color:#fff;">' + resumo.porAno[a] + '</span></div>';
         }).join('');
-        // As chaves de porStatus passaram a ser o NM_STATUS do cadastro
-        // (kzn_status), não mais os literais antigos. Casa pelo nome sem
-        // acento, como o badge do card já faz.
-        function qtdPorNome() {
-          var nomes = Array.prototype.slice.call(arguments);
-          var total = 0;
-          Object.keys(resumo.porStatus || {}).forEach(function (k) {
-            if (nomes.indexOf(semAcento(k)) !== -1) total += resumo.porStatus[k];
-          });
-          return total;
-        }
-        document.getElementById('bibQtdAprovado').textContent = qtdPorNome('aprovado', 'concluido');
-        document.getElementById('bibQtdReprovado').textContent = qtdPorNome('reprovado', 'rejeitado');
-        document.getElementById('bibQtdAguardando').textContent = qtdPorNome('em aprovacao', 'aguardando');
+
+        /* Os itens saem de statusAno — um por status ATIVO do cadastro,
+           na ordem do ID, que é a mesma origem e a mesma ordem do filtro
+           "Todos os status". A CONTAGEM, porém, vem de totalPorStatus:
+           statusAno conta só o ano corrente, e as linhas de "Total
+           <ano>" logo acima já são por ano — misturar os dois critérios
+           faria a soma dos status não bater com o total. */
+        var totais = resumo.totalPorStatus || {};
+        document.getElementById('bibResumoStatus').innerHTML = (resumo.statusAno || []).map(function (st) {
+          var cor = COR_RESUMO_STATUS[semAcento(st.NM_STATUS)] || 'rgba(255,255,255,.45)';
+          var qtd = totais[String(st.ID_STATUS)] || 0;
+          return '<div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">' +
+            '<span style="font-size:.72rem;color:rgba(255,255,255,.55);display:flex;align-items:center;gap:.4rem;">' +
+              '<span style="width:7px;height:7px;border-radius:50%;background:' + cor + ';display:inline-block;flex-shrink:0;"></span> ' +
+              escaparHtml(st.NM_STATUS) + '</span>' +
+            '<span style="font-family:\'Poppins\', sans-serif;font-weight:700;font-size:.85rem;color:#fff;">' + qtd + '</span>' +
+          '</div>';
+        }).join('');
       })
       .catch(function () {});
   }
@@ -1400,6 +1420,10 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     // ficam de fora: seriam duas consultas para devolver a mesma lista.
     carregarCategorias();
     carregarStatus();
+    // O resumo passou a mostrar o NOME de cada status, que é traduzido —
+    // sem recarregar aqui, o painel ficava em português com a tela em
+    // inglês, e divergindo do filtro logo abaixo.
+    carregarResumo();
     carregarLista();
   });
 })();
@@ -1504,9 +1528,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       'nav.administracao': 'Administração',
       'role.operador': 'Operador',
       'badge.aprovado': 'Aprovado',
-      'badge.aprovados': 'Aprovados',
-      'badge.reprovados': 'Reprovados',
-      'badge.aguardando': 'Aguardando',
       'badge.rascunhos': 'Rascunhos',
       'common.fechar': 'Fechar',
       'a11y.abrirMenu': 'Abrir menu',
@@ -1606,9 +1627,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       'nav.administracao': 'Administration',
       'role.operador': 'Operator',
       'badge.aprovado': 'Approved',
-      'badge.aprovados': 'Approved',
-      'badge.reprovados': 'Rejected',
-      'badge.aguardando': 'Pending',
       'badge.rascunhos': 'Drafts',
       'common.fechar': 'Close',
       'a11y.abrirMenu': 'Open menu',

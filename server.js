@@ -3709,11 +3709,18 @@ apiRouter.get("/kaizens/resumo", async (req, res) => {
     const porAno = await runQuery(
       `SELECT YEAR(DT_ATUALIZACAO) AS ANO, COUNT(*) AS QTD FROM ${FULL_PVC_TABLE} GROUP BY YEAR(DT_ATUALIZACAO)`
     );
+    // Total por status, TODOS os anos, casado por ID_STATUS.
+    //
+    // Era agrupado por NM_STATUS e o painel da Biblioteca casava o nome
+    // sem acento contra uma lista escrita à mão ('em aprovacao',
+    // 'aguardando'). O cadastro diz "Aguardando aprovação", que não está
+    // nessa lista — e o painel mostrava 0 tendo Kaizen aguardando.
+    // Renomear um status na Administração quebrava a conta de novo. ID
+    // não depende de como o status foi escrito nem do idioma.
     const porStatus = await runQuery(
-      `SELECT st.NM_STATUS, COUNT(*) AS QTD
+      `SELECT p.ID_STATUS, COUNT(*) AS QTD
          FROM ${FULL_PVC_TABLE} p
-         LEFT JOIN ${FULL_STATUS_TABLE} st ON st.ID_STATUS = p.ID_STATUS AND st.ID_IDIOMA = @idIdiomaBase
-        GROUP BY st.NM_STATUS`, [["idIdiomaBase", sql.Int, ID_IDIOMA_PT]]
+        GROUP BY p.ID_STATUS`
     );
     // Um item por status CADASTRADO, no idioma pedido, com a contagem do
     // ano — inclusive os que ficaram em zero, para o painel não esconder
@@ -3745,7 +3752,14 @@ apiRouter.get("/kaizens/resumo", async (req, res) => {
 
     res.json({
       porAno: Object.fromEntries(porAno.recordset.map((r) => [r.ANO, r.QTD])),
-      porStatus: Object.fromEntries(porStatus.recordset.map((r) => [r.NM_STATUS || "(sem status)", r.QTD])),
+      // Chave = ID_STATUS (como texto, porque é chave de objeto JSON).
+      // Quem lê monta a lista a partir de statusAno — que traz os status
+      // CADASTRADOS, no idioma da tela — e busca aqui o total de todos
+      // os anos. Assim o painel mostra os mesmos itens do filtro, na
+      // mesma ordem, sem nome literal no meio do caminho.
+      totalPorStatus: Object.fromEntries(
+        porStatus.recordset.map((r) => [String(r.ID_STATUS == null ? "" : r.ID_STATUS), r.QTD])
+      ),
       ano,
       statusAno: statusAno.recordset.map((r) => ({
         ID_STATUS: r.ID_STATUS, NM_STATUS: r.NM_STATUS, QTD: r.QTD,
