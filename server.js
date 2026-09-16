@@ -272,11 +272,16 @@ const FULL_KAIZEN_HIER_TABLE = `[${DB_SCHEMA}].[${DB_KAIZEN_HIER_TABLE}]`;
 const DB_MOEDA_TABLE = safeIdentifier(process.env.AZURE_SQL_MOEDA_TABLE, "kzn_moeda");
 const FULL_MOEDA_TABLE = `[${DB_SCHEMA}].[${DB_MOEDA_TABLE}]`;
 
-// Reduções de desperdício: seleção MÚLTIPLA na tela, mas
-// kzn_pedravisaoconsolidada só tem uma FK ID_DESPERDICIO (sem tabela de
-// junção no DER original) — nova tabela pedida ao usuário, mesmo
-// padrão de kzn_resultado_kaizen. PVC.ID_DESPERDICIO fica sempre NULL
-// agora; a lista de verdade mora só aqui.
+// Reduções de desperdício: seleção MÚLTIPLA na tela. O DER original
+// tinha uma FK única ID_DESPERDICIO na kzn_pedravisaoconsolidada, que
+// não comporta múltipla escolha; a tabela de junção abaixo resolve, no
+// mesmo padrão de kzn_resultado_kaizen, e é a ÚNICA fonte da lista.
+//
+// A coluna PVC.ID_DESPERDICIO não existe mais no banco. Enquanto ela
+// existia, o INSERT ainda a citava gravando NULL — resquício inofensivo
+// até ela ser removida, quando virou "Invalid column name
+// 'ID_DESPERDICIO'" e derrubou o cadastro inteiro. Não citar coluna que
+// não se usa: é o que evita que a próxima remoção quebre de novo.
 const DB_KZ_DESPERDICIO_TABLE = safeIdentifier(process.env.AZURE_SQL_KZ_DESPERDICIO_TABLE, "kzn_kaizen_desperdicio");
 const FULL_KZ_DESPERDICIO_TABLE = `[${DB_SCHEMA}].[${DB_KZ_DESPERDICIO_TABLE}]`;
 
@@ -3206,9 +3211,9 @@ function lerKaizenDoCorpo(b) {
   const idReplicacao = intOuNulo(b.id_replicacao);
   const idUsuarioAprovador = intOuNulo(b.id_usuario_aprovador);
   const idUsuarioLider = intOuNulo(b.id_usuario_lider); // opcional: sem escolha, usa quem está logado
-  // Desperdícios: seleção múltipla agora (ver FULL_KZ_DESPERDICIO_TABLE
-  // acima) — PVC.ID_DESPERDICIO fica sempre NULL, a lista de verdade
-  // vai pra kzn_kaizen_desperdicio.
+  // Desperdícios: seleção múltipla (ver FULL_KZ_DESPERDICIO_TABLE
+  // acima) — a lista vai inteira para kzn_kaizen_desperdicio, e a PVC
+  // não guarda desperdício nenhum.
   const idsDesperdicio = Array.isArray(b.ids_desperdicio)
     ? [...new Set(b.ids_desperdicio.map((v) => parseInt(v, 10)).filter((n) => Number.isInteger(n)))]
     : [];
@@ -3387,7 +3392,6 @@ apiRouter.post("/kaizens", async (req, res) => {
       reqInsert.input("urlImgDepois", sql.NVarChar(PVC_LIMITES.URL_IMG), caminhoDepois);
       reqInsert.input("dsEstadoDepois", sql.NVarChar(PVC_LIMITES.DS_ESTADO_DEPOIS), descricaoDepois);
       reqInsert.input("urlReferencia", sql.NVarChar(PVC_LIMITES.URL_REFERENCIA), urlReferencia);
-      reqInsert.input("idDesperdicio", sql.Int, null);
       reqInsert.input("dsLicoes", sql.NVarChar(PVC_LIMITES.DS_LICOES_APRENDIDAS), licoesAprendidas);
       reqInsert.input("vlResultado", sql.Decimal(18, 2), valorResultadoFinanceiro);
       reqInsert.input("idMoeda", sql.Int, idMoeda);
@@ -3411,13 +3415,13 @@ apiRouter.post("/kaizens", async (req, res) => {
         INSERT INTO ${FULL_PVC_TABLE}
           (ID_KAIZEN, ID_USUARIO_CADASTRO, ID_USUARIO_LIDER, NM_KAIZEN, ID_CATEGORIA, ID_REPLICACAO,
            DS_PROBLEMA, DS_OBJETIVO,${gravaStatus ? " ID_STATUS," : ""} ID_APROVADOR, URL_IMG_ANTES, DS_ESTADO_ANTES,
-           URL_IMG_DEPOIS, DS_ESTADO_DEPOIS, URL_REFERENCIA, ID_DESPERDICIO, DS_LICOES_APRENDIDAS,
+           URL_IMG_DEPOIS, DS_ESTADO_DEPOIS, URL_REFERENCIA, DS_LICOES_APRENDIDAS,
            VL_RESULTADO_FINANCEIRO, ID_MOEDA, ${colComparaMeta},${gravaDsResultado ? " DS_RESULTADO_ALCANCADO," : ""} DT_CONCLUSAO, DT_ATUALIZACAO,
            ID_USUARIO_ATUALIZACAO)
         VALUES
           (@idKaizen, @idUsuarioCadastro, @idUsuarioLider, @nmKaizen, @idCategoria, @idReplicacao,
            @dsProblema, @dsObjetivo,${gravaStatus ? " @idStatus," : ""} @idAprovador, @urlImgAntes, @dsEstadoAntes,
-           @urlImgDepois, @dsEstadoDepois, @urlReferencia, @idDesperdicio, @dsLicoes,
+           @urlImgDepois, @dsEstadoDepois, @urlReferencia, @dsLicoes,
            @vlResultado, @idMoeda, @dsComparaMeta,${gravaDsResultado ? " @dsResultado," : ""} CONVERT(DATE, @dtConclusao, 23), ${AGORA_BRASILIA},
            @idUsuarioCadastro)`);
 
