@@ -258,13 +258,23 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
   font-family:'Poppins',sans-serif;font-weight:600;font-size:.74rem;
   letter-spacing:.06em;text-transform:uppercase;color:var(--vbm-blue-dark);
 }
+/* A contagem vai para o CANTO DIREITO, encostada na borda direita dos
+   cards — antes ficava colada no nome, no meio de uma faixa larga, e o
+   olho tinha de caçá-la. margin-left:auto empurra pelo flex que já
+   existe: sem position, sem float, e o flex-wrap continua valendo se o
+   nome da unidade for longo demais para a linha. */
+.admin-grupo-cab .admin-item-badge{margin-left:auto;}
 [data-bg="dark"] .admin-grupo + .admin-grupo{border-top-color:rgba(255,255,255,.1);}
 [data-bg="dark"] .admin-grupo-cab{
   border-color:rgba(60,181,229,.28);
   background:linear-gradient(155deg,rgba(60,181,229,.16) 0%,rgba(60,181,229,.06) 100%);
 }
 [data-bg="dark"] .admin-grupo-nome{color:var(--vbm-blue-light);}
-@media(max-width:900px){.admin-grupo-cab{margin:0 1rem;}}
+/* Sem recuo próprio abaixo de 900px: a margem do cabeçalho TEM de ser a
+   mesma do padding lateral da .admin-list, senão ele deixa de casar com
+   a borda dos cards. Aqui havia 1rem contra os 1.25rem da grade — 4px de
+   desalinho que só aparecia no tablet e no celular. Um valor só, para o
+   alinhamento não depender de dois números combinarem por acaso. */
 .admin-item{display:flex;align-items:center;gap:1rem;padding:.9rem 1rem;border-radius:.6rem;border:1px solid #eaf0f8;background:#fff;transition:box-shadow .2s;height:100%;}
 .admin-item:hover{box-shadow:0 2px 10px rgba(60,181,229,.12);}
 .admin-avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:'Poppins',sans-serif;font-weight:700;font-size:11px;color:#fff;border:1.5px solid rgba(255,255,255,.5);}
