@@ -244,10 +244,32 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
    GET /api/aprovadores, que já vem ordenada por NM_SITE e NM_USUARIO:
    nenhuma consulta a mais, nenhuma reordenação no navegador. */
 .admin-grupos{display:block;}
+/* Os dois números que a grade de cards usa, num lugar só. O cabeçalho
+   tem de ter a LARGURA DE UM CARD, e largura de card é conta: recuo
+   lateral e vão entre colunas. Repetir 1.25rem e 1rem em dois blocos
+   deixaria o alinhamento dependendo de eles combinarem por acaso — foi
+   assim que nasceram os 4px de desalinho do tablet. */
+.admin-grupo{--grupo-recuo:1.25rem;--grupo-vao:1rem;}
+.admin-grupo .admin-list{
+  padding-left:var(--grupo-recuo);padding-right:var(--grupo-recuo);
+  column-gap:var(--grupo-vao);
+  /* minmax(0,1fr) e não 1fr: uma trilha 1fr tem mínimo automático de
+     min-content, então o e-mail longo de um aprovador empurrava a
+     COLUNA para além do contêiner em tela estreita (medido: 372px de
+     coluna dentro de 316px disponíveis, em 390px de viewport). O card
+     ficava mais largo que a área e o texto saía cortado. Com o mínimo
+     em zero a trilha pode encolher, e o nome e o cargo usam o
+     ellipsis/clamp que o .admin-item já tem. */
+  grid-template-columns:repeat(2,minmax(0,1fr));
+}
+@media(max-width:900px){.admin-grupo .admin-list{grid-template-columns:minmax(0,1fr);}}
 .admin-grupo + .admin-grupo{border-top:1px solid #eaf0f8;}
 .admin-grupo-cab{
   display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;
-  margin:0 1.25rem;padding:.55rem .85rem;
+  margin:0 var(--grupo-recuo);padding:.55rem .85rem;
+  /* Uma coluna da grade: tira os dois recuos e o vão, e divide por 2.
+     O cabeçalho termina exatamente onde o primeiro card termina. */
+  width:calc((100% - 2 * var(--grupo-recuo) - var(--grupo-vao)) / 2);
   border:1px solid #e3edf7;border-radius:.6rem;
   background:linear-gradient(155deg,rgba(232,247,253,.75) 0%,rgba(232,247,253,.35) 100%);
 }
@@ -270,6 +292,9 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
   background:linear-gradient(155deg,rgba(60,181,229,.16) 0%,rgba(60,181,229,.06) 100%);
 }
 [data-bg="dark"] .admin-grupo-nome{color:var(--vbm-blue-light);}
+/* Abaixo de 900px a grade vira UMA coluna, e "largura de um card" passa
+   a ser a largura toda — por isso a conta acima sai de cena aqui. */
+@media(max-width:900px){.admin-grupo-cab{width:auto;}}
 /* Sem recuo próprio abaixo de 900px: a margem do cabeçalho TEM de ser a
    mesma do padding lateral da .admin-list, senão ele deixa de casar com
    a borda dos cards. Aqui havia 1rem contra os 1.25rem da grade — 4px de
