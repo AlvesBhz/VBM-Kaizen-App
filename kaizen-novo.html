@@ -804,7 +804,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 
           <div class="form-grid form-grid-2">
             <div class="form-group">
-              <label for="liderSearchWrap" class="form-label" data-i18n="f.projectLeader">Líder do Projeto <span class="req">*</span></label>
+              <label for="liderSearchWrap" class="form-label" data-i18n="f.projectLeader">Líder do Projeto: <span class="req">*</span></label>
               <div class="input-with-icon" id="liderSearchWrap" style="position:relative;">
                 <i class="fa-solid fa-magnifying-glass input-icon"></i>
                 <input type="text" class="form-control" id="id_lider_projeto" name="id_lider_projeto" autocomplete="off" placeholder="Digite o nome..." data-i18n-placeholder="f.namePlaceholder" required/>
@@ -816,7 +816,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
             </div>
 
             <div class="form-group">
-              <label for="titulo_kaizen" class="form-label" data-i18n="f.kaizenTitle">Título do Kaizen <span class="req">*</span></label>
+              <label for="titulo_kaizen" class="form-label" data-i18n="f.kaizenTitle">Título do Kaizen: <span class="req">*</span></label>
               <input type="text" class="form-control" id="titulo_kaizen" name="titulo_kaizen" maxlength="100" placeholder="Ex.: Redução do tempo de setup" data-i18n-placeholder="f.kaizenTitlePlaceholder" required/>
               <!-- ID_KAIZEN do registro em edição. Vazio = cadastro novo.
                    É o que diferencia "o Kaizen mantendo o próprio título"
@@ -829,25 +829,25 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
             </div>
 
             <div class="form-group">
-              <label for="id_categoria" class="form-label" data-i18n="f.category">Categoria <span class="req">*</span></label>
+              <label for="id_categoria" class="form-label" data-i18n="f.category">Categoria: <span class="req">*</span></label>
               <select class="form-control" id="id_categoria" name="id_categoria" required>
                 <option value="" data-i18n="f.selectCategory">Selecione a categoria...</option>
               </select>
             </div>
             <div class="form-group">
-              <label for="id_replicacao_potencial" class="form-label" data-i18n="f.replicationPotential">Replicação em Potencial <span class="req">*</span></label>
+              <label for="id_replicacao_potencial" class="form-label" data-i18n="f.replicationPotential">Replicação em Potencial: <span class="req">*</span></label>
               <select class="form-control" id="id_replicacao_potencial" name="id_replicacao_potencial" required>
                 <option value="" data-i18n="f.select">Selecione...</option>
               </select>
             </div>
 
             <div class="form-group" style="grid-column:1/-1;">
-              <label for="declaracao_problema" class="form-label" data-i18n="f.problemDescription">Descrição do Problema <span class="req">*</span></label>
+              <label for="declaracao_problema" class="form-label" data-i18n="f.problemDescription">Descrição do Problema: <span class="req">*</span></label>
               <textarea class="form-control" id="declaracao_problema" name="declaracao_problema" rows="3" placeholder="Descreva claramente o problema ou a oportunidade identificada..." data-i18n-placeholder="f.problemPlaceholder" required></textarea>
               <div class="form-helper" data-i18n="f.problemHelper">Seja específico. Um bom problema bem descrito facilita a solução.</div>
             </div>
             <div class="form-group" style="grid-column:1/-1;">
-              <label for="meta_objetivo" class="form-label" data-i18n="f.goalObjective">Meta / Objetivo <span class="req">*</span></label>
+              <label for="meta_objetivo" class="form-label" data-i18n="f.goalObjective">Meta / Objetivo: <span class="req">*</span></label>
               <textarea class="form-control" id="meta_objetivo" name="meta_objetivo" rows="3" placeholder="Qual o resultado esperado com este Kaizen?" data-i18n-placeholder="f.goalPlaceholder" required></textarea>
             </div>
           </div>
@@ -856,7 +856,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 
           <div class="form-grid form-grid-2">
             <div class="form-group">
-              <label for="id_aprovador" class="form-label" data-i18n="f.approver">Aprovador <span class="req">*</span></label>
+              <label for="id_aprovador" class="form-label" data-i18n="f.approver">Aprovador: <span class="req">*</span></label>
               <select class="form-control" id="id_aprovador" name="id_aprovador" required>
                 <option value="" data-i18n="f.selectApprover">Selecione o aprovador...</option>
               </select>
@@ -869,7 +869,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
             </div>
 
             <div class="form-group" style="grid-column:1/2;">
-              <label for="teamSearchWrap" class="form-label" data-i18n="f.valeTeamMembers">Membros da Equipe Vale <span class="field-tag-optional" data-i18n="f.optionalMax2">opcional · máx. 2</span></label>
+              <label for="teamSearchWrap" class="form-label" data-i18n="f.valeTeamMembers">Membros da Equipe Vale: <span class="field-tag-optional" data-i18n="f.optionalMax2">opcional · máx. 2</span></label>
               <div class="input-with-icon team-search-group" id="teamSearchWrap">
                 <i class="fa-solid fa-magnifying-glass input-icon"></i>
                 <input type="text" class="form-control" id="buscaMembroVale" autocomplete="off" placeholder="Buscar colaborador (MDM)... (Enter para adicionar)" data-i18n-placeholder="f.searchCollaborator"/>
@@ -886,7 +886,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
             </div>
 
             <div class="form-group" style="grid-column:2/3;">
-              <label for="externoSearchWrap" class="form-label" data-i18n="f.externalMembers">Membros Externos (Terceiros) <span class="field-tag-optional" data-i18n="f.optionalMax1">opcional · máx. 1</span></label>
+              <label for="externoSearchWrap" class="form-label" data-i18n="f.externalMembers">Membros Externos (Terceiros): <span class="field-tag-optional" data-i18n="f.optionalMax1">opcional · máx. 1</span></label>
               <div class="input-with-icon team-search-group" id="externoSearchWrap">
                 <i class="fa-solid fa-user-plus input-icon"></i>
                 <input type="text" class="form-control" id="buscaMembroExterno" autocomplete="off" placeholder="Nome do membro externo... (Enter para adicionar)" data-i18n-placeholder="f.externalNamePlaceholder"/>
@@ -915,7 +915,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="wizard-panel-sub" data-i18n="wiz.panel2Sub">Documente como era a situação antes da melhoria — com evidência visual, se possível.</div>
 
           <div class="form-group">
-            <label for="imagem_antes" class="form-label" data-i18n="f.imageBefore">Imagem do Antes <span class="req">*</span></label>
+            <label for="imagem_antes" class="form-label" data-i18n="f.imageBefore">Imagem do Antes: <span class="req">*</span></label>
             <div class="photo-upload-zone">
               <input type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" id="imagem_antes" name="imagem_antes"/>
               <i class="fa-solid fa-camera photo-upload-icon"></i>
@@ -955,13 +955,13 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           </div>
 
           <div class="form-group">
-            <label for="descricao_antes" class="form-label" data-i18n="f.descriptionBefore">Descrição do Antes <span class="req">*</span></label>
+            <label for="descricao_antes" class="form-label" data-i18n="f.descriptionBefore">Descrição do Antes: <span class="req">*</span></label>
             <textarea class="form-control" id="descricao_antes" name="descricao_antes" rows="4" placeholder="Descreva a situação e os problemas anteriores à melhoria..." data-i18n-placeholder="f.descriptionBeforePlaceholder" required></textarea>
             <div class="form-helper" data-i18n="f.descriptionBeforeHelper">Inclua dados quantitativos, se disponíveis — facilita medir o ganho depois.</div>
           </div>
 
           <div class="form-group">
-            <label for="imagem_depois" class="form-label" data-i18n="f.wasteReduction">Redução de Desperdícios <span class="req">*</span></label> <span class="field-tag-multi"><i class="fa-solid fa-square-check"></i> <span data-i18n="f.multiSelect">seleção múltipla</span></span>
+            <label for="imagem_depois" class="form-label" data-i18n="f.wasteReduction">Redução de Desperdícios: <span class="req">*</span></label> <span class="field-tag-multi"><i class="fa-solid fa-square-check"></i> <span data-i18n="f.multiSelect">seleção múltipla</span></span>
             <div class="waste-tags-grid" id="wasteTagsGrid"><!-- populado via /api/desperdicios --></div>
           </div>
 
@@ -983,7 +983,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="wizard-panel-sub" data-i18n="wiz.panel3Sub">Mostre a solução aplicada e onde encontrar mais detalhes, se necessário.</div>
 
           <div class="form-group">
-            <label class="form-label" data-i18n="f.imageAfter">Imagem do Depois <span class="req">*</span></label>
+            <label class="form-label" data-i18n="f.imageAfter">Imagem do Depois: <span class="req">*</span></label>
             <div class="photo-upload-zone">
               <input type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" id="imagem_depois" name="imagem_depois"/>
               <i class="fa-solid fa-camera photo-upload-icon"></i>
@@ -1018,7 +1018,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           </div>
 
           <div class="form-group">
-            <label for="descricao_depois" class="form-label" data-i18n="f.descriptionAfter">Descrição do Depois <span class="req">*</span></label>
+            <label for="descricao_depois" class="form-label" data-i18n="f.descriptionAfter">Descrição do Depois: <span class="req">*</span></label>
             <textarea class="form-control" id="descricao_depois" name="descricao_depois" rows="4" placeholder="Descreva a solução, melhorias, padronização e impactos positivos..." data-i18n-placeholder="f.descriptionAfterPlaceholder" required></textarea>
           </div>
 
@@ -1027,7 +1027,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
                  id_resultado_financeiro, que é o combo de OUTRA etapa —
                  clicar em "Links / Documentos Extras" levava o foco para
                  lá. Copiar-e-colar antigo, achado ao renomear os campos. -->
-            <label for="links_documentos" class="form-label" data-i18n="f.extraLinks">Links / Documentos Extras</label> <span class="field-tag-optional" data-i18n="f.optional">opcional</span>
+            <label for="links_documentos" class="form-label" data-i18n="f.extraLinks">Links / Documentos Extras: </label> <span class="field-tag-optional" data-i18n="f.optional">opcional</span>
             <div class="input-with-icon">
               <i class="fa-solid fa-link input-icon"></i>
               <input type="url" class="form-control" id="links_documentos" name="links_documentos" placeholder="https://... (SharePoint, evidências, anexos)" data-i18n-placeholder="f.extraLinksPlaceholder"/>
@@ -1053,12 +1053,14 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="wizard-panel-sub" data-i18n="wiz.panel4Sub">Compartilhe o que foi aprendido e o valor gerado com esta melhoria.</div>
 
           <div class="form-group">
-            <label class="form-label" data-i18n="f.lessonsLearned">Lições Aprendidas</label> <span class="req">*</span>
+            <label class="form-label" data-i18n="f.lessonsLearned">Lições Aprendidas: <span class="req">*</span></label>
             <textarea class="form-control" id="licoes_aprendidas" name="licoes_aprendidas" rows="3" placeholder="O que foi aprendido durante este Kaizen? O que faria diferente?" data-i18n-placeholder="f.lessonsPlaceholder"></textarea>
           </div>
 
           <div class="form-group">
-            <label class="form-label" style="margin-bottom:.6rem;" data-i18n="f.financialResultQuestion">Este Kaizen gerou resultado? <span class="field-tag-optional" data-i18n="f.optional">opcional</span></label>
+            <!-- data-sem-dois-pontos: é PERGUNTA, não título de campo —
+                 termina em "?" e não leva ":". -->
+            <label class="form-label" style="margin-bottom:.6rem;" data-sem-dois-pontos data-i18n="f.financialResultQuestion">Este Kaizen gerou resultado? <span class="field-tag-optional" data-i18n="f.optional">opcional</span></label>
 
             <div style="display:flex;flex-direction:column;gap:1.1rem;">
               <div class="result-block" id="blocoResultadoFinanceiro">
@@ -1073,7 +1075,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
                 <div class="form-group conditional-sub">
                   <div class="form-grid form-grid-3">
                     <div class="form-group" style="margin-bottom:0;">
-                      <label for="id_resultado_financeiro" class="form-label" id="lblTipoResultadoFinanceiro" data-i18n="f.financialResultType">Resultado <span class="field-tag-conditional" data-i18n="f.conditional">Condicional</span></label>
+                      <label for="id_resultado_financeiro" class="form-label" id="lblTipoResultadoFinanceiro" data-i18n="f.financialResultType">Resultado: <span class="field-tag-conditional" data-i18n="f.conditional">Condicional</span></label>
                       <!-- Sem <option> fixa: a lista vem de kzn_resultados
                            (ID_TIPO_RESULTADO = 1). As duas que estavam aqui,
                            "Saving" e "Cost Avoided", eram texto solto — não
@@ -1084,13 +1086,13 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
                       </select>
                     </div>
                     <div class="form-group" style="margin-bottom:0;">
-                      <label for="moeda_resultado_financeiro" class="form-label" data-i18n="f.resultCurrency">Moeda</label>
+                      <label for="moeda_resultado_financeiro" class="form-label" data-i18n="f.resultCurrency">Moeda: </label>
                       <select class="form-control" id="moeda_resultado_financeiro" name="moeda_resultado_financeiro" disabled>
                         <option value="" data-i18n="f.select">Selecione...</option>
                       </select>
                     </div>
                     <div class="form-group" style="margin-bottom:0;">
-                      <label for="valor_resultado_financeiro" class="form-label" data-i18n="f.resultValue">Valor Alcançado/Esperado</label>
+                      <label for="valor_resultado_financeiro" class="form-label" data-i18n="f.resultValue">Valor Alcançado/Esperado: </label>
                       <input type="number" step="0.01" min="0" class="form-control" id="valor_resultado_financeiro" name="valor_resultado_financeiro" placeholder="0,00" disabled/>
                     </div>
                   </div>
@@ -1106,13 +1108,13 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
                 <div class="form-group conditional-sub">
                   <div class="form-grid form-grid-2">
                     <div class="form-group" style="margin-bottom:0;">
-                      <label for="id_resultado_outros" class="form-label" id="lblTipoResultadoOutros" data-i18n="f.otherResultType">Resultado <span class="field-tag-conditional" data-i18n="f.conditional">Condicional</span></label>
+                      <label for="id_resultado_outros" class="form-label" id="lblTipoResultadoOutros" data-i18n="f.otherResultType">Resultado: <span class="field-tag-conditional" data-i18n="f.conditional">Condicional</span></label>
                       <select class="form-control" id="id_resultado_outros" name="id_resultado_outros" disabled>
                         <option value="" data-i18n="f.select">Selecione...</option>
                       </select>
                     </div>
                     <div class="form-group" style="margin-bottom:0;">
-                      <label for="descricao_resultado_outros" class="form-label" data-i18n="f.otherResultDescription">Descrição dos Resultados Alcançados</label>
+                      <label for="descricao_resultado_outros" class="form-label" data-i18n="f.otherResultDescription">Descrição dos Resultados Alcançados: </label>
                       <textarea class="form-control" id="descricao_resultado_outros" name="descricao_resultado_outros" rows="1" placeholder="Descreva os resultados alcançados..." data-i18n-placeholder="f.otherResultDescriptionPlaceholder" disabled></textarea>
                     </div>
                   </div>
@@ -1148,7 +1150,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="form-group">
             <div class="form-grid form-grid-2">
               <div class="form-group" style="margin-bottom:0;">
-                <label class="form-label" for="data_conclusao_texto" data-i18n="f.completionDate">Data de Conclusão <span class="req">*</span></label>
+                <label class="form-label" for="data_conclusao_texto" data-i18n="f.completionDate">Data de Conclusão: <span class="req">*</span></label>
                 <div class="input-with-icon campo-data">
                   <button type="button" class="input-icon campo-data-botao" id="data_conclusao_abrir"
                           data-i18n-aria="f.completionDateOpen" aria-label="Abrir calendário">
@@ -1166,7 +1168,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           </div>
 
           <div class="form-group">
-            <label class="form-label" data-i18n="f.comparisonWithGoal">Comparação com a Meta Inicial / Declaração do Problema</label> <span class="req">*</span>
+            <label class="form-label" data-i18n="f.comparisonWithGoal">Comparação com a Meta Inicial / Declaração do Problema: <span class="req">*</span></label>
             <textarea class="form-control" id="comparacao_meta_inicial" name="comparacao_meta_inicial" rows="3" placeholder="Compare o resultado obtido com a meta ou o problema originalmente declarado..." data-i18n-placeholder="f.comparisonWithGoalPlaceholder"></textarea>
           </div>
 
@@ -1699,6 +1701,30 @@ function rotuloPessoa(p) {
   var settingsBtn = document.getElementById('settingsBtn');
   if (!select || !panel) return;
 
+  /* Escreve a tradução SEM destruir os filhos do elemento.
+
+     Era `el.textContent = dict[key]`, e isso apagava tudo que estivesse
+     dentro do rótulo: o "*" dos obrigatórios (span.req) e as etiquetas
+     "opcional" / "Condicional". Trocar o idioma fazia os asteriscos
+     sumirem da tela inteira, e só voltavam com F5 — o formulário deixava
+     de dizer o que é obrigatório. Aqui só o TEXTO do próprio elemento é
+     trocado; os filhos ficam onde estão.
+
+     O ":" dos rótulos entra AQUI, e não no dicionário: as mensagens de
+     pendência ("preencha os seguintes campos: Título do Kaizen") leem o
+     mesmo dicionário, e um "Título do Kaizen:" no meio da frase ficaria
+     errado. No dicionário mora o NOME do campo; o dois-pontos é enfeite
+     do rótulo. data-sem-dois-pontos isenta quem já termina em "?". */
+  function escreverTraducao(el, texto) {
+    if (el.classList.contains('form-label') && el.dataset.semDoisPontos == null) texto += ':';
+    var primeiro = null;
+    for (var n = el.firstChild; n; n = n.nextSibling) {
+      if (n.nodeType === 3) { primeiro = n; break; }   // 3 = nó de texto
+    }
+    if (primeiro) primeiro.nodeValue = texto;
+    else el.insertBefore(document.createTextNode(texto), el.firstChild);
+  }
+
   function translatePanel(lang) {
     var dict = I18N[lang] || I18N['pt-BR'];
     window.__i18n = dict;
@@ -1707,7 +1733,7 @@ function rotuloPessoa(p) {
     scope.forEach(function (root) {
       root.querySelectorAll('[data-i18n]').forEach(function (el) {
         var key = el.dataset.i18n;
-        if (dict[key] != null) el.textContent = dict[key];
+        if (dict[key] != null) escreverTraducao(el, dict[key]);
       });
       root.querySelectorAll('[data-i18n-html]').forEach(function (el) {
         var key = el.dataset.i18nHtml;
