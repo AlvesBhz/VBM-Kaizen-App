@@ -235,6 +235,38 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 [data-bg="dark"] .admin-add-btn.btn-outline:hover{background:rgba(255,255,255,.14);color:#fff;border-color:rgba(255,255,255,.5);transform:translateY(-1px);box-shadow:none;}
 .admin-list{display:grid;grid-template-columns:1fr 1fr;gap:.75rem 1rem;padding:1.25rem;align-items:stretch;grid-auto-rows:1fr;}
 @media(max-width:900px){.admin-list{grid-template-columns:1fr;}}
+/* ── Aprovadores agrupados por unidade ──────────────────────────────
+   Só organização: o card é o mesmo .admin-item, dentro da mesma
+   .admin-list. O que entra é o cabeçalho de cada unidade e o respiro
+   entre grupos. O cabeçalho é uma faixa de vidro discreta, no mesmo
+   vocabulário do resto do admin (--vbm-blue-pale, borda de 1px, raio
+   de .6rem) — não é um componente novo.
+
+   O agrupamento é feito EM MEMÓRIA, sobre a mesma resposta de
+   GET /api/aprovadores, que já vem ordenada por NM_SITE e NM_USUARIO:
+   nenhuma consulta a mais, nenhuma reordenação no navegador. */
+.admin-grupos{display:block;}
+.admin-grupo + .admin-grupo{border-top:1px solid #eaf0f8;}
+.admin-grupo-cab{
+  display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;
+  margin:0 1.25rem;padding:.55rem .85rem;
+  border:1px solid #e3edf7;border-radius:.6rem;
+  background:linear-gradient(155deg,rgba(232,247,253,.75) 0%,rgba(232,247,253,.35) 100%);
+}
+/* O primeiro grupo encosta no cabeçalho da seção; os demais ganham ar. */
+.admin-grupo{padding-top:1.25rem;}
+.admin-grupo .admin-list{padding-top:.75rem;}
+.admin-grupo-nome{
+  font-family:'Poppins',sans-serif;font-weight:600;font-size:.74rem;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--vbm-blue-dark);
+}
+[data-bg="dark"] .admin-grupo + .admin-grupo{border-top-color:rgba(255,255,255,.1);}
+[data-bg="dark"] .admin-grupo-cab{
+  border-color:rgba(60,181,229,.28);
+  background:linear-gradient(155deg,rgba(60,181,229,.16) 0%,rgba(60,181,229,.06) 100%);
+}
+[data-bg="dark"] .admin-grupo-nome{color:var(--vbm-blue-light);}
+@media(max-width:900px){.admin-grupo-cab{margin:0 1rem;}}
 .admin-item{display:flex;align-items:center;gap:1rem;padding:.9rem 1rem;border-radius:.6rem;border:1px solid #eaf0f8;background:#fff;transition:box-shadow .2s;height:100%;}
 .admin-item:hover{box-shadow:0 2px 10px rgba(60,181,229,.12);}
 .admin-avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:'Poppins',sans-serif;font-weight:700;font-size:11px;color:#fff;border:1.5px solid rgba(255,255,255,.5);}
@@ -642,7 +674,12 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       <div id="aprovadoresState" style="padding:1.25rem;color:var(--vbm-mid);font-size:.85rem;">
         Carregando aprovadores...
       </div>
-      <div class="admin-list" id="aprovadoresList" style="display:none;"></div>
+      <!-- Deixou de ser .admin-list para virar o CONTÊINER dos grupos por
+           unidade: cada grupo traz um cabeçalho e a sua PRÓPRIA .admin-list
+           dentro. Assim a grade de cards, o grid-auto-rows:1fr que iguala a
+           altura e a quebra para 1 coluna abaixo de 900px continuam valendo
+           exatamente como estavam — o card não mudou uma linha. -->
+      <div class="admin-grupos" id="aprovadoresList" style="display:none;"></div>
     </div>
 
     <!-- ═══ CATEGORIAS ═══ -->
@@ -1600,7 +1637,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 <!-- Dados do usuário logado (Microsoft Graph) — reaproveita o token do
      login já existente; sem MSAL próprio, sem alterar o fluxo de auth. -->
 <script src="js/usuario-graph.js?v=20260912-1"></script>
-<script src="js/aprovadores.js?v=20260912-1"></script>
+<script src="js/aprovadores.js?v=20260916-1"></script>
 <script src="js/usuarios.js?v=20260912-1"></script>
 <!-- cadastro-bilingue.js define o motor compartilhado (window.criarCadastroBilingue);
      os 6 arquivos seguintes só configuram sua própria aba com ele. -->
@@ -1799,6 +1836,10 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       'f.select': 'Selecione...',
       'table.status': 'Status',
       'adm.approversWord': 'aprovadores',
+      'adm.approverWord': 'aprovador',
+      'adm.siteNone': 'Sem unidade',
+      'adm.noApprovers': 'Nenhum aprovador cadastrado ainda.',
+      'adm.loadingApprovers': 'Carregando aprovadores...',
       'adm.kaizensWord': 'kaizens',
       'adm.kaizenWord': 'kaizen',
       'adm.usosWord': 'usos',
@@ -1949,6 +1990,10 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
       'f.select': 'Select...',
       'table.status': 'Status',
       'adm.approversWord': 'approvers',
+      'adm.approverWord': 'approver',
+      'adm.siteNone': 'No site',
+      'adm.noApprovers': 'No approvers registered yet.',
+      'adm.loadingApprovers': 'Loading approvers...',
       'adm.kaizensWord': 'kaizens',
       'adm.kaizenWord': 'kaizen',
       'adm.usosWord': 'uses',
@@ -2078,6 +2123,13 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 
   function translatePanel(lang) {
     var dict = I18N[lang] || I18N['pt-BR'];
+    // Publica o dicionário, como kaizen-novo.html já fazia. Os textos que
+    // nascem em JavaScript não têm [data-i18n] para o laço abaixo alcançar
+    // — é daqui que js/aprovadores.js tira "aprovadores" e "Sem unidade".
+    // Sem isto, a varredura traduzia a página e os rótulos montados em
+    // tempo de execução ficavam em português, sem erro nenhum aparente.
+    window.__i18n = dict;
+    window.__i18nLang = lang;
     var scope = [document.body];
     scope.forEach(function (root) {
       root.querySelectorAll('[data-i18n]').forEach(function (el) {

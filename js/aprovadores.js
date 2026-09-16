@@ -93,20 +93,95 @@
     return item;
   }
 
-  function renderList(rows) {
-    listEl.innerHTML = "";
-    if (countEl) countEl.textContent = rows.length + " " + (rows.length === 1 ? "aprovador" : "aprovadores");
+  function txt(chave, padrao) {
+    return (window.__i18n && window.__i18n[chave]) || padrao;
+  }
 
-    if (!rows.length) {
-      setState("Nenhum aprovador cadastrado ainda.", false);
+  /** "12 aprovadores" / "1 aprovador", no idioma da tela. */
+  function contagem(n) {
+    return n + " " + (n === 1
+      ? txt("adm.approverWord", "aprovador")
+      : txt("adm.approversWord", "aprovadores"));
+  }
+
+  /* Agrupa por NM_SITE em UMA passagem, sobre a mesma resposta de
+     GET /api/aprovadores — sem consulta por card e sem reordenar no
+     navegador: o servidor já devolve ordenado por NM_SITE, NM_USUARIO.
+     Manter a ordem de chegada é o que garante que o agrupamento não custa
+     nada além do laço que já existia.
+
+     Quem não tem unidade no MDM vai para um grupo próprio, no FIM. Em SQL
+     o NULL ordena primeiro, e abrir a tela por "(sem unidade)" daria a
+     esse punhado de registros um destaque que eles não têm. */
+  function agruparPorSite(rows) {
+    var grupos = [], porNome = {}, semSite = null;
+    rows.forEach(function (row) {
+      var site = row.NM_SITE || null;
+      if (!site) {
+        if (!semSite) semSite = { site: null, linhas: [] };
+        semSite.linhas.push(row);
+        return;
+      }
+      if (!porNome[site]) { porNome[site] = { site: site, linhas: [] }; grupos.push(porNome[site]); }
+      porNome[site].linhas.push(row);
+    });
+    if (semSite) grupos.push(semSite);
+    return grupos;
+  }
+
+  function renderGrupo(grupo) {
+    var bloco = document.createElement("div");
+    bloco.className = "admin-grupo";
+    bloco.dataset.site = grupo.site || "";
+
+    var cab = document.createElement("div");
+    cab.className = "admin-grupo-cab";
+    var nome = document.createElement("span");
+    nome.className = "admin-grupo-nome";
+    nome.textContent = grupo.site || txt("adm.siteNone", "Sem unidade");
+    var quantos = document.createElement("span");
+    quantos.className = "admin-item-badge";
+    quantos.textContent = contagem(grupo.linhas.length);
+    cab.appendChild(nome);
+    cab.appendChild(quantos);
+
+    // A grade dos cards é a MESMA .admin-list de antes — é ela que traz as
+    // duas colunas, a altura igual e a quebra para uma coluna no tablet.
+    var grade = document.createElement("div");
+    grade.className = "admin-list";
+    grupo.linhas.forEach(function (row) { grade.appendChild(renderItem(row)); });
+
+    bloco.appendChild(cab);
+    bloco.appendChild(grade);
+    return bloco;
+  }
+
+  // Guardado para redesenhar na troca de idioma sem pedir a lista de novo.
+  var ultimaLista = [];
+
+  function renderList(rows) {
+    ultimaLista = rows || [];
+    listEl.innerHTML = "";
+    if (countEl) countEl.textContent = contagem(ultimaLista.length);
+
+    if (!ultimaLista.length) {
+      setState(txt("adm.noApprovers", "Nenhum aprovador cadastrado ainda."), false);
       return;
     }
     setState(null);
-    rows.forEach(function (row) { listEl.appendChild(renderItem(row)); });
+    agruparPorSite(ultimaLista).forEach(function (grupo) {
+      listEl.appendChild(renderGrupo(grupo));
+    });
   }
 
+  // Trocar de idioma redesenha a lista já carregada — os rótulos
+  // ("aprovadores", "Sem unidade") mudam sem um segundo GET.
+  window.addEventListener("vbm:idioma", function () {
+    if (ultimaLista.length) renderList(ultimaLista);
+  });
+
   function loadAprovadores() {
-    setState("Carregando aprovadores...", false);
+    setState(txt("adm.loadingApprovers", "Carregando aprovadores..."), false);
     return fetch("/api/aprovadores")
       .then(function (res) {
         if (!res.ok) return res.json().then(function (e) { throw new Error(e.error || res.statusText); });
