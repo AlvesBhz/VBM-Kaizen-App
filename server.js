@@ -1927,13 +1927,17 @@ function mensagemErroSql(err, rotuloSing, rotuloExtra) {
 const CADASTRO_TTL_MS = 5 * 60 * 1000;
 const cadastroCache = new Map();
 
-function cadastroCacheLer(rota, idIdioma) {
-  const item = cadastroCache.get(`${rota}|${idIdioma}`);
+// `variante` entra na CHAVE do cache. Sem ela, /resultados?tipo=1 e
+// ?tipo=2 dividiriam a mesma entrada e o segundo combo receberia a
+// lista do primeiro — um bug que só apareceria depois do primeiro
+// acesso, dentro da janela do TTL, e sumiria sozinho ao expirar.
+function cadastroCacheLer(rota, idIdioma, variante) {
+  const item = cadastroCache.get(`${rota}|${idIdioma}|${variante || ""}`);
   if (!item || item.expiraEm < Date.now()) return null;
   return item.dados;
 }
-function cadastroCacheGravar(rota, idIdioma, dados) {
-  cadastroCache.set(`${rota}|${idIdioma}`, { dados, expiraEm: Date.now() + CADASTRO_TTL_MS });
+function cadastroCacheGravar(rota, idIdioma, variante, dados) {
+  cadastroCache.set(`${rota}|${idIdioma}|${variante || ""}`, { dados, expiraEm: Date.now() + CADASTRO_TTL_MS });
 }
 function cadastroCacheLimpar(rota) {
   for (const chave of cadastroCache.keys()) {
@@ -1947,6 +1951,7 @@ function registrarCadastroBilingue(cfg) {
   const temIcone = cfg.temIcone !== false;
   const capturarUsuario = !!cfg.capturarUsuarioResponsavel;
   const extraEditavel = cfg.campoExtraEditavel || null;
+  const filtroNumerico = cfg.filtroNumerico || null;
   const colUsuario = cfg.colUsuario || "ID_USUARIO";
   const log = `[${rota}]`;
 
@@ -2102,7 +2107,27 @@ function registrarCadastroBilingue(cfg) {
   apiRouter.get(`/${rota}`, async (req, res) => {
     try {
       const idIdiomaPedido = idIdiomaDaRequisicao(req);
-      const emCache = cadastroCacheLer(rota, idIdiomaPedido);
+      // Recorte opcional por uma coluna própria da tabela, declarado
+      // pela rota (cfg.filtroNumerico). Hoje só /resultados usa: os dois
+      // combos da etapa "Resultados & Aprendizados" pedem a MESMA
+      // tabela, separados por ID_TIPO_RESULTADO. O valor chega como
+      // parâmetro tipado — o nome da coluna vem do código, nunca da URL.
+      let filtroExtra = "";
+      const paramsFiltro = [];
+      let variante = "";
+      if (filtroNumerico) {
+        const bruto = req.query[filtroNumerico.query];
+        if (bruto != null && String(bruto).trim() !== "") {
+          const n = parseInt(bruto, 10);
+          if (!Number.isInteger(n)) {
+            return res.status(400).json({ error: `${filtroNumerico.query} inválido.` });
+          }
+          filtroExtra = ` AND base.${filtroNumerico.col} = @filtroExtra`;
+          paramsFiltro.push(["filtroExtra", sql.Int, n]);
+          variante = `${filtroNumerico.query}=${n}`;
+        }
+      }
+      const emCache = cadastroCacheLer(rota, idIdiomaPedido, variante);
       if (emCache) return res.json(emCache);
       const colsSelect = [`base.${pk} AS ID`, `COALESCE(tr.${colNome}, base.${colNome}) AS NM`];
       if (colDescricao) colsSelect.push(`COALESCE(tr.${colDescricao}, base.${colDescricao}) AS DS`);
@@ -2120,12 +2145,12 @@ function registrarCadastroBilingue(cfg) {
          FROM ${tabela} base
          LEFT JOIN ${tabela} tr
                 ON tr.${pk} = base.${pk} AND tr.ID_IDIOMA = @idIdioma
-         WHERE base.ID_IDIOMA = @idIdiomaBase
+         WHERE base.ID_IDIOMA = @idIdiomaBase${filtroExtra}
          ORDER BY COALESCE(tr.${colNome}, base.${colNome})`,
         [
           ["idIdioma", sql.Int, idIdiomaPedido],
           ["idIdiomaBase", sql.Int, ID_IDIOMA_PT],
-        ]
+        ].concat(paramsFiltro)
       );
 
       // Contagem opcional (badge "N kaizens"), numa ÚNICA consulta
@@ -2161,7 +2186,7 @@ function registrarCadastroBilingue(cfg) {
           // português É a tradução.
           SEM_TRADUCAO: r.SEM_TRADUCAO === 1,
       }));
-      cadastroCacheGravar(rota, idIdiomaPedido, corpo);
+      cadastroCacheGravar(rota, idIdiomaPedido, variante, corpo);
       res.json(corpo);
     } catch (err) {
       console.error(`${log} erro ao consultar:`, err.message);
@@ -2392,6 +2417,11 @@ registrarCadastroBilingue({
   // obrigatorio:true — a coluna real é NOT NULL (confirmado em produção:
   // "Cannot insert the value NULL into column 'ID_TIPO_RESULTADO'...").
   campoExtraEditavel: { col: "ID_TIPO_RESULTADO", campo: "idTipoResultado", obrigatorio: true, rotulo: "Tipo de Resultado" },
+  // GET /resultados?tipo=1|2 — os dois combos da etapa "Resultados &
+  // Aprendizados" bebem desta mesma tabela e se separam por
+  // ID_TIPO_RESULTADO (1 = financeiro, 2 = outros). O recorte fica no
+  // SERVIDOR: a tela manda o número, não o nome da coluna.
+  filtroNumerico: { query: "tipo", col: "ID_TIPO_RESULTADO" },
   // ID_USUARIO: mesmo padrão das demais abas — grava automaticamente
   // quem criou/editou.
   capturarUsuarioResponsavel: true,
@@ -2944,6 +2974,59 @@ const PVC_LIMITES = {
    a mesma consulta passa a usá-la sem precisar de novo deploy. A
    verificação é feita uma vez e guardada. */
 let colunaReferenciaExiste = null;
+// DS_RESULTADO em kzn_pedravisaoconsolidada guarda a "Descrição dos
+// Resultados Alcançados" — texto livre do KAIZEN, não do catálogo (ver
+// database/adicionar_ds_resultado_pvc.sql). A coluna é NOVA: o código
+// pode chegar ao ar antes do script rodar, e um INSERT citando coluna
+// inexistente derrubaria o cadastro inteiro. Checa uma vez, guarda a
+// resposta e diz no log o que decidiu — "não gravou a descrição" e
+// "gravou" não podem ser indistinguíveis de fora.
+let colunaDsResultadoExiste = null;
+async function temColunaDsResultado() {
+  if (colunaDsResultadoExiste !== null) return colunaDsResultadoExiste;
+  try {
+    const r = await runQuery(
+      `SELECT 1 AS OK FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = @esquema AND TABLE_NAME = @tabela AND COLUMN_NAME = 'DS_RESULTADO'`,
+      [["esquema", sql.NVarChar(128), DB_SCHEMA], ["tabela", sql.NVarChar(128), DB_PVC_TABLE]]
+    );
+    colunaDsResultadoExiste = r.recordset.length > 0;
+  } catch (err) {
+    colunaDsResultadoExiste = false;
+  }
+  console.log(`[resultados] DS_RESULTADO ${colunaDsResultadoExiste ? "disponível" : "AUSENTE"} em ` +
+    `${FULL_PVC_TABLE}` + (colunaDsResultadoExiste ? "." :
+      " — a descrição dos resultados não será gravada; rode database/adicionar_ds_resultado_pvc.sql."));
+  return colunaDsResultadoExiste;
+}
+
+/** Troca por completo os vínculos Kaizen ↔ Resultado, dentro da
+ *  transação de quem chamou. Um só caminho para o cadastro e para a
+ *  edição: no cadastro a lista chega vazia do banco e só há INSERT; na
+ *  edição o DELETE tira o que havia. É o mesmo padrão que membros e
+ *  desperdícios já usam — some tudo, entra o que veio da tela.
+ *
+ *  `ids` pode trazer nulos (bloco desligado) e repetidos (a mesma linha
+ *  do catálogo escolhida nos dois blocos, se um dia isso for possível);
+ *  os dois são filtrados aqui, e não em cada chamador. */
+async function gravarResultadosDoKaizen(tx, idKaizen, ids) {
+  const reqDel = new sql.Request(tx);
+  reqDel.input("idKaizen", sql.Int, idKaizen);
+  await reqDel.query(`DELETE FROM ${FULL_RESULTADO_KAIZEN_TABLE} WHERE ID_KAIZEN = @idKaizen`);
+
+  const unicos = [...new Set((ids || []).filter((x) => Number.isInteger(x)))];
+  for (const idResultado of unicos) {
+    const req = new sql.Request(tx);
+    req.input("idKaizen", sql.Int, idKaizen);
+    req.input("idResultado", sql.Int, idResultado);
+    await req.query(
+      `INSERT INTO ${FULL_RESULTADO_KAIZEN_TABLE} (ID_KAIZEN, ID_RESULTADO, DT_ATUALIZACAO)
+       VALUES (@idKaizen, @idResultado, ${AGORA_BRASILIA})`
+    );
+  }
+  return unicos.length;
+}
+
 async function expressaoDataReferencia(prefixo) {
   const p = prefixo ? `${prefixo}.` : "";
   if (colunaReferenciaExiste === null) {
@@ -3117,12 +3200,20 @@ function lerKaizenDoCorpo(b) {
       ? Number(b.valor_resultado_financeiro)
       : null;
 
-  // "Outros resultados": vira 1 item novo em kzn_resultados (nos 2
-  // idiomas, mesmo texto — não há como auto-traduzir descrição livre) +
-  // 1 linha em kzn_resultado_kaizen ligando ao Kaizen. Ver bloco de
-  // inserção mais abaixo.
+  // Os dois combos de resultado carregam um ID_RESULTADO do CATÁLOGO
+  // (kzn_resultados), separados por ID_TIPO_RESULTADO: 1 = financeiro,
+  // 2 = outros. Cada um escolhido vira UMA linha em
+  // kzn_resultado_kaizen — o vínculo Kaizen ↔ Resultado.
+  //
+  // Antes o campo se chamava id_tipo_resultado_outros e carregava um
+  // ID_TIPO_RESULTADO, porque o combo lia da tabela de CLASSIFICAÇÃO.
+  // O nome antigo continua aceito para não quebrar uma tela que ainda
+  // não tenha sido atualizada em cache.
   const geraResultadoOutros = b.fl_resultado_outros === true || b.fl_resultado_outros === "true";
-  const idTipoResultadoOutros = geraResultadoOutros ? intOuNulo(b.id_tipo_resultado_outros) : null;
+  const idResultadoOutros = geraResultadoOutros
+    ? intOuNulo(b.id_resultado_outros != null && b.id_resultado_outros !== "" ? b.id_resultado_outros : b.id_tipo_resultado_outros)
+    : null;
+  const idResultadoFinanceiro = geraResultadoFinanceiro ? intOuNulo(b.id_resultado_financeiro) : null;
   const descricaoResultadoOutros = geraResultadoOutros ? textoOuNuloLocal(b.descricao_resultado_outros) : null;
 
   // Membros da equipe (Vale + externos): ambos são só um ID_USUARIO do
@@ -3155,18 +3246,19 @@ function lerKaizenDoCorpo(b) {
     !formatoDataOk || !dataExiste ? "Data de Conclusão inválida." : null,
     formatoDataOk && dataExiste && !dataAnteriorAHoje
       ? "A Data de Conclusão deve ser anterior à data de hoje." : null,
-    geraResultadoOutros && !Number.isInteger(idTipoResultadoOutros) ? "Tipo de Resultado (Outros) é obrigatório quando o bloco está ativo." : null,
+    geraResultadoOutros && !Number.isInteger(idResultadoOutros) ? "Resultado (Outros) é obrigatório quando o bloco está ativo." : null,
+    geraResultadoFinanceiro && !Number.isInteger(idResultadoFinanceiro) ? "Resultado (Financeiro) é obrigatório quando o bloco está ativo." : null,
     geraResultadoOutros && !descricaoResultadoOutros ? "Descrição dos Resultados Alcançados é obrigatória quando \"Outros\" está ativo." : null,
     maxLen(descricaoResultadoOutros, 100, "Descrição dos Resultados Alcançados"),
   ].filter(Boolean);
-  return { erros, dados: { titulo, declaracaoProblema, metaObjetivo, descricaoAntes, descricaoDepois, idCategoria, idReplicacao, idUsuarioAprovador, idUsuarioLider, idsDesperdicio, urlImgAntes, urlImgDepois, urlReferencia, licoesAprendidas, comparacaoMeta, dataConclusao, geraResultadoFinanceiro, idMoeda, valorResultadoFinanceiro, geraResultadoOutros, idTipoResultadoOutros, descricaoResultadoOutros, membros } };
+  return { erros, dados: { titulo, declaracaoProblema, metaObjetivo, descricaoAntes, descricaoDepois, idCategoria, idReplicacao, idUsuarioAprovador, idUsuarioLider, idsDesperdicio, urlImgAntes, urlImgDepois, urlReferencia, licoesAprendidas, comparacaoMeta, dataConclusao, geraResultadoFinanceiro, idMoeda, valorResultadoFinanceiro, geraResultadoOutros, idResultadoOutros, idResultadoFinanceiro, descricaoResultadoOutros, membros } };
 }
 
 apiRouter.post("/kaizens", async (req, res) => {
   const b = req.body || {};
   const { erros, dados } = lerKaizenDoCorpo(b);
   if (erros.length) return res.status(400).json({ error: erros[0], erros });
-  const { titulo, declaracaoProblema, metaObjetivo, descricaoAntes, descricaoDepois, idCategoria, idReplicacao, idUsuarioAprovador, idUsuarioLider, idsDesperdicio, urlImgAntes, urlImgDepois, urlReferencia, licoesAprendidas, comparacaoMeta, dataConclusao, geraResultadoFinanceiro, idMoeda, valorResultadoFinanceiro, geraResultadoOutros, idTipoResultadoOutros, descricaoResultadoOutros, membros } = dados;
+  const { titulo, declaracaoProblema, metaObjetivo, descricaoAntes, descricaoDepois, idCategoria, idReplicacao, idUsuarioAprovador, idUsuarioLider, idsDesperdicio, urlImgAntes, urlImgDepois, urlReferencia, licoesAprendidas, comparacaoMeta, dataConclusao, geraResultadoFinanceiro, idMoeda, valorResultadoFinanceiro, geraResultadoOutros, idResultadoOutros, idResultadoFinanceiro, descricaoResultadoOutros, membros } = dados;
 
   try {
     // Título contra o tamanho REAL da coluna: enquanto o ALTER de 30
@@ -3255,6 +3347,11 @@ apiRouter.post("/kaizens", async (req, res) => {
       reqInsert.input("vlResultado", sql.Decimal(18, 2), valorResultadoFinanceiro);
       reqInsert.input("idMoeda", sql.Int, idMoeda);
       reqInsert.input("dsResultadoEsperado", sql.NVarChar(PVC_LIMITES.DS_RESULTADO_ESPERADO), comparacaoMeta);
+      // Coluna nova: só entra no comando se existir no banco (ver
+      // temColunaDsResultado). Sem ela, o Kaizen grava igual e o log diz
+      // por que a descrição ficou de fora.
+      const gravaDsResultado = await temColunaDsResultado();
+      if (gravaDsResultado) reqInsert.input("dsResultado", sql.NVarChar(100), descricaoResultadoOutros);
       // DT_CONCLUSAO é DATE. Vai como TEXTO "YYYY-MM-DD" e a conversão
       // fica com o banco (CONVERT ... 23), em vez de montar um Date no
       // Node: assim não há fuso no meio para empurrar a data um dia
@@ -3266,13 +3363,13 @@ apiRouter.post("/kaizens", async (req, res) => {
           (ID_KAIZEN, ID_USUARIO_CADASTRO, ID_USUARIO_LIDER, NM_KAIZEN, ID_CATEGORIA, ID_REPLICACAO,
            DS_PROBLEMA, DS_OBJETIVO,${gravaStatus ? " ID_STATUS," : ""} ID_APROVADOR, URL_IMG_ANTES, DS_ESTADO_ANTES,
            URL_IMG_DEPOIS, DS_ESTADO_DEPOIS, URL_REFERENCIA, ID_DESPERDICIO, DS_LICOES_APRENDIDAS,
-           VL_RESULTADO_FINANCEIRO, ID_MOEDA, DS_RESULTADO_ESPERADO, DT_CONCLUSAO, DT_ATUALIZACAO,
+           VL_RESULTADO_FINANCEIRO, ID_MOEDA, DS_RESULTADO_ESPERADO,${gravaDsResultado ? " DS_RESULTADO," : ""} DT_CONCLUSAO, DT_ATUALIZACAO,
            ID_USUARIO_ATUALIZACAO)
         VALUES
           (@idKaizen, @idUsuarioCadastro, @idUsuarioLider, @nmKaizen, @idCategoria, @idReplicacao,
            @dsProblema, @dsObjetivo,${gravaStatus ? " @idStatus," : ""} @idAprovador, @urlImgAntes, @dsEstadoAntes,
            @urlImgDepois, @dsEstadoDepois, @urlReferencia, @idDesperdicio, @dsLicoes,
-           @vlResultado, @idMoeda, @dsResultadoEsperado, CONVERT(DATE, @dtConclusao, 23), ${AGORA_BRASILIA},
+           @vlResultado, @idMoeda, @dsResultadoEsperado,${gravaDsResultado ? " @dsResultado," : ""} CONVERT(DATE, @dtConclusao, 23), ${AGORA_BRASILIA},
            @idUsuarioCadastro)`);
 
       for (const idMembro of membros) {
@@ -3295,38 +3392,18 @@ apiRouter.post("/kaizens", async (req, res) => {
         );
       }
 
-      if (geraResultadoOutros) {
-        // NM_RESULTADO é VARCHAR(30): sem campo de título próprio na
-        // tela, usa a própria descrição truncada como nome.
-        const nmResultado = descricaoResultadoOutros.slice(0, 30);
-        const proximoResultado = await new sql.Request(tx).query(
-          `SELECT ISNULL(MAX(ID_RESULTADO), 0) + 1 AS PROXIMO FROM ${FULL_RESULTADOS_TABLE}`
-        );
-        const idResultado = proximoResultado.recordset[0].PROXIMO;
-
-        for (const idIdioma of [1, 2]) {
-          const reqR = new sql.Request(tx);
-          reqR.input("idResultado", sql.Int, idResultado);
-          reqR.input("idIdioma", sql.Int, idIdioma);
-          reqR.input("idTipoResultado", sql.Int, idTipoResultadoOutros);
-          reqR.input("nmResultado", sql.NVarChar(30), nmResultado);
-          reqR.input("dsResultado", sql.NVarChar(100), descricaoResultadoOutros);
-          reqR.input("idUsuario", sql.Int, idUsuarioCadastro ?? null);
-          await reqR.query(`
-            INSERT INTO ${FULL_RESULTADOS_TABLE}
-              (ID_RESULTADO, ID_IDIOMA, ID_TIPO_RESULTADO, NM_RESULTADO, DS_RESULTADO, SG_ATIVO, ID_USUARIO, DT_ATUALIZACAO)
-            VALUES
-              (@idResultado, @idIdioma, @idTipoResultado, @nmResultado, @dsResultado, 'S', @idUsuario, ${AGORA_BRASILIA})`);
-        }
-
-        const reqRK = new sql.Request(tx);
-        reqRK.input("idKaizen", sql.Int, idKaizen);
-        reqRK.input("idResultado", sql.Int, idResultado);
-        await reqRK.query(
-          `INSERT INTO ${FULL_RESULTADO_KAIZEN_TABLE} (ID_KAIZEN, ID_RESULTADO, DT_ATUALIZACAO)
-           VALUES (@idKaizen, @idResultado, ${AGORA_BRASILIA})`
-        );
-      }
+      // Vínculo Kaizen ↔ Resultado do CATÁLOGO, um por bloco ativo.
+      //
+      // O que havia aqui antes INSERIA UMA LINHA NOVA em kzn_resultados
+      // (ID = MAX + 1, nos dois idiomas) usando a descrição como nome.
+      // Três consequências: o catálogo crescia um registro por Kaizen,
+      // o que o usuário ESCOLHEU no combo não era gravado como escolha
+      // (ia para ID_TIPO_RESULTADO da linha nova), e reabrir o Kaizen
+      // não devolvia a seleção. O catálogo agora é só lido.
+      await gravarResultadosDoKaizen(tx, idKaizen, [
+        geraResultadoFinanceiro ? idResultadoFinanceiro : null,
+        geraResultadoOutros ? idResultadoOutros : null,
+      ]);
 
       await tx.commit();
 
@@ -4356,6 +4433,11 @@ apiRouter.put("/kaizens/:id", async (req, res) => {
       r.input("dsResultadoEsperado", sql.NVarChar(PVC_LIMITES.DS_RESULTADO_ESPERADO), dados.comparacaoMeta);
       r.input("vlResultado", sql.Decimal(18, 2), dados.valorResultadoFinanceiro);
       r.input("idMoeda", sql.Int, dados.idMoeda);
+      // Mesma coluna opcional do cadastro. Desligar o bloco "Outros" na
+      // edição grava NULL de volta — é uma troca por completo, não um
+      // acréscimo.
+      const gravaDsResultado = await temColunaDsResultado();
+      if (gravaDsResultado) r.input("dsResultado", sql.NVarChar(100), dados.descricaoResultadoOutros);
       // Mesma regra do cadastro: texto "YYYY-MM-DD" convertido pelo
       // banco. Limpar o campo na edição grava NULL de volta.
       r.input("dtConclusao", sql.VarChar(10), dados.dataConclusao);
@@ -4398,7 +4480,7 @@ apiRouter.put("/kaizens/:id", async (req, res) => {
                 DS_LICOES_APRENDIDAS = @dsLicoes,
                 DS_RESULTADO_ESPERADO = @dsResultadoEsperado,
                 VL_RESULTADO_FINANCEIRO = @vlResultado,
-                ID_MOEDA = @idMoeda,
+                ID_MOEDA = @idMoeda,${gravaDsResultado ? "\n                DS_RESULTADO = @dsResultado," : ""}
                 DT_CONCLUSAO = CONVERT(DATE, @dtConclusao, 23),${trocaAntes ? "\n                URL_IMG_ANTES = @urlImgAntes," : ""}${trocaDepois ? "\n                URL_IMG_DEPOIS = @urlImgDepois," : ""}
                 ID_STATUS = @idStatus,
                 DT_ATUALIZACAO = ${AGORA_BRASILIA},
@@ -4447,8 +4529,18 @@ apiRouter.put("/kaizens/:id", async (req, res) => {
         );
       }
 
+      // Resultados: a MESMA troca por completo que membros e
+      // desperdícios acabaram de fazer. Sem isto, mudar o resultado na
+      // edição não gravava — o PUT nem tocava em kzn_resultado_kaizen, e
+      // reabrir devolvia a escolha antiga.
+      const quantosResultados = await gravarResultadosDoKaizen(tx, idKaizen, [
+        dados.geraResultadoFinanceiro ? dados.idResultadoFinanceiro : null,
+        dados.geraResultadoOutros ? dados.idResultadoOutros : null,
+      ]);
+
       await tx.commit();
-      console.log(`[edicao] ID_KAIZEN=${idKaizen} atualizado por ${idUsuario}; ID_STATUS=${revisado.id}.`);
+      console.log(`[edicao] ID_KAIZEN=${idKaizen} atualizado por ${idUsuario}; ID_STATUS=${revisado.id}; ` +
+        `${quantosResultados} resultado(s) vinculado(s).`);
 
       // Refaz a fotografia da hierarquia: o líder pode ter mudado nesta
       // edição, e a hierarquia dele pode ter mudado no MDM desde a
@@ -4574,6 +4666,12 @@ apiRouter.get("/kaizens/:id/edicao", async (req, res) => {
       data_conclusao: somenteData(k.DT_CONCLUSAO),
       valor_resultado_financeiro: k.VL_RESULTADO_FINANCEIRO,
       id_moeda: k.ID_MOEDA,
+      // Os dois blocos da etapa 4, prontos para a tela repor sem ter de
+      // adivinhar qual vínculo é de qual: quem separa é o
+      // ID_TIPO_RESULTADO do catálogo (1 = financeiro, 2 = outros).
+      id_resultado_financeiro: (resultados.recordset.find((x) => x.ID_TIPO_RESULTADO === 1) || {}).ID_RESULTADO ?? null,
+      id_resultado_outros: (resultados.recordset.find((x) => x.ID_TIPO_RESULTADO === 2) || {}).ID_RESULTADO ?? null,
+      descricao_resultado_outros: k.DS_RESULTADO ?? null,
       ID_STATUS: k.ID_STATUS,
       NM_STATUS: k.NM_STATUS,
       // Carimbo da última gravação: volta no salvamento para o servidor

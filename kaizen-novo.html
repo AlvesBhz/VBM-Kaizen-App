@@ -1025,7 +1025,11 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           </div>
 
           <div class="form-group">
-            <label for="id_resultado_financeiro" class="form-label" data-i18n="f.extraLinks">Links / Documentos Extras</label> <span class="field-tag-optional" data-i18n="f.optional">opcional</span>
+            <!-- for="links_documentos": o rótulo apontava para
+                 id_resultado_financeiro, que é o combo de OUTRA etapa —
+                 clicar em "Links / Documentos Extras" levava o foco para
+                 lá. Copiar-e-colar antigo, achado ao renomear os campos. -->
+            <label for="links_documentos" class="form-label" data-i18n="f.extraLinks">Links / Documentos Extras</label> <span class="field-tag-optional" data-i18n="f.optional">opcional</span>
             <div class="input-with-icon">
               <i class="fa-solid fa-link input-icon"></i>
               <input type="url" class="form-control" id="links_documentos" name="links_documentos" placeholder="https://... (SharePoint, evidências, anexos)" data-i18n-placeholder="f.extraLinksPlaceholder"/>
@@ -1071,11 +1075,14 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
                 <div class="form-group conditional-sub">
                   <div class="form-grid form-grid-3">
                     <div class="form-group" style="margin-bottom:0;">
-                      <label class="form-label" id="lblTipoResultadoFinanceiro" data-i18n="f.financialResultType">Tipo de Resultado Financeiro <span class="field-tag-conditional" data-i18n="f.conditional">Condicional</span></label>
+                      <label for="id_resultado_financeiro" class="form-label" id="lblTipoResultadoFinanceiro" data-i18n="f.financialResultType">Resultado <span class="field-tag-conditional" data-i18n="f.conditional">Condicional</span></label>
+                      <!-- Sem <option> fixa: a lista vem de kzn_resultados
+                           (ID_TIPO_RESULTADO = 1). As duas que estavam aqui,
+                           "Saving" e "Cost Avoided", eram texto solto — não
+                           tinham valor, não existiam no banco e o que fosse
+                           escolhido não chegava a lugar nenhum. -->
                       <select class="form-control" id="id_resultado_financeiro" name="id_resultado_financeiro" disabled>
                         <option value="" data-i18n="f.select">Selecione...</option>
-                        <option data-i18n="f.financial.saving">Saving</option>
-                        <option data-i18n="f.financial.costAvoided">Cost Avoided</option>
                       </select>
                     </div>
                     <div class="form-group" style="margin-bottom:0;">
@@ -1101,7 +1108,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
                 <div class="form-group conditional-sub">
                   <div class="form-grid form-grid-2">
                     <div class="form-group" style="margin-bottom:0;">
-                      <label for="id_resultado_outros" class="form-label" id="lblTipoResultadoOutros" data-i18n="f.otherResultType">Tipo de Resultado <span class="field-tag-conditional" data-i18n="f.conditional">Condicional</span></label>
+                      <label for="id_resultado_outros" class="form-label" id="lblTipoResultadoOutros" data-i18n="f.otherResultType">Resultado <span class="field-tag-conditional" data-i18n="f.conditional">Condicional</span></label>
                       <select class="form-control" id="id_resultado_outros" name="id_resultado_outros" disabled>
                         <option value="" data-i18n="f.select">Selecione...</option>
                       </select>
@@ -1464,12 +1471,14 @@ function rotuloPessoa(p) {
       'f.financialResultQuestion': 'Este Kaizen gerou resultado?',
       'f.resultTypeFinancial': 'Financeiro',
       'f.resultTypeOthers': 'Outros',
-      'f.financialResultType': 'Tipo de Resultado Financeiro',
+      // Os dois combos apontam para kzn_resultados, que e' a tabela de
+      // RESULTADOS — nao de tipos. "Tipo" e' a classificacao
+      // (kzn_tipo_resultado), que aqui nem aparece: ela so decide QUAL
+      // lista cada combo recebe.
+      'f.financialResultType': 'Resultado',
       'f.conditional': 'Condicional',
-      'f.financial.saving': 'Saving',
-      'f.financial.costAvoided': 'Cost Avoided',
       'f.financialResultHelper': 'Visível apenas quando "Financeiro" está selecionado.',
-      'f.otherResultType': 'Tipo de Resultado',
+      'f.otherResultType': 'Resultado',
       'f.other.productivity': 'Produtividade',
       'f.other.safety': 'Saúde e Segurança',
       'f.other.production': 'Produção',
@@ -1632,12 +1641,10 @@ function rotuloPessoa(p) {
       'f.financialResultQuestion': 'Did this Kaizen generate a result?',
       'f.resultTypeFinancial': 'Financial',
       'f.resultTypeOthers': 'Others',
-      'f.financialResultType': 'Financial Result Type',
+      'f.financialResultType': 'Result',
       'f.conditional': 'Conditional',
-      'f.financial.saving': 'Saving',
-      'f.financial.costAvoided': 'Cost Avoided',
       'f.financialResultHelper': 'Only visible when "Financial" is selected.',
-      'f.otherResultType': 'Result Type',
+      'f.otherResultType': 'Result',
       'f.other.productivity': 'Productivity',
       'f.other.safety': 'Health and Safety',
       'f.other.production': 'Production',
@@ -2126,11 +2133,19 @@ createTeamPicker({
     }
   }
 
+  // 1 = financeiro, 2 = outros, em kzn_tipo_resultado. Ficam aqui, com
+  // nome, em vez de dois números soltos no meio da chamada.
+  var ID_TIPO_RESULTADO_FINANCEIRO = 1;
+  var ID_TIPO_RESULTADO_OUTROS = 2;
+
   function carregarBilingue(url, select, montarLabel) {
     if (!select) return;
     var valorAtual = select.value;
     var idioma = (window.__i18nLang === 'en') ? 'en' : 'pt-BR';
-    fetch(url + '?idioma=' + encodeURIComponent(idioma), { headers: { Accept: 'application/json' } })
+    // A rota pode já trazer querystring (?tipo=): concatenar um segundo
+    // '?' geraria uma URL inválida e o servidor ignoraria o idioma.
+    var junta = url.indexOf('?') === -1 ? '?' : '&';
+    fetch(url + junta + 'idioma=' + encodeURIComponent(idioma), { headers: { Accept: 'application/json' } })
       .then(function (r) { return r.ok ? r.json() : []; })
       .then(function (itens) {
         preencherSelect(select, (itens || []).filter(function (i) { return i.ATIVO; }), montarLabel, valorAtual);
@@ -2282,8 +2297,20 @@ createTeamPicker({
     carregarBilingue('/api/categorias', document.getElementById('id_categoria'), function (i) { return i.NM; });
     carregarBilingue('/api/replicacoes', document.getElementById('id_replicacao_potencial'), function (i) { return i.NM; });
     carregarDesperdicios();
-    // kzn_tipo_resultado não tem descrição nem ícone — só nome (ver server.js, temIcone:false).
-    carregarBilingue('/api/tiporesultados', document.getElementById('id_resultado_outros'), function (i) { return i.NM; });
+    // Os DOIS combos de resultado vêm da MESMA tabela, kzn_resultados,
+    // separados por ID_TIPO_RESULTADO: 1 = financeiro, 2 = outros. O
+    // recorte é feito no servidor (?tipo=), não peneirando no navegador
+    // — a tela manda o número e recebe só o que lhe cabe.
+    //
+    // O "Outros" lia de /api/tiporesultados, que é a CLASSIFICAÇÃO
+    // (kzn_tipo_resultado): o combo oferecia "Financeiro/Outros" no
+    // lugar dos resultados. E o "Financeiro" não lia de lugar nenhum —
+    // tinha duas <option> escritas à mão no HTML, "Saving" e "Cost
+    // Avoided", que nunca existiram como registro.
+    carregarBilingue('/api/resultados?tipo=' + ID_TIPO_RESULTADO_FINANCEIRO,
+      document.getElementById('id_resultado_financeiro'), function (i) { return i.NM; });
+    carregarBilingue('/api/resultados?tipo=' + ID_TIPO_RESULTADO_OUTROS,
+      document.getElementById('id_resultado_outros'), function (i) { return i.NM; });
 
     carregarAprovadores();
 
@@ -3283,7 +3310,7 @@ window.validacaoWizard = (function () {
     // bloqueado, então este ramo não roda; ele existe pronto para o dia
     // em que o campo for liberado, sem depender de nova alteração aqui.
     if (valor('fl_resultado_financeiro') === 'true') {
-      exigir('id_resultado_financeiro', 'f.financialResultType', 'Tipo de Resultado Financeiro');
+      exigir('id_resultado_financeiro', 'f.financialResultType', 'Resultado');
       exigir('moeda_resultado_financeiro', 'f.resultCurrency', 'Moeda');
       exigir('valor_resultado_financeiro', 'f.resultValue', 'Valor Alcançado/Esperado');
     }
@@ -3291,7 +3318,7 @@ window.validacaoWizard = (function () {
     // Condicional do "Outros resultados": só cobra quando o bloco está
     // ativo. Desligado, os dois campos seguem opcionais.
     if (valor('fl_resultado_outros') === 'true') {
-      exigir('id_resultado_outros', 'f.otherResultType', 'Tipo de Resultado');
+      exigir('id_resultado_outros', 'f.otherResultType', 'Resultado');
       exigir('descricao_resultado_outros', 'f.otherResultDescription', 'Descrição dos Resultados Alcançados');
     }
 
@@ -3434,10 +3461,13 @@ window.validacaoWizard = (function () {
       // Vazio = o servidor grava NULL em DT_CONCLUSAO.
       data_conclusao: valor('data_conclusao'),
       fl_resultado_financeiro: flResultadoFinanceiro,
+      id_resultado_financeiro: flResultadoFinanceiro ? valor('id_resultado_financeiro') : '',
       valor_resultado_financeiro: flResultadoFinanceiro ? valor('valor_resultado_financeiro') : '',
       id_moeda: flResultadoFinanceiro ? valor('moeda_resultado_financeiro') : '',
       fl_resultado_outros: flResultadoOutros,
-      id_tipo_resultado_outros: flResultadoOutros ? valor('id_resultado_outros') : '',
+      // ID_RESULTADO do catálogo (kzn_resultados), não ID_TIPO_RESULTADO:
+      // o combo passou a listar os RESULTADOS, recortados pelo tipo.
+      id_resultado_outros: flResultadoOutros ? valor('id_resultado_outros') : '',
       descricao_resultado_outros: flResultadoOutros ? valor('descricao_resultado_outros') : '',
     };
 
@@ -3622,11 +3652,27 @@ function txtEdicao(chave, padrao) {
 
       // Resultado financeiro: aciona o MESMO toggle da tela, em vez de
       // habilitar os campos por fora e arriscar divergir dele.
-      if (k.valor_resultado_financeiro != null || k.id_moeda != null) {
+      //
+      // id_resultado_financeiro entra na conta do "tem dado?": um Kaizen
+      // pode ter o resultado escolhido sem valor nem moeda preenchidos,
+      // e sem ele o bloco voltaria desligado com a escolha escondida.
+      if (k.valor_resultado_financeiro != null || k.id_moeda != null || k.id_resultado_financeiro != null) {
         var tg = el('tipoResultadoFinanceiro');
         if (tg && !tg.classList.contains('is-bloqueado') && el('fl_resultado_financeiro').value !== 'true') tg.click();
+        selecionar('id_resultado_financeiro', k.id_resultado_financeiro);
         selecionar('moeda_resultado_financeiro', k.id_moeda);
         texto('valor_resultado_financeiro', k.valor_resultado_financeiro);
+      }
+
+      // "Outros resultados": não era reposto de jeito nenhum — o bloco
+      // voltava desligado e o que havia sido gravado sumia da tela, ainda
+      // que estivesse no banco. Liga pelo mesmo toggle, e só quando há
+      // dado de verdade.
+      if (k.id_resultado_outros != null || k.descricao_resultado_outros) {
+        var tgO = el('tipoResultadoOutros');
+        if (tgO && el('fl_resultado_outros').value !== 'true') tgO.click();
+        selecionar('id_resultado_outros', k.id_resultado_outros);
+        texto('descricao_resultado_outros', k.descricao_resultado_outros || '');
       }
 
       // Equipe: cada membro volta para o picker de onde saiu — tipo 2 é
