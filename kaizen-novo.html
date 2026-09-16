@@ -858,7 +858,12 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
               <select class="form-control" id="id_aprovador" name="id_aprovador" required>
                 <option value="" data-i18n="f.selectApprover">Selecione o aprovador...</option>
               </select>
-              <div class="form-helper" data-i18n="f.approverHelper">Lista de aprovadores ativos (kzn_aprovador).</div>
+              <!-- Sem data-i18n: o texto leva a UNIDADE do líder, que só
+                   existe em tempo de execução. translatePanel() sobrescreve
+                   todo [data-i18n] pelo dicionário e devolveria o "{site}"
+                   cru na troca de idioma. Quem escreve aqui é dizerUnidade(),
+                   que reage tanto à troca de líder quanto à de idioma. -->
+              <div class="form-helper" id="ajudaAprovador">Lista de aprovadores ativos (kzn_aprovador).</div>
             </div>
 
             <div class="form-group" style="grid-column:1/2;">
@@ -1402,7 +1407,14 @@ function rotuloPessoa(p) {
       'f.goalPlaceholder': 'Qual o resultado esperado com este Kaizen?',
       'f.approver': 'Aprovador',
       'f.selectApprover': 'Selecione o aprovador...',
-      'f.approverHelper': 'Lista filtrada automaticamente pelo grupo de aprovadores vinculado à unidade do líder do projeto (Sudbury, CA).',
+      // {site} é trocado em tempo de execução pela unidade do líder,
+      // que vem da kzn_mdm_hierarquia. O texto anterior trazia
+      // "(Sudbury, CA)" fixo no idioma — dizia a unidade errada para
+      // todo mundo, e a lista nem era filtrada.
+      'f.approverHelper': 'Lista de aprovadores ativos (kzn_aprovador).',
+      'f.approverHelperSite': 'Somente aprovadores da unidade {site} — a mesma do líder do projeto.',
+      'f.approverOtherSiteTitle': 'Aprovador de outra unidade',
+      'f.approverOtherSiteMsg': 'O aprovador gravado neste Kaizen não pertence à unidade do líder do projeto. Escolha um aprovador da lista.',
       'f.valeTeamMembers': 'Membros da Equipe Vale',
       'f.optionalMax2': 'opcional · máx. 2',
       'f.searchCollaborator': 'Buscar colaborador (MDM)... (Enter para adicionar)',
@@ -1567,7 +1579,10 @@ function rotuloPessoa(p) {
       'f.goalPlaceholder': 'What result is expected from this Kaizen?',
       'f.approver': 'Approver',
       'f.selectApprover': 'Select approver...',
-      'f.approverHelper': 'List automatically filtered by the approver group linked to the project leader\'s unit (Sudbury, CA).',
+      'f.approverHelper': 'Active approvers (kzn_aprovador).',
+      'f.approverHelperSite': 'Only approvers from the {site} site — the project leader\'s own.',
+      'f.approverOtherSiteTitle': 'Approver from another site',
+      'f.approverOtherSiteMsg': 'The approver saved on this Kaizen does not belong to the project leader\'s site. Pick one from the list.',
       'f.valeTeamMembers': 'Vale Team Members',
       'f.optionalMax2': 'optional · max. 2',
       'f.searchCollaborator': 'Search employee (MDM)... (Enter to add)',
@@ -2014,6 +2029,17 @@ createTeamPicker({
   var lista = null, timer = null;
   function fechar() { if (lista) { lista.remove(); lista = null; } }
 
+  /* Avisa quem depende do líder. Hoje é a lista de Aprovadores, que só
+     mostra quem é da MESMA unidade (NM_SITE) do líder. Só dispara quando o
+     ID muda de verdade: cada tecla digitada limpa o hidden, e sem esta
+     guarda seriam dezenas de recargas da lista por palavra. */
+  var ultimoLider = null;
+  function avisarLider() {
+    if (hidden.value === ultimoLider) return;
+    ultimoLider = hidden.value;
+    try { window.dispatchEvent(new Event('vbm:lider')); } catch (e) {}
+  }
+
   // O que o usuário vê no campo: "Nome — e-mail", nada além disso.
   function rotuloLider(nome, email) {
     return email ? nome + ' — ' + email : nome;
@@ -2021,6 +2047,7 @@ createTeamPicker({
 
   input.addEventListener('input', function () {
     hidden.value = ''; // digitou de novo: a escolha anterior não vale mais
+    avisarLider();       // sem líder escolhido, o recorte volta ao usuário logado
     var termo = input.value.trim();
     clearTimeout(timer);
     if (termo.length < 2) { fechar(); return; }
@@ -2046,6 +2073,7 @@ createTeamPicker({
               e.preventDefault();
               input.value = rotuloLider(r.nome, email);
               hidden.value = p.ID_USUARIO;
+              avisarLider();
               fechar();
             });
             lista.appendChild(item);
@@ -2149,6 +2177,107 @@ createTeamPicker({
       .catch(function () {});
   }
 
+  /* Aprovador: não é bilíngue nem tem ?idioma= — vem do join com o MDM
+     (mesmo endpoint que alimenta a aba Aprovadores do admin).
+
+     A lista é RECORTADA pela unidade (NM_SITE) do líder do projeto, e o
+     recorte é feito no servidor: daqui vai só o ID_USUARIO do líder, ou
+     "logado" quando o campo Líder ainda está no padrão (o usuário logado,
+     com o hidden vazio — mesmo acordo do POST /api/kaizens). Nome de site
+     nunca viaja na URL, então não há como pedir a lista de outra unidade.
+
+     Roda no carregamento, a cada troca de líder ('vbm:lider') e na
+     abertura de um Kaizen para edição/revisão. */
+  function liderAtual() {
+    var hidden = document.getElementById('id_usuario_lider');
+    var id = hidden && hidden.value ? String(hidden.value).trim() : '';
+    return id || 'logado';
+  }
+
+  function carregarAprovadores() {
+    var select = document.getElementById('id_aprovador');
+    if (!select) return;
+    var valorAtual = select.value;
+    // Só a resposta do pedido MAIS RECENTE pode desenhar: trocar de líder
+    // duas vezes seguidas dispara dois fetches e o mais lento pode chegar
+    // por último, repondo a lista da unidade antiga.
+    var meuPedido = ++pedidoAprovadores;
+    fetch('/api/aprovadores?lider=' + encodeURIComponent(liderAtual()), { headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (itens) {
+        if (meuPedido !== pedidoAprovadores) return;
+        // preencherSelect() lê item.ID — /api/aprovadores devolve ID_USUARIO
+        // (é a FK que POST /api/kaizens espera em id_usuario_aprovador).
+        var ativos = (itens || []).filter(function (i) { return i.ATIVO; });
+        var normalizados = ativos.map(function (i) {
+          return { ID: i.ID_USUARIO, DS_EMAIL: i.DS_EMAIL, CD_MATRICULA: i.CD_MATRICULA, NM_POSICAO: i.NM_POSICAO };
+        });
+        preencherSelect(select, normalizados, function (i) {
+          var r = rotuloPessoa({ CD_EMAIL: i.DS_EMAIL, CD_MATRICULA: i.CD_MATRICULA, NM_POSICAO: i.NM_POSICAO });
+          return r.nome + (r.extra ? ' — ' + r.extra : '');
+        }, valorAtual);
+        // NM_SITE_LIDER só vem quando o servidor CONSEGUIU resolver a
+        // unidade. Sem ela (líder fora do MDM ou sem NM_SITE) a lista
+        // veio inteira, e o texto tem de voltar ao genérico — dizer
+        // "somente da unidade X" sobre uma lista não recortada seria
+        // pior do que não dizer nada.
+        dizerUnidade((ativos.length && ativos[0].NM_SITE_LIDER) || null);
+        conferirAprovadorGravado(select);
+      })
+      .catch(function () {});
+  }
+  var pedidoAprovadores = 0;
+
+  /* O texto de ajuda passa a dizer a unidade DE VERDADE. Antes trazia
+     "(Sudbury, CA)" fixo no dicionário: errado para todo mundo que não
+     fosse de Sudbury, e a lista sequer era filtrada. */
+  var siteDoLider = null;
+  function dizerUnidade(site) {
+    siteDoLider = site || null;
+    reescreverUnidade();
+  }
+  function reescreverUnidade() {
+    var ajuda = document.getElementById('ajudaAprovador');
+    if (!ajuda) return;
+    ajuda.textContent = siteDoLider
+      ? txtFiltro('f.approverHelperSite',
+          'Somente aprovadores da unidade {site} — a mesma do líder do projeto.').replace('{site}', siteDoLider)
+      : txtFiltro('f.approverHelper', 'Lista de aprovadores ativos (kzn_aprovador).');
+  }
+  // Troca de idioma: reescreve no novo dicionário sem perder a unidade já
+  // descoberta. São duas funções, e não um parâmetro-sentinela, porque
+  // "site ausente" é um estado de verdade aqui — o líder pode não ter
+  // NM_SITE — e confundi-lo com "não mexa" deixava na tela a unidade do
+  // líder ANTERIOR sobre uma lista que não estava mais recortada.
+
+  /* Edição/revisão: o aprovador gravado pode ser de outra unidade (foi
+     escolhido antes desta regra, ou o líder mudou de site). Se ele não
+     está na lista recortada, a seleção é limpa e a pessoa escolhe outro —
+     deixar o ID antigo no hidden gravaria de volta um aprovador que a
+     regra não aceita mais. */
+  function conferirAprovadorGravado(select) {
+    var desejado = select.dataset.valorDesejado;
+    if (!desejado || select.value) return;
+    delete select.dataset.valorDesejado;
+    select.value = '';
+    if (typeof showToast === 'function') {
+      showToast('warning',
+        txtFiltro('f.approverOtherSiteTitle', 'Aprovador de outra unidade'),
+        txtFiltro('f.approverOtherSiteMsg', 'O aprovador gravado neste Kaizen não pertence à unidade do líder do projeto. Escolha um aprovador da lista.'),
+        7000);
+    }
+  }
+
+  function txtFiltro(chave, padrao) {
+    return (window.__i18n && window.__i18n[chave]) || padrao;
+  }
+
+  window.addEventListener('vbm:idioma', reescreverUnidade);
+
+  // Trocar o líder recarrega a lista. O evento é disparado pelo campo de
+  // busca do líder e pela abertura em modo de edição.
+  window.addEventListener('vbm:lider', carregarAprovadores);
+
   function carregarTodos() {
     carregarBilingue('/api/categorias', document.getElementById('id_categoria'), function (i) { return i.NM; });
     carregarBilingue('/api/replicacoes', document.getElementById('id_replicacao_potencial'), function (i) { return i.NM; });
@@ -2156,26 +2285,7 @@ createTeamPicker({
     // kzn_tipo_resultado não tem descrição nem ícone — só nome (ver server.js, temIcone:false).
     carregarBilingue('/api/tiporesultados', document.getElementById('id_resultado_outros'), function (i) { return i.NM; });
 
-    // Aprovador: não é bilíngue nem tem ?idioma= — vem do join com o MDM
-    // (mesmo endpoint que alimenta a aba Aprovadores do admin).
-    var selAprovador = document.getElementById('id_aprovador');
-    if (selAprovador) {
-      var valorAtual = selAprovador.value;
-      fetch('/api/aprovadores', { headers: { Accept: 'application/json' } })
-        .then(function (r) { return r.ok ? r.json() : []; })
-        .then(function (itens) {
-          // preencherSelect() lê item.ID — /api/aprovadores devolve ID_USUARIO
-          // (é a FK que POST /api/kaizens espera em id_usuario_aprovador).
-          var normalizados = (itens || [])
-            .filter(function (i) { return i.ATIVO; })
-            .map(function (i) { return { ID: i.ID_USUARIO, DS_EMAIL: i.DS_EMAIL, CD_MATRICULA: i.CD_MATRICULA, NM_POSICAO: i.NM_POSICAO }; });
-          preencherSelect(selAprovador, normalizados, function (i) {
-            var r = rotuloPessoa({ CD_EMAIL: i.DS_EMAIL, CD_MATRICULA: i.CD_MATRICULA, NM_POSICAO: i.NM_POSICAO });
-            return r.nome + (r.extra ? ' — ' + r.extra : '');
-          }, valorAtual);
-        })
-        .catch(function () {});
-    }
+    carregarAprovadores();
 
     // Moeda: não é bilíngue (sem ID_IDIOMA no DER).
     carregarSimples('/api/moedas', document.getElementById('moeda_resultado_financeiro'), function (i) {
@@ -3487,6 +3597,10 @@ function txtEdicao(chave, padrao) {
       if (k.id_usuario_lider) {
         texto('id_usuario_lider', k.id_usuario_lider);
         texto('id_lider_projeto', k.NM_LIDER || '');
+        // O líder gravado define a unidade: a lista de aprovadores tem de
+        // ser recarregada por ELE, não pelo usuário logado que abriu a
+        // edição. texto() escreve .value direto e não dispara evento algum.
+        try { window.dispatchEvent(new Event('vbm:lider')); } catch (e) {}
       }
 
       // Imagens já gravadas: os hidden apontam para o arquivo no volume.

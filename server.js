@@ -199,6 +199,20 @@ const ORDEM_PESSOA_DO_APROVADOR = (a) =>
         WHEN x.ID_USUARIO = TRY_CAST(${a}.CD_MATRICULA AS BIGINT) THEN 1
         ELSE 2 END, x.ID_TIPO_USUARIO`;
 
+/** NM_SITE de uma pessoa do MDM, pelo ID_USUARIO.
+ *
+ *  TOP (1) com ORDER BY ID_TIPO_USUARIO, e não um SELECT direto: a PK do
+ *  MDM é composta (ID_USUARIO, CD_MATRICULA, ID_TIPO_USUARIO), então o
+ *  mesmo ID_USUARIO aparece em mais de uma linha e um SELECT sem ordem
+ *  devolveria o site de uma linha qualquer — mudando de resultado entre
+ *  execuções. É o mesmo cuidado que os OUTER APPLY deste arquivo tomam.
+ *
+ *  Recebe o NOME do parâmetro (ex.: "@lider"), nunca um valor: o ID
+ *  continua viajando como parâmetro tipado, fora do texto do comando. */
+const SITE_DO_USUARIO = (param) =>
+  `(SELECT TOP (1) s.NM_SITE FROM ${FULL_MDM_TABLE} s
+     WHERE s.ID_USUARIO = ${param} ORDER BY s.ID_TIPO_USUARIO)`;
+
 // Mesmo schema dos aprovadores; tabela própria, também sobrescrevível
 // por env var caso o nome real divirja do padrão.
 const DB_CATEGORIA_TABLE = safeIdentifier(process.env.AZURE_SQL_CATEGORIA_TABLE, "kzn_categoria");
@@ -833,9 +847,29 @@ apiRouter.get("/test", async (req, res) => {
 // Consequência de negócio: não existe "editar aprovador" — os dados
 // pessoais são do MDM e o único campo próprio é SG_ATIVO. Por isso a
 // aba tem listar, adicionar e ativar/desativar, sem edição.
+// ?lider=<ID_USUARIO> | ?lider=logado — recorta a lista pelos aprovadores
+// do MESMO NM_SITE do líder do projeto. Sem o parâmetro a rota segue como
+// sempre (lista inteira), que é o que a aba Aprovadores do admin usa.
+//
+// "logado" existe porque no Novo Kaizen o campo Líder nasce preenchido com
+// quem está logado e o hidden id_usuario_lider fica VAZIO até a pessoa
+// escolher outro nome — é o mesmo acordo que POST /api/kaizens já tem. Sem
+// isso, o caso mais comum (líder = eu) ficaria sem filtro.
+//
+// O site é resolvido AQUI, no SQL, direto da kzn_mdm_hierarquia: o
+// navegador manda um ID, nunca um nome de site, então não há como pedir a
+// lista de outra unidade trocando a querystring.
 apiRouter.get("/aprovadores", async (req, res) => {
   try {
     const limite = Math.min(parseInt(req.query.limit, 10) || 500, 5000);
+
+    // Quem é o líder, na mesma ordem de precedência do cadastro.
+    const pedidoLider = String(req.query.lider || "").trim();
+    let idLider = null;
+    if (pedidoLider) {
+      const n = parseInt(pedidoLider, 10);
+      idLider = Number.isInteger(n) && n > 0 ? n : await idUsuarioLogado(req);
+    }
     // LEFT JOIN de propósito: um aprovador cujo usuário saiu do MDM
     // continua listado (com os campos vazios) em vez de sumir da tela
     // sem explicação.
@@ -851,23 +885,58 @@ apiRouter.get("/aprovadores", async (req, res) => {
     // (ID_USUARIO, CD_MATRICULA, ID_TIPO_USUARIO), então a mesma
     // matrícula pode aparecer em mais de um tipo e um join simples
     // duplicaria o aprovador na lista.
+    const params = [["limite", sql.Int, limite]];
+    // O recorte por site só entra quando HÁ um site para comparar. Um
+    // líder sem NM_SITE no MDM zeraria a lista e travaria o cadastro — a
+    // rota devolve a lista inteira nesse caso e registra o motivo no log,
+    // que é um problema de dado a corrigir no MDM, não em silêncio.
+    // Efeito colateral deliberado: um aprovador cujo usuário saiu do MDM
+    // vem com m.NM_SITE nulo, e "NULL = 'CORPORATIVO'" é UNKNOWN — ele
+    // NÃO entra na lista recortada. É o certo: sem pessoa no MDM não há
+    // como afirmar que é da mesma unidade (nem há e-mail para notificar).
+    // Na aba Aprovadores do admin, que chama sem ?lider=, ele continua
+    // aparecendo, que é o que o OUTER APPLY foi feito para garantir.
+    let filtroSite = "";
+    let colunaSiteLider = "";
+    if (idLider) {
+      filtroSite = `WHERE ${SITE_DO_USUARIO("@idLider")} IS NULL
+                       OR m.NM_SITE = ${SITE_DO_USUARIO("@idLider")}`;
+      // O site do líder volta na resposta para o log abaixo e para a tela
+      // poder dizer QUAL unidade está filtrando, sem uma segunda consulta.
+      colunaSiteLider = `, ${SITE_DO_USUARIO("@idLider")} AS NM_SITE_LIDER`;
+      params.push(["idLider", sql.Int, idLider]);
+    }
+
     const result = await runQuery(
       `SELECT TOP (@limite)
               a.ID_APROVADOR, a.CD_MATRICULA, a.SG_ATIVO, a.DT_ATUALIZACAO,
               a.ID_USUARIO AS ID_CONCEDENTE,
               m.ID_USUARIO, m.NM_USUARIO, m.CD_EMAIL AS DS_EMAIL,
-              m.NM_POSICAO, m.NM_ESTADO, m.NM_CIDADE
+              m.NM_POSICAO, m.NM_ESTADO, m.NM_CIDADE, m.NM_SITE${colunaSiteLider}
        FROM ${FULL_TABLE_NAME} a
        OUTER APPLY (
          SELECT TOP (1) x.ID_USUARIO, x.NM_USUARIO, x.CD_EMAIL,
-                        x.NM_POSICAO, x.NM_ESTADO, x.NM_CIDADE
+                        x.NM_POSICAO, x.NM_ESTADO, x.NM_CIDADE, x.NM_SITE
          FROM ${FULL_MDM_TABLE} x
          WHERE ${PESSOA_DO_APROVADOR("a")}
          ORDER BY ${ORDEM_PESSOA_DO_APROVADOR("a")}
        ) m
-       ORDER BY m.NM_USUARIO, a.ID_APROVADOR`,
-      [["limite", sql.Int, limite]]
+       ${filtroSite}
+       -- NM_SITE entra na ordem para a Administração poder agrupar sem
+       -- reordenar nada no navegador (ver a aba Aprovadores).
+       ORDER BY m.NM_SITE, m.NM_USUARIO, a.ID_APROVADOR`,
+      params
     );
+    if (idLider) {
+      const siteLider = result.recordset.length ? result.recordset[0].NM_SITE_LIDER : null;
+      if (siteLider == null) {
+        console.warn(`[aprovadores] líder ID_USUARIO=${idLider} sem NM_SITE em ${FULL_MDM_TABLE} — ` +
+          "lista devolvida SEM recorte por site.");
+      } else {
+        console.log(`[aprovadores] recorte por site "${siteLider}" (líder ID_USUARIO=${idLider}): ` +
+          `${result.recordset.length} aprovador(es).`);
+      }
+    }
     res.json(
       result.recordset.map((r) => ({
         // Identidade do REGISTRO: é a PK. ID_USUARIO não serve mais para
@@ -888,6 +957,12 @@ apiRouter.get("/aprovadores", async (req, res) => {
         NM_POSICAO: r.NM_POSICAO,
         NM_ESTADO: r.NM_ESTADO,
         NM_CIDADE: r.NM_CIDADE,
+        // Unidade da pessoa no MDM. É por ela que o Novo Kaizen recorta a
+        // lista (?lider=) e que a Administração agrupa os cards.
+        NM_SITE: r.NM_SITE,
+        // Só vem quando ?lider= foi pedido: a unidade pela qual a lista
+        // foi recortada, para a tela poder dizê-la sem consultar de novo.
+        NM_SITE_LIDER: r.NM_SITE_LIDER != null ? r.NM_SITE_LIDER : undefined,
         ATIVO: r.SG_ATIVO === "S",
         DT_ATUALIZACAO: relogioLocal(r.DT_ATUALIZACAO),
       }))
