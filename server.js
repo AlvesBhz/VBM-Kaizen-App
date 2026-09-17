@@ -386,11 +386,36 @@ async function getPool() {
 
 /** Executa um request parametrizado; `params` é um array de
  * [nome, tipoSql, valor], nunca concatenado na string SQL. */
+/* Quanto tempo ESTA requisição passou esperando o banco, e em quantas
+   idas.
+
+   Existe para responder uma pergunta que não se responde por palpite:
+   a tela está lenta por causa do BANCO ou do resto? Com o total da
+   requisição e o tempo de SQL lado a lado, a subtração dá o que foi
+   gasto FORA do banco — aplicação, leitura de imagem no volume,
+   serialização, rede do Databricks Apps até o navegador.
+
+   AsyncLocalStorage, e não uma variável de módulo: o Node é de uma
+   linha só, mas cada `await` intercala requisições. Com variável
+   global, a requisição B assumiria o lugar enquanto A espera o banco, e
+   o tempo de A seria somado no contador de B — o instrumento mediria
+   errado justamente quando há concorrência, que é quando ele importa. */
+const { AsyncLocalStorage } = require("node:async_hooks");
+const medicaoRequisicao = new AsyncLocalStorage();
+
 async function runQuery(query, params = []) {
   const pool = await getPool();
   const request = pool.request();
   params.forEach(([name, type, value]) => request.input(name, type, value));
-  return request.query(query);
+  const alvo = medicaoRequisicao.getStore();
+  if (!alvo) return request.query(query);
+  const inicio = process.hrtime.bigint();
+  try {
+    return await request.query(query);
+  } finally {
+    alvo.sqlMs += Number(process.hrtime.bigint() - inicio) / 1e6;
+    alvo.sqlQtd += 1;
+  }
 }
 
 // ------------------------------------------------------------------
@@ -450,6 +475,38 @@ const PAGINAS_RESTRITAS = {
 // vínculos de papel). Memorizado no próprio req: o gate da API e o
 // GET /api/me da mesma requisição reusam o resultado em vez de
 // consultar de novo.
+/* Identidade guardada por E-MAIL, por pouco tempo.
+
+   O cache por requisição (req._perfilAcesso) resolvia a repetição
+   DENTRO de uma chamada; abrir a Biblioteca dispara oito chamadas de
+   API, e cada uma repetia esta consulta do zero. Eram 12 das 22 idas ao
+   banco de uma única abertura de tela gastas em "quem é você?", sempre
+   com a mesma resposta. Contra um banco a alguns milissegundos de
+   distância isso não aparecia; do Databricks Apps para o Azure SQL,
+   cada ida paga a latência da rede, e elas somam.
+
+   TTL curto de propósito: a resposta vem de kzn_admin e kzn_aprovador,
+   que a Administração edita. Sessenta segundos é o mesmo prazo que o
+   catálogo de status já usa — tirar o acesso de alguém passa a valer no
+   minuto seguinte, não instantaneamente. Negativa NÃO entra no cache:
+   quem acabou de ser cadastrado no MDM não fica um minuto barrado. */
+const TTL_IDENTIDADE_MS = 60 * 1000;
+const identidadeCache = new Map();
+
+function identidadeLer(email) {
+  const item = identidadeCache.get(email);
+  if (!item) return null;
+  if (item.expiraEm < Date.now()) { identidadeCache.delete(email); return null; }
+  return item.perfil;
+}
+function identidadeGravar(email, perfil) {
+  // Só o que foi RECONHECIDO. Guardar a negativa faria um cadastro novo
+  // no MDM demorar a valer, e é justamente quando a pessoa está tentando
+  // entrar pela primeira vez.
+  if (!perfil || !perfil.idUsuario) return;
+  identidadeCache.set(email, { perfil, expiraEm: Date.now() + TTL_IDENTIDADE_MS });
+}
+
 async function perfilDeAcesso(req) {
   if (req._perfilAcesso) return req._perfilAcesso;
 
@@ -461,6 +518,9 @@ async function perfilDeAcesso(req) {
 
   const email = req.get("X-Forwarded-Email");
   if (!email) return negar("requisição sem X-Forwarded-Email (fora do Databricks Apps?)");
+
+  const guardado = identidadeLer(email);
+  if (guardado) { req._perfilAcesso = guardado; return guardado; }
 
   try {
     const result = await runQuery(
@@ -488,6 +548,7 @@ async function perfilDeAcesso(req) {
       admin: linha.EH_ADMIN === 1,
       aprovador: linha.EH_APROVADOR === 1,
     };
+    identidadeGravar(email, req._perfilAcesso);
     return req._perfilAcesso;
   } catch (err) {
     // Falha de consulta NUNCA libera: erro é tratado como sem permissão.
@@ -709,15 +770,26 @@ apiRouter.use(async (req, res, next) => {
 // Reaproveitada por GET /api/me (matrícula no cabeçalho) e por
 // idUsuarioLogado() (usuário responsável ao criar/editar categoria) —
 // mesma consulta, dois consumidores, sem duplicar SQL.
+/* Mesma ideia e mesmo prazo do identidadeCache, para a linha do MDM.
+   São duas consultas diferentes (esta traz matrícula e posição) e as
+   duas rodavam várias vezes por abertura de tela. */
+const mdmCache = new Map();
+
 async function buscarMdmPorEmail(email) {
   if (!email) return null;
+  const guardado = mdmCache.get(email);
+  if (guardado && guardado.expiraEm >= Date.now()) return guardado.linha;
   try {
     const result = await runQuery(
       // Comparação direta, sem LOWER() na coluna — ver perfilDeAcesso.
       `SELECT TOP (1) ID_USUARIO, CD_MATRICULA, NM_USUARIO, NM_POSICAO FROM ${FULL_MDM_TABLE} WHERE CD_EMAIL = @email`,
       [["email", sql.NVarChar(255), email]]
     );
-    return result.recordset[0] || null;
+    const linha = result.recordset[0] || null;
+    // Só o encontrado entra no cache, pela mesma razão do identidadeCache:
+    // guardar "não achei" atrasaria quem acabou de entrar no MDM.
+    if (linha) mdmCache.set(email, { linha, expiraEm: Date.now() + TTL_IDENTIDADE_MS });
+    return linha;
   } catch (err) {
     console.warn("[mdm] falha ao consultar usuário por e-mail:", err.message);
     return null;
@@ -4781,6 +4853,49 @@ apiRouter.post("/kaizens/:id/aviso", (req, res) => {
     console.error(`[email] ${chave || idKaizen}: NAO enviado — ${motivo || "sem detalhe"}`);
   }
   res.json({ ok: true });
+});
+
+/* Medição por requisição: total, tempo de banco e número de consultas.
+
+   Vai para o CABEÇALHO Server-Timing, que o navegador já sabe ler — na
+   aba Rede, coluna "Tempo", cada chamada mostra a fatia de banco sem
+   ninguém precisar abrir log de servidor. E vai para o log também, para
+   quem estiver olhando pelo Databricks.
+
+   COMO LER: `fora` é total menos banco. Se `sql` domina, o gargalo é o
+   Azure SQL (consulta pesada) ou a distância até ele (muitas idas, cada
+   uma pagando a latência). Se `fora` domina, o gargalo está deste lado
+   — aplicação, leitura de imagem no volume, serialização.
+
+   Só em /api: arquivo estático não consulta banco e o cabeçalho só faria
+   volume. */
+app.use("/api", (req, res, next) => {
+  const medida = { sqlMs: 0, sqlQtd: 0 };
+  const inicio = process.hrtime.bigint();
+  res.on("finish", () => {
+    const total = Number(process.hrtime.bigint() - inicio) / 1e6;
+    const fora = Math.max(0, total - medida.sqlMs);
+    // Lento = acima de meio segundo. Abaixo disso o log só atrapalharia
+    // a leitura do que importa.
+    if (total >= 500) {
+      console.warn(`[lento] ${req.method} ${req.originalUrl} — total ${total.toFixed(0)}ms, ` +
+        `banco ${medida.sqlMs.toFixed(0)}ms em ${medida.sqlQtd} consulta(s), fora do banco ${fora.toFixed(0)}ms`);
+    }
+  });
+  // O cabeçalho precisa sair ANTES do corpo; res.on('finish') seria
+  // tarde demais. writeHead é o último ponto em que ainda dá.
+  const writeHead = res.writeHead;
+  res.writeHead = function (...args) {
+    const total = Number(process.hrtime.bigint() - inicio) / 1e6;
+    try {
+      res.setHeader("Server-Timing",
+        `sql;desc="banco (${medida.sqlQtd} consultas)";dur=${medida.sqlMs.toFixed(1)},` +
+        `fora;desc="fora do banco";dur=${Math.max(0, total - medida.sqlMs).toFixed(1)},` +
+        `total;dur=${total.toFixed(1)}`);
+    } catch (e) { /* cabeçalho já enviado: não vale derrubar a resposta */ }
+    return writeHead.apply(this, args);
+  };
+  medicaoRequisicao.run(medida, next);
 });
 
 app.use("/api", apiRouter);

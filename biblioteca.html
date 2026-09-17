@@ -1166,18 +1166,24 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
      Basta apagar o campo (ou usar "Limpar filtros" e apagar) para ver
      tudo. */
   var nomeUsuarioLogado = '';
+  /* Devolve uma promessa: quem abre a tela ESPERA por ela antes de
+     pedir a lista.
+
+     Antes a abertura pedia a lista sem filtro, o /me respondia logo
+     depois, o campo de usuário era preenchido e a lista era pedida DE
+     NOVO, agora filtrada. A primeira resposta ia inteira para o lixo —
+     duas listagens e duas contagens no banco por abertura, sendo que a
+     contagem varre a tabela toda. Esperar o /me custa uma ida que já
+     estava sendo feita de qualquer jeito e economiza a outra metade. */
   function preencherUsuarioLogado() {
-    if (!window.VBMAcesso || !window.VBMAcesso.me) return;
-    window.VBMAcesso.me().then(function (me) {
+    if (!window.VBMAcesso || !window.VBMAcesso.me) return Promise.resolve();
+    return window.VBMAcesso.me().then(function (me) {
       if (!me || !me.nome) return;
       nomeUsuarioLogado = me.nome;
       // Só preenche se ninguém digitou nada enquanto o /me respondia —
       // sobrescrever o que a pessoa acabou de escrever seria pior do
       // que não preencher.
-      if (!selUsuario.value) {
-        selUsuario.value = nomeUsuarioLogado;
-        aplicarFiltros();
-      }
+      if (!selUsuario.value) selUsuario.value = nomeUsuarioLogado;
     }).catch(function () {});
   }
 
@@ -1406,12 +1412,21 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     });
   };
 
-  preencherUsuarioLogado();
+  // A guarda do 'vbm:idioma' compara com o idioma da última listagem, e
+  // quem gravava isso era o carregarLista. Como ele passou a esperar o
+  // /me, o applyLang inicial disparava o evento com a marca ainda em
+  // branco e a página recarregava tudo de novo. A marca é do IDIOMA EM
+  // QUE A TELA ABRIU, então é aqui que ela pertence.
+  idiomaDaLista = idiomaDaTela();
+
   carregarFiltrosDoBanco();
   carregarCategorias();
   carregarStatus();
   carregarResumo();
-  carregarLista();
+  // A lista vem DEPOIS do /me, e uma vez só: o filtro de usuário faz
+  // parte da consulta, então pedi-la antes de saber quem está logado
+  // significa jogar fora a resposta e pedir de novo.
+  preencherUsuarioLogado().then(carregarLista);
   window.addEventListener('vbm:idioma', function () {
     // O applyLang inicial também dispara este evento; recarregar aqui
     // repetiria a consulta que acabou de sair. Só refaz em troca real.
