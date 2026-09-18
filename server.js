@@ -294,6 +294,27 @@ const FULL_RESULTADOS_TABLE = `[${DB_SCHEMA}].[${DB_RESULTADOS_TABLE}]`;
 const DB_RESULTADO_KAIZEN_TABLE = safeIdentifier(process.env.AZURE_SQL_RESULTADO_KAIZEN_TABLE, "kzn_resultado_kaizen");
 const FULL_RESULTADO_KAIZEN_TABLE = `[${DB_SCHEMA}].[${DB_RESULTADO_KAIZEN_TABLE}]`;
 
+/* ── Tabelas HISTÓRICAS ───────────────────────────────────────────
+   Kaizens de anos anteriores, carregados em tabelas próprias com o
+   MESMO desenho das atuais. A Biblioteca lê as duas (UNION ALL); a
+   Aprovação não — histórico é Kaizen concluído, e pô-lo na fila faria
+   o aprovador abrir a tela com milhares de itens para decidir de novo.
+
+   A KZN_HIST_PEDRAVISAOCONSOLIDADA já nasceu com DS_COMPARA_META e
+   DS_RESULTADO_ALCANCADO, e SEM o ID_DESPERDICIO que saiu da atual —
+   ou seja, está no desenho novo. A atual pode ainda estar no antigo se
+   database/adicionar_colunas_texto_pvc.sql não tiver rodado, e é por
+   isso que o lado atual do UNION resolve o nome da coluna em tempo de
+   execução (ver fonteBiblioteca). */
+const DB_HIST_PVC_TABLE = safeIdentifier(process.env.AZURE_SQL_HIST_PVC_TABLE, "kzn_hist_pedravisaoconsolidada");
+const FULL_HIST_PVC_TABLE = `[${DB_SCHEMA}].[${DB_HIST_PVC_TABLE}]`;
+const DB_HIST_KZ_DESPERDICIO_TABLE = safeIdentifier(process.env.AZURE_SQL_HIST_KZ_DESPERDICIO_TABLE, "kzn_hist_kaizen_desperdicio");
+const FULL_HIST_KZ_DESPERDICIO_TABLE = `[${DB_SCHEMA}].[${DB_HIST_KZ_DESPERDICIO_TABLE}]`;
+const DB_HIST_MEMBROS_TABLE = safeIdentifier(process.env.AZURE_SQL_HIST_MEMBROS_TABLE, "kzn_hist_membros_equipe");
+const FULL_HIST_MEMBROS_TABLE = `[${DB_SCHEMA}].[${DB_HIST_MEMBROS_TABLE}]`;
+const DB_HIST_RESULTADO_KAIZEN_TABLE = safeIdentifier(process.env.AZURE_SQL_HIST_RESULTADO_KAIZEN_TABLE, "kzn_hist_resultado_kaizen");
+const FULL_HIST_RESULTADO_KAIZEN_TABLE = `[${DB_SCHEMA}].[${DB_HIST_RESULTADO_KAIZEN_TABLE}]`;
+
 // Nomes de tabela usados só em JOINs de leitura (Biblioteca) — mesmas
 // env vars/padrões já usados nos cadastros bilíngues acima (registrarCadastroBilingue).
 const FULL_REPLICACAO_TABLE = tabelaCadastro("AZURE_SQL_REPLICACAO_TABLE", "kzn_replicacao");
@@ -3122,6 +3143,87 @@ async function colunaDaComparacaoMeta() {
   return colunaDsComparaMetaExiste ? "DS_COMPARA_META" : "DS_RESULTADO_ESPERADO";
 }
 
+/* ── A fonte da BIBLIOTECA: atual + histórico ─────────────────────
+
+   Tabela derivada com UNION ALL das duas. Usada no lugar do nome da
+   tabela nas consultas da Biblioteca, que por isso não mudam de forma:
+   continuam escrevendo `p.NM_KAIZEN`, `p.ID_STATUS` e o resto.
+
+   UNION ALL, e não UNION: UNION elimina duplicatas, o que obriga o
+   banco a ordenar o resultado inteiro das duas pontas antes de
+   devolver a primeira linha. Não há duplicata a eliminar — são tabelas
+   disjuntas —, então seria pagar uma ordenação de 12.000 linhas por
+   nada.
+
+   ORIGEM diz de qual tabela a linha veio. Não é enfeite: é o que
+   permite ao detalhe e à gravação irem à tabela certa. Sem ela, editar
+   um Kaizen histórico faria UPDATE na tabela atual, que não tem a
+   linha — a gravação se perderia sem erro nenhum.
+
+   As colunas são LISTADAS, nunca `*`: UNION ALL casa por POSIÇÃO, não
+   por nome. Com `*` dos dois lados, uma coluna a mais em qualquer uma
+   das tabelas desalinharia tudo em silêncio, e a Biblioteca passaria a
+   mostrar o valor de uma coluna no lugar de outra.
+
+   DS_COMPARA_META e DS_RESULTADO_ALCANCADO existem na histórica desde
+   o começo; na atual dependem do ALTER TABLE. Os dois lados são
+   resolvidos em tempo de execução para que o tipo e a ordem batam de
+   qualquer jeito.
+
+   DT_REFERENCIA sai calculada aqui, uma vez, para o filtro de ano e a
+   ordenação não repetirem ISNULL() em cada consulta. No lado atual usa
+   a coluna persistida quando ela existe (é indexável); na histórica é
+   sempre a expressão, que é barata porque a tabela não tem índice
+   sobre ela de qualquer forma. */
+async function fonteBiblioteca() {
+  const colComparaMeta = await colunaDaComparacaoMeta();
+  const temAlcancado = await temColunaDsResultado();
+  const alcancadoAtual = temAlcancado ? "DS_RESULTADO_ALCANCADO" : "CAST(NULL AS VARCHAR(100))";
+  const dataRefAtual = await expressaoDataReferencia("");
+
+  const colunas = (origem, compara, alcancado, dataRef) => `
+    SELECT ORIGEM = ${origem},
+           ID_KAIZEN, NM_KAIZEN, ID_STATUS, ID_CATEGORIA, ID_REPLICACAO, ID_APROVADOR,
+           ID_USUARIO_CADASTRO, ID_USUARIO_LIDER, ID_USUARIO_ATUALIZACAO,
+           DS_PROBLEMA, DS_OBJETIVO, DS_ESTADO_ANTES, DS_ESTADO_DEPOIS, URL_REFERENCIA,
+           DS_LICOES_APRENDIDAS,
+           DS_COMPARA_META = ${compara},
+           DS_RESULTADO_ALCANCADO = ${alcancado},
+           VL_RESULTADO_FINANCEIRO, ID_MOEDA, DT_CONCLUSAO, DT_ATUALIZACAO, DS_MOTIVO,
+           URL_IMG_ANTES, URL_IMG_DEPOIS,
+           DT_REFERENCIA = ${dataRef}`;
+
+  return `(
+    ${colunas("'A'", colComparaMeta, alcancadoAtual, dataRefAtual)}
+      FROM ${FULL_PVC_TABLE}
+    UNION ALL
+    ${colunas("'H'", "DS_COMPARA_META", "DS_RESULTADO_ALCANCADO", "ISNULL(DT_CONCLUSAO, DT_ATUALIZACAO)")}
+      FROM ${FULL_HIST_PVC_TABLE}
+  )`;
+}
+
+/* Em qual tabela mora este ID_KAIZEN? Devolve "A", "H" ou null.
+
+   O ID é único dentro de cada tabela, mas as duas são carregadas por
+   caminhos diferentes e nada no banco impede o mesmo número nas duas.
+   Quando isso acontece a atual ganha — é a que ainda recebe gravação —
+   e o caso fica registrado no log, porque é defeito de carga e não
+   situação normal. */
+async function origemDoKaizen(idKaizen) {
+  const r = await runQuery(
+    `SELECT ORIGEM = 'A' FROM ${FULL_PVC_TABLE} WHERE ID_KAIZEN = @idKaizen
+     UNION ALL
+     SELECT ORIGEM = 'H' FROM ${FULL_HIST_PVC_TABLE} WHERE ID_KAIZEN = @idKaizen`,
+    [["idKaizen", sql.Int, idKaizen]]
+  );
+  if (r.recordset.length > 1) {
+    console.warn(`[historico] ID_KAIZEN=${idKaizen} existe nas DUAS tabelas — ` +
+      "a atual prevalece. Confira a carga do histórico: IDs não deveriam colidir.");
+    return "A";
+  }
+  return r.recordset.length ? r.recordset[0].ORIGEM : null;
+}
+
 /** Troca por completo os vínculos Kaizen ↔ Resultado, dentro da
  *  transação de quem chamou. Um só caminho para o cadastro e para a
  *  edição: no cadastro a lista chega vazia do banco e só há INSERT; na
@@ -3131,10 +3233,12 @@ async function colunaDaComparacaoMeta() {
  *  `ids` pode trazer nulos (bloco desligado) e repetidos (a mesma linha
  *  do catálogo escolhida nos dois blocos, se um dia isso for possível);
  *  os dois são filtrados aqui, e não em cada chamador. */
-async function gravarResultadosDoKaizen(tx, idKaizen, ids) {
+async function gravarResultadosDoKaizen(tx, idKaizen, ids, tabela) {
+  // Sem tabela informada, a atual — é o caminho do cadastro novo.
+  const alvo = tabela || FULL_RESULTADO_KAIZEN_TABLE;
   const reqDel = new sql.Request(tx);
   reqDel.input("idKaizen", sql.Int, idKaizen);
-  await reqDel.query(`DELETE FROM ${FULL_RESULTADO_KAIZEN_TABLE} WHERE ID_KAIZEN = @idKaizen`);
+  await reqDel.query(`DELETE FROM ${alvo} WHERE ID_KAIZEN = @idKaizen`);
 
   const unicos = [...new Set((ids || []).filter((x) => Number.isInteger(x)))];
   for (const idResultado of unicos) {
@@ -3142,7 +3246,7 @@ async function gravarResultadosDoKaizen(tx, idKaizen, ids) {
     req.input("idKaizen", sql.Int, idKaizen);
     req.input("idResultado", sql.Int, idResultado);
     await req.query(
-      `INSERT INTO ${FULL_RESULTADO_KAIZEN_TABLE} (ID_KAIZEN, ID_RESULTADO, DT_ATUALIZACAO)
+      `INSERT INTO ${alvo} (ID_KAIZEN, ID_RESULTADO, DT_ATUALIZACAO)
        VALUES (@idKaizen, @idResultado, ${AGORA_BRASILIA})`
     );
   }
@@ -3607,7 +3711,10 @@ apiRouter.get("/kaizens", async (req, res) => {
     // um ?tamanho= grande na URL não recrie o problema.
     const pagina = Math.max(0, intOuNuloGlobal(req.query.pagina) || 0);
     const tamanho = Math.min(100, Math.max(1, intOuNuloGlobal(req.query.tamanho) || 24));
-    const dataRef = await expressaoDataReferencia("p");
+    // A Biblioteca lê atual + histórico. DT_REFERENCIA já vem pronta da
+    // fonte unificada, então aqui é só a coluna — não mais a expressão.
+    const fonteKaizens = await fonteBiblioteca();
+    const dataRef = "p.DT_REFERENCIA";
 
     // Autorização por linha: a Biblioteca só mostra o lápis onde este
     // usuário pode mesmo editar. É a MESMA regra que a gravação aplica.
@@ -3665,7 +3772,7 @@ apiRouter.get("/kaizens", async (req, res) => {
     // LEFT JOIN entram porque a listagem seleciona cat.NM_CATEGORIA e
     // st.NM_STATUS. São relações 1:1 (uma linha por ID e idioma), então
     // não alteram a contagem.
-    const fonte = `FROM ${FULL_PVC_TABLE} p
+    const fonte = `FROM ${fonteKaizens} p
        LEFT JOIN ${FULL_CATEGORIA_TABLE} cat ON cat.ID_CATEGORIA = p.ID_CATEGORIA AND cat.ID_IDIOMA = @idIdioma
        LEFT JOIN ${FULL_STATUS_TABLE} st ON st.ID_STATUS = p.ID_STATUS AND st.ID_IDIOMA = @idIdioma
        OUTER APPLY (
@@ -3689,13 +3796,28 @@ apiRouter.get("/kaizens", async (req, res) => {
               lider.NM_USUARIO AS NM_LIDER, lider.NM_ESTADO, lider.NM_CIDADE,
               autor.NM_SITE,
               p.URL_IMG_ANTES, p.URL_IMG_DEPOIS,
+              -- De qual tabela veio. Vai para a tela porque o card
+              -- precisa saber: o lápis leva para a edição, e editar é
+              -- na tabela de origem.
+              p.ORIGEM,
               -- TODOS os desperdícios do Kaizen, não só o primeiro: cada
               -- um vira um balão próprio no card. STRING_AGG com um
               -- separador que não aparece em nome de cadastro.
+              --
+              -- O vínculo mora em DUAS tabelas, uma por origem, e o
+              -- p.ORIGEM escolhe qual: unir as duas sem esse filtro
+              -- misturaria os desperdícios de um Kaizen atual com os de
+              -- um histórico de mesmo número, se um dia colidirem.
               (SELECT STRING_AGG(d.NM_DESPERDICIO, '§')
-                 FROM ${FULL_KZ_DESPERDICIO_TABLE} kd
+                 FROM (
+                   SELECT ID_DESPERDICIO FROM ${FULL_KZ_DESPERDICIO_TABLE}
+                    WHERE ID_KAIZEN = p.ID_KAIZEN AND p.ORIGEM = 'A'
+                   UNION ALL
+                   SELECT ID_DESPERDICIO FROM ${FULL_HIST_KZ_DESPERDICIO_TABLE}
+                    WHERE ID_KAIZEN = p.ID_KAIZEN AND p.ORIGEM = 'H'
+                 ) kd
                  JOIN ${FULL_DESPERDICIO_TABLE} d ON d.ID_DESPERDICIO = kd.ID_DESPERDICIO AND d.ID_IDIOMA = @idIdioma
-                WHERE kd.ID_KAIZEN = p.ID_KAIZEN) AS DESPERDICIOS,
+              ) AS DESPERDICIOS,
               PODE_EDITAR = ${SQL_PODE_EDITAR("p")},
               STATUS_EDITAVEL = ${SQL_STATUS_EDITAVEL("p")}
        ${fonte}
@@ -3735,6 +3857,10 @@ apiRouter.get("/kaizens", async (req, res) => {
       total,
       itens: result.recordset.map((r) => ({
         ID_KAIZEN: r.ID_KAIZEN,
+        // "A" = tabela atual, "H" = histórica. A tela precisa saber:
+        // é o que distingue um Kaizen do ano corrente de um carregado
+        // do histórico, e ambos aparecem na mesma lista.
+        ORIGEM: r.ORIGEM,
         // Dois sinais, de propósito: PODE_EDITAR é a permissão da pessoa
         // (mostra ou esconde o botão) e EDICAO_LIBERADA junta a
         // permissão com o status (habilita ou desabilita).
@@ -3778,8 +3904,12 @@ apiRouter.get("/kaizens", async (req, res) => {
 // (hero da tela): total por ano de criação + total por status.
 apiRouter.get("/kaizens/resumo", async (req, res) => {
   try {
+    // O resumo é da BIBLIOTECA, então conta atual + histórico — os
+    // mesmos Kaizens que a lista logo abaixo mostra. Se contasse só a
+    // tabela atual, o painel diria um número e a lista mostraria outro.
+    const fonteKaizens = await fonteBiblioteca();
     const porAno = await runQuery(
-      `SELECT YEAR(DT_ATUALIZACAO) AS ANO, COUNT(*) AS QTD FROM ${FULL_PVC_TABLE} GROUP BY YEAR(DT_ATUALIZACAO)`
+      `SELECT YEAR(DT_ATUALIZACAO) AS ANO, COUNT(*) AS QTD FROM ${fonteKaizens} p GROUP BY YEAR(DT_ATUALIZACAO)`
     );
     // Total por status, TODOS os anos, casado por ID_STATUS.
     //
@@ -3791,7 +3921,7 @@ apiRouter.get("/kaizens/resumo", async (req, res) => {
     // não depende de como o status foi escrito nem do idioma.
     const porStatus = await runQuery(
       `SELECT p.ID_STATUS, COUNT(*) AS QTD
-         FROM ${FULL_PVC_TABLE} p
+         FROM ${fonteKaizens} p
         GROUP BY p.ID_STATUS`
     );
     // Um item por status CADASTRADO, no idioma pedido, com a contagem do
@@ -3802,7 +3932,7 @@ apiRouter.get("/kaizens/resumo", async (req, res) => {
     const ano = intOuNuloGlobal(req.query.ano) ?? new Date().getUTCFullYear();
     const statusAno = await runQuery(
       `SELECT st.ID_STATUS, st.NM_STATUS,
-              QTD = (SELECT COUNT(*) FROM ${FULL_PVC_TABLE} p
+              QTD = (SELECT COUNT(*) FROM ${fonteKaizens} p
                       WHERE p.ID_STATUS = st.ID_STATUS
                         AND YEAR(p.DT_ATUALIZACAO) = @ano)
          FROM ${FULL_STATUS_TABLE} st
@@ -3892,7 +4022,7 @@ apiRouter.get("/kaizens/titulo-existe", async (req, res) => {
 // ID (mesmo cuidado de /kaizens/resumo e /kaizens/titulo-existe).
 apiRouter.get("/kaizens/filtros", async (req, res) => {
   try {
-    const dataRef = await expressaoDataReferencia("");
+    const fonteKaizens = await fonteBiblioteca();
     const [unidades, anos] = await Promise.all([
       // Todas as unidades da hierarquia, não só as dos terceiros.
       opcoesDistintasDoMdm("NM_SITE", { todosOsTipos: true }),
@@ -3905,9 +4035,12 @@ apiRouter.get("/kaizens/filtros", async (req, res) => {
         // Sobre DT_REFERENCIA quando ela existir: YEAR(ISNULL(...))
         // impede o uso de índice e obriga a varrer a tabela para montar
         // um combo de meia dúzia de anos.
-        `SELECT DISTINCT YEAR(${dataRef}) AS ANO
-           FROM ${FULL_PVC_TABLE}
-          WHERE ${dataRef} IS NOT NULL
+        // Os anos oferecidos no filtro têm de cobrir o histórico
+        // também: sem isso a Biblioteca mostraria Kaizens de 2019 e não
+        // deixaria filtrar por 2019.
+        `SELECT DISTINCT YEAR(p.DT_REFERENCIA) AS ANO
+           FROM ${fonteKaizens} p
+          WHERE p.DT_REFERENCIA IS NOT NULL
           ORDER BY ANO DESC`
       ),
     ]);
@@ -3925,6 +4058,7 @@ apiRouter.get("/kaizens/:id", async (req, res) => {
     const idKaizen = parseInt(req.params.id, 10);
     if (!Number.isInteger(idKaizen)) return res.status(400).json({ error: "ID inválido." });
     const idIdioma = idIdiomaDaRequisicao(req);
+    const fonteKaizens = await fonteBiblioteca();
 
     const principal = await runQuery(
       `SELECT p.*, p.DT_ATUALIZACAO AS DT_CRIACAO, cat.NM_CATEGORIA, repl.NM_REPLICACAO, moeda.SG_MOEDA, moeda.NM_MOEDA,
@@ -3932,7 +4066,7 @@ apiRouter.get("/kaizens/:id", async (req, res) => {
               lider.NM_USUARIO AS NM_LIDER, lider.NM_ESTADO, lider.NM_CIDADE,
               autor.NM_SITE,
               aprov.NM_USUARIO AS NM_APROVADOR
-       FROM ${FULL_PVC_TABLE} p
+       FROM ${fonteKaizens} p
        LEFT JOIN ${FULL_CATEGORIA_TABLE} cat ON cat.ID_CATEGORIA = p.ID_CATEGORIA AND cat.ID_IDIOMA = @idIdioma
        LEFT JOIN ${FULL_REPLICACAO_TABLE} repl ON repl.ID_REPLICACAO = p.ID_REPLICACAO AND repl.ID_IDIOMA = @idIdioma
        LEFT JOIN ${FULL_STATUS_TABLE} st ON st.ID_STATUS = p.ID_STATUS AND st.ID_IDIOMA = @idIdioma
@@ -3955,24 +4089,32 @@ apiRouter.get("/kaizens/:id", async (req, res) => {
     );
     if (!principal.recordset.length) return res.status(404).json({ error: "Kaizen não encontrado." });
     const k = principal.recordset[0];
+    const ehHistorico = k.ORIGEM === "H";
 
     const [membros, desperdicios, resultados] = await Promise.all([
+      // Membros, desperdícios e resultados moram em DUAS tabelas cada,
+      // uma por origem. A do Kaizen aberto foi resolvida acima (k.ORIGEM),
+      // então cada consulta vai direto à tabela certa — nada de unir as
+      // duas e torcer para os IDs não colidirem.
       runQuery(
-        `SELECT m.NM_USUARIO, m.NM_POSICAO FROM ${FULL_MEMBROS_TABLE} me
-         JOIN ${FULL_MDM_TABLE} m ON m.ID_USUARIO = me.ID_USUARIO
-         WHERE me.ID_KAIZEN = @idKaizen`,
+        `SELECT m.NM_USUARIO, m.NM_POSICAO
+           FROM ${ehHistorico ? FULL_HIST_MEMBROS_TABLE : FULL_MEMBROS_TABLE} me
+           JOIN ${FULL_MDM_TABLE} m ON m.ID_USUARIO = me.ID_USUARIO
+          WHERE me.ID_KAIZEN = @idKaizen`,
         [["idKaizen", sql.Int, idKaizen]]
       ),
       runQuery(
-        `SELECT d.NM_DESPERDICIO FROM ${FULL_KZ_DESPERDICIO_TABLE} kd
-         JOIN ${FULL_DESPERDICIO_TABLE} d ON d.ID_DESPERDICIO = kd.ID_DESPERDICIO AND d.ID_IDIOMA = @idIdioma
-         WHERE kd.ID_KAIZEN = @idKaizen`,
+        `SELECT d.NM_DESPERDICIO
+           FROM ${ehHistorico ? FULL_HIST_KZ_DESPERDICIO_TABLE : FULL_KZ_DESPERDICIO_TABLE} kd
+           JOIN ${FULL_DESPERDICIO_TABLE} d ON d.ID_DESPERDICIO = kd.ID_DESPERDICIO AND d.ID_IDIOMA = @idIdioma
+          WHERE kd.ID_KAIZEN = @idKaizen`,
         [["idKaizen", sql.Int, idKaizen], ["idIdioma", sql.Int, idIdioma]]
       ),
       runQuery(
-        `SELECT r.NM_RESULTADO, r.DS_RESULTADO FROM ${FULL_RESULTADO_KAIZEN_TABLE} rk
-         JOIN ${FULL_RESULTADOS_TABLE} r ON r.ID_RESULTADO = rk.ID_RESULTADO AND r.ID_IDIOMA = @idIdioma
-         WHERE rk.ID_KAIZEN = @idKaizen`,
+        `SELECT r.NM_RESULTADO, r.DS_RESULTADO
+           FROM ${ehHistorico ? FULL_HIST_RESULTADO_KAIZEN_TABLE : FULL_RESULTADO_KAIZEN_TABLE} rk
+           JOIN ${FULL_RESULTADOS_TABLE} r ON r.ID_RESULTADO = rk.ID_RESULTADO AND r.ID_IDIOMA = @idIdioma
+          WHERE rk.ID_KAIZEN = @idKaizen`,
         [["idKaizen", sql.Int, idKaizen], ["idIdioma", sql.Int, idIdioma]]
       ),
     ]);
@@ -4003,7 +4145,11 @@ apiRouter.get("/kaizens/:id", async (req, res) => {
       DS_ESTADO_DEPOIS: k.DS_ESTADO_DEPOIS,
       URL_REFERENCIA: k.URL_REFERENCIA,
       DS_LICOES_APRENDIDAS: k.DS_LICOES_APRENDIDAS,
-      DS_RESULTADO_ESPERADO: k.DS_RESULTADO_ESPERADO,
+      // A "Comparação com a Meta Inicial". O nome do campo na RESPOSTA
+      // fica como estava para não mexer em quem consome (o modal e o
+      // relatório A4); o que mudou foi de onde ele vem — a fonte
+      // unificada resolve a coluna dos dois lados do UNION.
+      DS_RESULTADO_ESPERADO: k.DS_COMPARA_META,
       VL_RESULTADO_FINANCEIRO: k.VL_RESULTADO_FINANCEIRO,
       SG_MOEDA: k.SG_MOEDA,
       NM_MOEDA: k.NM_MOEDA,
@@ -4205,11 +4351,15 @@ const SQL_STATUS_EDITAVEL = (aliasPvc) =>
 /** Resposta direta para UM Kaizen: existe? e este usuário pode editar? */
 async function podeEditarKaizen(req, idKaizen) {
   const ctx = await contextoDeEdicao(req);
+  // Olha as DUAS tabelas: o Kaizen histórico é editável como qualquer
+  // outro, e a autorização é a mesma regra. A ORIGEM volta junto porque
+  // quem grava precisa saber em qual tabela mexer.
+  const fonteKaizens = await fonteBiblioteca();
   const r = await runQuery(
     `SELECT PODE_EDITAR = ${SQL_PODE_EDITAR("p")},
             STATUS_EDITAVEL = ${SQL_STATUS_EDITAVEL("p")},
-            p.ID_STATUS
-       FROM ${FULL_PVC_TABLE} p WHERE p.ID_KAIZEN = @idKaizen`,
+            p.ID_STATUS, p.ORIGEM
+       FROM ${fonteKaizens} p WHERE p.ID_KAIZEN = @idKaizen`,
     ctx.params.concat([["idKaizen", sql.Int, idKaizen]])
   );
   const linha = r.recordset[0];
@@ -4219,6 +4369,7 @@ async function podeEditarKaizen(req, idKaizen) {
     pode: linha.PODE_EDITAR === 1,
     statusPermite: linha.STATUS_EDITAVEL === 1,
     idStatus: linha.ID_STATUS,
+    origem: linha.ORIGEM,
     idUsuario: ctx.idUsuario,
   };
 }
@@ -4529,6 +4680,18 @@ apiRouter.put("/kaizens/:id", async (req, res) => {
     const idUsuario = autoriz.idUsuario;
     if (!idUsuario) return res.status(401).json({ error: "Não foi possível identificar o usuário logado." });
 
+    /* Kaizen histórico é editado na TABELA DELE. Sem isto o UPDATE iria
+       para a tabela atual, que não tem a linha: zero linhas afetadas,
+       nenhum erro, alteração perdida em silêncio — e, se um dia os IDs
+       colidirem, gravada por cima de outro Kaizen. As quatro tabelas
+       andam juntas: cabeçalho, membros, desperdícios e resultados. */
+    const ehHistorico = autoriz.origem === "H";
+    const tabelaPvc = ehHistorico ? FULL_HIST_PVC_TABLE : FULL_PVC_TABLE;
+    const tabelaMembros = ehHistorico ? FULL_HIST_MEMBROS_TABLE : FULL_MEMBROS_TABLE;
+    const tabelaDesperdicio = ehHistorico ? FULL_HIST_KZ_DESPERDICIO_TABLE : FULL_KZ_DESPERDICIO_TABLE;
+    const tabelaResultado = ehHistorico ? FULL_HIST_RESULTADO_KAIZEN_TABLE : FULL_RESULTADO_KAIZEN_TABLE;
+    if (ehHistorico) console.log(`[edicao] ID_KAIZEN=${idKaizen} é HISTÓRICO — gravando em ${tabelaPvc}.`);
+
     // Mesma conferência do cadastro: o título é medido contra o tamanho
     // REAL da coluna, não contra o número do DER (ver limiteNmKaizen).
     const maxTitulo = await limiteNmKaizen();
@@ -4607,7 +4770,7 @@ apiRouter.put("/kaizens/:id", async (req, res) => {
       if (carimbo) r.input("carimbo", sql.NVarChar(40), carimbo);
 
       const gravacao = await r.query(
-        `UPDATE ${FULL_PVC_TABLE}
+        `UPDATE ${tabelaPvc}
             SET NM_KAIZEN = @nmKaizen,
                 ID_CATEGORIA = @idCategoria,
                 ID_REPLICACAO = @idReplicacao,
@@ -4646,26 +4809,26 @@ apiRouter.put("/kaizens/:id", async (req, res) => {
       // dentro da MESMA transação — some tudo, entra o que veio da tela.
       const reqDelM = new sql.Request(tx);
       reqDelM.input("idKaizen", sql.Int, idKaizen);
-      await reqDelM.query(`DELETE FROM ${FULL_MEMBROS_TABLE} WHERE ID_KAIZEN = @idKaizen`);
+      await reqDelM.query(`DELETE FROM ${tabelaMembros} WHERE ID_KAIZEN = @idKaizen`);
       for (const idMembro of dados.membros) {
         const reqM = new sql.Request(tx);
         reqM.input("idKaizen", sql.Int, idKaizen);
         reqM.input("idUsuario", sql.Int, idMembro);
         await reqM.query(
-          `INSERT INTO ${FULL_MEMBROS_TABLE} (ID_KAIZEN, ID_USUARIO, DT_ATUALIZACAO)
+          `INSERT INTO ${tabelaMembros} (ID_KAIZEN, ID_USUARIO, DT_ATUALIZACAO)
            VALUES (@idKaizen, @idUsuario, ${AGORA_BRASILIA})`
         );
       }
 
       const reqDelD = new sql.Request(tx);
       reqDelD.input("idKaizen", sql.Int, idKaizen);
-      await reqDelD.query(`DELETE FROM ${FULL_KZ_DESPERDICIO_TABLE} WHERE ID_KAIZEN = @idKaizen`);
+      await reqDelD.query(`DELETE FROM ${tabelaDesperdicio} WHERE ID_KAIZEN = @idKaizen`);
       for (const idDesp of dados.idsDesperdicio) {
         const reqD = new sql.Request(tx);
         reqD.input("idKaizen", sql.Int, idKaizen);
         reqD.input("idDesperdicio", sql.Int, idDesp);
         await reqD.query(
-          `INSERT INTO ${FULL_KZ_DESPERDICIO_TABLE} (ID_KAIZEN, ID_DESPERDICIO, DT_ATUALIZACAO)
+          `INSERT INTO ${tabelaDesperdicio} (ID_KAIZEN, ID_DESPERDICIO, DT_ATUALIZACAO)
            VALUES (@idKaizen, @idDesperdicio, ${AGORA_BRASILIA})`
         );
       }
@@ -4677,7 +4840,7 @@ apiRouter.put("/kaizens/:id", async (req, res) => {
       const quantosResultados = await gravarResultadosDoKaizen(tx, idKaizen, [
         dados.geraResultadoFinanceiro ? dados.idResultadoFinanceiro : null,
         dados.geraResultadoOutros ? dados.idResultadoOutros : null,
-      ]);
+      ], tabelaResultado);
 
       await tx.commit();
       console.log(`[edicao] ID_KAIZEN=${idKaizen} atualizado por ${idUsuario}; ID_STATUS=${revisado.id}; ` +
