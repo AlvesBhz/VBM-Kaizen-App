@@ -1338,7 +1338,16 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     var meuPedido = ++requisicaoAtual;
 
     fetch('/api/kaizens?' + new URLSearchParams(params).toString(), { headers: { Accept: 'application/json' } })
-      .then(function (r) { return r.ok ? r.json() : null; })
+      // Resposta de erro: lê o corpo (o servidor manda {error: "..."})
+      // em vez de descartar o motivo — sem isso a tela só sabia dizer
+      // "deu erro", nunca QUAL, e quem via a tela não tinha como
+      // diagnosticar sem abrir o DevTools.
+      .then(function (r) {
+        if (r.ok) return r.json();
+        return r.json().catch(function () { return null; }).then(function (corpo) {
+          throw new Error((corpo && corpo.error) || ('HTTP ' + r.status));
+        });
+      })
       .then(function (resposta) {
         if (meuPedido !== requisicaoAtual) return;
         carregando = false;
@@ -1354,13 +1363,16 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         paginaAtual = pagina;
         render();
       })
-      .catch(function () {
+      .catch(function (err) {
         if (meuPedido !== requisicaoAtual) return;
         carregando = false;
         loadMoreBtn.disabled = false;
         if (pagina === 0) {
           bibList.innerHTML = '<p style="padding:1.5rem;color:#dc2626;font-size:.8rem;">' +
-            escaparHtml(txtI18n('bib.loadError', 'Erro ao carregar a Biblioteca.')) + '</p>';
+            escaparHtml(txtI18n('bib.loadError', 'Erro ao carregar a Biblioteca.')) +
+            (err && err.message ? '<br><span style="font-size:.7rem;color:var(--vbm-mid);">' +
+              escaparHtml(err.message) + '</span>' : '') +
+            '</p>';
         }
       });
   }
