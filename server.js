@@ -314,6 +314,29 @@ const DB_HIST_MEMBROS_TABLE = safeIdentifier(process.env.AZURE_SQL_HIST_MEMBROS_
 const FULL_HIST_MEMBROS_TABLE = `[${DB_SCHEMA}].[${DB_HIST_MEMBROS_TABLE}]`;
 const DB_HIST_RESULTADO_KAIZEN_TABLE = safeIdentifier(process.env.AZURE_SQL_HIST_RESULTADO_KAIZEN_TABLE, "kzn_hist_resultado_kaizen");
 const FULL_HIST_RESULTADO_KAIZEN_TABLE = `[${DB_SCHEMA}].[${DB_HIST_RESULTADO_KAIZEN_TABLE}]`;
+const DB_HIST_KAIZEN_HIER_TABLE = safeIdentifier(process.env.AZURE_SQL_HIST_KAIZEN_HIER_TABLE, "kzn_hist_kaizen_hierarquia");
+const FULL_HIST_KAIZEN_HIER_TABLE = `[${DB_SCHEMA}].[${DB_HIST_KAIZEN_HIER_TABLE}]`;
+
+/* ORIGEM de um Kaizen: "A" (tabelas atuais) ou "H" (históricas).
+   Só estes dois valores são aceitos; qualquer outra coisa vira null e
+   quem chamou decide o que fazer — na edição, é recusar. */
+function origemValida(x) {
+  const o = String(x == null ? "" : x).trim().toUpperCase();
+  return o === "A" || o === "H" ? o : null;
+}
+/** As cinco tabelas de uma origem, para leitura e gravação irem sempre
+ *  ao mesmo conjunto. É a única tabela de despacho por origem: não há
+ *  outro ponto do código que escolha tabela histórica ou atual. */
+function tabelasDaOrigem(origem) {
+  const h = origem === "H";
+  return {
+    pvc: h ? FULL_HIST_PVC_TABLE : FULL_PVC_TABLE,
+    membros: h ? FULL_HIST_MEMBROS_TABLE : FULL_MEMBROS_TABLE,
+    desperdicio: h ? FULL_HIST_KZ_DESPERDICIO_TABLE : FULL_KZ_DESPERDICIO_TABLE,
+    resultado: h ? FULL_HIST_RESULTADO_KAIZEN_TABLE : FULL_RESULTADO_KAIZEN_TABLE,
+    hierarquia: h ? FULL_HIST_KAIZEN_HIER_TABLE : FULL_KAIZEN_HIER_TABLE,
+  };
+}
 
 // Nomes de tabela usados só em JOINs de leitura (Biblioteca) — mesmas
 // env vars/padrões já usados nos cadastros bilíngues acima (registrarCadastroBilingue).
@@ -1272,7 +1295,9 @@ async function matriculaDoMdm(idUsuario, matriculaEscolhida) {
  *  líder. Assim a foto não tem como divergir do que ficou gravado no
  *  Kaizen, e a linha de origem só existe se o Kaizen existir — se ele
  *  não estiver lá, o MERGE não grava (e avisa) em vez de estourar a FK. */
-async function gravarHierarquiaDoKaizen(idKaizen) {
+async function gravarHierarquiaDoKaizen(idKaizen, origem) {
+  // Sem origem, atual: é o caminho do cadastro novo, que só grava lá.
+  const tab = tabelasDaOrigem(origem || "A");
   if (!Number.isInteger(idKaizen) || idKaizen <= 0) {
     console.warn(`[hierarquia] ID_KAIZEN inválido (${idKaizen}); nada gravado.`);
     return false;
@@ -1300,11 +1325,11 @@ async function gravarHierarquiaDoKaizen(idKaizen) {
     // se foi INSERT ou UPDATE e com que líder — sem uma segunda consulta,
     // e sem depender de rowsAffected.
     const r = await runQuery(
-      `MERGE INTO ${FULL_KAIZEN_HIER_TABLE} AS alvo
+      `MERGE INTO ${tab.hierarquia} AS alvo
        USING (SELECT p.ID_KAIZEN,
                      p.ID_USUARIO_LIDER,
                      ${niveis.map((c) => `m.${c}`).join(",\n                     ")}
-                FROM ${FULL_PVC_TABLE} p
+                FROM ${tab.pvc} p
                 OUTER APPLY (
                   SELECT TOP (1) ${niveis.map((c) => `x.${c}`).join(", ")}
                     FROM ${FULL_MDM_TABLE} x
@@ -2878,7 +2903,8 @@ apiRouter.post("/kaizens/imagem", receberImagemUnica, async (req, res) => {
       // O ?id= PRECISA de autorização: com o nome do arquivo sendo o ID e
       // a gravação em overwrite, mandar o ID de OUTRO Kaizen gravaria por
       // cima da foto dele.
-      const autoriz = await podeEditarKaizen(req, idKaizenArquivo);
+      // A tela manda a origem junto com o ?id= (ver VBMEdicao.origem).
+      const autoriz = await podeEditarKaizen(req, idKaizenArquivo, origemValida(req.query.origem));
       if (!autoriz.existe) {
         return res.status(404).json({ error: "Kaizen não encontrado." });
       }
@@ -3337,9 +3363,12 @@ async function idStatusRevisado() {
  *
  *  `idIgnorar` existe para a EDIÇÃO: ao atualizar, o próprio registro
  *  não pode ser tratado como duplicata de si mesmo. */
-async function existeKaizenComMesmoNome(nome, idIgnorar) {
+async function existeKaizenComMesmoNome(nome, idIgnorar, origem) {
   const alvo = String(nome || "").trim().replace(/\s+/g, " ");
   if (!alvo) return false;
+  // Unicidade dentro da ORIGEM: um Kaizen histórico não bloqueia o nome
+  // de um atual, e vice-versa — são cadastros de épocas diferentes.
+  const tabela = tabelasDaOrigem(origem || "A").pvc;
   // A comparação acontece no banco, parametrizada: COLLATE ..._CI_AI
   // ignora maiúsculas (CI) e acento (AI), a mesma indiferença que a
   // busca da Biblioteca aplica no navegador. O REPLACE aninhado colapsa
@@ -3350,7 +3379,7 @@ async function existeKaizenComMesmoNome(nome, idIgnorar) {
   const semEspacoDuplo = (col) =>
     `REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(${col})), ' ', '<>'), '><', ''), '<>', ' ')`;
   const r = await runQuery(
-    `SELECT TOP (1) ID_KAIZEN FROM ${FULL_PVC_TABLE}
+    `SELECT TOP (1) ID_KAIZEN FROM ${tabela}
       WHERE ${semEspacoDuplo("NM_KAIZEN")} COLLATE Latin1_General_CI_AI = @nome COLLATE Latin1_General_CI_AI
         AND (@idIgnorar IS NULL OR ID_KAIZEN <> @idIgnorar)`,
     [["nome", sql.NVarChar(PVC_LIMITES.NM_KAIZEN), alvo],
@@ -4349,21 +4378,33 @@ const SQL_STATUS_EDITAVEL = (aliasPvc) =>
   `CASE WHEN ${aliasPvc}.ID_STATUS IN (@statusEdit1, @statusEdit2) THEN 1 ELSE 0 END`;
 
 /** Resposta direta para UM Kaizen: existe? e este usuário pode editar? */
-async function podeEditarKaizen(req, idKaizen) {
+async function podeEditarKaizen(req, idKaizen, origem) {
   const ctx = await contextoDeEdicao(req);
-  // Olha as DUAS tabelas: o Kaizen histórico é editável como qualquer
-  // outro, e a autorização é a mesma regra. A ORIGEM volta junto porque
-  // quem grava precisa saber em qual tabela mexer.
+  // A mesma regra de autorização vale para atual e histórico. Quem
+  // decide a TABELA é a origem que veio da tela, conferida aqui: o
+  // registro tem de existir NAQUELA tabela. Com origem informada, a
+  // consulta nem olha a outra — "achou primeiro" não escolhe nada.
+  //
+  // Sem origem (só o upload de imagem chama assim), olha as duas; se o
+  // mesmo ID estiver nas duas, é AMBÍGUO e a resposta é "não pode":
+  // gravar por cima do Kaizen errado é pior do que recusar.
   const fonteKaizens = await fonteBiblioteca();
+  const params = ctx.params.concat([["idKaizen", sql.Int, idKaizen]]);
+  let filtroOrigem = "";
+  if (origem) { filtroOrigem = " AND p.ORIGEM = @origem"; params.push(["origem", sql.Char(1), origem]); }
   const r = await runQuery(
     `SELECT PODE_EDITAR = ${SQL_PODE_EDITAR("p")},
             STATUS_EDITAVEL = ${SQL_STATUS_EDITAVEL("p")},
             p.ID_STATUS, p.ORIGEM
-       FROM ${fonteKaizens} p WHERE p.ID_KAIZEN = @idKaizen`,
-    ctx.params.concat([["idKaizen", sql.Int, idKaizen]])
+       FROM ${fonteKaizens} p WHERE p.ID_KAIZEN = @idKaizen${filtroOrigem}`,
+    params
   );
+  if (!r.recordset.length) return { existe: false, pode: false, statusPermite: false, idUsuario: ctx.idUsuario };
+  if (r.recordset.length > 1) {
+    console.warn(`[edicao] ID_KAIZEN=${idKaizen} existe nas DUAS tabelas e a origem não foi informada — recusado.`);
+    return { existe: true, pode: false, ambigua: true, statusPermite: false, idUsuario: ctx.idUsuario };
+  }
   const linha = r.recordset[0];
-  if (!linha) return { existe: false, pode: false, statusPermite: false, idUsuario: ctx.idUsuario };
   return {
     existe: true,
     pode: linha.PODE_EDITAR === 1,
@@ -4664,10 +4705,20 @@ apiRouter.put("/kaizens/:id", async (req, res) => {
   const { erros, dados } = lerKaizenDoCorpo(b);
   if (erros.length) return res.status(400).json({ error: erros[0], erros });
 
+  // A ORIGEM que a tela recebeu no /edicao volta aqui, e é obrigatória:
+  // ela decide em qual conjunto de tabelas o UPDATE cai. Ausente ou
+  // inválida, nada é gravado — o servidor não adivinha a tabela pelo
+  // ID, porque o mesmo número pode existir nas duas.
+  const origem = origemValida(b.ORIGEM);
+  if (!origem) {
+    console.warn(`[edicao] PUT ID_KAIZEN=${idKaizen} sem origem válida (${JSON.stringify(b.ORIGEM)}) — recusado.`);
+    return res.status(400).json({ error: "Origem do Kaizen não informada. Abra a edição pela Biblioteca e tente de novo." });
+  }
+
   try {
-    // 1. registro existe?  2. este usuário pode editar?  Nesta ordem, e
-    // antes de qualquer gravação.
-    const autoriz = await podeEditarKaizen(req, idKaizen);
+    // 1. registro existe NA ORIGEM informada?  2. este usuário pode
+    // editar?  Nesta ordem, e antes de qualquer gravação.
+    const autoriz = await podeEditarKaizen(req, idKaizen, origem);
     if (!autoriz.existe) return res.status(404).json({ error: "Kaizen não encontrado." });
     if (!autoriz.pode) {
       console.warn(`[edicao] usuário ${autoriz.idUsuario} sem permissão para gravar ID_KAIZEN=${idKaizen}`);
@@ -4685,11 +4736,12 @@ apiRouter.put("/kaizens/:id", async (req, res) => {
        nenhum erro, alteração perdida em silêncio — e, se um dia os IDs
        colidirem, gravada por cima de outro Kaizen. As quatro tabelas
        andam juntas: cabeçalho, membros, desperdícios e resultados. */
-    const ehHistorico = autoriz.origem === "H";
-    const tabelaPvc = ehHistorico ? FULL_HIST_PVC_TABLE : FULL_PVC_TABLE;
-    const tabelaMembros = ehHistorico ? FULL_HIST_MEMBROS_TABLE : FULL_MEMBROS_TABLE;
-    const tabelaDesperdicio = ehHistorico ? FULL_HIST_KZ_DESPERDICIO_TABLE : FULL_KZ_DESPERDICIO_TABLE;
-    const tabelaResultado = ehHistorico ? FULL_HIST_RESULTADO_KAIZEN_TABLE : FULL_RESULTADO_KAIZEN_TABLE;
+    const ehHistorico = origem === "H";
+    const tab = tabelasDaOrigem(origem);
+    const tabelaPvc = tab.pvc;
+    const tabelaMembros = tab.membros;
+    const tabelaDesperdicio = tab.desperdicio;
+    const tabelaResultado = tab.resultado;
     if (ehHistorico) console.log(`[edicao] ID_KAIZEN=${idKaizen} é HISTÓRICO — gravando em ${tabelaPvc}.`);
 
     // Mesma conferência do cadastro: o título é medido contra o tamanho
@@ -4701,7 +4753,7 @@ apiRouter.put("/kaizens/:id", async (req, res) => {
 
     // O nome NÃO pode barrar a atualização do próprio registro: a busca
     // ignora o ID que está sendo editado.
-    if (await existeKaizenComMesmoNome(dados.titulo, idKaizen)) {
+    if (await existeKaizenComMesmoNome(dados.titulo, idKaizen, origem)) {
       return res.status(409).json({ error: "Já existe outro Kaizen cadastrado com este nome." });
     }
 
@@ -4850,7 +4902,7 @@ apiRouter.put("/kaizens/:id", async (req, res) => {
       // edição, e a hierarquia dele pode ter mudado no MDM desde a
       // gravação anterior. O líder sai da própria linha, já atualizada
       // pelo UPDATE acima. Depois do commit, como no cadastro.
-      await gravarHierarquiaDoKaizen(idKaizen);
+      await gravarHierarquiaDoKaizen(idKaizen, origem);
 
       // Reencaminha ao fluxo: o aprovador designado é avisado de novo,
       // pelo mesmo caminho do cadastro.
@@ -4876,7 +4928,14 @@ apiRouter.get("/kaizens/:id/edicao", async (req, res) => {
     if (!Number.isInteger(idKaizen) || idKaizen <= 0) {
       return res.status(400).json({ error: "Kaizen inválido." });
     }
-    const autoriz = await podeEditarKaizen(req, idKaizen);
+    // A ORIGEM vem da Biblioteca junto com o ID (kaizen-novo.html?id=&origem=)
+    // e é obrigatória: é ela que diz em qual tabela ler — e, depois, em
+    // qual gravar. Sem ela a rota não escolhe sozinha.
+    const origem = origemValida(req.query.origem);
+    if (!origem) {
+      return res.status(400).json({ error: "Origem do Kaizen não informada. Abra a edição pela Biblioteca." });
+    }
+    const autoriz = await podeEditarKaizen(req, idKaizen, origem);
     if (!autoriz.existe) return res.status(404).json({ error: "Kaizen não encontrado." });
     if (!autoriz.pode) {
       console.warn(`[edicao] usuário ${autoriz.idUsuario} sem permissão para editar ID_KAIZEN=${idKaizen}`);
@@ -4888,6 +4947,13 @@ apiRouter.get("/kaizens/:id/edicao", async (req, res) => {
     }
 
     const idIdioma = idIdiomaDaRequisicao(req);
+    // Mesma fonte da Biblioteca (atual + histórico, colunas alinhadas),
+    // filtrada pela origem: é a MESMA consulta para os dois casos, só a
+    // tabela muda — e p.* aqui devolve exatamente as colunas listadas
+    // em fonteBiblioteca, com DS_COMPARA_META e DS_RESULTADO_ALCANCADO
+    // já resolvidas dos dois lados.
+    const fonteKaizens = await fonteBiblioteca();
+    const tab = tabelasDaOrigem(origem);
     const [principal, membros, desperdicios, resultados] = await Promise.all([
       runQuery(
         // O aprovador do formulário é o ID_USUARIO da PESSOA (é o que a
@@ -4903,7 +4969,7 @@ apiRouter.get("/kaizens/:id/edicao", async (req, res) => {
                 apr.SG_ATIVO AS APROVADOR_ATIVO,
                 aprPessoa.ID_USUARIO AS ID_USUARIO_APROVADOR,
                 aprPessoa.NM_USUARIO AS NM_APROVADOR
-           FROM ${FULL_PVC_TABLE} p
+           FROM ${fonteKaizens} p
            LEFT JOIN ${FULL_MDM_TABLE} lider ON lider.ID_USUARIO = p.ID_USUARIO_LIDER
            LEFT JOIN ${FULL_MDM_TABLE} autor ON autor.ID_USUARIO = p.ID_USUARIO_CADASTRO
            LEFT JOIN ${FULL_TABLE_NAME} apr ON apr.ID_APROVADOR = p.ID_APROVADOR
@@ -4914,23 +4980,24 @@ apiRouter.get("/kaizens/:id/edicao", async (req, res) => {
               ORDER BY ${ORDEM_PESSOA_DO_APROVADOR("apr")}
            ) aprPessoa
            LEFT JOIN ${FULL_STATUS_TABLE} st ON st.ID_STATUS = p.ID_STATUS AND st.ID_IDIOMA = @idIdioma
-          WHERE p.ID_KAIZEN = @idKaizen`,
-        [["idKaizen", sql.Int, idKaizen], ["idIdioma", sql.Int, idIdioma]]
+          WHERE p.ID_KAIZEN = @idKaizen AND p.ORIGEM = @origem`,
+        [["idKaizen", sql.Int, idKaizen], ["idIdioma", sql.Int, idIdioma], ["origem", sql.Char(1), origem]]
       ),
+      // Os vínculos saem das tabelas da MESMA origem (ver tabelasDaOrigem).
       runQuery(
         `SELECT me.ID_USUARIO, m.NM_USUARIO, m.CD_MATRICULA, m.ID_TIPO_USUARIO
-           FROM ${FULL_MEMBROS_TABLE} me
+           FROM ${tab.membros} me
            LEFT JOIN ${FULL_MDM_TABLE} m ON m.ID_USUARIO = me.ID_USUARIO
           WHERE me.ID_KAIZEN = @idKaizen`,
         [["idKaizen", sql.Int, idKaizen]]
       ),
       runQuery(
-        `SELECT ID_DESPERDICIO FROM ${FULL_KZ_DESPERDICIO_TABLE} WHERE ID_KAIZEN = @idKaizen`,
+        `SELECT ID_DESPERDICIO FROM ${tab.desperdicio} WHERE ID_KAIZEN = @idKaizen`,
         [["idKaizen", sql.Int, idKaizen]]
       ),
       runQuery(
         `SELECT rk.ID_RESULTADO, r.NM_RESULTADO, r.DS_RESULTADO, r.ID_TIPO_RESULTADO
-           FROM ${FULL_RESULTADO_KAIZEN_TABLE} rk
+           FROM ${tab.resultado} rk
            LEFT JOIN ${FULL_RESULTADOS_TABLE} r ON r.ID_RESULTADO = rk.ID_RESULTADO AND r.ID_IDIOMA = @idIdioma
           WHERE rk.ID_KAIZEN = @idKaizen`,
         [["idKaizen", sql.Int, idKaizen], ["idIdioma", sql.Int, idIdioma]]
@@ -4938,8 +5005,16 @@ apiRouter.get("/kaizens/:id/edicao", async (req, res) => {
     ]);
 
     const k = principal.recordset[0];
+    // A autorização passou, mas a linha pode ter sumido entre as duas
+    // consultas. Sem esta guarda o erro era "Cannot read properties of
+    // undefined (reading 'ID_KAIZEN')" — um 500 que a tela mostrava
+    // cru, no lugar de um 404 que diz o que houve.
+    if (!k) return res.status(404).json({ error: "Kaizen não encontrado." });
     res.json({
       ID_KAIZEN: k.ID_KAIZEN,
+      // Volta para a tela e vem de volta no PUT. É o que amarra o
+      // "carreguei daqui" ao "gravei ali".
+      ORIGEM: origem,
       ROTULO: rotuloIdKaizen(k.ID_KAIZEN, k.DT_CRIACAO),
       titulo: k.NM_KAIZEN,
       NM_AUTOR: k.NM_AUTOR,

@@ -872,6 +872,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     return '<button type="button" class="btn-icon btn-icon-blue kaizen-card-edit"' +
       (liberado ? '' : ' disabled aria-disabled="true"') +
       ' data-editar-kaizen="' + k.ID_KAIZEN + '"' +
+      // De qual tabela o card veio. Viaja para o Novo Kaizen junto com o
+      // ID: é o que faz a edição ler — e depois gravar — na tabela certa.
+      ' data-editar-origem="' + escaparHtml(k.ORIGEM || '') + '"' +
       ' title="' + rotulo + '" data-i18n-title="' + chave + '"' +
       ' aria-label="' + rotulo + '" data-i18n-aria="' + chave + '">' +
       '<i class="fa-solid fa-pen" aria-hidden="true"></i></button>';
@@ -988,7 +991,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     // clique nem Enter, mas a checagem fica explícita para o dia em que
     // o estilo do desabilitado mudar.
     if (botao.disabled) return;
-    window.location.href = 'kaizen-novo.html?id=' + encodeURIComponent(botao.dataset.editarKaizen);
+    window.location.href = 'kaizen-novo.html?id=' + encodeURIComponent(botao.dataset.editarKaizen) +
+      '&origem=' + encodeURIComponent(botao.dataset.editarOrigem || '');
   }
   bibList.addEventListener('click', aoClicarEditar);
   if (bibTabela) bibTabela.addEventListener('click', aoClicarEditar);

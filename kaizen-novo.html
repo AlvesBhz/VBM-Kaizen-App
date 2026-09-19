@@ -2883,7 +2883,9 @@ function uploadImagemSeSelecionada(inputId, hiddenId, tipo) {
   // ?id= só existe na edição; no cadastro novo o ID ainda não foi
   // gerado, e o servidor nomeia o arquivo com o prefixo NOVO.
   var idKaizen = (window.VBMEdicao && window.VBMEdicao.id) || '';
-  return fetch('/api/kaizens/imagem?tipo=' + tipo + (idKaizen ? '&id=' + encodeURIComponent(idKaizen) : ''),
+  var origemImg = (window.VBMEdicao && window.VBMEdicao.origem) || '';
+  return fetch('/api/kaizens/imagem?tipo=' + tipo +
+               (idKaizen ? '&id=' + encodeURIComponent(idKaizen) + '&origem=' + encodeURIComponent(origemImg) : ''),
                { method: 'POST', body: dados })
     .then(function (r) { return r.json().then(function (corpo) { return { ok: r.ok, corpo: corpo }; }); })
     .then(function (resultado) {
@@ -3525,6 +3527,9 @@ window.validacaoWizard = (function () {
         var idEdicao = valor('id_kaizen');
         if (idEdicao) {
           payload.DT_ATUALIZACAO = (window.VBMEdicao && window.VBMEdicao.dtAtualizacao) || '';
+          // A origem que o /edicao devolveu volta aqui: é o que garante
+          // que a gravação cai na mesma tabela de onde o Kaizen foi lido.
+          payload.ORIGEM = (window.VBMEdicao && window.VBMEdicao.origem) || '';
           return fetch('/api/kaizens/' + encodeURIComponent(idEdicao), {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -3593,8 +3598,12 @@ function txtEdicao(chave, padrao) {
 (function () {
   'use strict';
 
-  var idKaizen = parseInt(new URLSearchParams(window.location.search).get('id'), 10);
+  var parametros = new URLSearchParams(window.location.search);
+  var idKaizen = parseInt(parametros.get('id'), 10);
   if (!Number.isInteger(idKaizen) || idKaizen <= 0) return;   // cadastro normal
+  // A origem ("A" atual / "H" histórico) vem da Biblioteca com o id. O
+  // servidor exige e confere; a tela só transporta.
+  var origemKaizen = String(parametros.get('origem') || '').toUpperCase();
 
   function el(id) { return document.getElementById(id); }
   function texto(id, valor) { var e = el(id); if (e && valor != null) e.value = valor; }
@@ -3607,7 +3616,8 @@ function txtEdicao(chave, padrao) {
     e.value = String(valor);
   }
 
-  fetch('/api/kaizens/' + idKaizen + '/edicao', { headers: { Accept: 'application/json' } })
+  fetch('/api/kaizens/' + idKaizen + '/edicao?origem=' + encodeURIComponent(origemKaizen),
+        { headers: { Accept: 'application/json' } })
     .then(function (r) {
       return r.json().then(function (c) {
         if (!r.ok) throw new Error((c && c.error) || 'Não foi possível abrir o Kaizen para edição.');
@@ -3617,7 +3627,7 @@ function txtEdicao(chave, padrao) {
     .then(function (k) {
       // Só depois de o servidor autorizar é que a página entra em modo
       // de edição — antes disso ela continua sendo um cadastro novo.
-      window.VBMEdicao = { id: k.ID_KAIZEN, dtAtualizacao: k.DT_ATUALIZACAO };
+      window.VBMEdicao = { id: k.ID_KAIZEN, dtAtualizacao: k.DT_ATUALIZACAO, origem: k.ORIGEM };
       texto('id_kaizen', k.ID_KAIZEN);
 
       // A ficha já vem na marcação, nos dois modos. A chamada fica como
