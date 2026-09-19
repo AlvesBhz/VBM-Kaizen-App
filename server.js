@@ -379,6 +379,51 @@ function textoOuNuloGlobal(valor) {
   return limpo === "" ? null : limpo;
 }
 
+/* Mesma ideia de intOuNuloGlobal/textoOuNuloGlobal, para filtros de
+ * MÚLTIPLA escolha: a Biblioteca manda a lista inteira num parâmetro só,
+ * separado por vírgula (ex.: ?status=3,5,6) — é o formato que
+ * `new URLSearchParams({status: [3,5,6]})` já produz sozinho no
+ * navegador, então o front não precisa montar a string à mão nem repetir
+ * o nome do parâmetro.
+ *
+ * Ausente, vazio ou só vírgula devolve [] — "nenhum filtro aplicado",
+ * nunca "filtrar por nada" (que devolveria zero linhas). Duplicata e
+ * espaço em volta são tolerados e descartados. */
+function listaIntOuVaziaGlobal(valor) {
+  if (valor == null || valor === "") return [];
+  const vistos = new Set();
+  const lista = [];
+  for (const parte of String(valor).split(",")) {
+    const n = parseInt(parte.trim(), 10);
+    if (Number.isInteger(n) && !vistos.has(n)) { vistos.add(n); lista.push(n); }
+  }
+  return lista;
+}
+function listaTextoOuVaziaGlobal(valor) {
+  if (valor == null || valor === "") return [];
+  const vistos = new Set();
+  const lista = [];
+  for (const parte of String(valor).split(",")) {
+    const limpo = parte.trim();
+    if (limpo && !vistos.has(limpo)) { vistos.add(limpo); lista.push(limpo); }
+  }
+  return lista;
+}
+
+/** IN (...) com um parâmetro NOMEADO por valor — nunca o valor
+ *  concatenado no texto do comando. `prefixo` dá nomes únicos
+ *  (ex.: idStatus0, idStatus1…) para não colidir com outro filtro da
+ *  mesma consulta. Lista vazia não empurra filtro nenhum. */
+function filtroEmLista(filtros, params, coluna, prefixo, valores, tipoSql) {
+  if (!valores.length) return;
+  const nomes = valores.map((v, i) => {
+    const nome = `${prefixo}${i}`;
+    params.push([nome, tipoSql, v]);
+    return `@${nome}`;
+  });
+  filtros.push(`${coluna} IN (${nomes.join(", ")})`);
+}
+
 function checkConfig() {
   const missing = [
     ["AZURE_SQL_SERVER", DB_SERVER],
@@ -3735,12 +3780,15 @@ function rotuloIdKaizen(idKaizen, dtCriacao) {
 apiRouter.get("/kaizens", async (req, res) => {
   try {
     const idIdioma = idIdiomaDaRequisicao(req);
-    const idStatus = intOuNuloGlobal(req.query.status);
-    const idCategoria = intOuNuloGlobal(req.query.categoria);
+    // Unidade, categoria, status e ano aceitam MÚLTIPLOS valores — um
+    // parâmetro só, separado por vírgula (?status=3,5,6). Lista vazia é
+    // "filtro não aplicado", igual ao null de antes.
+    const idsStatus = listaIntOuVaziaGlobal(req.query.status);
+    const idsCategoria = listaIntOuVaziaGlobal(req.query.categoria);
     const estado = textoOuNuloGlobal(req.query.estado);
-    const site = textoOuNuloGlobal(req.query.site);
+    const sites = listaTextoOuVaziaGlobal(req.query.site);
     const lider = textoOuNuloGlobal(req.query.lider);
-    const ano = intOuNuloGlobal(req.query.ano);
+    const anos = listaIntOuVaziaGlobal(req.query.ano);
     const q = textoOuNuloGlobal(req.query.q);
 
     // Paginação no SERVIDOR. Antes a rota devolvia a tabela inteira e a
@@ -3762,13 +3810,15 @@ apiRouter.get("/kaizens", async (req, res) => {
     // filtro vier — o resto do comando segue exatamente igual.
     const filtros = ["1 = 1"];
     // O filtro passa a ser por ID_STATUS (o valor que a Biblioteca manda
-    // vem do próprio kzn_status), não mais pelo literal antigo.
-    if (idStatus != null) { filtros.push("p.ID_STATUS = @idStatus"); params.push(["idStatus", sql.Int, idStatus]); }
-    if (idCategoria != null) { filtros.push("p.ID_CATEGORIA = @idCategoria"); params.push(["idCategoria", sql.Int, idCategoria]); }
+    // vem do próprio kzn_status), não mais pelo literal antigo. IN (...)
+    // com um ID_STATUS marcado, dois, ou todos os ativos — a query é a
+    // mesma forma nos três casos.
+    filtroEmLista(filtros, params, "p.ID_STATUS", "idStatus", idsStatus, sql.Int);
+    filtroEmLista(filtros, params, "p.ID_CATEGORIA", "idCategoria", idsCategoria, sql.Int);
     if (estado) { filtros.push("lider.NM_ESTADO = @estado"); params.push(["estado", sql.NVarChar(100), estado]); }
     // Unidade e líder passaram a filtrar AQUI. Eram peneirados no
     // navegador, o que só funcionava porque a base inteira ia junto.
-    if (site) { filtros.push("autor.NM_SITE = @site"); params.push(["site", sql.NVarChar(200), site]); }
+    filtroEmLista(filtros, params, "autor.NM_SITE", "site", sites, sql.NVarChar(200));
     // COLLATE ..._CI_AI: a peneira de usuário rodava no NAVEGADOR, com
     // normalizar() — minúsculas e SEM acento. Trazida para o SQL, ela
     // passaria a depender da collation do banco; a padrão do Azure SQL é
@@ -3781,15 +3831,20 @@ apiRouter.get("/kaizens", async (req, res) => {
     }
     // Faixa de datas em vez de YEAR(coluna): função sobre a coluna
     // impede o uso de índice e obrigava a varrer a tabela mesmo com o
-    // filtro de ano aplicado.
-    if (ano != null) {
-      // Limites como TEXTO 'AAAA-01-01' convertidos no próprio SQL: um
-      // objeto Date passaria pelo fuso do driver e do servidor, e a
-      // virada do ano poderia deslocar algumas horas — Kaizens do dia
-      // 1º de janeiro cairiam no ano errado.
-      filtros.push(`${dataRef} >= CONVERT(DATETIME2, @iniAno, 23) AND ${dataRef} < CONVERT(DATETIME2, @fimAno, 23)`);
-      params.push(["iniAno", sql.VarChar(10), `${ano}-01-01`]);
-      params.push(["fimAno", sql.VarChar(10), `${ano + 1}-01-01`]);
+    // filtro de ano aplicado. Vários anos viram um OR de faixas — não dá
+    // para expressar "2019 ou 2024" num IN sobre uma coluna calculada por
+    // função, então cada ano marcado entra como a própria faixa dele.
+    if (anos.length) {
+      const trechos = anos.map((ano, i) => {
+        // Limites como TEXTO 'AAAA-01-01' convertidos no próprio SQL: um
+        // objeto Date passaria pelo fuso do driver e do servidor, e a
+        // virada do ano poderia deslocar algumas horas — Kaizens do dia
+        // 1º de janeiro cairiam no ano errado.
+        params.push([`iniAno${i}`, sql.VarChar(10), `${ano}-01-01`]);
+        params.push([`fimAno${i}`, sql.VarChar(10), `${ano + 1}-01-01`]);
+        return `(${dataRef} >= CONVERT(DATETIME2, @iniAno${i}, 23) AND ${dataRef} < CONVERT(DATETIME2, @fimAno${i}, 23))`;
+      });
+      filtros.push(`(${trechos.join(" OR ")})`);
     }
     if (q) {
       // Mesma razão do filtro de líder: a busca era feita sem acento no
