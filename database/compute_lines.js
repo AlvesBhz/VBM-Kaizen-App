@@ -137,7 +137,8 @@ const rels = [
   ['PVC','CATEGORIA',4],
   ['PVC','REPLICACAO',5],
   ['PVC','APROVADOR',9],
-  ['PVC','DESPERDICIO',15],
+  // ['PVC','DESPERDICIO',15] removida: ID_DESPERDICIO virou DS_COMPARA_META
+  // (VARCHAR(300) de texto livre), entao nao ha mais relacao com KZN_DESPERDICIO.
   ['PVC','MOEDA',18],
   ['LOG','PVC',1],
   ['LOG','MDM',4],
@@ -154,7 +155,7 @@ const rels = [
 
 // relações sem FK de banco (PK composta no destino) — desenhadas tracejadas
 const softRels = new Set([
-  'PVC>STATUS','PVC>CATEGORIA','PVC>REPLICACAO','PVC>DESPERDICIO',
+  'PVC>STATUS','PVC>CATEGORIA','PVC>REPLICACAO',
   'RESULTADO_KAIZEN>RESULTADOS',
   'KZDESP>DESPERDICIO',
   'MEMBROS>MDM',
