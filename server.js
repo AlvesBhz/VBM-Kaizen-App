@@ -4367,7 +4367,7 @@ async function situacaoDaDecisao(idKaizen, idUsuario) {
 
 /** REGRA ÚNICA de quem pode editar um Kaizen:
  *
- *      podeEditar = autor OU aprovador designado OU administrador
+ *      podeEditar = ORIGEM atual E (autor OU aprovador designado OU administrador)
  *
  *  Um lugar só, usado pela listagem (para a Biblioteca decidir se mostra
  *  o ícone), pela carga do formulário e pela gravação. Front escondendo
@@ -4383,10 +4383,18 @@ async function situacaoDaDecisao(idKaizen, idUsuario) {
  *    · admin      → perfilDeAcesso(req), a mesma verificação de kzn_admin
  *                   já usada pelo gate da API.
  *
+ *  Kaizen histórico (ORIGEM = 'H') nunca é editável, nem por admin: são
+ *  registros arquivados, e o aprovador da época costuma já estar
+ *  inativo — apurar autor/aprovador/admin para ele só produziria falsos
+ *  positivos ("Aprovador indisponível") num vínculo que não deveria
+ *  poder mudar. A checagem some ANTES das outras, e não junto: assim
+ *  nenhuma condição do OR consegue reabrir a edição para um histórico.
+ *
  *  O SQL abaixo é o mesmo usado na listagem, para a decisão da tela e a
  *  do servidor não poderem divergir. */
 const SQL_PODE_EDITAR = (aliasPvc) => `
-  CASE WHEN @ehAdmin = 1
+  CASE WHEN ${aliasPvc}.ORIGEM = 'A' AND (
+         @ehAdmin = 1
          OR ISNULL(${aliasPvc}.ID_USUARIO_CADASTRO, ${aliasPvc}.ID_USUARIO_LIDER) = @idUsuarioLogado
          OR EXISTS (
               SELECT 1 FROM ${FULL_TABLE_NAME} ae
@@ -4396,7 +4404,7 @@ const SQL_PODE_EDITAR = (aliasPvc) => `
                               WHERE me.ID_USUARIO = @idUsuarioLogado
                                 AND ${MATRICULA_IGUAL("me.CD_MATRICULA", "ae.CD_MATRICULA")})
             )
-       THEN 1 ELSE 0 END`;
+       ) THEN 1 ELSE 0 END`;
 
 /** Status em que o Kaizen ainda pode ser editado: "Aguardando
  *  aprovação" e "Solicitado alterações" — 3 e 4 no cadastro atual.

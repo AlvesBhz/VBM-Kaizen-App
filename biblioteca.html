@@ -936,13 +936,16 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   function botaoEditarHtml(k) {
     // Os dois sinais vêm calculados por linha em GET /api/kaizens, no
     // servidor: PODE_EDITAR é a permissão da pessoa (autor, aprovador
-    // designado ou admin) e EDICAO_LIBERADA junta essa permissão com o
-    // status do Kaizen. Aqui é só apresentação — as rotas de edição
+    // designado ou admin) — mas só quando ORIGEM='A'; um Kaizen histórico
+    // nunca tem PODE_EDITAR, nem para o autor/aprovador/admin (SQL_PODE_
+    // EDITAR em server.js) — e EDICAO_LIBERADA junta essa permissão com
+    // o status do Kaizen. Aqui é só apresentação — as rotas de edição
     // refazem as duas checagens.
     //
-    // Sem permissão o botão nem aparece; com permissão mas em status que
-    // não aceita edição ele aparece DESABILITADO, para o lugar do botão
-    // não mudar de card para card.
+    // Sem permissão o botão nem aparece (é o caso de todo card
+    // histórico); com permissão mas em status que não aceita edição ele
+    // aparece DESABILITADO, para o lugar do botão não mudar de card
+    // para card.
     if (!k.PODE_EDITAR) return '';
     var liberado = !!k.EDICAO_LIBERADA;
     var rotulo = liberado
