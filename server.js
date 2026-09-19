@@ -3201,13 +3201,21 @@ async function colunaDaComparacaoMeta() {
    a coluna persistida quando ela existe (é indexável); na histórica é
    sempre a expressão, que é barata porque a tabela não tem índice
    sobre ela de qualquer forma. */
-async function fonteBiblioteca() {
+/** `apenasOrigem` ("A" ou "H") restringe o resultado a UM lado só — e,
+ *  mais importante, tira a OUTRA tabela do TEXTO do comando. Quando
+ *  quem chama já sabe a origem (edição, PUT, upload de imagem), o SQL
+ *  enviado ao banco não cita mais a tabela que não interessa: não é
+ *  "o otimizador provavelmente descarta aquele ramo do UNION" — é o
+ *  ramo nem existir no comando. Sem argumento, devolve o UNION ALL das
+ *  duas, para quem precisa mesmo das duas (a listagem da Biblioteca,
+ *  o resumo, o filtro de anos). */
+async function fonteBiblioteca(apenasOrigem) {
   const colComparaMeta = await colunaDaComparacaoMeta();
   const temAlcancado = await temColunaDsResultado();
   const alcancadoAtual = temAlcancado ? "DS_RESULTADO_ALCANCADO" : "CAST(NULL AS VARCHAR(100))";
   const dataRefAtual = await expressaoDataReferencia("");
 
-  const colunas = (origem, compara, alcancado, dataRef) => `
+  const bloco = (origem, compara, alcancado, dataRef, tabela) => `
     SELECT ORIGEM = ${origem},
            ID_KAIZEN, NM_KAIZEN, ID_STATUS, ID_CATEGORIA, ID_REPLICACAO, ID_APROVADOR,
            ID_USUARIO_CADASTRO, ID_USUARIO_LIDER, ID_USUARIO_ATUALIZACAO,
@@ -3217,15 +3225,16 @@ async function fonteBiblioteca() {
            DS_RESULTADO_ALCANCADO = ${alcancado},
            VL_RESULTADO_FINANCEIRO, ID_MOEDA, DT_CONCLUSAO, DT_ATUALIZACAO, DS_MOTIVO,
            URL_IMG_ANTES, URL_IMG_DEPOIS,
-           DT_REFERENCIA = ${dataRef}`;
+           DT_REFERENCIA = ${dataRef}
+      FROM ${tabela}`;
 
-  return `(
-    ${colunas("'A'", colComparaMeta, alcancadoAtual, dataRefAtual)}
-      FROM ${FULL_PVC_TABLE}
-    UNION ALL
-    ${colunas("'H'", "DS_COMPARA_META", "DS_RESULTADO_ALCANCADO", "ISNULL(DT_CONCLUSAO, DT_ATUALIZACAO)")}
-      FROM ${FULL_HIST_PVC_TABLE}
-  )`;
+  const ladoAtual = bloco("'A'", colComparaMeta, alcancadoAtual, dataRefAtual, FULL_PVC_TABLE);
+  const ladoHist = bloco("'H'", "DS_COMPARA_META", "DS_RESULTADO_ALCANCADO",
+    "ISNULL(DT_CONCLUSAO, DT_ATUALIZACAO)", FULL_HIST_PVC_TABLE);
+
+  if (apenasOrigem === "A") return `(${ladoAtual})`;
+  if (apenasOrigem === "H") return `(${ladoHist})`;
+  return `(${ladoAtual}\n    UNION ALL\n    ${ladoHist})`;
 }
 
 /* Em qual tabela mora este ID_KAIZEN? Devolve "A", "H" ou null.
@@ -4382,21 +4391,25 @@ async function podeEditarKaizen(req, idKaizen, origem) {
   const ctx = await contextoDeEdicao(req);
   // A mesma regra de autorização vale para atual e histórico. Quem
   // decide a TABELA é a origem que veio da tela, conferida aqui: o
-  // registro tem de existir NAQUELA tabela. Com origem informada, a
-  // consulta nem olha a outra — "achou primeiro" não escolhe nada.
+  // registro tem de existir NAQUELA tabela.
   //
-  // Sem origem (só o upload de imagem chama assim), olha as duas; se o
-  // mesmo ID estiver nas duas, é AMBÍGUO e a resposta é "não pode":
-  // gravar por cima do Kaizen errado é pior do que recusar.
-  const fonteKaizens = await fonteBiblioteca();
+  // Com origem informada — é o caso normal: edição, PUT e o upload de
+  // imagem já mandam a origem —, fonteBiblioteca(origem) devolve só
+  // aquele lado, e o comando SQL não cita a outra tabela: não precisa
+  // WHERE para "não olhar" a tabela errada, porque ela nem aparece no
+  // texto do comando.
+  //
+  // Sem origem (só se a tela mandar algo inválido no upload de
+  // imagem), olha as duas; se o mesmo ID estiver nas duas, é AMBÍGUO e
+  // a resposta é "não pode": gravar por cima do Kaizen errado é pior
+  // do que recusar.
+  const fonteKaizens = await fonteBiblioteca(origem || undefined);
   const params = ctx.params.concat([["idKaizen", sql.Int, idKaizen]]);
-  let filtroOrigem = "";
-  if (origem) { filtroOrigem = " AND p.ORIGEM = @origem"; params.push(["origem", sql.Char(1), origem]); }
   const r = await runQuery(
     `SELECT PODE_EDITAR = ${SQL_PODE_EDITAR("p")},
             STATUS_EDITAVEL = ${SQL_STATUS_EDITAVEL("p")},
             p.ID_STATUS, p.ORIGEM
-       FROM ${fonteKaizens} p WHERE p.ID_KAIZEN = @idKaizen${filtroOrigem}`,
+       FROM ${fonteKaizens} p WHERE p.ID_KAIZEN = @idKaizen`,
     params
   );
   if (!r.recordset.length) return { existe: false, pode: false, statusPermite: false, idUsuario: ctx.idUsuario };
@@ -4947,12 +4960,14 @@ apiRouter.get("/kaizens/:id/edicao", async (req, res) => {
     }
 
     const idIdioma = idIdiomaDaRequisicao(req);
-    // Mesma fonte da Biblioteca (atual + histórico, colunas alinhadas),
-    // filtrada pela origem: é a MESMA consulta para os dois casos, só a
-    // tabela muda — e p.* aqui devolve exatamente as colunas listadas
-    // em fonteBiblioteca, com DS_COMPARA_META e DS_RESULTADO_ALCANCADO
-    // já resolvidas dos dois lados.
-    const fonteKaizens = await fonteBiblioteca();
+    // fonteBiblioteca(origem) — não fonteBiblioteca() — porque a
+    // origem já é conhecida e obrigatória neste ponto (checada acima).
+    // Com o argumento, o comando SQL só cita a tabela daquele lado: um
+    // Kaizen ATUAL abre sem o texto do comando mencionar em nenhum
+    // momento kzn_hist_pedravisaoconsolidada. Mesmas colunas nos dois
+    // casos (p.* devolve a mesma lista, com DS_COMPARA_META e
+    // DS_RESULTADO_ALCANCADO já resolvidas), só a tabela muda.
+    const fonteKaizens = await fonteBiblioteca(origem);
     const tab = tabelasDaOrigem(origem);
     const [principal, membros, desperdicios, resultados] = await Promise.all([
       runQuery(
