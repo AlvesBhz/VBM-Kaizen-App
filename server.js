@@ -23,6 +23,7 @@
 
 const path = require("path");
 const express = require("express");
+const helmet = require("helmet");
 const compression = require("compression");
 const sql = require("mssql");
 const multer = require("multer");
@@ -37,6 +38,28 @@ const {
 const { montarAviso } = require("./email-kaizen");
 
 const app = express();
+
+// Cabeçalhos de segurança básicos (clickjacking, MIME sniffing,
+// referrer). Dois desligados de propósito:
+//
+//   contentSecurityPolicy — as telas são HTML com <script>/<style>
+//   inline em todo lugar (sem nonce); o CSP padrão do helmet
+//   bloquearia a aplicação inteira. Reativar exige antes reescrever
+//   essas telas para script/style externos com nonce, mudança grande
+//   demais para entrar aqui como correção pontual.
+//
+//   crossOriginOpenerPolicy — isolar o contexto de navegação (padrão
+//   do helmet: 'same-origin') fez o Chromium headless atrasar a
+//   pintura do glifo do ícone de fechar em kaizen-novo.html e
+//   admin.html o bastante para a captura de tela do teste de
+//   contraste (tests/teste-fechar.js) pegar o "X" ainda sem o glifo —
+//   falha REAL e reprodutível, confirmada isolando cada opção do
+//   helmet uma por vez contra a bateria de regressão, não só teórica.
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  crossOriginOpenerPolicy: false,
+}));
 
 // gzip em tudo que é texto (HTML/CSS/JS/JSON/SVG). Já estava no
 // package.json mas nunca tinha sido ligado — o app servia os ~110 KB de
@@ -814,7 +837,7 @@ const ROTAS_LEITURA_AUTENTICADA = [
   /^\/kaizens$/,
   /^\/kaizens\/\d+$/,
   /^\/kaizens\/\d+\/edicao$/,
-  /^\/kaizens\/(filtros|imagem|resumo|titulo-existe)$/,
+  /^\/kaizens\/(filtros|imagem|resumo|titulo-existe|exportar)$/,
   /^\/(categorias|status|replicacoes|desperdicios|resultados|tiporesultados|moedas)$/,
   /^\/aprovadores$/,
   /^\/aprovadores\/mdm(\/\d+)?$/,
@@ -2674,20 +2697,28 @@ registrarCadastroBilingue({
 // ------------------------------------------------------------------
 apiRouter.get("/moedas", async (req, res) => {
   try {
+    // Mesmo cadastroCache dos outros catálogos (ver comentário acima
+    // dele) — só este ficou de fora por não passar por
+    // registrarCadastroBilingue(). Sem ID_IDIOMA nem variante: uma
+    // entrada só, TTL de 5min é rede de segurança pra quem cadastrar
+    // moeda direto no banco (não há rota de escrita aqui para invalidar).
+    const emCache = cadastroCacheLer("moedas", 0, "");
+    if (emCache) return res.json(emCache);
+
     const result = await runQuery(
       `SELECT ID_MOEDA, NM_MOEDA, SG_MOEDA, NM_PAIS, SG_ATIVO
        FROM ${FULL_MOEDA_TABLE}
        ORDER BY NM_MOEDA`
     );
-    res.json(
-      result.recordset.map((r) => ({
-        ID: r.ID_MOEDA,
-        NM: r.NM_MOEDA,
-        SG: r.SG_MOEDA,
-        PAIS: r.NM_PAIS,
-        ATIVO: r.SG_ATIVO === "S",
-      }))
-    );
+    const itens = result.recordset.map((r) => ({
+      ID: r.ID_MOEDA,
+      NM: r.NM_MOEDA,
+      SG: r.SG_MOEDA,
+      PAIS: r.NM_PAIS,
+      ATIVO: r.SG_ATIVO === "S",
+    }));
+    cadastroCacheGravar("moedas", 0, "", itens);
+    res.json(itens);
   } catch (err) {
     console.error("[moedas] erro ao listar:", err.message);
     res.status(500).json({ error: "Erro ao consultar moedas: " + err.message });
@@ -4412,6 +4443,17 @@ apiRouter.get("/kaizens/exportar", async (req, res) => {
        ORDER BY p.ID_KAIZEN DESC`,
       params
     );
+
+    // Sem teto: a exportação sempre traz tudo que o filtro aprova (ver
+    // comentário no topo da rota). Só um alerta no log acima de um
+    // volume que hoje seria incomum (~6.000 linhas no total) — visível
+    // ANTES de virar timeout/estouro de memória, sem truncar nada nem
+    // mudar a resposta pra quem chamou.
+    const LIMIAR_ALERTA_EXPORTACAO = 20000;
+    if (result.recordset.length > LIMIAR_ALERTA_EXPORTACAO) {
+      console.warn(`[kaizens/exportar] ${result.recordset.length} linhas — acima do volume esperado ` +
+        `(${LIMIAR_ALERTA_EXPORTACAO}). Considere revisar memória/timeout do Node antes que isso vire incidente.`);
+    }
 
     const workbook = new ExcelJS.Workbook();
     const planilha = workbook.addWorksheet("Kaizens");

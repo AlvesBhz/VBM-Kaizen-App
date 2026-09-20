@@ -1292,6 +1292,17 @@ function rotuloPessoa(p) {
   return { nome: nome, extra: extra };
 }
 
+// Texto que vai para innerHTML sem passar por .textContent precisa
+// disto antes — nome de Membro Externo é digitado livre pela pessoa
+// (não escolhido de uma lista), grava no banco e volta pra tela em
+// mais de uma tela/edição: sem escapar, um nome com "<" ou "&" quebra
+// a estrutura do card, e HTML de verdade (script/img onerror) executa.
+function escaparHtml(txt) {
+  var d = document.createElement('div');
+  d.textContent = txt == null ? '' : String(txt);
+  return d.innerHTML;
+}
+
 // ─── Painel de Configurações (engrenagem) — replicado de Value Driver Tree ───
 (function () {
   var btn = document.getElementById('settingsBtn');
@@ -1873,9 +1884,9 @@ function createTeamPicker(opts) {
     if (nome) {
       slot.classList.add('filled');
       slot.innerHTML =
-        '<div class="team-chip-avatar" style="background:' + cor + ';">' + iniciais(nome) + '</div>' +
-        '<span class="team-slot-name">' + nome + (mat ? '<small>' + mat + '</small>' : '') + '</span>' +
-        '<button type="button" class="team-slot-remove" aria-label="' + (dict['common.remover'] || 'Remover') + '"><i class="fa-solid fa-xmark"></i></button>';
+        '<div class="team-chip-avatar" style="background:' + cor + ';">' + escaparHtml(iniciais(nome)) + '</div>' +
+        '<span class="team-slot-name">' + escaparHtml(nome) + (mat ? '<small>' + escaparHtml(mat) + '</small>' : '') + '</span>' +
+        '<button type="button" class="team-slot-remove" aria-label="' + escaparHtml(dict['common.remover'] || 'Remover') + '"><i class="fa-solid fa-xmark"></i></button>';
     } else {
       slot.classList.remove('filled');
       slot.innerHTML = '<i class="fa-solid fa-plus"></i>&nbsp;' + (dict['common.adicionar'] || 'Adicionar');
@@ -1960,7 +1971,7 @@ function createTeamPicker(opts) {
       item.type = 'button';
       item.className = 'mdm-suggest-item';
       var r = rotuloPessoa(p);
-      item.innerHTML = '<strong>' + r.nome + '</strong><small>' + r.extra + '</small>';
+      item.innerHTML = '<strong>' + escaparHtml(r.nome) + '</strong><small>' + escaparHtml(r.extra) + '</small>';
       item.addEventListener('mousedown', function (e) {
         e.preventDefault();
         preencherVaga(p);
@@ -2099,7 +2110,7 @@ createTeamPicker({
             // viajando no hidden, que é o que o servidor lê.
             var r = rotuloPessoa(p);
             var email = p.CD_EMAIL || p.DS_EMAIL || '';
-            item.innerHTML = '<strong>' + r.nome + '</strong><small>' + email + '</small>';
+            item.innerHTML = '<strong>' + escaparHtml(r.nome) + '</strong><small>' + escaparHtml(email) + '</small>';
             item.addEventListener('mousedown', function (e) {
               e.preventDefault();
               input.value = rotuloLider(r.nome, email);
@@ -2209,7 +2220,7 @@ createTeamPicker({
           label.className = 'waste-tag';
           label.innerHTML =
             '<input type="checkbox" name="ids_reducao_desperdicios" value="' + item.ID + '"' + (marcados.has(String(item.ID)) ? ' checked' : '') + '/>' +
-            '<span class="waste-tag-visual"><span class="waste-tag-check"><i class="fa-solid fa-check"></i></span><span>' + item.NM + '</span></span>';
+            '<span class="waste-tag-visual"><span class="waste-tag-check"><i class="fa-solid fa-check"></i></span><span>' + escaparHtml(item.NM) + '</span></span>';
           grid.appendChild(label);
         });
       })
