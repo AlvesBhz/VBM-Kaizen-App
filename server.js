@@ -3215,13 +3215,15 @@ async function colunaDaComparacaoMeta() {
 }
 
 /* DT_ATUALIZACAO em kzn_pedravisaoconsolidada foi renomeada para
-   DT_CRIACAO em produção (fora do controle deste código). A coluna é
+   DT_CRIACAO em produção (fora do controle deste código) — confirmado
+   por consulta direta ao INFORMATION_SCHEMA via SSMS. A coluna é
    citada por nome em quase toda rota que toca a PVC direto — listagem
    de aprovação, decisão de aprovar/reprovar, cadastro, edição,
    comunicado por e-mail —, então em vez de trocar cada rota para um
    nome fixo (e quebrar de novo se o nome mudar outra vez, ou em outro
    ambiente que ainda não tenha a renomeação), o nome real é resolvido
-   uma vez aqui, como as outras colunas opcionais acima.
+   uma vez aqui, como as outras colunas opcionais acima — com DT_CRIACAO
+   como padrão, já que é o nome confirmado em produção HOJE.
 
    Só a tabela ATUAL: a histórica (kzn_hist_pedravisaoconsolidada) não
    foi tocada por essa renomeação e continua com DT_ATUALIZACAO — ver os
@@ -3238,19 +3240,26 @@ async function colunaAtualizacaoPvc() {
         [["esquema", sql.NVarChar(128), DB_SCHEMA], ["tabela", sql.NVarChar(128), DB_PVC_TABLE]]
       );
       const nomes = r.recordset.map((x) => x.COLUMN_NAME);
-      colunaAtualizacaoPvcResolvida = nomes.includes("DT_ATUALIZACAO") ? "DT_ATUALIZACAO"
-        : nomes.includes("DT_CRIACAO") ? "DT_CRIACAO" : "DT_ATUALIZACAO";
-      // Nenhuma das duas apareceu: log alto, porque cai no valor padrão
-      // (DT_ATUALIZACAO) e, se essa não for a coluna real, toda consulta
-      // à PVC direto vai falhar de novo com "Invalid column name" — sem
-      // este aviso, o log ficaria idêntico ao do caminho normal.
+      // Confirmado por consulta direta ao banco (INFORMATION_SCHEMA via
+      // SSMS): a coluna atual é DT_CRIACAO. Ela é o PADRÃO agora — a
+      // checagem abaixo só existe para o dia em que ela for renomeada de
+      // novo, ou para outro ambiente que ainda não tenha essa migração.
+      // Antes o padrão era o nome ANTIGO (DT_ATUALIZACAO): se por
+      // qualquer motivo esta consulta ao INFORMATION_SCHEMA não achasse
+      // nenhuma das duas linhas — sem essa causa aparecer nos logs, que
+      // eu não tenho acesso —, o cache guardava o nome errado até o
+      // processo reiniciar, e TODA consulta à PVC direto quebrava com
+      // "Invalid column name" de forma consistente, não intermitente.
+      // Exatamente o sintoma relatado duas vezes seguidas.
+      colunaAtualizacaoPvcResolvida = nomes.includes("DT_CRIACAO") ? "DT_CRIACAO"
+        : nomes.includes("DT_ATUALIZACAO") ? "DT_ATUALIZACAO" : "DT_CRIACAO";
       if (!nomes.length) {
         console.warn(`[kaizens] INFORMATION_SCHEMA não encontrou DT_ATUALIZACAO nem DT_CRIACAO em ` +
-          `${DB_SCHEMA}.${DB_PVC_TABLE} — usando DT_ATUALIZACAO como padrão, que pode estar errado.`);
+          `${DB_SCHEMA}.${DB_PVC_TABLE} — usando DT_CRIACAO como padrão (confirmado em produção).`);
       }
     } catch (err) {
-      colunaAtualizacaoPvcResolvida = "DT_ATUALIZACAO";
-      console.error(`[kaizens] erro ao resolver a coluna de atualização da PVC (usando DT_ATUALIZACAO como padrão): ${err.message}`);
+      colunaAtualizacaoPvcResolvida = "DT_CRIACAO";
+      console.error(`[kaizens] erro ao resolver a coluna de atualização da PVC (usando DT_CRIACAO como padrão): ${err.message}`);
     }
     console.log(`[kaizens] coluna de data de atualização em ${FULL_PVC_TABLE}: ${colunaAtualizacaoPvcResolvida}.`);
   }
