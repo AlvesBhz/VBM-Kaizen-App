@@ -4456,7 +4456,7 @@ apiRouter.get("/kaizens/exportar", async (req, res) => {
     // de referência (que usava a fonte corporativa "Vale Sans").
     planilha.getRow(1).height = 30;
     planilha.getRow(1).eachCell((celula) => {
-      celula.font = { name: FONTE_PADRAO, size: 12, color: { argb: "FFFFFFFF" } };
+      celula.font = { name: FONTE_PADRAO, size: 10, color: { argb: "FFFFFFFF" } };
       celula.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF3CB5E5" } };
       celula.alignment = { horizontal: "center", vertical: "middle" };
     });
@@ -4493,10 +4493,17 @@ apiRouter.get("/kaizens/exportar", async (req, res) => {
         DT_ULTIMA_OPERACAO: r.DT_ULTIMA_OPERACAO,
       });
     });
-    // Linhas de dado: mesma fonte do site, tamanho padrão de corpo de
-    // texto — só o título leva a cor de destaque.
+    // Linhas de dado: mesma fonte do site, tamanho 9, centralizadas na
+    // horizontal e no meio na vertical — só o título leva a cor de
+    // destaque. includeEmpty: sem ele, célula com valor nulo (Membros
+    // VBM 2 vazio, DT_ATUALIZACAO sem log) não é nem visitada — ficaria
+    // no padrão do ExcelJS (Calibri 11, sem alinhamento) em vez de
+    // seguir o resto da linha.
     for (let linha = 2; linha <= planilha.rowCount; linha++) {
-      planilha.getRow(linha).font = { name: FONTE_PADRAO, size: 11 };
+      planilha.getRow(linha).eachCell({ includeEmpty: true }, (celula) => {
+        celula.font = { name: FONTE_PADRAO, size: 9 };
+        celula.alignment = { horizontal: "center", vertical: "middle" };
+      });
     }
     planilha.getColumn("DT_CONCLUSAO").numFmt = "dd/mm/yyyy";
     planilha.getColumn("DT_CRIACAO").numFmt = "dd/mm/yyyy hh:mm";
