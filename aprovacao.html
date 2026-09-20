@@ -805,10 +805,21 @@ function atualizarContador() {
     kaizenSelecionadoId = id;
     document.getElementById('kdMotivo').value = '';
     panel.style.display = 'block';
+    // Sem checar r.ok, uma resposta de erro (corpo {error: "..."}) era
+    // lida como se fosse o Kaizen: preencherDetalhe via setText() só
+    // sabe mostrar "—" para cada campo ausente, e a tela parecia "vazia"
+    // em vez de dizer que a busca falhou.
     fetch('/api/kaizens/' + id, { headers: { Accept: 'application/json' } })
-      .then(function (r) { return r.json(); })
+      .then(function (r) {
+        if (r.ok) return r.json();
+        return r.json().catch(function () { return null; }).then(function (corpo) {
+          throw new Error((corpo && corpo.error) || ('HTTP ' + r.status));
+        });
+      })
       .then(preencherDetalhe)
-      .catch(function () {});
+      .catch(function (err) {
+        showToast('error', txt('ap.loadFailed', 'Não foi possível carregar o Kaizen'), err.message, 6000);
+      });
   }
 
   fila.addEventListener('click', function (e) {

@@ -3240,8 +3240,17 @@ async function colunaAtualizacaoPvc() {
       const nomes = r.recordset.map((x) => x.COLUMN_NAME);
       colunaAtualizacaoPvcResolvida = nomes.includes("DT_ATUALIZACAO") ? "DT_ATUALIZACAO"
         : nomes.includes("DT_CRIACAO") ? "DT_CRIACAO" : "DT_ATUALIZACAO";
+      // Nenhuma das duas apareceu: log alto, porque cai no valor padrão
+      // (DT_ATUALIZACAO) e, se essa não for a coluna real, toda consulta
+      // à PVC direto vai falhar de novo com "Invalid column name" — sem
+      // este aviso, o log ficaria idêntico ao do caminho normal.
+      if (!nomes.length) {
+        console.warn(`[kaizens] INFORMATION_SCHEMA não encontrou DT_ATUALIZACAO nem DT_CRIACAO em ` +
+          `${DB_SCHEMA}.${DB_PVC_TABLE} — usando DT_ATUALIZACAO como padrão, que pode estar errado.`);
+      }
     } catch (err) {
       colunaAtualizacaoPvcResolvida = "DT_ATUALIZACAO";
+      console.error(`[kaizens] erro ao resolver a coluna de atualização da PVC (usando DT_ATUALIZACAO como padrão): ${err.message}`);
     }
     console.log(`[kaizens] coluna de data de atualização em ${FULL_PVC_TABLE}: ${colunaAtualizacaoPvcResolvida}.`);
   }
