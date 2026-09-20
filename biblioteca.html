@@ -230,13 +230,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 }
 .ms-filter-panel.open{opacity:1;transform:translateY(0) scale(1);pointer-events:auto}
 .ms-filter-panel-esquerda{left:auto;right:0}
-.ms-filter-search{
-  display:flex;align-items:center;gap:.4rem;margin:.6rem;
-  background:#f7f7f7;border:1.5px solid #eaeaea;border-radius:.4rem;padding:.4rem .65rem;
-}
-.ms-filter-search i{color:#bbb;font-size:.72rem}
-.ms-filter-search input{border:none;background:none;outline:none;flex:1;font-size:.75rem;font-family:'Poppins',sans-serif;color:var(--vbm-dark)}
-.ms-filter-toolbar{display:flex;gap:.5rem;padding:0 .6rem .5rem;border-bottom:1px solid #f0f0f0}
+.ms-filter-toolbar{display:flex;gap:.5rem;padding:.65rem .6rem .5rem;border-bottom:1px solid #f0f0f0}
 .ms-filter-toolbtn{
   background:none;border:none;color:var(--vbm-blue);font-size:.7rem;font-weight:600;
   font-family:'Poppins',sans-serif;cursor:pointer;padding:.15rem 0;transition:color .2s;
@@ -266,8 +260,6 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 [data-bg="dark"] .ms-filter-trigger.ms-filter-ativo{color:var(--vbm-blue-light)}
 [data-bg="dark"] .ms-filter-chip{background:rgba(60,181,229,.18);color:var(--vbm-blue-light)}
 [data-bg="dark"] .ms-filter-panel{background:var(--vbm-blue-deep);border-color:rgba(255,255,255,.12)}
-[data-bg="dark"] .ms-filter-search{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.14)}
-[data-bg="dark"] .ms-filter-search input{color:#fff}
 [data-bg="dark"] .ms-filter-toolbar{border-bottom-color:rgba(255,255,255,.1)}
 [data-bg="dark"] .ms-filter-item:hover,[data-bg="dark"] .ms-filter-item-marcado{background:rgba(255,255,255,.08)}
 [data-bg="dark"] .ms-filter-item-check{border-color:rgba(255,255,255,.3);background:transparent}
@@ -1093,8 +1085,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
   /* Fábrica do filtro de múltipla seleção (Unidade, Categoria, Status,
      Ano): um botão-gatilho que mostra chips/contagem da seleção atual e
-     um painel com busca, "Selecionar Todos", "Limpar Seleção" e a lista
-     de checkboxes. Substitui o antigo <select> mantendo o mesmo id no
+     um painel com "Selecionar Todos", "Limpar Seleção" e a lista de
+     checkboxes — sem campo de busca de propósito: é só selecionar,
+     nunca digitar. Substitui o antigo <select> mantendo o mesmo id no
      container, então nada fora daqui precisa mudar para continuar
      encontrando o filtro. */
   function criarFiltroMultiplo(container, opts) {
@@ -1103,7 +1096,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     var mudou = opts.onChange || function () {};
     var itens = [];
     var selecionados = [];
-    var termoBusca = '';
     var aberto = false;
 
     container.classList.add('ms-filter');
@@ -1111,8 +1103,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       '<button type="button" class="ms-filter-trigger"><span class="ms-filter-label"></span>' +
         '<i class="fa-solid fa-chevron-down"></i></button>' +
       '<div class="ms-filter-panel">' +
-        '<div class="ms-filter-search"><i class="fa-solid fa-magnifying-glass"></i>' +
-          '<input type="text" placeholder="' + escaparHtml(txtI18n('msFilter.search', 'Buscar...')) + '"></div>' +
         '<div class="ms-filter-toolbar">' +
           '<button type="button" class="ms-filter-toolbtn" data-acao="todos">' + escaparHtml(txtI18n('msFilter.selectAll', 'Selecionar Todos')) + '</button>' +
           '<button type="button" class="ms-filter-toolbtn" data-acao="limpar">' + escaparHtml(txtI18n('msFilter.clearSelection', 'Limpar Seleção')) + '</button>' +
@@ -1124,16 +1114,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     var trigger = container.querySelector('.ms-filter-trigger');
     var label = container.querySelector('.ms-filter-label');
     var panel = container.querySelector('.ms-filter-panel');
-    var campoBusca = container.querySelector('.ms-filter-search input');
     var lista = container.querySelector('.ms-filter-list');
     var vazio = container.querySelector('.ms-filter-empty');
     var cardPai = container.closest('.section-card');
-
-    function itensFiltrados() {
-      if (!termoBusca) return itens;
-      var t = normalizar(termoBusca);
-      return itens.filter(function (i) { return normalizar(i.texto).indexOf(t) !== -1; });
-    }
 
     function renderLabel() {
       if (!selecionados.length) {
@@ -1149,9 +1132,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     }
 
     function renderLista() {
-      var visiveis = itensFiltrados();
-      vazio.hidden = visiveis.length > 0;
-      lista.innerHTML = visiveis.map(function (i) {
+      vazio.hidden = itens.length > 0;
+      lista.innerHTML = itens.map(function (i) {
         var marcado = selecionados.indexOf(i.valor) !== -1;
         return '<label class="ms-filter-item' + (marcado ? ' ms-filter-item-marcado' : '') + '">' +
           '<input type="checkbox" value="' + escaparHtml(i.valor) + '"' + (marcado ? ' checked' : '') + '>' +
@@ -1178,11 +1160,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       trigger.classList.add('open');
       panel.classList.add('open');
       if (cardPai) cardPai.classList.add('ms-filter-open');
-      campoBusca.value = '';
-      termoBusca = '';
       renderLista();
       posicionar();
-      setTimeout(function () { campoBusca.focus(); }, 10);
     }
 
     function fechar() {
@@ -1195,7 +1174,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
     trigger.addEventListener('click', function (e) { e.stopPropagation(); aberto ? fechar() : abrir(); });
     panel.addEventListener('click', function (e) { e.stopPropagation(); });
-    campoBusca.addEventListener('input', function () { termoBusca = campoBusca.value; renderLista(); });
 
     lista.addEventListener('change', function (e) {
       var chk = e.target.closest('input[type="checkbox"]');
@@ -1210,7 +1188,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     });
 
     container.querySelector('[data-acao="todos"]').addEventListener('click', function () {
-      itensFiltrados().forEach(function (i) { if (selecionados.indexOf(i.valor) === -1) selecionados.push(i.valor); });
+      itens.forEach(function (i) { if (selecionados.indexOf(i.valor) === -1) selecionados.push(i.valor); });
       renderLista(); renderLabel(); mudou();
     });
     container.querySelector('[data-acao="limpar"]').addEventListener('click', function () {
