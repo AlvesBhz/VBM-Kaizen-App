@@ -286,6 +286,15 @@ const FULL_MOEDA_TABLE = `[${DB_SCHEMA}].[${DB_MOEDA_TABLE}]`;
 const DB_KZ_DESPERDICIO_TABLE = safeIdentifier(process.env.AZURE_SQL_KZ_DESPERDICIO_TABLE, "kzn_kaizen_desperdicio");
 const FULL_KZ_DESPERDICIO_TABLE = `[${DB_SCHEMA}].[${DB_KZ_DESPERDICIO_TABLE}]`;
 
+// Log de gravações da tabela ATUAL — uma linha por operação (INSERT/
+// UPDATE), com DT_OPERACAO. É a fonte confiável da ÚLTIMA atualização
+// de um Kaizen (ver GET /kaizens/exportar): DT_ATUALIZACAO/DT_CRIACAO
+// na própria kzn_pedravisaoconsolidada passou a registrar o CADASTRO
+// (ver colunaAtualizacaoDe), não a última edição. Sem equivalente
+// histórico — Kaizen do histórico é arquivo fechado, não recebe edição.
+const DB_LOG_PVC_TABLE = safeIdentifier(process.env.AZURE_SQL_LOG_PVC_TABLE, "kzn_log_pedravisaoconsolidada");
+const FULL_LOG_PVC_TABLE = `[${DB_SCHEMA}].[${DB_LOG_PVC_TABLE}]`;
+
 // "Outros resultados": grava em kzn_resultados (item bilíngue novo,
 // texto duplicado nos 2 idiomas — não há como auto-traduzir a
 // descrição livre) + a junção kzn_resultado_kaizen, que já existe no
@@ -4241,6 +4250,15 @@ apiRouter.get("/kaizens/filtros", async (req, res) => {
 // nunca dentro de laço. Permissão de acesso é a mesma da Biblioteca — a
 // listagem não esconde Kaizen nenhum por linha, só o lápis de editar
 // (PODE_EDITAR), que não faz sentido numa planilha.
+//
+// Conjunto e ordem de colunas definidos junto com o time (planilha de
+// referência): sem Origem/Descrição do Status/Estado e Cidade do
+// Líder/Imagem Antes e Depois; com Membros VBM 1/2 e Membros Externos
+// (kzn_membros_equipe + kzn_hist_membros_equipe, distinguidos pelo
+// ID_TIPO_USUARIO do MDM — ver ID_TIPO_USUARIO_TERCEIRO). A última
+// coluna (DT_ATUALIZACAO) não é mais a data de cadastro — vem do LOG de
+// gravações (kzn_log_pedravisaoconsolidada.DT_OPERACAO), a última
+// atualização de verdade do registro.
 apiRouter.get("/kaizens/exportar", async (req, res) => {
   try {
     const idIdioma = idIdiomaDaRequisicao(req);
@@ -4287,11 +4305,25 @@ apiRouter.get("/kaizens/exportar", async (req, res) => {
       params.push(["q", sql.NVarChar(255), termoContem(q)]);
     }
 
+    params.push(["tipoTerceiro", sql.Int, ID_TIPO_USUARIO_TERCEIRO]);
+
+    // Membros da equipe moram em duas tabelas, uma por origem (mesmo
+    // padrão de DESPERDICIOS abaixo) — union inline, reaproveitado nos
+    // três OUTER APPLY de membros porque cada um pega uma fatia
+    // diferente do mesmo conjunto (1º Vale, 2º Vale, externos).
+    const fonteMembros = `(
+         SELECT ID_USUARIO FROM ${FULL_MEMBROS_TABLE} WHERE ID_KAIZEN = p.ID_KAIZEN AND p.ORIGEM = 'A'
+         UNION ALL
+         SELECT ID_USUARIO FROM ${FULL_HIST_MEMBROS_TABLE} WHERE ID_KAIZEN = p.ID_KAIZEN AND p.ORIGEM = 'H'
+       )`;
+
     // JOINs de GET /kaizens (líder e unidade por OUTER APPLY TOP(1), para
     // nunca duplicar linha por matrícula repetida no MDM) mais os que só
     // existiam no detalhe (replicação, moeda, aprovador — aqui também
-    // por OUTER APPLY, pelo mesmo motivo) e um novo: quem gravou a
-    // última atualização, que nenhuma rota resolvia ainda.
+    // por OUTER APPLY, pelo mesmo motivo) e os membros da equipe: até 2
+    // internos (Vale) e os externos (terceiros, ID_TIPO_USUARIO=2 no
+    // MDM — ver ID_TIPO_USUARIO_TERCEIRO), no mesmo limite da tela de
+    // cadastro (kaizen-novo.html).
     const fonte = `FROM ${fonteKaizens} p
        LEFT JOIN ${FULL_CATEGORIA_TABLE} cat ON cat.ID_CATEGORIA = p.ID_CATEGORIA AND cat.ID_IDIOMA = @idIdioma
        LEFT JOIN ${FULL_STATUS_TABLE} st ON st.ID_STATUS = p.ID_STATUS AND st.ID_IDIOMA = @idIdioma
@@ -4299,13 +4331,13 @@ apiRouter.get("/kaizens/exportar", async (req, res) => {
        LEFT JOIN ${FULL_MOEDA_TABLE} moeda ON moeda.ID_MOEDA = p.ID_MOEDA
        LEFT JOIN ${FULL_TABLE_NAME} aprovFk ON aprovFk.ID_APROVADOR = p.ID_APROVADOR
        OUTER APPLY (
-         SELECT TOP (1) x.NM_USUARIO, x.NM_ESTADO, x.NM_CIDADE
+         SELECT TOP (1) x.NM_USUARIO
            FROM ${FULL_MDM_TABLE} x
           WHERE x.ID_USUARIO = p.ID_USUARIO_LIDER
           ORDER BY x.ID_TIPO_USUARIO
        ) lider
        OUTER APPLY (
-         SELECT TOP (1) y.NM_SITE
+         SELECT TOP (1) y.NM_SITE, y.NM_USUARIO
            FROM ${FULL_MDM_TABLE} y
           WHERE y.ID_USUARIO = ISNULL(p.ID_USUARIO_CADASTRO, p.ID_USUARIO_LIDER)
           ORDER BY y.ID_TIPO_USUARIO
@@ -4317,31 +4349,46 @@ apiRouter.get("/kaizens/exportar", async (req, res) => {
           ORDER BY z.ID_TIPO_USUARIO
        ) aprov
        OUTER APPLY (
-         SELECT TOP (1) w.NM_USUARIO
-           FROM ${FULL_MDM_TABLE} w
-          WHERE w.ID_USUARIO = p.ID_USUARIO_ATUALIZACAO
-          ORDER BY w.ID_TIPO_USUARIO
-       ) atualizou
+         SELECT TOP (1) mv.NM_USUARIO
+           FROM ${fonteMembros} me
+           JOIN ${FULL_MDM_TABLE} mv ON mv.ID_USUARIO = me.ID_USUARIO
+          WHERE mv.ID_TIPO_USUARIO <> @tipoTerceiro
+          ORDER BY me.ID_USUARIO
+       ) membroVale1
+       OUTER APPLY (
+         SELECT mv2.NM_USUARIO
+           FROM ${fonteMembros} me2
+           JOIN ${FULL_MDM_TABLE} mv2 ON mv2.ID_USUARIO = me2.ID_USUARIO
+          WHERE mv2.ID_TIPO_USUARIO <> @tipoTerceiro
+          ORDER BY me2.ID_USUARIO
+          OFFSET 1 ROWS FETCH NEXT 1 ROWS ONLY
+       ) membroVale2
        WHERE ${filtros.join(" AND ")}`;
 
     // Uma consulta só, sem OFFSET/FETCH: a exportação traz TODAS as
     // linhas que os filtros aprovam, não a página que está na tela.
     const result = await runQuery(
       `SELECT p.ID_KAIZEN, p.ORIGEM, p.NM_KAIZEN,
-              cat.NM_CATEGORIA, st.NM_STATUS, st.DS_STATUS,
-              lider.NM_USUARIO AS NM_LIDER, lider.NM_ESTADO, lider.NM_CIDADE,
-              autor.NM_SITE,
+              cat.NM_CATEGORIA, st.NM_STATUS,
+              lider.NM_USUARIO AS NM_LIDER,
+              membroVale1.NM_USUARIO AS NM_MEMBRO_VALE_1,
+              membroVale2.NM_USUARIO AS NM_MEMBRO_VALE_2,
+              (SELECT STRING_AGG(mv3.NM_USUARIO, ', ')
+                 FROM ${fonteMembros} me3
+                 JOIN ${FULL_MDM_TABLE} mv3 ON mv3.ID_USUARIO = me3.ID_USUARIO
+                WHERE mv3.ID_TIPO_USUARIO = @tipoTerceiro
+              ) AS NM_MEMBROS_EXTERNOS,
+              autor.NM_SITE, autor.NM_USUARIO AS NM_CADASTRO,
               aprov.NM_USUARIO AS NM_APROVADOR,
               repl.NM_REPLICACAO,
               moeda.SG_MOEDA, moeda.NM_MOEDA,
-              atualizou.NM_USUARIO AS NM_ATUALIZACAO,
               p.DS_PROBLEMA, p.DS_OBJETIVO,
               p.DS_ESTADO_ANTES, p.DS_ESTADO_DEPOIS,
               p.URL_REFERENCIA, p.DS_LICOES_APRENDIDAS,
               p.DS_COMPARA_META, p.DS_RESULTADO_ALCANCADO,
               p.VL_RESULTADO_FINANCEIRO,
               p.DT_CONCLUSAO, p.DT_ATUALIZACAO AS DT_CRIACAO,
-              p.DS_MOTIVO, p.URL_IMG_ANTES, p.URL_IMG_DEPOIS,
+              p.DS_MOTIVO,
               (SELECT STRING_AGG(d.NM_DESPERDICIO, '§')
                  FROM (
                    SELECT ID_DESPERDICIO FROM ${FULL_KZ_DESPERDICIO_TABLE}
@@ -4351,7 +4398,16 @@ apiRouter.get("/kaizens/exportar", async (req, res) => {
                     WHERE ID_KAIZEN = p.ID_KAIZEN AND p.ORIGEM = 'H'
                  ) kd
                  JOIN ${FULL_DESPERDICIO_TABLE} d ON d.ID_DESPERDICIO = kd.ID_DESPERDICIO AND d.ID_IDIOMA = @idIdioma
-              ) AS DESPERDICIOS
+              ) AS DESPERDICIOS,
+              -- Última atualização de verdade: DT_ATUALIZACAO/DT_CRIACAO
+              -- na própria PVC virou data de CADASTRO (ver
+              -- colunaAtualizacaoDe) — quem edita depois só fica
+              -- registrado no log. Só a tabela ATUAL tem log; histórico
+              -- é arquivo fechado, então o valor sai NULL para ele.
+              (SELECT MAX(lg.DT_OPERACAO)
+                 FROM ${FULL_LOG_PVC_TABLE} lg
+                WHERE lg.ID_KAIZEN = p.ID_KAIZEN AND p.ORIGEM = 'A'
+              ) AS DT_ULTIMA_OPERACAO
        ${fonte}
        ORDER BY p.ID_KAIZEN DESC`,
       params
@@ -4359,23 +4415,26 @@ apiRouter.get("/kaizens/exportar", async (req, res) => {
 
     const workbook = new ExcelJS.Workbook();
     const planilha = workbook.addWorksheet("Kaizens");
+    // Fonte e cor: as mesmas do site (Poppins, ver css/vbm-app.css, e o
+    // azul --vbm-blue-light #3CB5E5 do cabeçalho da Biblioteca) — não a
+    // "Vale Sans" do arquivo de referência, que é a fonte corporativa,
+    // não a da aplicação.
+    const FONTE_PADRAO = "Poppins";
     planilha.columns = [
       { header: "ID Kaizen", key: "ID_KAIZEN", width: 12 },
       { header: "Rótulo", key: "ROTULO", width: 14 },
-      { header: "Origem", key: "ORIGEM_TXT", width: 12 },
       { header: "Título", key: "NM_KAIZEN", width: 40 },
-      { header: "Categoria", key: "NM_CATEGORIA", width: 20 },
-      { header: "Status", key: "NM_STATUS", width: 20 },
-      { header: "Descrição do Status", key: "DS_STATUS", width: 30 },
-      { header: "Líder", key: "NM_LIDER", width: 26 },
-      { header: "Estado do Líder", key: "NM_ESTADO", width: 16 },
-      { header: "Cidade do Líder", key: "NM_CIDADE", width: 18 },
-      { header: "Unidade", key: "NM_SITE", width: 18 },
-      { header: "Aprovador", key: "NM_APROVADOR", width: 26 },
-      { header: "Replicação", key: "NM_REPLICACAO", width: 16 },
-      { header: "Atualizado por", key: "NM_ATUALIZACAO", width: 26 },
       { header: "Declaração do Problema", key: "DS_PROBLEMA", width: 40 },
       { header: "Meta/Objetivo", key: "DS_OBJETIVO", width: 40 },
+      { header: "Categoria", key: "NM_CATEGORIA", width: 20 },
+      { header: "Status", key: "NM_STATUS", width: 20 },
+      { header: "Líder", key: "NM_LIDER", width: 26 },
+      { header: "Membros VBM 1", key: "NM_MEMBRO_VALE_1", width: 26 },
+      { header: "Membros VBM 2", key: "NM_MEMBRO_VALE_2", width: 26 },
+      { header: "Membros Externos", key: "NM_MEMBROS_EXTERNOS", width: 26 },
+      { header: "Site", key: "NM_SITE", width: 18 },
+      { header: "Aprovador", key: "NM_APROVADOR", width: 26 },
+      { header: "Replicação", key: "NM_REPLICACAO", width: 16 },
       { header: "Descrição Antes", key: "DS_ESTADO_ANTES", width: 40 },
       { header: "Descrição Depois", key: "DS_ESTADO_DEPOIS", width: 40 },
       { header: "Link de Referência", key: "URL_REFERENCIA", width: 30 },
@@ -4385,31 +4444,39 @@ apiRouter.get("/kaizens/exportar", async (req, res) => {
       { header: "Valor do Resultado Financeiro", key: "VL_RESULTADO_FINANCEIRO", width: 20 },
       { header: "Moeda", key: "SG_MOEDA", width: 10 },
       { header: "Redução de Desperdícios", key: "DESPERDICIOS", width: 30 },
-      { header: "Data de Conclusão", key: "DT_CONCLUSAO", width: 16 },
-      { header: "Data de Atualização", key: "DT_CRIACAO", width: 18 },
       { header: "Motivo (reprovação/ajuste)", key: "DS_MOTIVO", width: 30 },
-      { header: "Imagem Antes", key: "URL_IMG_ANTES", width: 24 },
-      { header: "Imagem Depois", key: "URL_IMG_DEPOIS", width: 24 },
+      { header: "Cadastrado por", key: "NM_CADASTRO", width: 26 },
+      { header: "Data de Conclusão", key: "DT_CONCLUSAO", width: 16 },
+      { header: "Data de cadastro", key: "DT_CRIACAO", width: 18 },
+      { header: "DT_ATUALIZACAO", key: "DT_ULTIMA_OPERACAO", width: 18 },
     ];
-    planilha.getRow(1).font = { bold: true };
+
+    // Título: altura 30, fundo azul do site, texto branco, centralizado
+    // — mesma identidade visual da Biblioteca, não o estilo do arquivo
+    // de referência (que usava a fonte corporativa "Vale Sans").
+    planilha.getRow(1).height = 30;
+    planilha.getRow(1).eachCell((celula) => {
+      celula.font = { name: FONTE_PADRAO, size: 12, color: { argb: "FFFFFFFF" } };
+      celula.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF3CB5E5" } };
+      celula.alignment = { horizontal: "center", vertical: "middle" };
+    });
+
     result.recordset.forEach((r) => {
       planilha.addRow({
         ID_KAIZEN: r.ID_KAIZEN,
         ROTULO: rotuloIdKaizen(r.ID_KAIZEN, r.DT_CRIACAO),
-        ORIGEM_TXT: r.ORIGEM === "H" ? "Histórico" : "Atual",
         NM_KAIZEN: r.NM_KAIZEN,
+        DS_PROBLEMA: r.DS_PROBLEMA,
+        DS_OBJETIVO: r.DS_OBJETIVO,
         NM_CATEGORIA: r.NM_CATEGORIA,
         NM_STATUS: r.NM_STATUS,
-        DS_STATUS: r.DS_STATUS,
         NM_LIDER: r.NM_LIDER,
-        NM_ESTADO: r.NM_ESTADO,
-        NM_CIDADE: r.NM_CIDADE,
+        NM_MEMBRO_VALE_1: r.NM_MEMBRO_VALE_1,
+        NM_MEMBRO_VALE_2: r.NM_MEMBRO_VALE_2,
+        NM_MEMBROS_EXTERNOS: r.NM_MEMBROS_EXTERNOS,
         NM_SITE: r.NM_SITE,
         NM_APROVADOR: r.NM_APROVADOR,
         NM_REPLICACAO: r.NM_REPLICACAO,
-        NM_ATUALIZACAO: r.NM_ATUALIZACAO,
-        DS_PROBLEMA: r.DS_PROBLEMA,
-        DS_OBJETIVO: r.DS_OBJETIVO,
         DS_ESTADO_ANTES: r.DS_ESTADO_ANTES,
         DS_ESTADO_DEPOIS: r.DS_ESTADO_DEPOIS,
         URL_REFERENCIA: r.URL_REFERENCIA,
@@ -4419,15 +4486,21 @@ apiRouter.get("/kaizens/exportar", async (req, res) => {
         VL_RESULTADO_FINANCEIRO: r.VL_RESULTADO_FINANCEIRO,
         SG_MOEDA: r.SG_MOEDA,
         DESPERDICIOS: r.DESPERDICIOS ? String(r.DESPERDICIOS).split("§").filter(Boolean).join(", ") : "",
+        DS_MOTIVO: r.DS_MOTIVO,
+        NM_CADASTRO: r.NM_CADASTRO,
         DT_CONCLUSAO: r.DT_CONCLUSAO,
         DT_CRIACAO: r.DT_CRIACAO,
-        DS_MOTIVO: r.DS_MOTIVO,
-        URL_IMG_ANTES: r.URL_IMG_ANTES,
-        URL_IMG_DEPOIS: r.URL_IMG_DEPOIS,
+        DT_ULTIMA_OPERACAO: r.DT_ULTIMA_OPERACAO,
       });
     });
+    // Linhas de dado: mesma fonte do site, tamanho padrão de corpo de
+    // texto — só o título leva a cor de destaque.
+    for (let linha = 2; linha <= planilha.rowCount; linha++) {
+      planilha.getRow(linha).font = { name: FONTE_PADRAO, size: 11 };
+    }
     planilha.getColumn("DT_CONCLUSAO").numFmt = "dd/mm/yyyy";
     planilha.getColumn("DT_CRIACAO").numFmt = "dd/mm/yyyy hh:mm";
+    planilha.getColumn("DT_ULTIMA_OPERACAO").numFmt = "dd/mm/yyyy hh:mm";
 
     const nomeArquivo = `biblioteca-kaizen-${new Date().toISOString().slice(0, 10)}.xlsx`;
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
