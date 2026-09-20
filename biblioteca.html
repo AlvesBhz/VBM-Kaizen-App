@@ -904,6 +904,17 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   var inputNome = document.getElementById('bibFiltroNome');
   if (!bibList) return;
 
+  // Registro dos "fechar" de todas as instâncias, para abrir uma
+  // fechar as outras. Sem isto, cada gatilho chama e.stopPropagation()
+  // (necessário para o próprio clique não contar como "clique fora" e
+  // fechar o painel que acabou de abrir) — e esse mesmo stopPropagation
+  // impede o clique de chegar ao listener de "clique fora" dos OUTROS
+  // filtros, que nunca fecham. Precisa existir ANTES da primeira
+  // chamada a criarFiltroMultiplo (função é hoisted; a atribuição de um
+  // var não é — sem isto, o próprio push() já falhava no primeiro
+  // filtro criado, antes dos outros três chegarem a existir).
+  var todosFiltrosMultiplos = [];
+
   // Os quatro filtros de múltipla seleção. onChange já dispara a mesma
   // aplicarFiltros() usada pelos demais controles da barra.
   var filtroUnidade = criarFiltroMultiplo(document.getElementById('bibFiltroUnidade'),
@@ -1159,6 +1170,10 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
     function abrir() {
       if (aberto) return;
+      // Fecha qualquer outro filtro aberto: o próprio clique no gatilho
+      // pára a propagação (ver mais abaixo), então o listener de
+      // "clique fora" dos outros nunca veria este clique sozinho.
+      todosFiltrosMultiplos.forEach(function (f) { if (f !== fechar) f(); });
       aberto = true;
       trigger.classList.add('open');
       panel.classList.add('open');
@@ -1206,6 +1221,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     document.addEventListener('click', function (e) { if (aberto && !container.contains(e.target)) fechar(); });
     document.addEventListener('keydown', function (e) { if (aberto && e.key === 'Escape') fechar(); });
     window.addEventListener('resize', function () { if (aberto) posicionar(); });
+    todosFiltrosMultiplos.push(fechar);
 
     renderLabel();
 

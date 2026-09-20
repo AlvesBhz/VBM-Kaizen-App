@@ -3214,6 +3214,40 @@ async function colunaDaComparacaoMeta() {
   return colunaDsComparaMetaExiste ? "DS_COMPARA_META" : "DS_RESULTADO_ESPERADO";
 }
 
+/* DT_ATUALIZACAO em kzn_pedravisaoconsolidada foi renomeada para
+   DT_CRIACAO em produção (fora do controle deste código). A coluna é
+   citada por nome em quase toda rota que toca a PVC direto — listagem
+   de aprovação, decisão de aprovar/reprovar, cadastro, edição,
+   comunicado por e-mail —, então em vez de trocar cada rota para um
+   nome fixo (e quebrar de novo se o nome mudar outra vez, ou em outro
+   ambiente que ainda não tenha a renomeação), o nome real é resolvido
+   uma vez aqui, como as outras colunas opcionais acima.
+
+   Só a tabela ATUAL: a histórica (kzn_hist_pedravisaoconsolidada) não
+   foi tocada por essa renomeação e continua com DT_ATUALIZACAO — ver os
+   dois lados de fonteBiblioteca(), que resolvem cada um com o seu
+   próprio nome de coluna. */
+let colunaAtualizacaoPvcResolvida = null;
+async function colunaAtualizacaoPvc() {
+  if (colunaAtualizacaoPvcResolvida === null) {
+    try {
+      const r = await runQuery(
+        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+          WHERE TABLE_SCHEMA = @esquema AND TABLE_NAME = @tabela
+            AND COLUMN_NAME IN ('DT_ATUALIZACAO', 'DT_CRIACAO')`,
+        [["esquema", sql.NVarChar(128), DB_SCHEMA], ["tabela", sql.NVarChar(128), DB_PVC_TABLE]]
+      );
+      const nomes = r.recordset.map((x) => x.COLUMN_NAME);
+      colunaAtualizacaoPvcResolvida = nomes.includes("DT_ATUALIZACAO") ? "DT_ATUALIZACAO"
+        : nomes.includes("DT_CRIACAO") ? "DT_CRIACAO" : "DT_ATUALIZACAO";
+    } catch (err) {
+      colunaAtualizacaoPvcResolvida = "DT_ATUALIZACAO";
+    }
+    console.log(`[kaizens] coluna de data de atualização em ${FULL_PVC_TABLE}: ${colunaAtualizacaoPvcResolvida}.`);
+  }
+  return colunaAtualizacaoPvcResolvida;
+}
+
 /* ── A fonte da BIBLIOTECA: atual + histórico ─────────────────────
 
    Tabela derivada com UNION ALL das duas. Usada no lugar do nome da
@@ -3259,8 +3293,14 @@ async function fonteBiblioteca(apenasOrigem) {
   const temAlcancado = await temColunaDsResultado();
   const alcancadoAtual = temAlcancado ? "DS_RESULTADO_ALCANCADO" : "CAST(NULL AS VARCHAR(100))";
   const dataRefAtual = await expressaoDataReferencia("");
+  // Nome real na tabela ATUAL — pode não ser mais "DT_ATUALIZACAO" (ver
+  // colunaAtualizacaoPvc). Exposto sempre com o MESMO nome lógico
+  // "DT_ATUALIZACAO" no resultado da fonte unificada (o alias abaixo),
+  // então nenhum código que lê `p.DT_ATUALIZACAO` a partir daqui precisa
+  // saber ou mudar por causa disso.
+  const colAtualizacaoAtual = await colunaAtualizacaoPvc();
 
-  const bloco = (origem, compara, alcancado, dataRef, tabela) => `
+  const bloco = (origem, compara, alcancado, dataRef, tabela, colAtualizacao) => `
     SELECT ORIGEM = ${origem},
            ID_KAIZEN, NM_KAIZEN, ID_STATUS, ID_CATEGORIA, ID_REPLICACAO, ID_APROVADOR,
            ID_USUARIO_CADASTRO, ID_USUARIO_LIDER, ID_USUARIO_ATUALIZACAO,
@@ -3268,14 +3308,14 @@ async function fonteBiblioteca(apenasOrigem) {
            DS_LICOES_APRENDIDAS,
            DS_COMPARA_META = ${compara},
            DS_RESULTADO_ALCANCADO = ${alcancado},
-           VL_RESULTADO_FINANCEIRO, ID_MOEDA, DT_CONCLUSAO, DT_ATUALIZACAO, DS_MOTIVO,
+           VL_RESULTADO_FINANCEIRO, ID_MOEDA, DT_CONCLUSAO, DT_ATUALIZACAO = ${colAtualizacao}, DS_MOTIVO,
            URL_IMG_ANTES, URL_IMG_DEPOIS,
            DT_REFERENCIA = ${dataRef}
       FROM ${tabela}`;
 
-  const ladoAtual = bloco("'A'", colComparaMeta, alcancadoAtual, dataRefAtual, FULL_PVC_TABLE);
+  const ladoAtual = bloco("'A'", colComparaMeta, alcancadoAtual, dataRefAtual, FULL_PVC_TABLE, colAtualizacaoAtual);
   const ladoHist = bloco("'H'", "DS_COMPARA_META", "DS_RESULTADO_ALCANCADO",
-    "ISNULL(DT_CONCLUSAO, DT_ATUALIZACAO)", FULL_HIST_PVC_TABLE);
+    "ISNULL(DT_CONCLUSAO, DT_ATUALIZACAO)", FULL_HIST_PVC_TABLE, "DT_ATUALIZACAO");
 
   if (apenasOrigem === "A") return `(${ladoAtual})`;
   if (apenasOrigem === "H") return `(${ladoHist})`;
@@ -3349,7 +3389,13 @@ async function expressaoDataReferencia(prefixo) {
       colunaReferenciaExiste = false;
     }
   }
-  return colunaReferenciaExiste ? `${p}DT_REFERENCIA` : `ISNULL(${p}DT_CONCLUSAO, ${p}DT_ATUALIZACAO)`;
+  if (colunaReferenciaExiste) return `${p}DT_REFERENCIA`;
+  // Sem DT_REFERENCIA, cai para a expressão — e o nome real da coluna de
+  // atualização da PVC pode não ser mais DT_ATUALIZACAO (ver
+  // colunaAtualizacaoPvc). Só chamado com o lado ATUAL (fonteBiblioteca
+  // nunca pede este fallback para o histórico).
+  const colAtualizacao = await colunaAtualizacaoPvc();
+  return `ISNULL(${p}DT_CONCLUSAO, ${p}${colAtualizacao})`;
 }
 
 const limiteColunaCache = new Map();
@@ -3669,13 +3715,16 @@ apiRouter.post("/kaizens", async (req, res) => {
       // Node: assim não há fuso no meio para empurrar a data um dia
       // para trás ou para frente. Só data, nunca hora.
       reqInsert.input("dtConclusao", sql.VarChar(10), dataConclusao);
+      // Nome real da coluna de atualização — pode não ser mais
+      // DT_ATUALIZACAO (ver colunaAtualizacaoPvc).
+      const colAtualizacaoPvc = await colunaAtualizacaoPvc();
 
       await reqInsert.query(`
         INSERT INTO ${FULL_PVC_TABLE}
           (ID_KAIZEN, ID_USUARIO_CADASTRO, ID_USUARIO_LIDER, NM_KAIZEN, ID_CATEGORIA, ID_REPLICACAO,
            DS_PROBLEMA, DS_OBJETIVO,${gravaStatus ? " ID_STATUS," : ""} ID_APROVADOR, URL_IMG_ANTES, DS_ESTADO_ANTES,
            URL_IMG_DEPOIS, DS_ESTADO_DEPOIS, URL_REFERENCIA, DS_LICOES_APRENDIDAS,
-           VL_RESULTADO_FINANCEIRO, ID_MOEDA, ${colComparaMeta},${gravaDsResultado ? " DS_RESULTADO_ALCANCADO," : ""} DT_CONCLUSAO, DT_ATUALIZACAO,
+           VL_RESULTADO_FINANCEIRO, ID_MOEDA, ${colComparaMeta},${gravaDsResultado ? " DS_RESULTADO_ALCANCADO," : ""} DT_CONCLUSAO, ${colAtualizacaoPvc},
            ID_USUARIO_ATUALIZACAO)
         VALUES
           (@idKaizen, @idUsuarioCadastro, @idUsuarioLider, @nmKaizen, @idCategoria, @idReplicacao,
@@ -4290,9 +4339,10 @@ apiRouter.get("/aprovacoes", async (req, res) => {
     if (!idUsuario) return res.status(401).json({ error: "Não foi possível identificar o usuário logado." });
     const idIdioma = idIdiomaDaRequisicao(req);
     const idsFila = await idsNaFilaDeAprovacao();
+    const colAtualizacaoPvc = await colunaAtualizacaoPvc();
 
     const result = await runQuery(
-      `SELECT p.ID_KAIZEN, p.NM_KAIZEN, p.DT_ATUALIZACAO AS DT_CRIACAO, cat.NM_CATEGORIA,
+      `SELECT p.ID_KAIZEN, p.NM_KAIZEN, p.${colAtualizacaoPvc} AS DT_CRIACAO, cat.NM_CATEGORIA,
               lider.NM_USUARIO AS NM_LIDER, lider.NM_ESTADO, lider.NM_CIDADE,
               p.ID_STATUS, st.NM_STATUS
        FROM ${FULL_PVC_TABLE} p
@@ -4301,7 +4351,7 @@ apiRouter.get("/aprovacoes", async (req, res) => {
        LEFT JOIN ${FULL_CATEGORIA_TABLE} cat ON cat.ID_CATEGORIA = p.ID_CATEGORIA AND cat.ID_IDIOMA = @idIdioma
        LEFT JOIN ${FULL_MDM_TABLE} lider ON lider.ID_USUARIO = p.ID_USUARIO_LIDER
        WHERE ${filtroPendente(idsFila)}
-       ORDER BY p.DT_ATUALIZACAO ASC`,
+       ORDER BY p.${colAtualizacaoPvc} ASC`,
       paramsComPendente([["idUsuario", sql.Int, idUsuario], ["idIdioma", sql.Int, idIdioma]], idsFila)
     );
     res.json(result.recordset.map((r) => ({
@@ -4510,8 +4560,9 @@ const ERRO_STATUS_NAO_EDITAVEL =
  *
  *  Categoria e status vêm nos DOIS idiomas, porque o e-mail é bilíngue. */
 async function dadosDoComunicado(idKaizen, idUsuarioAcao) {
+  const colAtualizacaoPvc = await colunaAtualizacaoPvc();
   const r = await runQuery(
-    `SELECT p.ID_KAIZEN, p.NM_KAIZEN, p.DS_MOTIVO, p.ID_STATUS, p.DT_ATUALIZACAO,
+    `SELECT p.ID_KAIZEN, p.NM_KAIZEN, p.DS_MOTIVO, p.ID_STATUS, p.${colAtualizacaoPvc} AS DT_ATUALIZACAO,
             autor.NM_USUARIO AS NM_AUTOR, autor.CD_EMAIL AS EMAIL_AUTOR,
             autor.NM_SITE, autor.NM_CIDADE, autor.NM_ESTADO,
             aprov.NM_USUARIO AS NM_APROVADOR, aprov.CD_EMAIL AS EMAIL_APROVADOR,
@@ -4716,10 +4767,11 @@ async function registrarDecisao(req, res, opcoes) {
     // SQL Server: ou as duas colunas gravam, ou nenhuma — não existe o
     // estado intermediário "reprovado sem motivo". Dividir em dois
     // comandos é que exigiria transação explícita.
+    const colAtualizacaoPvc = await colunaAtualizacaoPvc();
     const gravacao = await runQuery(
       `UPDATE ${FULL_PVC_TABLE}
        SET ID_STATUS = @idStatus${setMotivo}${setConclusao},
-           DT_ATUALIZACAO = ${AGORA_BRASILIA}, ID_USUARIO_ATUALIZACAO = @idUsuario
+           ${colAtualizacaoPvc} = ${AGORA_BRASILIA}, ID_USUARIO_ATUALIZACAO = @idUsuario
        WHERE ID_KAIZEN = @idKaizen`,
       params
     );
@@ -4896,6 +4948,9 @@ apiRouter.put("/kaizens/:id", async (req, res) => {
       // então, outra pessoa gravou no meio e este UPDATE não acha nada.
       const carimbo = String(b.DT_ATUALIZACAO || "").trim();
       if (carimbo) r.input("carimbo", sql.NVarChar(40), carimbo);
+      // Nome real da coluna nesta tabela — a histórica não foi tocada
+      // pela renomeação da atual (ver colunaAtualizacaoPvc).
+      const colAtualizacaoDestino = ehHistorico ? "DT_ATUALIZACAO" : await colunaAtualizacaoPvc();
 
       const gravacao = await r.query(
         `UPDATE ${tabelaPvc}
@@ -4915,9 +4970,9 @@ apiRouter.put("/kaizens/:id", async (req, res) => {
                 ID_MOEDA = @idMoeda,${gravaDsResultado ? "\n                DS_RESULTADO_ALCANCADO = @dsResultado," : ""}
                 DT_CONCLUSAO = CONVERT(DATE, @dtConclusao, 23),${trocaAntes ? "\n                URL_IMG_ANTES = @urlImgAntes," : ""}${trocaDepois ? "\n                URL_IMG_DEPOIS = @urlImgDepois," : ""}
                 ID_STATUS = @idStatus,
-                DT_ATUALIZACAO = ${AGORA_BRASILIA},
+                ${colAtualizacaoDestino} = ${AGORA_BRASILIA},
                 ID_USUARIO_ATUALIZACAO = @idUsuario
-          WHERE ID_KAIZEN = @idKaizen${carimbo ? `\n            AND CONVERT(VARCHAR(19), DT_ATUALIZACAO, 126) = @carimbo` : ""}`
+          WHERE ID_KAIZEN = @idKaizen${carimbo ? `\n            AND CONVERT(VARCHAR(19), ${colAtualizacaoDestino}, 126) = @carimbo` : ""}`
       );
 
       const linhas = gravacao.rowsAffected ? gravacao.rowsAffected[0] : 0;
