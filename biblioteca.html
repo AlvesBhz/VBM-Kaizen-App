@@ -37,7 +37,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>VBM Kaizen — Biblioteca</title>
-<link href="css/fontawesome-subset.css?v=20260911-3" rel="stylesheet"/>
+<link href="css/fontawesome-subset.css?v=20260920-1" rel="stylesheet"/>
 <link href="css/vbm-app.css?v=20260916-2" rel="stylesheet"/>
 <!-- Poppins servida pelo próprio app (css/poppins.css + assets/fonts/poppins).
      Vinha de fonts.googleapis.com: em rede sem saída para a internet o
@@ -673,6 +673,13 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
           <i class="fa-solid fa-filter-circle-xmark"></i>
           <span data-i18n="bib.clearFilters">Limpar filtros</span>
         </button>
+        <!-- Exporta TODOS os registros que os filtros acima aprovam (não
+             só os exibidos na tela) — ver GET /api/kaizens/exportar. -->
+        <button type="button" class="filter-clear-btn" id="bibExportarExcel"
+                data-i18n-title="bib.exportExcel" title="Exportar Excel" aria-label="bib.exportExcel">
+          <i class="fa-solid fa-file-excel"></i>
+          <span data-i18n="bib.exportExcel">Exportar Excel</span>
+        </button>
         <div class="filter-view-toggle" style="margin-left:auto;">
           <button class="filter-view-btn active" data-view-toggle="biblioteca" data-view="grid" title="Grade" data-i18n-title="common.grid" aria-label="Grade"><i class="fa-solid fa-th-large"></i></button>
           <button class="filter-view-btn" data-view-toggle="biblioteca" data-view="list" title="Lista" data-i18n-title="common.list" aria-label="Lista"><i class="fa-solid fa-list"></i></button>
@@ -700,9 +707,22 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         </div>
       </div>
 
-      <div class="bib-table-foot no-print" style="padding:1rem 1.5rem;border-top:1px solid #f0f0f0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
+      <div class="bib-table-foot no-print" style="padding:1rem 1.5rem;border-top:1px solid #f0f0f0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem;">
         <span style="font-size:.72rem;color:var(--vbm-mid);" id="bibShowingCount">Carregando…</span>
-        <button class="btn btn-outline btn-sm bib-loadmore-btn" id="bibLoadMoreBtn"><span data-i18n="bib.loadMore">Carregar mais</span> <i class="fa-solid fa-chevron-down"></i></button>
+        <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;">
+          <label style="display:flex;align-items:center;gap:.4rem;font-size:.72rem;color:var(--vbm-mid);">
+            <span data-i18n="bib.perPage">Por página</span>
+            <select class="filter-select" id="bibTamanhoPagina" style="padding:.35rem 1.6rem .35rem .6rem;font-size:.72rem;">
+              <option value="12">12</option>
+              <option value="24" selected>24</option>
+              <option value="48">48</option>
+              <option value="96">96</option>
+            </select>
+          </label>
+          <button class="btn-icon" id="bibPaginaAnterior" title="Página anterior" data-i18n-title="bib.prevPage" aria-label="Página anterior"><i class="fa-solid fa-chevron-left"></i></button>
+          <span style="font-size:.72rem;color:var(--vbm-mid);white-space:nowrap;" id="bibPaginaAtual">Página 1 de 1</span>
+          <button class="btn-icon" id="bibPaginaProxima" title="Próxima página" data-i18n-title="bib.nextPage" aria-label="Próxima página"><i class="fa-solid fa-chevron-right"></i></button>
+        </div>
       </div>
     </div>
 
@@ -891,7 +911,10 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   var bibList = document.getElementById('bibList');
   var bibTabela = document.getElementById('bibListaTabela');
   var showingCount = document.getElementById('bibShowingCount');
-  var loadMoreBtn = document.getElementById('bibLoadMoreBtn');
+  var selTamanhoPagina = document.getElementById('bibTamanhoPagina');
+  var btnPaginaAnterior = document.getElementById('bibPaginaAnterior');
+  var btnPaginaProxima = document.getElementById('bibPaginaProxima');
+  var paginaAtualLabel = document.getElementById('bibPaginaAtual');
   var selUsuario = document.getElementById('bibFiltroUsuario');
   var inputNome = document.getElementById('bibFiltroNome');
   if (!bibList) return;
@@ -1048,17 +1071,44 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   function render() {
     bibList.innerHTML = lote.map(cartaoHtml).join('') || '<p style="padding:1.5rem;color:var(--vbm-mid);font-size:.8rem;">' + escaparHtml(txtI18n('bib.empty', 'Nenhum Kaizen encontrado.')) + '</p>';
     bibTabela.innerHTML = lote.map(linhaHtml).join('');
-    // Texto do dicionário: era montado em português direto no código.
-    var molde = (window.__i18n && window.__i18n['bib.countTemplate']) || '{total} Kaizens · Exibindo {n}';
-    showingCount.textContent = molde.replace('{total}', total).replace('{n}', lote.length);
-    loadMoreBtn.style.display = lote.length < total ? '' : 'none';
+    // "Exibindo 1–24 de 6.000 registros". inicio/fim são da PÁGINA atual
+    // (não do total acumulado — cada página SUBSTITUI a anterior, não
+    // soma mais, ver carregarLista).
+    var inicio = total === 0 ? 0 : (paginaAtual * PAGE_SIZE) + 1;
+    var fim = Math.min((paginaAtual + 1) * PAGE_SIZE, total);
+    var molde = (window.__i18n && window.__i18n['bib.countRangeTemplate']) || 'Exibindo {inicio}–{fim} de {total} registros';
+    showingCount.textContent = molde
+      .replace('{inicio}', inicio.toLocaleString(idiomaDaTela()))
+      .replace('{fim}', fim.toLocaleString(idiomaDaTela()))
+      .replace('{total}', total.toLocaleString(idiomaDaTela()));
+
+    var totalPaginas = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    var moldePagina = (window.__i18n && window.__i18n['bib.pageTemplate']) || 'Página {atual} de {totalPaginas}';
+    paginaAtualLabel.textContent = moldePagina
+      .replace('{atual}', paginaAtual + 1)
+      .replace('{totalPaginas}', totalPaginas);
+    btnPaginaAnterior.disabled = paginaAtual <= 0;
+    btnPaginaProxima.disabled = (paginaAtual + 1) >= totalPaginas;
   }
 
-  // Pede a PRÓXIMA página ao servidor e acrescenta ao que já está na
-  // tela — antes só revelava o que já estava na memória.
-  loadMoreBtn.addEventListener('click', function () {
-    if (carregando || lote.length >= total) return;
+  // Paginação clássica: cada clique troca de página (a lista da tela é
+  // SUBSTITUÍDA, não acumulada — ver o "lote = itens" em carregarLista,
+  // sem o "carregar mais" de antes).
+  btnPaginaAnterior.addEventListener('click', function () {
+    if (carregando || paginaAtual <= 0) return;
+    carregarLista({ pagina: paginaAtual - 1 });
+  });
+  btnPaginaProxima.addEventListener('click', function () {
+    if (carregando) return;
+    var totalPaginas = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    if (paginaAtual + 1 >= totalPaginas) return;
     carregarLista({ pagina: paginaAtual + 1 });
+  });
+  // Tamanho de página: reinicia na primeira página, mantendo a escolha
+  // (não é um filtro — não passa por aplicarFiltros/filtrosAtuais).
+  selTamanhoPagina.addEventListener('change', function () {
+    PAGE_SIZE = parseInt(selTamanhoPagina.value, 10) || 24;
+    carregarLista({ pagina: 0 });
   });
 
   /* Clique no lápis: abre a MESMA página de cadastro em modo de edição,
@@ -1304,8 +1354,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     return (sel && sel.value) || 'pt-BR';
   }
 
-  /* Busca UMA página no servidor. pagina 0 troca o conteúdo da tela;
-     as seguintes acrescentam ao fim (é o "Carregar mais").
+  /* Busca UMA página no servidor. Cada resposta SUBSTITUI a lista da
+     tela (paginação clássica, não "Carregar mais") — o total só volta a
+     ser contado quando pagina é 0, ver o COUNT condicional em server.js.
      As opções dos filtros não saem daqui: cada uma vem da sua tabela
      (ver carregarFiltrosDoBanco, carregarStatus e carregarCategorias). */
   var requisicaoAtual = 0;
@@ -1314,12 +1365,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     var pagina = o.pagina || 0;
     idiomaDaLista = idiomaDaTela();
     carregando = true;
-    if (pagina === 0) {
-      bibList.innerHTML = '<p style="padding:1.5rem;color:var(--vbm-mid);font-size:.8rem;">' +
-        escaparHtml(txtI18n('bib.loading', 'Carregando…')) + '</p>';
-    } else {
-      loadMoreBtn.disabled = true;
-    }
+    bibList.innerHTML = '<p style="padding:1.5rem;color:var(--vbm-mid);font-size:.8rem;">' +
+      escaparHtml(txtI18n('bib.loading', 'Carregando…')) + '</p>';
 
     var params = filtrosAtuais();
     params.idioma = idiomaDaLista;
@@ -1349,14 +1396,11 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       .then(function (resposta) {
         if (meuPedido !== requisicaoAtual) return;
         carregando = false;
-        loadMoreBtn.disabled = false;
         if (!resposta) throw new Error('resposta inválida');
         var itens = resposta.itens || [];
+        lote = itens;
         if (pagina === 0) {
-          lote = itens;
           total = resposta.total != null ? resposta.total : itens.length;
-        } else {
-          lote = lote.concat(itens);
         }
         paginaAtual = pagina;
         render();
@@ -1364,7 +1408,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       .catch(function (err) {
         if (meuPedido !== requisicaoAtual) return;
         carregando = false;
-        loadMoreBtn.disabled = false;
         if (pagina === 0) {
           bibList.innerHTML = '<p style="padding:1.5rem;color:#dc2626;font-size:.8rem;">' +
             escaparHtml(txtI18n('bib.loadError', 'Erro ao carregar a Biblioteca.')) +
@@ -1401,6 +1444,55 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       filtroPeriodo.limpar();
       selUsuario.value = '';
       aplicarFiltros();
+    });
+  }
+
+  /* Exportar Excel: mesmos filtros da tela, mas SEM paginação — o
+     servidor traz todas as linhas que os filtros aprovam (ver GET
+     /api/kaizens/exportar) e devolve o arquivo pronto; aqui só cabe
+     baixar. Trava contra clique duplo enquanto a exportação roda. */
+  var btnExportar = document.getElementById('bibExportarExcel');
+  var exportando = false;
+  if (btnExportar) {
+    var exportarHtmlOriginal = btnExportar.innerHTML;
+    btnExportar.addEventListener('click', function () {
+      if (exportando) return;
+      exportando = true;
+      btnExportar.disabled = true;
+      btnExportar.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> ' +
+        escaparHtml(txtI18n('bib.exporting', 'Exportando…'));
+
+      var params = filtrosAtuais();
+      params.idioma = idiomaDaTela();
+
+      fetch('/api/kaizens/exportar?' + new URLSearchParams(params).toString(), { headers: { Accept: '*/*' } })
+        .then(function (r) {
+          if (r.ok) return r.blob();
+          return r.json().catch(function () { return null; }).then(function (corpo) {
+            var erro = new Error((corpo && corpo.error) || ('HTTP ' + r.status));
+            if (corpo && corpo.sql) erro.sql = corpo.sql;
+            throw erro;
+          });
+        })
+        .then(function (blob) {
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement('a');
+          a.href = url;
+          a.download = 'biblioteca-kaizen-' + new Date().toISOString().slice(0, 10) + '.xlsx';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+        })
+        .catch(function (err) {
+          showToast('error', txtI18n('bib.exportErrorTitle', 'Erro ao exportar'),
+            (err && err.message) || 'Não foi possível gerar o Excel.');
+        })
+        .finally(function () {
+          exportando = false;
+          btnExportar.disabled = false;
+          btnExportar.innerHTML = exportarHtmlOriginal;
+        });
     });
   }
 
@@ -1794,8 +1886,15 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       'print.errorMsg': 'Não deu para carregar os dados deste Kaizen. Tente de novo.',
       'bib.groupDesperdicios': 'Redução de Desperdícios',
       'bib.editBlocked': 'Edição indisponível para o status atual',
-      'bib.loadMore': 'Carregar mais',
       'bib.loading': 'Carregando…',
+      'bib.exportExcel': 'Exportar Excel',
+      'bib.exporting': 'Exportando…',
+      'bib.exportErrorTitle': 'Erro ao exportar',
+      'bib.perPage': 'Por página',
+      'bib.prevPage': 'Página anterior',
+      'bib.nextPage': 'Próxima página',
+      'bib.countRangeTemplate': 'Exibindo {inicio}–{fim} de {total} registros',
+      'bib.pageTemplate': 'Página {atual} de {totalPaginas}',
       'kd.noImage': 'Sem imagem registrada',
       'kd.imageFailed': 'Imagem não disponível',
       'bib.empty': 'Nenhum Kaizen encontrado.',
@@ -1888,8 +1987,15 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       'print.errorMsg': 'The data for this Kaizen could not be loaded. Please try again.',
       'bib.groupDesperdicios': 'Waste Reduction',
       'bib.editBlocked': 'Editing unavailable for the current status',
-      'bib.loadMore': 'Load more',
       'bib.loading': 'Loading…',
+      'bib.exportExcel': 'Export Excel',
+      'bib.exporting': 'Exporting…',
+      'bib.exportErrorTitle': 'Export failed',
+      'bib.perPage': 'Per page',
+      'bib.prevPage': 'Previous page',
+      'bib.nextPage': 'Next page',
+      'bib.countRangeTemplate': 'Showing {inicio}–{fim} of {total} records',
+      'bib.pageTemplate': 'Page {atual} of {totalPaginas}',
       'kd.noImage': 'No image on file',
       'kd.imageFailed': 'Image unavailable',
       'bib.empty': 'No Kaizen found.',

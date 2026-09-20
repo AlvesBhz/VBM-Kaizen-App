@@ -26,6 +26,7 @@ const express = require("express");
 const compression = require("compression");
 const sql = require("mssql");
 const multer = require("multer");
+const ExcelJS = require("exceljs");
 const { enviarArquivoParaVolume, baixarArquivoDoVolume, removerArquivoDoVolume } = require("./databricks-fs");
 const {
   blobConfigurado,
@@ -4230,6 +4231,213 @@ apiRouter.get("/kaizens/filtros", async (req, res) => {
   } catch (err) {
     console.error("[kaizens/filtros] erro:", err.message);
     res.status(500).json(corpoErroSql("Erro ao consultar os filtros: ", err));
+  }
+});
+
+// GET /kaizens/exportar — Excel com TODOS os registros que os filtros da
+// Biblioteca aprovam, não só a página exibida na tela. Mesmos parâmetros
+// de GET /kaizens (q, lider, site, categoria, status, ano) e a MESMA
+// fonte unificada (atual + histórico), sem OFFSET/FETCH: uma consulta só,
+// nunca dentro de laço. Permissão de acesso é a mesma da Biblioteca — a
+// listagem não esconde Kaizen nenhum por linha, só o lápis de editar
+// (PODE_EDITAR), que não faz sentido numa planilha.
+apiRouter.get("/kaizens/exportar", async (req, res) => {
+  try {
+    const idIdioma = idIdiomaDaRequisicao(req);
+    const fonteKaizens = await fonteBiblioteca();
+    const dataRef = "p.DT_REFERENCIA";
+
+    // Os mesmos seis filtros de GET /kaizens, na mesma forma — ver ali
+    // os comentários de cada um (COLLATE, faixa de datas em vez de
+    // YEAR(), etc.). Duplicado em vez de extraído para não arriscar a
+    // rota já estável; qualquer mudança de filtro futura precisa vir
+    // nas duas rotas.
+    const idsStatus = listaIntOuVaziaGlobal(req.query.status);
+    const idsCategoria = listaIntOuVaziaGlobal(req.query.categoria);
+    const estado = textoOuNuloGlobal(req.query.estado);
+    const sites = listaTextoOuVaziaGlobal(req.query.site);
+    const lider = textoOuNuloGlobal(req.query.lider);
+    const anos = listaIntOuVaziaGlobal(req.query.ano);
+    const q = textoOuNuloGlobal(req.query.q);
+
+    const params = [["idIdioma", sql.Int, idIdioma]];
+    const filtros = ["1 = 1"];
+    filtroEmLista(filtros, params, "p.ID_STATUS", "idStatus", idsStatus, sql.Int);
+    filtroEmLista(filtros, params, "p.ID_CATEGORIA", "idCategoria", idsCategoria, sql.Int);
+    if (estado) { filtros.push("lider.NM_ESTADO = @estado"); params.push(["estado", sql.NVarChar(100), estado]); }
+    filtroEmLista(filtros, params, "autor.NM_SITE", "site", sites, sql.NVarChar(200));
+    if (lider) {
+      filtros.push("lider.NM_USUARIO COLLATE Latin1_General_CI_AI LIKE @lider COLLATE Latin1_General_CI_AI");
+      params.push(["lider", sql.NVarChar(255), termoContem(lider)]);
+    }
+    if (anos.length) {
+      const trechos = anos.map((ano, i) => {
+        params.push([`iniAno${i}`, sql.VarChar(10), `${ano}-01-01`]);
+        params.push([`fimAno${i}`, sql.VarChar(10), `${ano + 1}-01-01`]);
+        return `(${dataRef} >= CONVERT(DATETIME2, @iniAno${i}, 23) AND ${dataRef} < CONVERT(DATETIME2, @fimAno${i}, 23))`;
+      });
+      filtros.push(`(${trechos.join(" OR ")})`);
+    }
+    if (q) {
+      filtros.push(
+        "(p.NM_KAIZEN COLLATE Latin1_General_CI_AI LIKE @q COLLATE Latin1_General_CI_AI" +
+        " OR lider.NM_USUARIO COLLATE Latin1_General_CI_AI LIKE @q COLLATE Latin1_General_CI_AI" +
+        " OR CAST(p.ID_KAIZEN AS VARCHAR(20)) LIKE @q)"
+      );
+      params.push(["q", sql.NVarChar(255), termoContem(q)]);
+    }
+
+    // JOINs de GET /kaizens (líder e unidade por OUTER APPLY TOP(1), para
+    // nunca duplicar linha por matrícula repetida no MDM) mais os que só
+    // existiam no detalhe (replicação, moeda, aprovador — aqui também
+    // por OUTER APPLY, pelo mesmo motivo) e um novo: quem gravou a
+    // última atualização, que nenhuma rota resolvia ainda.
+    const fonte = `FROM ${fonteKaizens} p
+       LEFT JOIN ${FULL_CATEGORIA_TABLE} cat ON cat.ID_CATEGORIA = p.ID_CATEGORIA AND cat.ID_IDIOMA = @idIdioma
+       LEFT JOIN ${FULL_STATUS_TABLE} st ON st.ID_STATUS = p.ID_STATUS AND st.ID_IDIOMA = @idIdioma
+       LEFT JOIN ${FULL_REPLICACAO_TABLE} repl ON repl.ID_REPLICACAO = p.ID_REPLICACAO AND repl.ID_IDIOMA = @idIdioma
+       LEFT JOIN ${FULL_MOEDA_TABLE} moeda ON moeda.ID_MOEDA = p.ID_MOEDA
+       LEFT JOIN ${FULL_TABLE_NAME} aprovFk ON aprovFk.ID_APROVADOR = p.ID_APROVADOR
+       OUTER APPLY (
+         SELECT TOP (1) x.NM_USUARIO, x.NM_ESTADO, x.NM_CIDADE
+           FROM ${FULL_MDM_TABLE} x
+          WHERE x.ID_USUARIO = p.ID_USUARIO_LIDER
+          ORDER BY x.ID_TIPO_USUARIO
+       ) lider
+       OUTER APPLY (
+         SELECT TOP (1) y.NM_SITE
+           FROM ${FULL_MDM_TABLE} y
+          WHERE y.ID_USUARIO = ISNULL(p.ID_USUARIO_CADASTRO, p.ID_USUARIO_LIDER)
+          ORDER BY y.ID_TIPO_USUARIO
+       ) autor
+       OUTER APPLY (
+         SELECT TOP (1) z.NM_USUARIO
+           FROM ${FULL_MDM_TABLE} z
+          WHERE z.ID_USUARIO = aprovFk.ID_USUARIO
+          ORDER BY z.ID_TIPO_USUARIO
+       ) aprov
+       OUTER APPLY (
+         SELECT TOP (1) w.NM_USUARIO
+           FROM ${FULL_MDM_TABLE} w
+          WHERE w.ID_USUARIO = p.ID_USUARIO_ATUALIZACAO
+          ORDER BY w.ID_TIPO_USUARIO
+       ) atualizou
+       WHERE ${filtros.join(" AND ")}`;
+
+    // Uma consulta só, sem OFFSET/FETCH: a exportação traz TODAS as
+    // linhas que os filtros aprovam, não a página que está na tela.
+    const result = await runQuery(
+      `SELECT p.ID_KAIZEN, p.ORIGEM, p.NM_KAIZEN,
+              cat.NM_CATEGORIA, st.NM_STATUS, st.DS_STATUS,
+              lider.NM_USUARIO AS NM_LIDER, lider.NM_ESTADO, lider.NM_CIDADE,
+              autor.NM_SITE,
+              aprov.NM_USUARIO AS NM_APROVADOR,
+              repl.NM_REPLICACAO,
+              moeda.SG_MOEDA, moeda.NM_MOEDA,
+              atualizou.NM_USUARIO AS NM_ATUALIZACAO,
+              p.DS_PROBLEMA, p.DS_OBJETIVO,
+              p.DS_ESTADO_ANTES, p.DS_ESTADO_DEPOIS,
+              p.URL_REFERENCIA, p.DS_LICOES_APRENDIDAS,
+              p.DS_COMPARA_META, p.DS_RESULTADO_ALCANCADO,
+              p.VL_RESULTADO_FINANCEIRO,
+              p.DT_CONCLUSAO, p.DT_ATUALIZACAO AS DT_CRIACAO,
+              p.DS_MOTIVO, p.URL_IMG_ANTES, p.URL_IMG_DEPOIS,
+              (SELECT STRING_AGG(d.NM_DESPERDICIO, '§')
+                 FROM (
+                   SELECT ID_DESPERDICIO FROM ${FULL_KZ_DESPERDICIO_TABLE}
+                    WHERE ID_KAIZEN = p.ID_KAIZEN AND p.ORIGEM = 'A'
+                   UNION ALL
+                   SELECT ID_DESPERDICIO FROM ${FULL_HIST_KZ_DESPERDICIO_TABLE}
+                    WHERE ID_KAIZEN = p.ID_KAIZEN AND p.ORIGEM = 'H'
+                 ) kd
+                 JOIN ${FULL_DESPERDICIO_TABLE} d ON d.ID_DESPERDICIO = kd.ID_DESPERDICIO AND d.ID_IDIOMA = @idIdioma
+              ) AS DESPERDICIOS
+       ${fonte}
+       ORDER BY p.ID_KAIZEN DESC`,
+      params
+    );
+
+    const workbook = new ExcelJS.Workbook();
+    const planilha = workbook.addWorksheet("Kaizens");
+    planilha.columns = [
+      { header: "ID Kaizen", key: "ID_KAIZEN", width: 12 },
+      { header: "Rótulo", key: "ROTULO", width: 14 },
+      { header: "Origem", key: "ORIGEM_TXT", width: 12 },
+      { header: "Título", key: "NM_KAIZEN", width: 40 },
+      { header: "Categoria", key: "NM_CATEGORIA", width: 20 },
+      { header: "Status", key: "NM_STATUS", width: 20 },
+      { header: "Descrição do Status", key: "DS_STATUS", width: 30 },
+      { header: "Líder", key: "NM_LIDER", width: 26 },
+      { header: "Estado do Líder", key: "NM_ESTADO", width: 16 },
+      { header: "Cidade do Líder", key: "NM_CIDADE", width: 18 },
+      { header: "Unidade", key: "NM_SITE", width: 18 },
+      { header: "Aprovador", key: "NM_APROVADOR", width: 26 },
+      { header: "Replicação", key: "NM_REPLICACAO", width: 16 },
+      { header: "Atualizado por", key: "NM_ATUALIZACAO", width: 26 },
+      { header: "Declaração do Problema", key: "DS_PROBLEMA", width: 40 },
+      { header: "Meta/Objetivo", key: "DS_OBJETIVO", width: 40 },
+      { header: "Descrição Antes", key: "DS_ESTADO_ANTES", width: 40 },
+      { header: "Descrição Depois", key: "DS_ESTADO_DEPOIS", width: 40 },
+      { header: "Link de Referência", key: "URL_REFERENCIA", width: 30 },
+      { header: "Lições Aprendidas", key: "DS_LICOES_APRENDIDAS", width: 40 },
+      { header: "Comparação com a Meta", key: "DS_COMPARA_META", width: 40 },
+      { header: "Resultado Alcançado", key: "DS_RESULTADO_ALCANCADO", width: 40 },
+      { header: "Valor do Resultado Financeiro", key: "VL_RESULTADO_FINANCEIRO", width: 20 },
+      { header: "Moeda", key: "SG_MOEDA", width: 10 },
+      { header: "Redução de Desperdícios", key: "DESPERDICIOS", width: 30 },
+      { header: "Data de Conclusão", key: "DT_CONCLUSAO", width: 16 },
+      { header: "Data de Atualização", key: "DT_CRIACAO", width: 18 },
+      { header: "Motivo (reprovação/ajuste)", key: "DS_MOTIVO", width: 30 },
+      { header: "Imagem Antes", key: "URL_IMG_ANTES", width: 24 },
+      { header: "Imagem Depois", key: "URL_IMG_DEPOIS", width: 24 },
+    ];
+    planilha.getRow(1).font = { bold: true };
+    result.recordset.forEach((r) => {
+      planilha.addRow({
+        ID_KAIZEN: r.ID_KAIZEN,
+        ROTULO: rotuloIdKaizen(r.ID_KAIZEN, r.DT_CRIACAO),
+        ORIGEM_TXT: r.ORIGEM === "H" ? "Histórico" : "Atual",
+        NM_KAIZEN: r.NM_KAIZEN,
+        NM_CATEGORIA: r.NM_CATEGORIA,
+        NM_STATUS: r.NM_STATUS,
+        DS_STATUS: r.DS_STATUS,
+        NM_LIDER: r.NM_LIDER,
+        NM_ESTADO: r.NM_ESTADO,
+        NM_CIDADE: r.NM_CIDADE,
+        NM_SITE: r.NM_SITE,
+        NM_APROVADOR: r.NM_APROVADOR,
+        NM_REPLICACAO: r.NM_REPLICACAO,
+        NM_ATUALIZACAO: r.NM_ATUALIZACAO,
+        DS_PROBLEMA: r.DS_PROBLEMA,
+        DS_OBJETIVO: r.DS_OBJETIVO,
+        DS_ESTADO_ANTES: r.DS_ESTADO_ANTES,
+        DS_ESTADO_DEPOIS: r.DS_ESTADO_DEPOIS,
+        URL_REFERENCIA: r.URL_REFERENCIA,
+        DS_LICOES_APRENDIDAS: r.DS_LICOES_APRENDIDAS,
+        DS_COMPARA_META: r.DS_COMPARA_META,
+        DS_RESULTADO_ALCANCADO: r.DS_RESULTADO_ALCANCADO,
+        VL_RESULTADO_FINANCEIRO: r.VL_RESULTADO_FINANCEIRO,
+        SG_MOEDA: r.SG_MOEDA,
+        DESPERDICIOS: r.DESPERDICIOS ? String(r.DESPERDICIOS).split("§").filter(Boolean).join(", ") : "",
+        DT_CONCLUSAO: r.DT_CONCLUSAO,
+        DT_CRIACAO: r.DT_CRIACAO,
+        DS_MOTIVO: r.DS_MOTIVO,
+        URL_IMG_ANTES: r.URL_IMG_ANTES,
+        URL_IMG_DEPOIS: r.URL_IMG_DEPOIS,
+      });
+    });
+    planilha.getColumn("DT_CONCLUSAO").numFmt = "dd/mm/yyyy";
+    planilha.getColumn("DT_CRIACAO").numFmt = "dd/mm/yyyy hh:mm";
+
+    const nomeArquivo = `biblioteca-kaizen-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="${nomeArquivo}"`);
+    await workbook.xlsx.write(res);
+    res.end();
+    console.log(`[kaizens/exportar] ${result.recordset.length} linha(s) exportada(s).`);
+  } catch (err) {
+    console.error("[kaizens/exportar] erro:", err.message);
+    if (!res.headersSent) res.status(500).json(corpoErroSql("Erro ao exportar Kaizens: ", err));
   }
 });
 
