@@ -22,21 +22,28 @@ env:
   - name: 'AZURE_SQL_TABLE'
     value: 'kzn_aprovador'
 
-  # Usuário e senha: NUNCA em texto puro em produção — o valor antigo
-  # ('KZNDEV' / 'DEVKZN@!13') ficou versionado em texto puro de
-  # 02/09/2026 até aqui e precisa ser tratado como COMPROMETIDO: troque
-  # a senha no Azure SQL antes de configurar o resource abaixo, para o
-  # valor novo nunca ter existido em texto puro no histórico do git.
+  # ROLLBACK DE EMERGÊNCIA (20/09/2026): voltou pra texto puro porque o
+  # deploy com "valueFrom" saiu ANTES de os resources 'azure-sql-user'/
+  # 'azure-sql-password' existirem no Databricks App — sem eles a env
+  # var fica vazia, checkConfig() derruba a conexão com o banco, e
+  # TODA a aplicação para (não só a exportação: login, Biblioteca,
+  # Aprovação, Administração — tudo depende de identificar o usuário
+  # contra o MDM). Incidente registrado, não é decisão nova.
   #
-  # Antes do deploy: App resources > + Add resource > Secret, criando
-  # os dois resources com os nomes usados em "valueFrom" abaixo (o nome
-  # à esquerda é o do resource no Databricks App, não o do secret scope
-  # em si — configure os dois apontando para o MESMO secret scope/chave
-  # se for reaproveitar um já existente).
+  # NUNCA em texto puro em produção — o valor abaixo já estava
+  # versionado em texto puro desde 02/09/2026 e é tratado como
+  # COMPROMETIDO independente deste rollback. Antes de voltar para
+  # "valueFrom":
+  #   1. Criar os resources 'azure-sql-user'/'azure-sql-password' em
+  #      App resources > + Add resource > Secret — e CONFIRMAR que
+  #      existem antes do próximo deploy, não durante.
+  #   2. Trocar a senha no Azure SQL para um valor NOVO, que nunca
+  #      tenha existido em texto puro no histórico do git.
+  #   3. Só então trocar as duas linhas abaixo para valueFrom de novo.
   - name: 'AZURE_SQL_USER'
-    valueFrom: 'azure-sql-user'
+    value: 'KZNDEV'
   - name: 'AZURE_SQL_PASSWORD'
-    valueFrom: 'azure-sql-password'
+    value: 'DEVKZN@!13'
 
   # ── Leitura das imagens ANTIGAS (Volumes do Databricks) ──
   # As fotos passaram a ser gravadas no Azure Blob (bloco abaixo). O
@@ -73,24 +80,30 @@ env:
   #      volta 403. O cadastro funciona, o aviso fica no log, e o lixo se
   #      acumula. Reemita com sp=racwd.
   #
-  #   2. O valor que estava aqui ficou em TEXTO PURO, versionado desde
-  #      02/09/2026, com escrita no container inteiro até 2030 — trate
-  #      como COMPROMETIDO. Fechar o download (server.js recusa servir
+  #   2. O valor abaixo ficou em TEXTO PURO, versionado desde 02/09/2026,
+  #      com escrita no container inteiro até 2030 — trate como
+  #      COMPROMETIDO. Fechar o download (server.js recusa servir
   #      app.yaml, os .js da raiz, node_modules, database e docs — ver
   #      ARQUIVOS_DO_SERVIDOR) não substitui revogar: o token esteve
   #      exposto enquanto a trava não existia, e continua recuperável
   #      pelo histórico do git mesmo depois de trocado aqui.
   #
-  #      Revogue o SAS antigo no Azure, emita outro já com sp=racwd
-  #      (resolve também a pendência 1 acima) e só então configure o
-  #      resource "azure-storage-sas" abaixo com o valor novo.
+  #      ROLLBACK DE EMERGÊNCIA (20/09/2026): voltou pra texto puro
+  #      porque o resource 'azure-storage-sas' não existia no Databricks
+  #      App quando o "valueFrom" foi para produção — env var vazia
+  #      derruba a conexão com o banco (é o USER/PASSWORD acima que faz
+  #      isso, não este SAS sozinho) e tira a aplicação inteira do ar.
+  #      Antes de voltar para valueFrom: revogar este SAS no Azure,
+  #      emitir outro já com sp=racwd (resolve a pendência 1 acima),
+  #      CRIAR o resource 'azure-storage-sas' e só então trocar a linha
+  #      abaixo — nessa ordem, confirmando cada passo antes do próximo.
 
   - name: 'AZURE_STORAGE_ACCOUNT'
     value: 'https://ibpdatalake.blob.core.windows.net/vbmdatalake'
   - name: 'AZURE_STORAGE_CONTAINER'
     value: '05 - Kaizen'
   - name: 'AZURE_STORAGE_SAS_TOKEN'
-    valueFrom: 'azure-storage-sas'
+    value: 'sp=racw&st=2026-09-02T13:37:52Z&se=2030-01-18T21:52:52Z&spr=https&sv=2026-02-06&sr=c&sig=8gEPo1jtLiz1wbdSW7EVlOl0su8Tj5%2FqJDYe7I%2B%2BOHI%3D'
 
 
   # ── Avisos por e-mail das decisões de aprovação ──
