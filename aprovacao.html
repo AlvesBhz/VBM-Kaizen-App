@@ -813,12 +813,17 @@ function atualizarContador() {
       .then(function (r) {
         if (r.ok) return r.json();
         return r.json().catch(function () { return null; }).then(function (corpo) {
-          throw new Error((corpo && corpo.error) || ('HTTP ' + r.status));
+          var erro = new Error((corpo && corpo.error) || ('HTTP ' + r.status));
+          // sql: só vem quando o servidor prende o comando que falhou
+          // (ver corpoErroSql em server.js) — diagnóstico temporário.
+          if (corpo && corpo.sql) erro.sql = corpo.sql;
+          throw erro;
         });
       })
       .then(preencherDetalhe)
       .catch(function (err) {
-        showToast('error', txt('ap.loadFailed', 'Não foi possível carregar o Kaizen'), err.message, 6000);
+        showToast('error', txt('ap.loadFailed', 'Não foi possível carregar o Kaizen'),
+          err.message + (err.sql ? '\n\nSQL: ' + err.sql : ''), 12000);
       });
   }
 

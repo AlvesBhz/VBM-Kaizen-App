@@ -497,14 +497,32 @@ async function runQuery(query, params = []) {
   const request = pool.request();
   params.forEach(([name, type, value]) => request.input(name, type, value));
   const alvo = medicaoRequisicao.getStore();
-  if (!alvo) return request.query(query);
-  const inicio = process.hrtime.bigint();
   try {
-    return await request.query(query);
-  } finally {
-    alvo.sqlMs += Number(process.hrtime.bigint() - inicio) / 1e6;
-    alvo.sqlQtd += 1;
+    if (!alvo) return await request.query(query);
+    const inicio = process.hrtime.bigint();
+    try {
+      return await request.query(query);
+    } finally {
+      alvo.sqlMs += Number(process.hrtime.bigint() - inicio) / 1e6;
+      alvo.sqlQtd += 1;
+    }
+  } catch (err) {
+    // Prende o TEXTO do comando que falhou no próprio erro — é o que
+    // permite a rota devolver, no diagnóstico, qual consulta exata foi
+    // para o banco, sem precisar do log do servidor.
+    err.sqlQuery = query;
+    throw err;
   }
+}
+
+/** Corpo de erro para as rotas da Biblioteca/Aprovação: inclui o SQL
+ *  que falhou (err.sqlQuery, preso por runQuery) quando ele existe —
+ *  diagnóstico temporário para achar, sem log do servidor, exatamente
+ *  qual comando ainda cita uma coluna que não existe mais na tabela. */
+function corpoErroSql(mensagem, err) {
+  const corpo = { error: mensagem + err.message };
+  if (err.sqlQuery) corpo.sql = err.sqlQuery;
+  return corpo;
 }
 
 // ------------------------------------------------------------------
@@ -3225,46 +3243,47 @@ async function colunaDaComparacaoMeta() {
    uma vez aqui, como as outras colunas opcionais acima — com DT_CRIACAO
    como padrão, já que é o nome confirmado em produção HOJE.
 
-   Só a tabela ATUAL: a histórica (kzn_hist_pedravisaoconsolidada) não
-   foi tocada por essa renomeação e continua com DT_ATUALIZACAO — ver os
-   dois lados de fonteBiblioteca(), que resolvem cada um com o seu
-   próprio nome de coluna. */
-let colunaAtualizacaoPvcResolvida = null;
-async function colunaAtualizacaoPvc() {
-  if (colunaAtualizacaoPvcResolvida === null) {
-    try {
-      const r = await runQuery(
-        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
-          WHERE TABLE_SCHEMA = @esquema AND TABLE_NAME = @tabela
-            AND COLUMN_NAME IN ('DT_ATUALIZACAO', 'DT_CRIACAO')`,
-        [["esquema", sql.NVarChar(128), DB_SCHEMA], ["tabela", sql.NVarChar(128), DB_PVC_TABLE]]
-      );
-      const nomes = r.recordset.map((x) => x.COLUMN_NAME);
-      // Confirmado por consulta direta ao banco (INFORMATION_SCHEMA via
-      // SSMS): a coluna atual é DT_CRIACAO. Ela é o PADRÃO agora — a
-      // checagem abaixo só existe para o dia em que ela for renomeada de
-      // novo, ou para outro ambiente que ainda não tenha essa migração.
-      // Antes o padrão era o nome ANTIGO (DT_ATUALIZACAO): se por
-      // qualquer motivo esta consulta ao INFORMATION_SCHEMA não achasse
-      // nenhuma das duas linhas — sem essa causa aparecer nos logs, que
-      // eu não tenho acesso —, o cache guardava o nome errado até o
-      // processo reiniciar, e TODA consulta à PVC direto quebrava com
-      // "Invalid column name" de forma consistente, não intermitente.
-      // Exatamente o sintoma relatado duas vezes seguidas.
-      colunaAtualizacaoPvcResolvida = nomes.includes("DT_CRIACAO") ? "DT_CRIACAO"
-        : nomes.includes("DT_ATUALIZACAO") ? "DT_ATUALIZACAO" : "DT_CRIACAO";
-      if (!nomes.length) {
-        console.warn(`[kaizens] INFORMATION_SCHEMA não encontrou DT_ATUALIZACAO nem DT_CRIACAO em ` +
-          `${DB_SCHEMA}.${DB_PVC_TABLE} — usando DT_CRIACAO como padrão (confirmado em produção).`);
-      }
-    } catch (err) {
-      colunaAtualizacaoPvcResolvida = "DT_CRIACAO";
-      console.error(`[kaizens] erro ao resolver a coluna de atualização da PVC (usando DT_CRIACAO como padrão): ${err.message}`);
+   A histórica (kzn_hist_pedravisaoconsolidada) foi tratada por muito
+   tempo como "não tocada por essa renomeação" — suposição nunca
+   verificada, e ERRADA: o texto do SQL que efetivamente saiu para o
+   banco (capturado via corpoErroSql, ver runQuery) mostrou a mesma
+   falha vindo do lado histórico. As duas tabelas são resolvidas
+   INDEPENDENTEMENTE, cada uma com seu próprio cache — nada garante que
+   uma renomeação futura atinja as duas ao mesmo tempo. */
+const colunaAtualizacaoCache = new Map();
+async function colunaAtualizacaoDe(nomeSchema, nomeTabela) {
+  const chave = `${nomeSchema}.${nomeTabela}`;
+  if (colunaAtualizacaoCache.has(chave)) return colunaAtualizacaoCache.get(chave);
+  let resolvida;
+  try {
+    const r = await runQuery(
+      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = @esquema AND TABLE_NAME = @tabela
+          AND COLUMN_NAME IN ('DT_ATUALIZACAO', 'DT_CRIACAO')`,
+      [["esquema", sql.NVarChar(128), nomeSchema], ["tabela", sql.NVarChar(128), nomeTabela]]
+    );
+    const nomes = r.recordset.map((x) => x.COLUMN_NAME);
+    // DT_CRIACAO é o padrão — é o nome confirmado em produção hoje para
+    // a tabela atual, e o mais recente de qualquer forma. Se a checagem
+    // não achar nenhuma das duas linhas, cair no nome ANTIGO (como
+    // acontecia antes) travava a rota em erro consistente até o
+    // processo reiniciar — o mesmo padrão observado nos relatos.
+    resolvida = nomes.includes("DT_CRIACAO") ? "DT_CRIACAO"
+      : nomes.includes("DT_ATUALIZACAO") ? "DT_ATUALIZACAO" : "DT_CRIACAO";
+    if (!nomes.length) {
+      console.warn(`[kaizens] INFORMATION_SCHEMA não encontrou DT_ATUALIZACAO nem DT_CRIACAO em ` +
+        `${chave} — usando DT_CRIACAO como padrão (confirmado em produção).`);
     }
-    console.log(`[kaizens] coluna de data de atualização em ${FULL_PVC_TABLE}: ${colunaAtualizacaoPvcResolvida}.`);
+  } catch (err) {
+    resolvida = "DT_CRIACAO";
+    console.error(`[kaizens] erro ao resolver a coluna de atualização de ${chave} (usando DT_CRIACAO como padrão): ${err.message}`);
   }
-  return colunaAtualizacaoPvcResolvida;
+  colunaAtualizacaoCache.set(chave, resolvida);
+  console.log(`[kaizens] coluna de data de atualização em [${nomeSchema}].[${nomeTabela}]: ${resolvida}.`);
+  return resolvida;
 }
+const colunaAtualizacaoPvc = () => colunaAtualizacaoDe(DB_SCHEMA, DB_PVC_TABLE);
+const colunaAtualizacaoHist = () => colunaAtualizacaoDe(DB_SCHEMA, DB_HIST_PVC_TABLE);
 
 /* ── A fonte da BIBLIOTECA: atual + histórico ─────────────────────
 
@@ -3311,12 +3330,15 @@ async function fonteBiblioteca(apenasOrigem) {
   const temAlcancado = await temColunaDsResultado();
   const alcancadoAtual = temAlcancado ? "DS_RESULTADO_ALCANCADO" : "CAST(NULL AS VARCHAR(100))";
   const dataRefAtual = await expressaoDataReferencia("");
-  // Nome real na tabela ATUAL — pode não ser mais "DT_ATUALIZACAO" (ver
-  // colunaAtualizacaoPvc). Exposto sempre com o MESMO nome lógico
-  // "DT_ATUALIZACAO" no resultado da fonte unificada (o alias abaixo),
-  // então nenhum código que lê `p.DT_ATUALIZACAO` a partir daqui precisa
-  // saber ou mudar por causa disso.
+  // Nome real em CADA tabela — pode não ser mais "DT_ATUALIZACAO" em
+  // nenhuma das duas (ver colunaAtualizacaoDe; resolvidas
+  // independentemente, uma renomeação não implica a outra). Exposto
+  // sempre com o MESMO nome lógico "DT_ATUALIZACAO" no resultado da
+  // fonte unificada (o alias abaixo), então nenhum código que lê
+  // `p.DT_ATUALIZACAO` a partir daqui precisa saber ou mudar por causa
+  // disso.
   const colAtualizacaoAtual = await colunaAtualizacaoPvc();
+  const colAtualizacaoHist = await colunaAtualizacaoHist();
 
   const bloco = (origem, compara, alcancado, dataRef, tabela, colAtualizacao) => `
     SELECT ORIGEM = ${origem},
@@ -3333,7 +3355,7 @@ async function fonteBiblioteca(apenasOrigem) {
 
   const ladoAtual = bloco("'A'", colComparaMeta, alcancadoAtual, dataRefAtual, FULL_PVC_TABLE, colAtualizacaoAtual);
   const ladoHist = bloco("'H'", "DS_COMPARA_META", "DS_RESULTADO_ALCANCADO",
-    "ISNULL(DT_CONCLUSAO, DT_ATUALIZACAO)", FULL_HIST_PVC_TABLE, "DT_ATUALIZACAO");
+    `ISNULL(DT_CONCLUSAO, ${colAtualizacaoHist})`, FULL_HIST_PVC_TABLE, colAtualizacaoHist);
 
   if (apenasOrigem === "A") return `(${ladoAtual})`;
   if (apenasOrigem === "H") return `(${ladoHist})`;
@@ -4056,7 +4078,7 @@ apiRouter.get("/kaizens", async (req, res) => {
     });
   } catch (err) {
     console.error("[kaizens] erro ao listar:", err.message);
-    res.status(500).json({ error: "Erro ao consultar Kaizens: " + err.message });
+    res.status(500).json(corpoErroSql("Erro ao consultar Kaizens: ", err));
   }
 });
 
@@ -4130,7 +4152,7 @@ apiRouter.get("/kaizens/resumo", async (req, res) => {
     });
   } catch (err) {
     console.error("[kaizens/resumo] erro:", err.message);
-    res.status(500).json({ error: "Erro ao consultar resumo: " + err.message });
+    res.status(500).json(corpoErroSql("Erro ao consultar resumo: ", err));
   }
 });
 
@@ -4207,7 +4229,7 @@ apiRouter.get("/kaizens/filtros", async (req, res) => {
     res.json({ unidades, anos: anos.recordset.map((r) => r.ANO) });
   } catch (err) {
     console.error("[kaizens/filtros] erro:", err.message);
-    res.status(500).json({ error: "Erro ao consultar os filtros: " + err.message });
+    res.status(500).json(corpoErroSql("Erro ao consultar os filtros: ", err));
   }
 });
 
@@ -4319,7 +4341,7 @@ apiRouter.get("/kaizens/:id", async (req, res) => {
     });
   } catch (err) {
     console.error("[kaizens/:id] erro:", err.message);
-    res.status(500).json({ error: "Erro ao consultar o Kaizen: " + err.message });
+    res.status(500).json(corpoErroSql("Erro ao consultar o Kaizen: ", err));
   }
 });
 
@@ -4388,7 +4410,7 @@ apiRouter.get("/aprovacoes", async (req, res) => {
     })));
   } catch (err) {
     console.error("[aprovacoes] erro ao listar:", err.message);
-    res.status(500).json({ error: "Erro ao consultar aprovações: " + err.message });
+    res.status(500).json(corpoErroSql("Erro ao consultar aprovações: ", err));
   }
 });
 
@@ -4968,7 +4990,7 @@ apiRouter.put("/kaizens/:id", async (req, res) => {
       if (carimbo) r.input("carimbo", sql.NVarChar(40), carimbo);
       // Nome real da coluna nesta tabela — a histórica não foi tocada
       // pela renomeação da atual (ver colunaAtualizacaoPvc).
-      const colAtualizacaoDestino = ehHistorico ? "DT_ATUALIZACAO" : await colunaAtualizacaoPvc();
+      const colAtualizacaoDestino = ehHistorico ? await colunaAtualizacaoHist() : await colunaAtualizacaoPvc();
 
       const gravacao = await r.query(
         `UPDATE ${tabelaPvc}

@@ -1339,7 +1339,11 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       .then(function (r) {
         if (r.ok) return r.json();
         return r.json().catch(function () { return null; }).then(function (corpo) {
-          throw new Error((corpo && corpo.error) || ('HTTP ' + r.status));
+          var erro = new Error((corpo && corpo.error) || ('HTTP ' + r.status));
+          // sql: só vem quando o servidor prende o comando que falhou
+          // (ver corpoErroSql em server.js) — diagnóstico temporário.
+          if (corpo && corpo.sql) erro.sql = corpo.sql;
+          throw erro;
         });
       })
       .then(function (resposta) {
@@ -1366,6 +1370,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
             escaparHtml(txtI18n('bib.loadError', 'Erro ao carregar a Biblioteca.')) +
             (err && err.message ? '<br><span style="font-size:.7rem;color:var(--vbm-mid);">' +
               escaparHtml(err.message) + '</span>' : '') +
+            (err && err.sql ? '<br><code style="display:block;margin-top:.5rem;padding:.6rem;' +
+              'background:#f7f7f7;border:1px solid #eee;border-radius:.4rem;font-size:.68rem;' +
+              'color:#555;white-space:pre-wrap;word-break:break-word;">' + escaparHtml(err.sql) + '</code>' : '') +
             '</p>';
         }
       });
