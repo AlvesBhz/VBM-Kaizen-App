@@ -245,15 +245,23 @@ body[data-bg="dark"] {
   --hair: rgba(100,116,139,.14);
   --glass: rgba(241,245,249,.82);
 
-  width: 100%; max-width: 760px;
-  height: min(70vh, 560px); min-height: 420px;
+  width: min(92vw, 1200px);
+  height: min(76vh, 720px);
+  min-width: 420px;
+  min-height: 360px;
+  max-width: 96vw;
+  max-height: calc(100vh - 140px);
   display: flex; flex-direction: column;
   font-family: 'Vale Sans Medium', 'Segoe UI', 'system-ui', sans-serif;
   padding: 20px 20px 14px;
   background: #FFFFFF; border-radius: 14px; border: 1px solid #E2E8F0;
   box-shadow: 0 12px 40px rgba(10,20,35,.12), 0 2px 8px rgba(10,20,35,.06);
-  overflow: hidden;
+  overflow: auto;
+  resize: both;
 }
+
+/* Alça de resize — reforça visualmente o canto nativo do navegador */
+.main-wrapper::-webkit-resizer { background: transparent; }
 
 .chart-header { flex-shrink: 0; }
 .chart-title { color: #316866; font-family: 'Vale Sans Medium', 'Segoe UI', sans-serif; font-size: 1.4rem; font-weight: 400; margin: 0; }
@@ -625,6 +633,37 @@ function renderTurnoverChart() {
 
 renderTurnoverChart();
 window.addEventListener('resize', renderTurnoverChart);
+
+// ── Memória do tamanho do gráfico (mesmo padrão de 'vdt-theme'/'vdt-lang') ──
+// O redimensionamento em si é 100% CSS (resize:both + unidades %), então
+// nenhum recálculo em JS é necessário; aqui só persistimos a preferência de
+// tamanho do usuário entre sessões, como já é feito para tema e idioma.
+(() => {
+  const chartWrapper = document.getElementById('chartWrapper');
+  const STORAGE_KEY = 'vdt-chart-size';
+
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+    if (saved && saved.w && saved.h) {
+      chartWrapper.style.width = saved.w + 'px';
+      chartWrapper.style.height = saved.h + 'px';
+    }
+  } catch (e) { /* localStorage indisponível ou dado inválido — usa o padrão */ }
+
+  // offsetWidth/offsetHeight (border-box) — não contentRect do ResizeObserver
+  // (content-box) — para bater exatamente com o que style.width/height
+  // controlam, já que .main-wrapper usa box-sizing:border-box.
+  let saveTimer;
+  const observer = new ResizeObserver(() => {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ w: chartWrapper.offsetWidth, h: chartWrapper.offsetHeight }));
+      } catch (e) { /* localStorage indisponível — sessão segue sem persistir */ }
+    }, 300);
+  });
+  observer.observe(chartWrapper);
+})();
 </script>
 
 </body>
