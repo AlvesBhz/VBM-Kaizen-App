@@ -34,13 +34,21 @@ let distinctValues = {
   horizons: []
 };
 
-// ── API Calls ──────────────────────────────────────────────────
-async function fetchChartData() {
+// ── Mock Data ──────────────────────────────────────────────
+const mockChartData = [
+  { Type: 'Sep B', Value: 0.60, NM_TYPE: 'Budget', DT_REF: '2025-09-01', ID_SITE: '1', ID_OPERACAO: '1' },
+  { Type: 'Sep F', Value: 0.60, NM_TYPE: 'Act/Fcst', DT_REF: '2025-09-01', ID_SITE: '1', ID_OPERACAO: '1' },
+  { Type: 'Q3B', Value: 1.65, NM_TYPE: 'Budget', DT_REF: '2025-07-01', ID_SITE: '1', ID_OPERACAO: '1' },
+  { Type: 'Q3F', Value: 1.33, NM_TYPE: 'Act/Fcst', DT_REF: '2025-07-01', ID_SITE: '1', ID_OPERACAO: '1' },
+  { Type: '26B', Value: 7.39, NM_TYPE: 'Budget', DT_REF: '2025-01-01', ID_SITE: '1', ID_OPERACAO: '1' },
+  { Type: '26A', Value: 6.25, NM_TYPE: 'Act/Fcst', DT_REF: '2025-01-01', ID_SITE: '1', ID_OPERACAO: '1' }
+];
+
+// ── API Calls (Mock) ────────────────────────────────────────
+function loadChartData() {
   showState('loading');
-  try {
-    const response = await fetch('/api/chart-data');
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    chartData = await response.json();
+  setTimeout(() => {
+    chartData = mockChartData;
     window.chartData = chartData;
 
     if (chartData.length === 0) {
@@ -49,24 +57,9 @@ async function fetchChartData() {
     }
 
     extractFilters(chartData);
-    await renderFilters();
+    renderFilters();
     applyFilters();
-  } catch (err) {
-    console.error('Fetch error:', err);
-    showState('error', err.message);
-  }
-}
-
-async function fetchSites() {
-  try {
-    const response = await fetch('/api/filters/sites');
-    if (!response.ok) return [];
-    const sites = await response.json();
-    return sites.map(s => String(s.ID_SITE || s));
-  } catch (err) {
-    console.error('Fetch sites error:', err);
-    return [];
-  }
+  }, 300);
 }
 
 // ── State Management ────────────────────────────────────────────
@@ -82,8 +75,9 @@ function showState(state, errorMessage = '') {
 }
 
 // ── Filter Extraction ───────────────────────────────────────────
-async function extractFilters(data) {
+function extractFilters(data) {
   const years = new Set();
+  const sites = new Set();
   const products = new Set();
   const views = new Set();
   const horizons = new Set();
@@ -93,29 +87,26 @@ async function extractFilters(data) {
       const year = new Date(row.DT_REF).getFullYear();
       years.add(String(year));
     }
+    if (row.ID_SITE) sites.add(String(row.ID_SITE));
     if (row.ID_OPERACAO) products.add(String(row.ID_OPERACAO));
     if (row.NM_TYPE) views.add(row.NM_TYPE);
     if (row.Type) horizons.add(row.Type);
   });
 
-  // Fetch sites from API
-  const sitesFromAPI = await fetchSites();
-
   distinctValues = {
     years: Array.from(years).sort(),
-    sites: sitesFromAPI.sort(),
+    sites: Array.from(sites).sort(),
     products: Array.from(products).sort(),
     views: Array.from(views).sort(),
     horizons: Array.from(horizons).sort()
   };
 
-  // Initialize all filters as active
   activeFilters = {
-    years: new Set(distinctValues.years),
-    sites: new Set(distinctValues.sites),
-    products: new Set(distinctValues.products),
-    views: new Set(distinctValues.views),
-    horizons: new Set(distinctValues.horizons)
+    years: new Set(),
+    sites: new Set(),
+    products: new Set(),
+    views: new Set(),
+    horizons: new Set()
   };
   window.activeFilters = activeFilters;
 }
@@ -369,4 +360,4 @@ window.addEventListener('resize', () => {
 
 // ── Initialization ──────────────────────────────────────────────
 initTheme();
-fetchChartData();
+loadChartData();

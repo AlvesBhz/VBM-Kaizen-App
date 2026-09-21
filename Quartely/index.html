@@ -1,235 +1,476 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+<!--
+  ═══════════════════════════════════════════════════════════════════
+  QUARTELY · Dashboard
+  ═══════════════════════════════════════════════════════════════════
+  PAPEL DA PÁGINA
+    Tela inicial: hero em tela cheia + navegação para as demais telas.
+    Autenticação Microsoft (MSAL) fica aqui — ver bloco no fim do arquivo.
+
+  DEPENDÊNCIAS (carregadas no <head> / fim do <body>)
+    • Font Awesome 6  — ícones (fa-solid ...)
+    • css/vbm-app.css — Design System VBM: tokens (--vbm-*), reset,
+      componentes compartilhados (.btn, .form-control, .modal, .badge...)
+    • js/vbm-app.js  — comportamento compartilhado: modais, abas,
+      wizard, filtros, toasts, toggles. Auto-inicializa no DOMContentLoaded.
+
+  TEMA CLARO/ESCURO
+    Alternado por body[data-bg="dark"] (persistido em localStorage
+    'vdt-theme'). Toda regra de cor precisa do par claro + escuro.
+
+  INTERNACIONALIZAÇÃO (i18n)
+    Marque o elemento com data-i18n / -title / -aria / -placeholder e
+    cadastre a chave nos DOIS dicionários (pt-BR e en) no fim do arquivo.
+    Idioma persistido em localStorage 'vdt-lang'.
+  ═══════════════════════════════════════════════════════════════════
+-->
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Quarterly Dashboard</title>
-  <link rel="stylesheet" href="style.css">
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>Quartely — Dashboard</title>
+<style>
+/* ═══════════════════════════════════════════════════
+   TOPNAV LAYOUT
+═══════════════════════════════════════════════════ */
+
+:root {
+  --vbm-blue: #3cb5e5;
+  --vbm-blue-light: #7dd3f0;
+  --vbm-blue-dark: #0d2640;
+  --vbm-dark: #0a1421;
+  --vbm-mid: #6b7c93;
+  --vbm-white: #f4f7fb;
+  --ease-out: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+[data-bg="dark"] {
+  --vbm-dark: #f4f7fb;
+  --vbm-mid: rgba(244,247,251,.55);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  overflow-x: clip;
+  overflow-y: auto;
+}
+
+body {
+  background: linear-gradient(160deg, #10131a 0%, var(--vbm-blue-dark) 100%);
+  background-attachment: fixed;
+  color: var(--vbm-dark);
+}
+
+/* App layout */
+.app-layout { display: block; }
+.app-main { margin-left: 0; min-height: calc(100vh - 64px); }
+.page-content { padding: 1.75rem; padding-bottom: 0; }
+
+/* Hero */
+.dash-hero {
+  width: calc(100% + 3.5rem);
+  margin-top: calc(-1.75rem - 64px);
+  margin-left: -1.75rem;
+  margin-right: 0;
+  margin-bottom: 0;
+  border-radius: 0;
+  height: 100vh;
+  min-height: 100vh;
+  position: relative;
+  z-index: 1;
+}
+
+@supports (height: 100dvh) {
+  .dash-hero { height: 100dvh; min-height: 100dvh; }
+  .app-layout, .app-main { min-height: calc(100dvh - 64px); }
+}
+
+html, body { overflow-x: clip; overflow-y: auto; }
+
+.dash-hero-zoom {
+  position: absolute;
+  inset: 0;
+  animation: heroZoomIn 20s linear infinite alternate;
+}
+
+.dash-hero-bg-img {
+  opacity: 1;
+  mix-blend-mode: normal;
+  object-fit: cover;
+  object-position: left bottom;
+  width: 100%;
+  height: 100%;
+  animation: none;
+}
+
+@keyframes heroZoomIn {
+  from { transform: scale(1); }
+  to   { transform: scale(1.08); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dash-hero-zoom { animation: none; }
+}
+
+.dash-hero-texto {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* Topbar */
+.topnav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: 64px;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  padding: 0 2rem;
+  gap: 0;
+  border-bottom: 1px solid rgba(255,255,255,.05);
+  box-shadow: none;
+  transition: background .3s var(--ease-out), box-shadow .3s var(--ease-out);
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  .topnav { backdrop-filter: blur(4px) saturate(120%); }
+}
+
+.topnav.scrolled {
+  background: var(--vbm-blue-dark);
+  box-shadow: 0 2px 20px rgba(13,38,64,.18);
+}
+
+.topnav-logo {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+  flex-shrink: 0;
+  margin-right: 1.5rem;
+  position: relative;
+  z-index: 1;
+}
+
+.topnav-logo img { height: 26px; width: auto; filter: brightness(10); }
+
+.topnav-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .15rem;
+  flex: 1;
+  position: relative;
+  z-index: 1;
+}
+
+.topnav-link {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .5rem .85rem;
+  border-radius: .45rem;
+  font-family: 'Poppins', sans-serif;
+  font-weight: 400;
+  font-size: .72rem;
+  letter-spacing: .04em;
+  color: rgba(255,255,255,.75);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color .18s;
+  position: relative;
+}
+
+.topnav-link:hover { color: #fff; }
+
+.topnav-link.active {
+  color: #fff;
+}
+
+.topnav-link::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 50%;
+  width: 0;
+  height: 1.5px;
+  background: linear-gradient(90deg, transparent, #fff 25%, #fff 75%, transparent);
+  border-radius: 10px;
+  box-shadow: 0 0 8px rgba(255,255,255,.65);
+  opacity: 0;
+  transform: translateX(-50%);
+  transition: width .3s var(--ease-out), opacity .3s var(--ease-out);
+}
+
+.topnav-link.active::after {
+  width: 60%;
+  opacity: 1;
+}
+
+.topnav-sep {
+  width: 1px;
+  height: 20px;
+  background: rgba(255,255,255,.25);
+  flex-shrink: 0;
+  margin: 0 .1rem;
+}
+
+.topnav-actions {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex-shrink: 0;
+  margin-left: auto;
+  position: relative;
+  z-index: 1;
+}
+
+.settings-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 100px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background .25s;
+}
+
+.settings-btn:hover { background: rgba(255,255,255,.12); }
+
+.topnav-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: 10px;
+  border-left: 1px solid rgba(255,255,255,.22);
+  flex-shrink: 0;
+}
+
+.topnav-user-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.3;
+}
+
+.topnav-user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, var(--vbm-blue-light), var(--vbm-blue-dark));
+  border: 1.5px solid rgba(255,255,255,.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Poppins', sans-serif;
+  font-weight: 700;
+  font-size: 11px;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.topnav-user-name {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+  font-size: 11.5px;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.topnav-user-role {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+  font-size: 9px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.6);
+  white-space: nowrap;
+}
+
+@media (max-width: 960px) {
+  .topnav-links { display: none; }
+  .topnav-user-role { display: none; }
+}
+
+@media (max-width: 540px) {
+  .topnav-user-name { display: none; }
+}
+
+@media (max-width: 768px) {
+  .dash-hero {
+    width: calc(100% + 2rem);
+    margin-top: calc(-1rem - 64px);
+    margin-left: -1rem;
+  }
+  .page-content { padding: 1rem; }
+}
+
+/* Tema escuro */
+[data-bg="dark"] {
+  background: radial-gradient(ellipse 80% 50% at 72% 6%, rgba(60,181,229,.10) 0%, transparent 55%),
+              linear-gradient(160deg, #10131a 0%, var(--vbm-blue-dark) 100%);
+  background-attachment: fixed;
+}
+
+[data-bg="dark"] .topnav {
+  background: transparent;
+  border-bottom-color: rgba(255,255,255,.05);
+}
+
+[data-bg="dark"] .topnav.scrolled {
+  background: rgba(13,38,64,.92);
+  box-shadow: 0 2px 24px rgba(0,0,0,.4);
+}
+
+[data-bg="dark"] .topnav-link { color: rgba(255,255,255,.65); }
+[data-bg="dark"] .topnav-link:hover { color: #fff; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,.14); border-radius: 100px; }
+[data-bg="dark"] ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.14); }
+</style>
 </head>
 <body>
-  <!-- Topbar - Kaizen Style -->
-  <header class="topbar">
-    <!-- Left Section: Logo -->
-    <div class="topbar-section topbar-left">
-      <svg class="vale-logo" viewBox="0 0 120 40" xmlns="http://www.w3.org/2000/svg">
-        <rect width="120" height="40" fill="#D4A547"/>
-        <text x="60" y="28" font-family="Arial, sans-serif" font-size="20" font-weight="bold" text-anchor="middle" fill="white">VALE</text>
-      </svg>
-    </div>
 
-    <!-- Center Section: Navigation -->
-    <nav class="topbar-section topbar-center">
-      <a href="#" class="nav-item" data-i18n="newKaizen">New Kaizen</a>
-      <a href="#" class="nav-item" data-i18n="library">Library</a>
-      <a href="#" class="nav-item approval-link">
-        <span data-i18n="approval">Approval</span>
-        <span class="badge">1</span>
-      </a>
-      <a href="#" class="nav-item" data-i18n="administration">Administration</a>
-    </nav>
+<!-- ═══ TOP NAVIGATION ═══ -->
+<nav class="topnav" id="topnav">
+  <a href="index.html" class="topnav-logo">
+    <img src="assets/images/vale-logo.svg" alt="Quartely"/>
+  </a>
 
-    <!-- Right Section: Actions & User -->
-    <div class="topbar-section topbar-right">
-      <!-- Settings Icon -->
-      <button class="icon-btn" id="settings-btn" title="Settings" aria-label="Settings">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="3"></circle>
-          <path d="M12 1v6m0 6v6M4.22 4.22l4.24 4.24m5.08 5.08l4.24 4.24M1 12h6m6 0h6M4.22 19.78l4.24-4.24m5.08-5.08l4.24-4.24"/>
-        </svg>
-      </button>
+  <div class="topnav-links" id="topnavLinks">
+    <a href="#quartely" class="topnav-link active" data-i18n="nav.quartely">
+      <i class="fa-solid fa-chart-line"></i> <span>Quartely</span>
+    </a>
 
-      <!-- Theme Toggle -->
-      <button class="icon-btn" id="theme-toggle" title="Toggle theme" aria-label="Toggle dark/light theme">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="5"></circle>
-          <line x1="12" y1="1" x2="12" y2="3"></line>
-          <line x1="12" y1="21" x2="12" y2="23"></line>
-          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-          <line x1="1" y1="12" x2="3" y2="12"></line>
-          <line x1="21" y1="12" x2="23" y2="12"></line>
-          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-        </svg>
-      </button>
+    <div class="topnav-sep"></div>
 
-      <!-- User Info -->
-      <div class="user-info">
-        <div class="user-details">
-          <div class="user-name" id="user-name">CRISTIAN ARLAN ALVES</div>
-          <div class="user-role" id="user-role" data-i18n="userRole">ABL PROGRAMAÇÃO INTEGRADA</div>
-        </div>
-        <div class="user-avatar">CA</div>
-      </div>
-    </div>
-  </header>
-
-  <!-- Main Container -->
-  <div class="chart-main">
-    <!-- Filters Toolbar -->
-    <div class="filters-toolbar">
-      <div class="filters-container">
-        <!-- Years Dropdown -->
-        <div class="filter-dropdown-wrapper">
-          <select id="years-filter" class="filter-dropdown" multiple>
-            <option value="">Todos os anos</option>
-          </select>
-        </div>
-
-        <!-- Sites Dropdown -->
-        <div class="filter-dropdown-wrapper">
-          <select id="sites-filter" class="filter-dropdown" multiple>
-            <option value="">Todos os sites</option>
-          </select>
-        </div>
-
-        <!-- Products Dropdown -->
-        <div class="filter-dropdown-wrapper">
-          <select id="products-filter" class="filter-dropdown" multiple>
-            <option value="">Todos os produtos</option>
-          </select>
-        </div>
-
-        <!-- Views Dropdown -->
-        <div class="filter-dropdown-wrapper">
-          <select id="views-filter" class="filter-dropdown" multiple>
-            <option value="">Todas as visualizações</option>
-          </select>
-        </div>
-
-        <!-- Horizons Dropdown -->
-        <div class="filter-dropdown-wrapper">
-          <select id="horizons-filter" class="filter-dropdown" multiple>
-            <option value="">Todos os horizontes</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="filters-actions">
-        <!-- Clear Filters Button -->
-        <button class="btn-clear-filters" id="clear-filters" data-i18n="clearFilters">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M3 6h18"></path>
-            <path d="M8 6v12a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V6"></path>
-            <line x1="9" y1="6" x2="9" y2="3h6v3"></line>
-          </svg>
-          Limpar Filtros
-        </button>
-
-        <!-- Export Excel Button (optional) -->
-        <button class="btn-export" id="export-btn" title="Export to Excel">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="7 10 12 15 17 10"></polyline>
-            <line x1="12" y1="15" x2="12" y2="3"></line>
-          </svg>
-          Export Excel
-        </button>
-      </div>
-    </div>
-
-    <!-- Chart Container -->
-    <main class="chart-container">
-      <!-- State Indicators -->
-      <div class="chart-state" id="chart-state">
-        <!-- Loading State -->
-        <div class="state-loading" id="state-loading">
-          <div class="spinner"></div>
-          <p data-i18n="loading">Carregando dados...</p>
-        </div>
-
-        <!-- Empty State -->
-        <div class="state-empty" id="state-empty" style="display: none;">
-          <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
-            <path d="M3 3h18v18H3z"></path>
-            <path d="M3 12l6-6 6 6 6-6"></path>
-            <path d="M21 15h-2v6h-2v-4h-2v4h-2v-6"></path>
-          </svg>
-          <h3 data-i18n="noData">Nenhum dado disponível</h3>
-          <p data-i18n="noDataMessage">Tente ajustar os filtros</p>
-        </div>
-
-        <!-- Error State -->
-        <div class="state-error" id="state-error" style="display: none;">
-          <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"></circle>
-            <line x1="12" y1="8" x2="12" y2="12"></line>
-            <line x1="12" y1="16" x2="12.01" y2="16"></line>
-          </svg>
-          <h3 data-i18n="error">Erro ao carregar dados</h3>
-          <p id="error-message"></p>
-          <button class="btn-retry" id="retry-btn" data-i18n="retry">Tentar Novamente</button>
-        </div>
-      </div>
-
-      <!-- SVG Chart Container (hidden initially, shown when data loads) -->
-      <div id="chart-wrapper" style="display: none; width: 100%; height: 100%;">
-        <svg id="chart" style="width: 100%; height: 100%;"></svg>
-      </div>
-    </main>
+    <a href="#monthly" class="topnav-link" data-i18n="nav.monthly">
+      <i class="fa-solid fa-calendar"></i> <span>Monthly</span>
+    </a>
   </div>
 
-  <!-- D3 Library -->
-  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <div class="topnav-actions">
+    <button class="settings-btn" id="settingsBtn" type="button" title="Configurações" aria-label="Configurações">
+      <svg width="17" height="17" viewBox="0 0 20 20" fill="none">
+        <path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" stroke="currentColor" stroke-width="1.5" />
+        <path d="M16.2 12.3a1.4 1.4 0 0 0 .28 1.54l.05.05a1.7 1.7 0 1 1-2.4 2.4l-.05-.05a1.4 1.4 0 0 0-1.54-.28 1.4 1.4 0 0 0-.85 1.28V17.4a1.7 1.7 0 0 1-3.4 0v-.08a1.4 1.4 0 0 0-.91-1.28 1.4 1.4 0 0 0-1.54.28l-.05.05a1.7 1.7 0 1 1-2.4-2.4l.05-.05a1.4 1.4 0 0 0 .28-1.54 1.4 1.4 0 0 0-1.28-.85H2.6a1.7 1.7 0 0 1 0-3.4h.08a1.4 1.4 0 0 0 1.28-.91 1.4 1.4 0 0 0-.28-1.54l-.05-.05a1.7 1.7 0 1 1 2.4-2.4l.05.05a1.4 1.4 0 0 0 1.54.28h.06a1.4 1.4 0 0 0 .85-1.28V2.6a1.7 1.7 0 0 1 3.4 0v.08a1.4 1.4 0 0 0 .85 1.28h.06a1.4 1.4 0 0 0 1.54-.28l.05-.05a1.7 1.7 0 1 1 2.4 2.4l-.05.05a1.4 1.4 0 0 0-.28 1.54v.06a1.4 1.4 0 0 0 1.28.85h.08a1.7 1.7 0 0 1 0 3.4h-.08a1.4 1.4 0 0 0-1.28.85Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+      </svg>
+    </button>
+    <div class="topnav-user" id="topnavUser">
+      <div class="topnav-user-text">
+        <span class="topnav-user-name" id="topnavUserName">Usuário</span>
+        <span class="topnav-user-role" id="topnavUserRole">Quartely</span>
+      </div>
+      <div class="topnav-user-avatar" id="topnavUserAvatar">QT</div>
+    </div>
+  </div>
+</nav>
 
-  <!-- Internationalization -->
-  <script>
-    const i18n = {
-      'pt-BR': {
-        newKaizen: 'New Kaizen',
-        library: 'Library',
-        approval: 'Approval',
-        administration: 'Administration',
-        userRole: 'ABL PROGRAMAÇÃO INTEGRADA MS',
-        filters: 'Filtros',
-        years: 'Anos',
-        sites: 'Sites',
-        products: 'Produtos',
-        views: 'Visualizações',
-        horizons: 'Horizontes',
-        clearFilters: 'Limpar Filtros',
-        loading: 'Carregando dados...',
-        noData: 'Nenhum dado disponível',
-        noDataMessage: 'Tente ajustar os filtros',
-        error: 'Erro ao carregar dados',
-        retry: 'Tentar Novamente'
-      },
-      'en': {
-        newKaizen: 'New Kaizen',
-        library: 'Library',
-        approval: 'Approval',
-        administration: 'Administration',
-        userRole: 'ABL PROGRAMMING INTEGRATED MS',
-        filters: 'Filters',
-        years: 'Years',
-        sites: 'Sites',
-        products: 'Products',
-        views: 'Views',
-        horizons: 'Horizons',
-        clearFilters: 'Clear Filters',
-        loading: 'Loading data...',
-        noData: 'No data available',
-        noDataMessage: 'Try adjusting the filters',
-        error: 'Error loading data',
-        retry: 'Retry'
-      }
-    };
+<!-- ═══ MAIN ═══ -->
+<div class="app-layout">
+<main class="app-main">
+<div class="page-content">
 
-    function setLanguage(lang) {
-      localStorage.setItem('language', lang);
-      document.documentElement.lang = lang;
-      document.querySelectorAll('[data-i18n]').forEach(el => {
-        const key = el.getAttribute('data-i18n');
-        el.textContent = i18n[lang][key];
-      });
+<!-- Hero -->
+<div class="dash-hero" id="dashHero">
+  <div class="dash-hero-zoom">
+    <img src="assets/images/Fundo_VBM_2400x1145.webp" class="dash-hero-bg-img" alt="Quartely Dashboard"/>
+  </div>
+  <div class="dash-hero-texto" id="heroText">
+    <svg width="100%" height="100%" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <style>
+          .hero-antetitulo { font-family: 'Poppins', sans-serif; font-weight: 800; font-size: 22px; letter-spacing: 3px; fill: #5fd0ff; }
+          .hero-linha { font-family: 'Poppins', sans-serif; font-weight: 800; font-size: 120px; letter-spacing: -2px; fill: #ffffff; }
+          .hero-subtitulo { font-family: 'Poppins', sans-serif; font-weight: 400; font-size: 28px; fill: #d6e8f4; fill-opacity: .78; }
+        </style>
+      </defs>
+
+      <text class="hero-antetitulo" x="50" y="120">QUARTELY DASHBOARD</text>
+
+      <text class="hero-linha" x="50" y="280">Financial</text>
+      <text class="hero-linha" x="50" y="380">Insight.</text>
+
+      <text class="hero-subtitulo" x="50" y="450">Real-time Financial Dashboard</text>
+    </svg>
+  </div>
+</div>
+
+</div>
+</main>
+</div>
+
+<!-- Font Awesome -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+
+<script>
+// ─── Tema ───
+document.addEventListener('DOMContentLoaded', () => {
+  const savedTheme = localStorage.getItem('vdt-theme') || 'light';
+  document.body.setAttribute('data-bg', savedTheme === 'dark' ? 'dark' : 'light');
+
+  document.getElementById('settingsBtn').addEventListener('click', () => {
+    const currentBg = document.body.getAttribute('data-bg');
+    const newBg = currentBg === 'dark' ? 'light' : 'dark';
+    document.body.setAttribute('data-bg', newBg);
+    localStorage.setItem('vdt-theme', newBg);
+  });
+});
+
+// ─── Scroll effect ───
+window.addEventListener('scroll', () => {
+  const topnav = document.getElementById('topnav');
+  topnav.classList.toggle('scrolled', window.scrollY > 0);
+});
+
+// ─── Menu links ───
+document.querySelectorAll('.topnav-link').forEach(link => {
+  link.addEventListener('click', (e) => {
+    document.querySelectorAll('.topnav-link').forEach(l => l.classList.remove('active'));
+    e.target.closest('.topnav-link').classList.add('active');
+  });
+});
+
+// ─── i18n ───
+const i18n = {
+  'pt-BR': {
+    'nav.quartely': 'Quartely',
+    'nav.monthly': 'Monthly'
+  },
+  'en': {
+    'nav.quartely': 'Quarterly',
+    'nav.monthly': 'Monthly'
+  }
+};
+
+function applyI18n(lang) {
+  document.documentElement.lang = lang;
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    if (i18n[lang] && i18n[lang][key]) {
+      el.textContent = i18n[lang][key];
     }
+  });
+  localStorage.setItem('vdt-lang', lang);
+}
 
-    const savedLang = localStorage.getItem('language') || 'pt-BR';
-    setLanguage(savedLang);
-    document.getElementById('language-select').value = savedLang;
-  </script>
+const savedLang = localStorage.getItem('vdt-lang') || 'pt-BR';
+applyI18n(savedLang);
+</script>
 
-  <!-- Application Script -->
-  <script src="chart.js"></script>
 </body>
 </html>

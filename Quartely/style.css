@@ -258,10 +258,13 @@ body {
 /* ── Chart Main Layout ──────────────────────────────────────────── */
 .chart-main {
   display: flex;
+  flex-direction: column;
   height: calc(100vh - 65px);
-  gap: var(--spacing-md);
-  padding: var(--spacing-md);
+  gap: var(--spacing-lg);
+  padding: var(--spacing-lg);
   background-color: var(--color-bg);
+  align-items: center;
+  justify-content: flex-start;
 }
 
 /* ── Filters Toolbar ────────────────────────────────────────────── */
