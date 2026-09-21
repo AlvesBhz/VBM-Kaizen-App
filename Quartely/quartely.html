@@ -1065,9 +1065,16 @@ function setDataFallbackWarning(active, detail) {
 
 async function loadQuartelyData() {
   try {
+    // Caminho relativo (sem "/" inicial): resolve a partir do diretório
+    // da própria página (new URL('api/chart-data', location.href)), não
+    // da raiz do domínio. Necessário porque este app pode ser publicado
+    // sob um subcaminho (ex.: .../Quartely/quartely.html no Databricks
+    // Apps) — um fetch('/api/...') com barra inicial ignoraria esse
+    // subcaminho e bateria na raiz do domínio, gerando 404 mesmo com o
+    // servidor respondendo normalmente em <subcaminho>/api/....
     const [chartRes, sitesRes] = await Promise.all([
-      fetch('/api/chart-data'),
-      fetch('/api/sites')
+      fetch('api/chart-data'),
+      fetch('api/sites')
     ]);
     if (!chartRes.ok || !sitesRes.ok) throw new Error(`HTTP ${chartRes.status}/${sitesRes.status}`);
     const chartRows = await chartRes.json();
