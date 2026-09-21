@@ -1,130 +1,146 @@
-const express = require("express");
-const path = require("path");
-const { DBSQLClient } = require("@databricks/sql");
+const express = require('express');
+const path = require('path');
+const sql = require('mssql');
+const compression = require('compression');
+
 const app = express();
 
-// Middleware de compressão
-try {
-  app.use(require("compression")());
-} catch (err) {
-  console.warn("[perf] middleware 'compression' indisponível; servindo sem gzip.");
-}
+// Middleware
+app.use(compression());
+app.use(express.json());
 
-// Servir arquivos estáticos
+// Serve static files
 app.use(express.static(__dirname, {
-  etag: true,
+  etag: false,
   index: false,
-  setHeaders: (res) => res.set("Cache-Control", "no-store"),
+  setHeaders: (res) => res.set('Cache-Control', 'no-store'),
 }));
 
-// ── Conexão Databricks ──────────────────────────────────────────
-async function createSession() {
-  const client = new DBSQLClient();
+// ── Azure SQL Configuration ──────────────────────────────────────
+const sqlConfig = {
+  server: process.env.AZURE_SQL_SERVER,
+  database: process.env.AZURE_SQL_DATABASE,
+  authentication: {
+    type: 'default',
+    options: {
+      userName: process.env.AZURE_SQL_USER,
+      password: process.env.AZURE_SQL_PASSWORD,
+    },
+  },
+  options: {
+    port: parseInt(process.env.AZURE_SQL_PORT || '1433', 10),
+    encrypt: true,
+    trustServerCertificate: false,
+    connectionTimeout: 30000,
+    requestTimeout: 30000,
+  },
+};
 
-  const host = process.env.DATABRICKS_HOST;
-  const warehouseId = process.env.DATABRICKS_WAREHOUSE_ID;
-  const clientId = process.env.DATABRICKS_CLIENT_ID;
-  const clientSecret = process.env.DATABRICKS_CLIENT_SECRET;
+let pool = null;
 
-  const missing = [
-    !host && "DATABRICKS_HOST",
-    !warehouseId && "DATABRICKS_WAREHOUSE_ID",
-    !clientId && "DATABRICKS_CLIENT_ID",
-    !clientSecret && "DATABRICKS_CLIENT_SECRET",
+// ── Connection Management ────────────────────────────────────────
+async function initializePool() {
+  if (pool) return pool;
+
+  const missingVars = [
+    !process.env.AZURE_SQL_SERVER && 'AZURE_SQL_SERVER',
+    !process.env.AZURE_SQL_DATABASE && 'AZURE_SQL_DATABASE',
+    !process.env.AZURE_SQL_USER && 'AZURE_SQL_USER',
+    !process.env.AZURE_SQL_PASSWORD && 'AZURE_SQL_PASSWORD',
   ].filter(Boolean);
 
-  if (missing.length) {
-    throw new Error(`Variáveis de ambiente ausentes: ${missing.join(", ")}`);
+  if (missingVars.length) {
+    throw new Error(`Variáveis de ambiente ausentes: ${missingVars.join(', ')}`);
   }
 
-  await client.connect({
-    authType: "databricks-oauth",
-    useDatabricksOAuthInAzure: true,
-    host,
-    path: `/sql/1.0/warehouses/${warehouseId}`,
-    oauthClientId: clientId,
-    oauthClientSecret: clientSecret,
-  });
-
-  const session = await client.openSession();
-  return { client, session };
-}
-
-let sessionPromise = null;
-
-async function getSession() {
-  if (!sessionPromise) sessionPromise = createSession();
   try {
-    return await sessionPromise;
+    pool = new sql.ConnectionPool(sqlConfig);
+    pool.on('error', err => {
+      console.error('[sql] Pool error:', err);
+      pool = null;
+    });
+
+    await pool.connect();
+    console.log('[sql] Conexão com Azure SQL estabelecida');
+    return pool;
   } catch (err) {
-    sessionPromise = null;
+    console.error('[sql] Erro ao conectar:', err);
+    pool = null;
     throw err;
   }
 }
 
-async function closeSessionQuietly() {
-  const pending = sessionPromise;
-  sessionPromise = null;
-  if (!pending) return;
-  try {
-    const { client, session } = await pending;
-    await session.close();
-    await client.close();
-  } catch (err) {
-    /* sessão já estava morta */
-  }
-}
-
-let queue = Promise.resolve();
-
-async function executeOnSession(sql) {
-  const tSession = Date.now();
-  const { session } = await getSession();
-  const msSession = Date.now() - tSession;
-
-  const tQuery = Date.now();
-  const query = await session.executeStatement(sql);
-  try {
-    const rows = await query.fetchAll();
-    const primeiraLinha = sql.trim().split("\n")[0].trim().slice(0, 48);
-    console.log(
-      `[sql] sessão=${msSession}ms query=${Date.now() - tQuery}ms linhas=${rows.length} :: ${primeiraLinha}`
-    );
-    return rows;
-  } finally {
-    await query.close();
-  }
-}
-
-async function runQuery(sql) {
-  const run = async () => {
+async function closePool() {
+  if (pool) {
     try {
-      return await executeOnSession(sql);
+      await pool.close();
+      pool = null;
+      console.log('[sql] Pool de conexão fechado');
     } catch (err) {
-      await closeSessionQuietly();
-      return executeOnSession(sql);
+      console.error('[sql] Erro ao fechar pool:', err);
     }
-  };
-  queue = queue.then(run, run);
-  return queue;
+  }
 }
 
-// ── Cache em memória ────────────────────────────────────────────
+// ── Cache Management ────────────────────────────────────────────
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const cache = new Map();
 
 async function withCache(key, fetcher) {
   const hit = cache.get(key);
-  if (hit && hit.expiresAt > Date.now()) return hit.data;
+  if (hit && hit.expiresAt > Date.now()) {
+    return hit.data;
+  }
+
   const data = await fetcher();
   cache.set(key, { data, expiresAt: Date.now() + CACHE_TTL_MS });
   return data;
 }
 
-// ── Função de dados do gráfico ──────────────────────────────────
-async function getChartData() {
-  return withCache("chart-data", async () => {
-    const sql = `
+// Clear cache periodically
+setInterval(() => {
+  const now = Date.now();
+  let cleared = 0;
+  for (const [key, value] of cache.entries()) {
+    if (value.expiresAt <= now) {
+      cache.delete(key);
+      cleared++;
+    }
+  }
+  if (cleared > 0) {
+    console.log(`[cache] Limpeza: ${cleared} itens expirados removidos`);
+  }
+}, 60000);
+
+// ── Query Execution ─────────────────────────────────────────────
+async function executeQuery(sql) {
+  const tQuery = Date.now();
+  try {
+    const p = await initializePool();
+    const request = p.request();
+    const result = await request.query(sql);
+    const duration = Date.now() - tQuery;
+    const firstLine = sql.trim().split('\n')[0].trim().slice(0, 48);
+    console.log(`[sql] query=${duration}ms linhas=${result.recordset.length} :: ${firstLine}`);
+    return result.recordset;
+  } catch (err) {
+    console.error('[sql] Query error:', err.message);
+    throw err;
+  }
+}
+
+// ── API Routes ──────────────────────────────────────────────────
+
+// Serve index.html
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Serve chart data endpoint
+app.get('/api/chart-data', async (req, res) => {
+  try {
+    const data = await withCache('chart-data', async () => {
+      const chartSql = `
 DECLARE @DT_INI AS DATE, @DT_FIM AS DATE, @DT_REF AS DATE
 
 SET @DT_INI = '2025-01-01'
@@ -204,366 +220,88 @@ SELECT
     WHEN UnpivotedData.Type = 'Supply' THEN 'Plan'
     ELSE 'Act/Fcst'
   END AS 'NM_TYPE',
-  CONCAT(
-    'Q',
-    DATEPART(QUARTER, PVC.DT_REF),
-    CASE
-      WHEN UnpivotedData.Type = 'Budget' THEN 'B'
-      WHEN UnpivotedData.Type = 'Supply' THEN 'P'
-      WHEN UnpivotedData.Type = 'Forecast'
-        AND EOMONTH(
-          DATEFROMPARTS(
-            YEAR(PVC.DT_REF),
-            DATEPART(QUARTER, PVC.DT_REF) * 3,
-            1
-          )
-        ) <= CAST(@DT_REF AS DATE)
-      THEN 'A'
-      WHEN UnpivotedData.Type = 'Forecast' THEN 'F'
-    END
-  ) AS 'Type',
-  SUM(
-    CASE
-      WHEN UnpivotedData.Value IS NULL THEN 0
-      ELSE UnpivotedData.Value
-    END
-  ) AS [Value]
-FROM
-  IBP.PEDRAVISAOCONSOLIDADA PVC
-  INNER JOIN IBP.DASHBOARD DASH
-    ON PVC.ID_SISTEMA = DASH.ID_SISTEMA
-    AND CONCAT(
-      PVC.ID_SITE,
-      PVC.ID_OPERACAO,
-      PVC.ID_KPI
-    ) = CONCAT(
-      DASH.ID_SITE,
-      DASH.ID_OPERACAO,
-      DASH.ID_KPI
-    )
-  CROSS APPLY (
-    SELECT
-      'Budget' AS Type,
-      PVC.VL_ORC * DASH.VL_FATOR AS Value
-    UNION ALL
-    SELECT
-      'Supply' AS Type,
-      PVC.VL_SUPPLY * DASH.VL_FATOR AS Value
-    UNION ALL
-    SELECT
-      'Forecast' AS Type,
-      CASE
-        WHEN PVC.DT_REF <= DATEFROMPARTS(
-          YEAR(DATEADD(MONTH, -1, @DT_REF)),
-          MONTH(DATEADD(MONTH, -1, @DT_REF)),
-          1
-        )
-        AND PVC.VL_REAL IS NULL
-        THEN 0
-        WHEN PVC.DT_REF <= DATEFROMPARTS(
-          YEAR(DATEADD(MONTH, -1, @DT_REF)),
-          MONTH(DATEADD(MONTH, -1, @DT_REF)),
-          1
-        )
-        AND PVC.VL_REAL IS NOT NULL
-        THEN PVC.VL_REAL * DASH.VL_FATOR
-        ELSE PVC.VL_PROJ * DASH.VL_FATOR
-      END AS Value
-  ) AS UnpivotedData
-WHERE
-  PVC.DT_REF BETWEEN @DT_INI AND @DT_FIM
-  AND DASH.ID_DASH = 21
-GROUP BY
-  DATEADD(
-    QUARTER,
-    DATEDIFF(QUARTER, 0, PVC.DT_REF),
-    0
-  ),
-  YEAR(PVC.DT_REF),
-  DATEPART(QUARTER, PVC.DT_REF),
-  PVC.ID_SISTEMA,
-  PVC.ID_SITE,
-  PVC.ID_OPERACAO,
-  PVC.ID_KPI,
-  DASH.NM_KPIS_DASH,
-  DASH.ID_ORDEM,
-  UnpivotedData.Type
-
-UNION ALL
-
--- SEMESTER
-SELECT
-  DATEFROMPARTS(
-    YEAR(PVC.DT_REF),
-    CASE
-      WHEN MONTH(PVC.DT_REF) BETWEEN 1 AND 6 THEN 1
-      ELSE 7
-    END,
-    1
-  ) AS DT_REF,
-  PVC.ID_SISTEMA,
-  PVC.ID_SITE,
-  PVC.ID_OPERACAO,
-  PVC.ID_KPI,
-  DASH.NM_KPIS_DASH AS 'NM_KPI',
-  DASH.ID_ORDEM,
   CASE
-    WHEN UnpivotedData.Type = 'Budget' THEN 0
-    WHEN UnpivotedData.Type = 'Supply' THEN 1
-    ELSE 2
-  END AS 'ORDEM_GRAFICO',
-  CASE
-    WHEN UnpivotedData.Type = 'Budget' THEN 0
-    WHEN UnpivotedData.Type = 'Supply' THEN 2
-    ELSE 1
-  END AS 'ID_TYPE',
-  CASE
-    WHEN UnpivotedData.Type = 'Budget' THEN 'Budget'
-    WHEN UnpivotedData.Type = 'Supply' THEN 'Plan'
-    ELSE 'Act/Fcst'
-  END AS 'NM_TYPE',
-  CASE
-    WHEN MONTH(PVC.DT_REF) BETWEEN 1 AND 6 THEN 'H1'
-    WHEN MONTH(PVC.DT_REF) BETWEEN 7 AND 12 THEN 'H2'
+    WHEN UnpivotedData.Type = 'Budget' THEN CONCAT('Q', DATEPART(QUARTER, DT_REF), ' B')
+    WHEN UnpivotedData.Type = 'Supply' THEN CONCAT('Q', DATEPART(QUARTER, DT_REF), ' P')
+    WHEN UnpivotedData.Type = 'Forecast' AND PVC.DT_REF <= @DT_REF THEN CONCAT('Q', DATEPART(QUARTER, DT_REF), 'A')
+    WHEN UnpivotedData.Type = 'Forecast' THEN CONCAT('Q', DATEPART(QUARTER, DT_REF), 'F')
   END AS 'Type',
-  SUM(
-    CASE
-      WHEN UnpivotedData.Value IS NULL THEN 0
-      ELSE UnpivotedData.Value
-    END
-  ) AS [Value]
+  CASE WHEN UnpivotedData.Value IS NULL THEN 0 ELSE UnpivotedData.Value END AS [Value]
 FROM
   IBP.PEDRAVISAOCONSOLIDADA PVC
   INNER JOIN IBP.DASHBOARD DASH
     ON PVC.ID_SISTEMA = DASH.ID_SISTEMA
-    AND CONCAT(
-      PVC.ID_SITE,
-      PVC.ID_OPERACAO,
-      PVC.ID_KPI
-    ) = CONCAT(
-      DASH.ID_SITE,
-      DASH.ID_OPERACAO,
-      DASH.ID_KPI
-    )
+    AND CONCAT(PVC.ID_SITE, PVC.ID_OPERACAO, PVC.ID_KPI) = CONCAT(DASH.ID_SITE, DASH.ID_OPERACAO, DASH.ID_KPI)
   CROSS APPLY (
-    SELECT
-      'Budget' AS Type,
-      PVC.VL_ORC * DASH.VL_FATOR AS Value
+    SELECT 'Budget' AS Type, PVC.VL_ORC  * DASH.VL_FATOR AS Value
     UNION ALL
-    SELECT
-      'Supply' AS Type,
-      PVC.VL_SUPPLY * DASH.VL_FATOR AS Value
+    SELECT 'Supply' AS Type, PVC.VL_SUPPLY  * DASH.VL_FATOR AS Value
     UNION ALL
-    SELECT
-      'Forecast' AS Type,
-      CASE
-        WHEN PVC.DT_REF <= DATEFROMPARTS(
-          YEAR(DATEADD(MONTH, -1, @DT_REF)),
-          MONTH(DATEADD(MONTH, -1, @DT_REF)),
-          1
-        )
-        AND PVC.VL_REAL IS NULL
-        THEN 0
-        WHEN PVC.DT_REF <= DATEFROMPARTS(
-          YEAR(DATEADD(MONTH, -1, @DT_REF)),
-          MONTH(DATEADD(MONTH, -1, @DT_REF)),
-          1
-        )
-        AND PVC.VL_REAL IS NOT NULL
-        THEN PVC.VL_REAL * DASH.VL_FATOR
-        ELSE PVC.VL_PROJ * DASH.VL_FATOR
-      END AS Value
-  ) AS UnpivotedData
-WHERE
-  PVC.DT_REF BETWEEN @DT_INI AND @DT_FIM
-  AND DASH.ID_DASH = 21
-GROUP BY
-  YEAR(PVC.DT_REF),
-  CASE
-    WHEN MONTH(PVC.DT_REF) BETWEEN 1 AND 6 THEN 1
-    ELSE 7
-  END,
-  CASE
-    WHEN MONTH(PVC.DT_REF) BETWEEN 1 AND 6 THEN 'H1'
-    WHEN MONTH(PVC.DT_REF) BETWEEN 7 AND 12 THEN 'H2'
-  END,
-  PVC.ID_SISTEMA,
-  PVC.ID_SITE,
-  PVC.ID_OPERACAO,
-  PVC.ID_KPI,
-  DASH.NM_KPIS_DASH,
-  DASH.ID_ORDEM,
-  UnpivotedData.Type
-
-UNION ALL
-
--- YEAR
-SELECT
-  DATEFROMPARTS(
-    YEAR(PVC.DT_REF),
-    1,
-    1
-  ) AS DT_REF,
-  PVC.ID_SISTEMA,
-  PVC.ID_SITE,
-  PVC.ID_OPERACAO,
-  PVC.ID_KPI,
-  DASH.NM_KPIS_DASH AS 'NM_KPI',
-  DASH.ID_ORDEM,
-  CASE
-    WHEN UnpivotedData.Type = 'Budget' THEN 6
-    ELSE 7
-  END AS 'ORDEM_GRAFICO',
-  CASE
-    WHEN UnpivotedData.Type = 'Budget' THEN 0
-    WHEN UnpivotedData.Type = 'Supply' THEN 2
-    ELSE 1
-  END AS 'ID_TYPE',
-  CASE
-    WHEN UnpivotedData.Type = 'Budget' THEN 'Budget'
-    WHEN UnpivotedData.Type = 'Supply' THEN 'Plan'
-    ELSE 'Act/Fcst'
-  END AS 'NM_TYPE',
-  CASE
-    WHEN UnpivotedData.Type = 'Budget'
-      THEN CONCAT(RIGHT(YEAR(PVC.DT_REF), 2), 'B')
-    WHEN UnpivotedData.Type = 'Supply'
-      THEN CONCAT(RIGHT(YEAR(PVC.DT_REF), 2), 'P')
-    WHEN UnpivotedData.Type = 'Forecast'
-      AND YEAR(PVC.DT_REF) < YEAR(@DT_REF)
-      THEN CONCAT(RIGHT(YEAR(PVC.DT_REF), 2), 'A')
-    WHEN UnpivotedData.Type = 'Forecast'
-      THEN CONCAT(RIGHT(YEAR(PVC.DT_REF), 2), 'F')
-  END AS 'Type',
-  SUM(
+    SELECT 'Forecast' AS Type,
     CASE
-      WHEN UnpivotedData.Value IS NULL THEN 0
-      ELSE UnpivotedData.Value
-    END
-  ) AS [Value]
-FROM
-  IBP.PEDRAVISAOCONSOLIDADA PVC
-  INNER JOIN IBP.DASHBOARD DASH
-    ON PVC.ID_SISTEMA = DASH.ID_SISTEMA
-    AND CONCAT(
-      PVC.ID_SITE,
-      PVC.ID_OPERACAO,
-      PVC.ID_KPI
-    ) = CONCAT(
-      DASH.ID_SITE,
-      DASH.ID_OPERACAO,
-      DASH.ID_KPI
-    )
-  CROSS APPLY (
-    SELECT
-      'Budget' AS Type,
-      PVC.VL_ORC * DASH.VL_FATOR AS Value
-    UNION ALL
-    SELECT
-      'Supply' AS Type,
-      PVC.VL_SUPPLY * DASH.VL_FATOR AS Value
-    UNION ALL
-    SELECT
-      'Forecast' AS Type,
-      CASE
-        WHEN PVC.DT_REF <= DATEFROMPARTS(
-          YEAR(DATEADD(MONTH, -1, @DT_REF)),
-          MONTH(DATEADD(MONTH, -1, @DT_REF)),
-          1
-        )
-        AND PVC.VL_REAL IS NULL
-        THEN 0
-        WHEN PVC.DT_REF <= DATEFROMPARTS(
-          YEAR(DATEADD(MONTH, -1, @DT_REF)),
-          MONTH(DATEADD(MONTH, -1, @DT_REF)),
-          1
-        )
-        AND PVC.VL_REAL IS NOT NULL
-        THEN PVC.VL_REAL * DASH.VL_FATOR
-        ELSE PVC.VL_PROJ * DASH.VL_FATOR
-      END AS Value
+      WHEN PVC.DT_REF <= DATEFROMPARTS(YEAR(DATEADD(MONTH, -1, @DT_REF)), MONTH(DATEADD(MONTH, -1, @DT_REF)), 1) AND PVC.VL_REAL IS NULL THEN 0
+      WHEN PVC.DT_REF <= DATEFROMPARTS(YEAR(DATEADD(MONTH, -1, @DT_REF)), MONTH(DATEADD(MONTH, -1, @DT_REF)), 1) AND PVC.VL_REAL IS NOT NULL THEN PVC.VL_REAL  * DASH.VL_FATOR
+      ELSE PVC.VL_PROJ  * DASH.VL_FATOR
+    END AS Value
   ) AS UnpivotedData
 WHERE
   PVC.DT_REF BETWEEN @DT_INI AND @DT_FIM
   AND DASH.ID_DASH = 21
-GROUP BY
-  YEAR(PVC.DT_REF),
-  PVC.ID_SISTEMA,
-  PVC.ID_SITE,
-  PVC.ID_OPERACAO,
-  PVC.ID_KPI,
-  DASH.NM_KPIS_DASH,
-  DASH.ID_ORDEM,
-  UnpivotedData.Type
-    `;
+ORDER BY DT_REF, ORDEM_GRAFICO`;
+      return await executeQuery(chartSql);
+    });
 
-    const rows = await runQuery(sql);
-    return rows;
-  });
-}
-
-// ── Middleware de cache para APIs ──────────────────────────────
-app.use("/api", (req, res, next) => {
-  res.set("Cache-Control", "no-store");
-  next();
-});
-
-// ── Endpoint de dados do gráfico ───────────────────────────────
-app.get("/api/chart-data", async (req, res) => {
-  try {
-    const tTotal = Date.now();
-    const data = await getChartData();
-    console.log(`[api] /api/chart-data total=${Date.now() - tTotal}ms rows=${data.length}`);
     res.json(data);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
+    console.error('[api] Error fetching chart data:', err.message);
+    res.status(500).json({ error: 'Failed to fetch chart data' });
   }
 });
 
-// ── Endpoint de filtros (Sites) ─────────────────────────────────
-app.get("/api/filters/sites", async (req, res) => {
+// Health check endpoint
+app.get('/api/health', async (req, res) => {
   try {
-    const sql = `
-      SELECT DISTINCT ID_SITE FROM IBP.SITES
-      WHERE ID_SITE IS NOT NULL
-      ORDER BY ID_SITE ASC
-    `;
-    const sites = await runQuery(sql);
-    res.json(sites);
+    const p = await initializePool();
+    const request = p.request();
+    await request.query('SELECT 1 AS status');
+    res.json({ status: 'healthy', database: 'connected' });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
+    res.status(503).json({ status: 'unhealthy', error: err.message });
   }
 });
 
-// ── Rotas de página ────────────────────────────────────────────
-app.get("/", (req, res) => {
-  res.set("Cache-Control", "no-store");
-  res.sendFile(path.join(__dirname, "index.html"));
+// Clear cache endpoint
+app.post('/api/cache/clear', (req, res) => {
+  cache.clear();
+  res.json({ message: 'Cache cleared' });
 });
 
-// ── Health check ───────────────────────────────────────────────
-app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
+// ── Error Handling ──────────────────────────────────────────────
+app.use((err, req, res, next) => {
+  console.error('[error]', err);
+  res.status(500).json({ error: 'Internal server error' });
 });
 
-// ── Error handling ─────────────────────────────────────────────
-process.on("uncaughtException", (err) => {
-  console.error("UNCAUGHT EXCEPTION");
-  console.error(err);
+// ── Server Startup ──────────────────────────────────────────────
+const PORT = process.env.PORT || 8000;
+
+const server = app.listen(PORT, () => {
+  console.log(`[server] Quartely Dashboard listening on port ${PORT}`);
 });
 
-process.on("unhandledRejection", (err) => {
-  console.error("UNHANDLED REJECTION");
-  console.error(err);
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  console.log('[server] SIGTERM received, shutting down gracefully');
+  server.close(async () => {
+    await closePool();
+    process.exit(0);
+  });
 });
 
-// ── Iniciar servidor ───────────────────────────────────────────
-const port = process.env.DATABRICKS_APP_PORT || 8000;
-
-app.listen(port, "0.0.0.0", () => {
-  console.log(`[quarterly-dashboard] Server running on port ${port}`);
-  console.log(`  http://localhost:${port}`);
-  console.log(`  API: http://localhost:${port}/api/chart-data`);
+process.on('SIGINT', async () => {
+  console.log('[server] SIGINT received, shutting down gracefully');
+  server.close(async () => {
+    await closePool();
+    process.exit(0);
+  });
 });
