@@ -748,16 +748,6 @@ function renderTurnoverChart(sourceRows) {
   const data = sourceRows.map(d => ({ type: d.type, value: Number(d.value.toFixed(CFG.casasDecimais)) }));
   const maxValue = Math.max(...data.map(d => d.value), 0);
 
-  // A QUARTELY.sql passou a sufixar Trimestral/Semestral com o ano
-  // (" YY", ex.: "Q3F 25") para diferenciar o mesmo período entre anos —
-  // Anual já era assim ("25B"). Isola esse sufixo opcional antes de ler o
-  // "core" do rótulo (letra de série, prefixo Q/H) — nenhuma regra de
-  // negócio muda aqui, só a leitura do formato de rótulo mais novo.
-  const splitTypeLabel = (t) => {
-    const m = t.match(/^(.*?)(\s\d{2})$/);
-    return m ? { core: m[1], yearSuffix: m[2] } : { core: t, yearSuffix: '' };
-  };
-
   const html = data.map((row, i) => {
     const index1 = i + 1; // índice 1-based, como o VIndex do DAX
     const type = row.type.trim();
@@ -887,6 +877,16 @@ function compareByTechnicalKeys(a, b) {
       || (a.ORDEM_ANO - b.ORDEM_ANO)
       || (a.ORDEM_PERIODO - b.ORDEM_PERIODO)
       || (a.ORDEM_SERIE - b.ORDEM_SERIE);
+}
+
+// A QUARTELY.sql sufixa Trimestral/Semestral com o ano (" YY", ex.:
+// "Q3F 25") para diferenciar o mesmo período entre anos — Anual já era
+// assim ("25B"). Isola esse sufixo opcional antes de ler o "core" do
+// rótulo (letra de série, prefixo Q/H) — usado tanto na leitura do
+// gráfico quanto na detecção do período "atual" para o filtro default.
+function splitTypeLabel(t) {
+  const m = t.match(/^(.*?)(\s\d{2})$/);
+  return m ? { core: m[1], yearSuffix: m[2] } : { core: t, yearSuffix: '' };
 }
 
 function escapeHtml(str) {
@@ -1422,19 +1422,45 @@ function closeAllPanels() {
 //    Se o dataset não tiver linhas do período/site esperado (fixture local
 //    fora da janela, ambiente sem aquele site, etc.), a seleção correspondente
 //    fica vazia e o filtro simplesmente não restringe nada — sem erro.
+// Período "atual" de UMA granularidade (QUARTER/SEMESTER/YEAR), derivado
+// do próprio corte Actual/Forecast que a QUARTELY.sql já calculou a
+// partir de @DT_REF (sufixo 'A' = fechado, 'F' = em aberto) — NUNCA do
+// relógio do navegador. O primeiro período em aberto ('F') É o atual;
+// sem nenhum 'F' presente (nada aberto ainda para essa granularidade),
+// cai no último 'A' (o mais recente já fechado). Isso evita que o
+// default fique "à frente" dos dados reais quando um KPI específico
+// ainda não tem carga para o trimestre corrente do calendário — cada
+// KPI pode fechar em datas diferentes, então isso é varrido sobre TODAS
+// as linhas da granularidade, não só as de um Product/Site já filtrado.
+function detectCurrentPeriod(rows, cdVisao) {
+  const candidates = [];
+  rows.forEach(r => {
+    if (r.CD_VISAO !== cdVisao) return;
+    const lastChar = splitTypeLabel(r.Type.trim()).core.slice(-1).toUpperCase();
+    if (lastChar !== 'A' && lastChar !== 'F') return;
+    candidates.push({ ORDEM_ANO: r.ORDEM_ANO, ORDEM_PERIODO: r.ORDEM_PERIODO, open: lastChar === 'F' });
+  });
+  const open = candidates.filter(c => c.open);
+  const pool = open.length ? open : candidates.filter(c => !c.open);
+  if (!pool.length) return null;
+  const cmp = open.length
+    ? (a, b) => (a.ORDEM_ANO - b.ORDEM_ANO) || (a.ORDEM_PERIODO - b.ORDEM_PERIODO) // 1º em aberto
+    : (a, b) => (b.ORDEM_ANO - a.ORDEM_ANO) || (b.ORDEM_PERIODO - a.ORDEM_PERIODO); // último fechado
+  return [...pool].sort(cmp)[0];
+}
+
 function applyDefaultFilters(rows) {
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentQuarter = Math.floor(now.getMonth() / 3) + 1;
-  const currentSemester = now.getMonth() < 6 ? 1 : 2;
   const defaultSeries = new Set(['Budget', 'Act/Fcst']);
+  const quarter = detectCurrentPeriod(rows, 'QUARTER');
+  const semester = detectCurrentPeriod(rows, 'SEMESTER');
+  const year = detectCurrentPeriod(rows, 'YEAR');
 
   const horizonTypes = new Set();
   rows.forEach(r => {
-    if (!defaultSeries.has(r.NM_TYPE) || r.ORDEM_ANO !== currentYear) return;
-    if (r.CD_VISAO === 'QUARTER' && r.ORDEM_PERIODO === currentQuarter) horizonTypes.add(r.Type);
-    else if (r.CD_VISAO === 'SEMESTER' && r.ORDEM_PERIODO === currentSemester) horizonTypes.add(r.Type);
-    else if (r.CD_VISAO === 'YEAR') horizonTypes.add(r.Type);
+    if (!defaultSeries.has(r.NM_TYPE)) return;
+    if (quarter && r.CD_VISAO === 'QUARTER' && r.ORDEM_ANO === quarter.ORDEM_ANO && r.ORDEM_PERIODO === quarter.ORDEM_PERIODO) horizonTypes.add(r.Type);
+    else if (semester && r.CD_VISAO === 'SEMESTER' && r.ORDEM_ANO === semester.ORDEM_ANO && r.ORDEM_PERIODO === semester.ORDEM_PERIODO) horizonTypes.add(r.Type);
+    else if (year && r.CD_VISAO === 'YEAR' && r.ORDEM_ANO === year.ORDEM_ANO) horizonTypes.add(r.Type);
   });
   if (horizonTypes.size) {
     filterState.visoes = new Set(defaultSeries);
