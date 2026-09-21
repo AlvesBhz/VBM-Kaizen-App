@@ -147,55 +147,11 @@ SET @DT_INI = '2025-01-01'
 SET @DT_FIM = CAST(DATEADD(MONTH, 0, CONCAT(YEAR(DATEFROMPARTS(YEAR(DATEADD(MONTH, 0, GETDATE()-1)), MONTH(DATEADD(MONTH, -1, GETDATE()-1)), 1)), '-12-01')) AS DATE)
 SET @DT_REF = (SELECT DATEADD(MONTH, -1, DT_INI) AS DT_INI_MENOS_1_MES FROM IBP.CONTROLE_PROCESSOS WHERE ID_PROCESSO = 2)
 
--- MONTH
-SELECT
-  PVC.DT_REF,
-  PVC.ID_SISTEMA,
-  PVC.ID_SITE,
-  PVC.ID_OPERACAO,
-  PVC.ID_KPI,
-  DASH.NM_KPIS_DASH AS 'NM_KPI',
-  DASH.ID_ORDEM,
-  CASE WHEN UnpivotedData.Type = 'Budget' THEN 0
-    WHEN UnpivotedData.Type = 'Supply' THEN 1
-    ELSE 2 END AS 'ORDEM_GRAFICO',
-  CASE WHEN UnpivotedData.Type = 'Budget' THEN 0
-    WHEN UnpivotedData.Type = 'Supply' THEN 2
-    ELSE 1 END AS 'ID_TYPE',
-  CASE WHEN UnpivotedData.Type = 'Budget' THEN 'Budget'
-    WHEN UnpivotedData.Type = 'Supply' THEN 'Plan'
-    ELSE 'Act/Fcst' END AS 'NM_TYPE',
-  CASE WHEN UnpivotedData.Type = 'Budget' THEN CONCAT(FORMAT(DT_REF, 'MMM'),' B')
-    WHEN UnpivotedData.Type = 'Supply' THEN CONCAT(FORMAT(DT_REF, 'MMM'),' P')
-    WHEN UnpivotedData.Type = 'Forecast'  AND PVC.DT_REF <= @DT_REF THEN CONCAT(FORMAT(DT_REF, 'MMM'),' A')
-    WHEN UnpivotedData.Type = 'Forecast'  THEN CONCAT(FORMAT(DT_REF, 'MMM'),' F')
-  END AS 'Type',
-  CASE WHEN UnpivotedData.Value IS NULL THEN 0 ELSE UnpivotedData.Value END AS [Value],
-  -- Chaves técnicas de ordenação/filtro (visão temporal + série de negócio),
-  -- identificadas pelo bloco de origem — nunca inferidas do texto de Type
-  'MONTH' AS CD_VISAO, 'Mensal' AS NM_VISAO, 1 AS ORDEM_VISAO,
-  YEAR(PVC.DT_REF) AS ORDEM_ANO, MONTH(PVC.DT_REF) AS ORDEM_PERIODO,
-  CASE WHEN UnpivotedData.Type = 'Budget' THEN 1 WHEN UnpivotedData.Type = 'Supply' THEN 2 ELSE 3 END AS ORDEM_SERIE
-FROM
-  IBP.PEDRAVISAOCONSOLIDADA PVC
-  INNER JOIN IBP.DASHBOARD DASH
-    ON PVC.ID_SISTEMA = DASH.ID_SISTEMA
-    AND CONCAT(PVC.ID_SITE, PVC.ID_OPERACAO, PVC.ID_KPI) = CONCAT(DASH.ID_SITE, DASH.ID_OPERACAO, DASH.ID_KPI)
-  CROSS APPLY (
-    SELECT 'Budget' AS Type, PVC.VL_ORC  * DASH.VL_FATOR AS Value
-    UNION ALL
-    SELECT 'Supply' AS Type, PVC.VL_SUPPLY  * DASH.VL_FATOR AS Value
-    UNION ALL
-    SELECT 'Forecast' AS Type,
-    CASE WHEN PVC.DT_REF <= DATEFROMPARTS(YEAR(DATEADD(MONTH, -1, @DT_REF)), MONTH(DATEADD(MONTH, -1, @DT_REF)), 1) AND PVC.VL_REAL IS NULL THEN 0
-      WHEN PVC.DT_REF <= DATEFROMPARTS(YEAR(DATEADD(MONTH, -1, @DT_REF)), MONTH(DATEADD(MONTH, -1, @DT_REF)), 1) AND PVC.VL_REAL IS NOT NULL THEN PVC.VL_REAL  * DASH.VL_FATOR
-    ELSE PVC.VL_PROJ  * DASH.VL_FATOR END AS Value
-  ) AS UnpivotedData
-WHERE
-  PVC.DT_REF  BETWEEN @DT_INI  AND @DT_FIM
-  AND DASH.ID_DASH = 21
-
-UNION ALL
+-- MONTH — bloco comentado na QUARTELY.sql de origem (não produz linhas);
+-- mantido aqui apenas como registro de que a Quarterly nunca teve
+-- granularidade mensal ativa nesta consulta, não como algo removido por nós.
+-- CD_VISAO = 'MONTH' / NM_VISAO = 'Mensal' / ORDEM_VISAO = 1 (reservado para
+-- uma futura página Monthly reativar este bloco sem tocar nos demais).
 
 -- QUARTER
 SELECT
@@ -209,6 +165,7 @@ SELECT
   PVC.ID_OPERACAO,
   PVC.ID_KPI,
   DASH.NM_KPIS_DASH AS 'NM_KPI',
+  DASH.SG_UNID,
   DASH.ID_ORDEM,
   CASE
     WHEN UnpivotedData.Type = 'Budget' THEN 0
@@ -259,7 +216,7 @@ GROUP BY
   DATEADD(QUARTER, DATEDIFF(QUARTER, 0, PVC.DT_REF), 0),
   YEAR(PVC.DT_REF), DATEPART(QUARTER, PVC.DT_REF),
   PVC.ID_SISTEMA, PVC.ID_SITE, PVC.ID_OPERACAO, PVC.ID_KPI,
-  DASH.NM_KPIS_DASH, DASH.ID_ORDEM, UnpivotedData.Type
+  DASH.NM_KPIS_DASH, DASH.SG_UNID, DASH.ID_ORDEM, UnpivotedData.Type
 
 UNION ALL
 
@@ -267,7 +224,7 @@ UNION ALL
 SELECT
   DATEFROMPARTS(YEAR(PVC.DT_REF), CASE WHEN MONTH(PVC.DT_REF) BETWEEN 1 AND 6 THEN 1 ELSE 7 END, 1) AS DT_REF,
   PVC.ID_SISTEMA, PVC.ID_SITE, PVC.ID_OPERACAO, PVC.ID_KPI,
-  DASH.NM_KPIS_DASH AS 'NM_KPI', DASH.ID_ORDEM,
+  DASH.NM_KPIS_DASH AS 'NM_KPI', DASH.SG_UNID, DASH.ID_ORDEM,
   CASE WHEN UnpivotedData.Type = 'Budget' THEN 0 WHEN UnpivotedData.Type = 'Supply' THEN 1 ELSE 2 END AS 'ORDEM_GRAFICO',
   CASE WHEN UnpivotedData.Type = 'Budget' THEN 0 WHEN UnpivotedData.Type = 'Supply' THEN 2 ELSE 1 END AS 'ID_TYPE',
   CASE WHEN UnpivotedData.Type = 'Budget' THEN 'Budget' WHEN UnpivotedData.Type = 'Supply' THEN 'Plan' ELSE 'Act/Fcst' END AS 'NM_TYPE',
@@ -303,7 +260,7 @@ GROUP BY
   CASE WHEN MONTH(PVC.DT_REF) BETWEEN 1 AND 6 THEN 'H1' WHEN MONTH(PVC.DT_REF) BETWEEN 7 AND 12 THEN 'H2' END,
   CASE WHEN MONTH(PVC.DT_REF) BETWEEN 1 AND 6 THEN 1 ELSE 2 END,
   PVC.ID_SISTEMA, PVC.ID_SITE, PVC.ID_OPERACAO, PVC.ID_KPI,
-  DASH.NM_KPIS_DASH, DASH.ID_ORDEM, UnpivotedData.Type
+  DASH.NM_KPIS_DASH, DASH.SG_UNID, DASH.ID_ORDEM, UnpivotedData.Type
 
 UNION ALL
 
@@ -311,7 +268,7 @@ UNION ALL
 SELECT
   DATEFROMPARTS(YEAR(PVC.DT_REF), 1, 1) AS DT_REF,
   PVC.ID_SISTEMA, PVC.ID_SITE, PVC.ID_OPERACAO, PVC.ID_KPI,
-  DASH.NM_KPIS_DASH AS 'NM_KPI', DASH.ID_ORDEM,
+  DASH.NM_KPIS_DASH AS 'NM_KPI', DASH.SG_UNID, DASH.ID_ORDEM,
   CASE WHEN UnpivotedData.Type = 'Budget' THEN 6 ELSE 7 END AS 'ORDEM_GRAFICO',
   CASE WHEN UnpivotedData.Type = 'Budget' THEN 0 WHEN UnpivotedData.Type = 'Supply' THEN 2 ELSE 1 END AS 'ID_TYPE',
   CASE WHEN UnpivotedData.Type = 'Budget' THEN 'Budget' WHEN UnpivotedData.Type = 'Supply' THEN 'Plan' ELSE 'Act/Fcst' END AS 'NM_TYPE',
@@ -347,7 +304,7 @@ WHERE
   AND DASH.ID_DASH = 21
 GROUP BY
   YEAR(PVC.DT_REF), PVC.ID_SISTEMA, PVC.ID_SITE, PVC.ID_OPERACAO, PVC.ID_KPI,
-  DASH.NM_KPIS_DASH, DASH.ID_ORDEM, UnpivotedData.Type
+  DASH.NM_KPIS_DASH, DASH.SG_UNID, DASH.ID_ORDEM, UnpivotedData.Type
 
 ORDER BY ORDEM_ANO, ORDEM_VISAO, ORDEM_PERIODO, ORDEM_SERIE`;
       return await executeQuery(chartSql);
@@ -360,29 +317,29 @@ ORDER BY ORDEM_ANO, ORDEM_VISAO, ORDEM_PERIODO, ORDEM_SERIE`;
   }
 });
 
-// Site names for the Site filter — LEFT JOIN so a site without a match in
-// IBP.SITES still comes back (NM_SITE null) instead of disappearing.
+// Site names for the Site filter.
+// ------------------------------------------------------------------------
+// A origem correta é IBP.DASHBOARD.ID_SITE (todo site configurado para este
+// dashboard), não IBP.PEDRAVISAOCONSOLIDADA — usar PVC como ponto de partida
+// (como a versão anterior fazia, via INNER JOIN) omite qualquer site que
+// esteja cadastrado no DASHBOARD mas ainda sem linhas de fato/orçamento em
+// PVC, que é exatamente a causa-raiz de sites "faltando" no filtro. O RIGHT
+// JOIN abaixo é a query de referência pedida, literal: parte de DASHBOARD
+// (filtrado por ID_DASH = 21) e resolve o nome em SITES.
 app.get('/api/sites', async (req, res) => {
   try {
     const data = await withCache('sites', async () => {
       const sitesSql = `
 SELECT DISTINCT
-  Q.ID_SITE,
-  S.NM_SITE
-FROM (
-  SELECT DISTINCT PVC.ID_SITE
-  FROM IBP.PEDRAVISAOCONSOLIDADA PVC
-  INNER JOIN IBP.DASHBOARD DASH
-    ON PVC.ID_SISTEMA = DASH.ID_SISTEMA
-    AND CONCAT(PVC.ID_SITE, PVC.ID_OPERACAO, PVC.ID_KPI) = CONCAT(DASH.ID_SITE, DASH.ID_OPERACAO, DASH.ID_KPI)
-  WHERE DASH.ID_DASH = 21
-) Q
-LEFT JOIN IBP.SITES S
-  ON S.ID_SITE = Q.ID_SITE
-ORDER BY
-  CASE WHEN S.NM_SITE IS NULL THEN 1 ELSE 0 END,
-  S.NM_SITE,
-  Q.ID_SITE`;
+  S.ID_SITE,
+  LTRIM(RTRIM(S.NM_SITE)) AS NM_SITE
+FROM IBP.SITES S
+RIGHT JOIN IBP.DASHBOARD D
+  ON D.ID_SITE = S.ID_SITE
+WHERE D.ID_DASH = 21
+  AND S.NM_SITE IS NOT NULL
+  AND LTRIM(RTRIM(S.NM_SITE)) <> ''
+ORDER BY NM_SITE`;
       return await executeQuery(sitesSql);
     });
 
