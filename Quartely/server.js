@@ -182,13 +182,19 @@ SELECT
     WHEN UnpivotedData.Type = 'Supply' THEN 'Plan'
     ELSE 'Act/Fcst'
   END AS 'NM_TYPE',
-  CASE
-    WHEN UnpivotedData.Type = 'Budget' THEN CONCAT('Q', DATEPART(QUARTER, DT_REF), ' B')
-    WHEN UnpivotedData.Type = 'Supply' THEN CONCAT('Q', DATEPART(QUARTER, DT_REF), ' P')
-    WHEN UnpivotedData.Type = 'Forecast' AND PVC.DT_REF <= @DT_REF THEN CONCAT('Q', DATEPART(QUARTER, DT_REF), 'A')
-    WHEN UnpivotedData.Type = 'Forecast' THEN CONCAT('Q', DATEPART(QUARTER, DT_REF), 'F')
-  END AS 'Type',
-  CASE WHEN UnpivotedData.Value IS NULL THEN 0 ELSE UnpivotedData.Value END AS [Value],
+  CONCAT(
+    'Q',
+    DATEPART(QUARTER, PVC.DT_REF),
+    CASE
+      WHEN UnpivotedData.Type = 'Budget' THEN 'B'
+      WHEN UnpivotedData.Type = 'Supply' THEN 'P'
+      WHEN UnpivotedData.Type = 'Forecast'
+           AND EOMONTH(DATEFROMPARTS(YEAR(PVC.DT_REF), DATEPART(QUARTER, PVC.DT_REF) * 3, 1)) <= CAST(@DT_REF AS DATE)
+        THEN 'A'
+      WHEN UnpivotedData.Type = 'Forecast' THEN 'F'
+    END
+  ,' ', (RIGHT(YEAR(PVC.DT_REF), 2))) AS 'Type',
+  SUM(CASE WHEN UnpivotedData.Value IS NULL THEN 0 ELSE UnpivotedData.Value END) AS [Value],
   'QUARTER' AS CD_VISAO, 'Trimestral' AS NM_VISAO, 2 AS ORDEM_VISAO,
   YEAR(PVC.DT_REF) AS ORDEM_ANO, DATEPART(QUARTER, PVC.DT_REF) AS ORDEM_PERIODO,
   CASE WHEN UnpivotedData.Type = 'Budget' THEN 1 WHEN UnpivotedData.Type = 'Supply' THEN 2 ELSE 3 END AS ORDEM_SERIE
@@ -238,7 +244,7 @@ SELECT
         THEN 'A'
       WHEN UnpivotedData.Type = 'Forecast' THEN 'F'
     END
-  ) AS 'Type',
+  ,' ', (RIGHT(YEAR(PVC.DT_REF), 2))) AS 'Type',
   SUM(CASE WHEN UnpivotedData.Value IS NULL THEN 0 ELSE UnpivotedData.Value END) AS [Value],
   'SEMESTER' AS CD_VISAO, 'Semestral' AS NM_VISAO, 3 AS ORDEM_VISAO,
   YEAR(PVC.DT_REF) AS ORDEM_ANO,
@@ -283,7 +289,7 @@ GROUP BY
         THEN 'A'
       WHEN UnpivotedData.Type = 'Forecast' THEN 'F'
     END
-  )
+  ,' ', (RIGHT(YEAR(PVC.DT_REF), 2)))
 
 UNION ALL
 
