@@ -878,9 +878,13 @@ function renderTurnoverChart(sourceRows) {
 const SERIE_ORDER = { 'Budget': 1, 'Plan': 2, 'Act/Fcst': 3 }; // negócio, não alfabético
 function serieOrder(nmType) { return SERIE_ORDER[nmType] ?? 99; }
 
+// Ordem pedida explicitamente: Trimestre → Semestre → Ano SEMPRE primeiro
+// (ORDEM_VISAO), independente do ano — com múltiplos anos selecionados,
+// os grupos Trimestral/Semestral/Anual não se misturam entre si; dentro de
+// cada grupo, mantém a ordem temporal já existente (Ano → Período → Série).
 function compareByTechnicalKeys(a, b) {
-  return (a.ORDEM_ANO - b.ORDEM_ANO)
-      || (a.ORDEM_VISAO - b.ORDEM_VISAO)
+  return (a.ORDEM_VISAO - b.ORDEM_VISAO)
+      || (a.ORDEM_ANO - b.ORDEM_ANO)
       || (a.ORDEM_PERIODO - b.ORDEM_PERIODO)
       || (a.ORDEM_SERIE - b.ORDEM_SERIE);
 }
@@ -1070,10 +1074,17 @@ function getFilteredRows() {
 
 // ── Extração das opções de UM combobox a partir de um subconjunto de
 //    linhas — nenhuma lista fixa, tudo derivado dos dados; ordenação
-//    sempre por chave técnica, nunca pelo texto exibido ────────────────
-function extractOptions(key, rows) {
+//    sempre por chave técnica, nunca pelo texto exibido. `ensureValues`
+//    (opcional) são valores JÁ SELECIONADOS pelo usuário nesse campo —
+//    entram na lista mesmo que a combinação atual dos DEMAIS filtros não
+//    produza mais nenhuma linha para eles, buscando o rótulo em `allRows`
+//    (não em `rows`, que já veio restrito). Nenhum filtro pode fazer outro
+//    "sumir": a seleção do usuário nunca é removida por conta própria ───
+function extractOptions(key, rows, ensureValues) {
+  const ensure = ensureValues && ensureValues.length ? ensureValues : null;
   if (key === 'ano') {
     const set = new Set(rows.map(r => r.ORDEM_ANO));
+    if (ensure) ensure.forEach(v => set.add(Number(v)));
     return Array.from(set).sort((a, b) => b - a).map(y => ({ value: String(y), label: String(y) }));
   }
   if (key === 'sites') {
@@ -1083,6 +1094,14 @@ function extractOptions(key, rows) {
     rows.forEach(r => {
       if (!map.has(r.ID_SITE)) map.set(r.ID_SITE, { label: r.NM_SITE || `Site ${r.ID_SITE}`, hasName: !!r.NM_SITE });
     });
+    if (ensure) {
+      ensure.forEach(v => {
+        const id = Number(v);
+        if (map.has(id)) return;
+        const hit = allRows.find(r => r.ID_SITE === id);
+        map.set(id, { label: hit ? (hit.NM_SITE || `Site ${id}`) : `Site ${id}`, hasName: !!(hit && hit.NM_SITE) });
+      });
+    }
     return Array.from(map, ([value, { label, hasName }]) => ({ value: String(value), label, hasName }))
       .sort((a, b) => (a.hasName === b.hasName ? 0 : a.hasName ? -1 : 1)
         || a.label.localeCompare(b.label, 'pt-BR')
@@ -1093,6 +1112,7 @@ function extractOptions(key, rows) {
     // Visão (campo NM_TYPE = "Série" na QUARTELY.sql): ordem de negócio
     // Budget → Plan → Act/Fcst, nunca alfabética
     const set = new Set(rows.map(r => r.NM_TYPE));
+    if (ensure) ensure.forEach(v => set.add(v));
     return Array.from(set).sort((a, b) => serieOrder(a) - serieOrder(b)).map(v => ({ value: v, label: v }));
   }
   if (key === 'horizontes') {
@@ -1100,11 +1120,19 @@ function extractOptions(key, rows) {
     // origem — a mesma regra usada para ordenar as barras do gráfico
     const rep = new Map();
     rows.forEach(r => { if (!rep.has(r.Type)) rep.set(r.Type, r); });
+    if (ensure) {
+      ensure.forEach(v => {
+        if (rep.has(v)) return;
+        const hit = allRows.find(r => r.Type === v);
+        if (hit) rep.set(v, hit);
+      });
+    }
     return Array.from(rep.entries()).sort((a, b) => compareByTechnicalKeys(a[1], b[1])).map(([type]) => ({ value: type, label: type }));
   }
   if (key === 'product') {
     const set = new Set();
     rows.forEach(r => { if (r.NM_KPI && String(r.NM_KPI).trim() !== '') set.add(String(r.NM_KPI).trim()); });
+    if (ensure) ensure.forEach(v => set.add(v));
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR')).map(p => ({ value: p, label: p }));
   }
   return [];
@@ -1113,32 +1141,20 @@ function extractOptions(key, rows) {
 // Recalcula as opções de TODOS os campos de uma vez, cada uma sobre
 // allRows filtrado pelos demais — nunca sobre um dataset já reduzido
 // (regra técnica #3: "não filtrar repetidamente sobre um dataset já
-// reduzido" — cada extractOptions parte sempre de `allRows`).
+// reduzido" — cada extractOptions parte sempre de `allRows`). As seleções
+// já feitas pelo usuário em CADA campo são passadas como `ensureValues`
+// para que nenhuma seleção seja removida por uma mudança em outro filtro
+// — só a combinação final dos dados é que pode ficar vazia, nunca a
+// seleção em si (regra explícita: "nenhum filtro pode limpar/alterar
+// outro"; cada filtro só modifica o próprio estado).
 function recomputeFilterOptions() {
   FILTER_DEFS.forEach(def => {
     const narrowed = allRows.filter(r => rowMatchesFilters(r, def.key));
-    filterOptions[def.key] = extractOptions(def.key, narrowed);
+    const selected = def.multiple
+      ? [...filterState[def.key]]
+      : (filterState[def.key] != null ? [filterState[def.key]] : []);
+    filterOptions[def.key] = extractOptions(def.key, narrowed, selected);
   });
-}
-
-// Remove somente as seleções que deixaram de ter dados correspondentes
-// após outro filtro mudar — nunca a seleção inteira do campo, só o(s)
-// valor(es) inválido(s). Como podar uma seleção só AMPLIA as opções dos
-// demais campos (nunca as restringe mais), uma segunda passada de
-// recomputeFilterOptions() após a poda já converge — sem loop.
-function pruneInvalidSelections() {
-  let changed = false;
-  FILTER_DEFS.forEach(def => {
-    const valid = new Set((filterOptions[def.key] || []).map(o => o.value));
-    if (def.multiple) {
-      const set = filterState[def.key];
-      [...set].forEach(v => { if (!valid.has(v)) { set.delete(v); changed = true; } });
-    } else if (filterState[def.key] !== null && !valid.has(filterState[def.key])) {
-      filterState[def.key] = null;
-      changed = true;
-    }
-  });
-  return changed;
 }
 
 // ── Aplica o filtro + agrega por Type (mesmo SUM/GROUP BY já usado nas
@@ -1207,9 +1223,6 @@ function refreshFiltersAndChart() {
   setFiltersBusy(true);
   try {
     recomputeFilterOptions();
-    if (pruneInvalidSelections()) {
-      recomputeFilterOptions(); // poda só amplia opções — no máx. 2 passadas, nunca recursivo
-    }
     FILTER_DEFS.forEach(def => {
       const searchVal = document.querySelector(`[data-panel="${def.key}"] .qf-search input`)?.value;
       renderFilterOptions(def, searchVal);
