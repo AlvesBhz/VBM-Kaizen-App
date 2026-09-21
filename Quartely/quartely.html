@@ -2,18 +2,11 @@
 <html lang="pt-BR">
 <!--
   ═══════════════════════════════════════════════════════════════════
-  QUARTELY · Dashboard
+  QUARTELY · Dashboard — Página de Gráfico
   ═══════════════════════════════════════════════════════════════════
   PAPEL DA PÁGINA
-    Tela inicial: hero em tela cheia + navegação para as demais telas.
-    Autenticação Microsoft (MSAL) fica aqui — ver bloco no fim do arquivo.
-
-  DEPENDÊNCIAS (carregadas no <head> / fim do <body>)
-    • Font Awesome 6  — ícones (fa-solid ...)
-    • css/vbm-app.css — Design System VBM: tokens (--vbm-*), reset,
-      componentes compartilhados (.btn, .form-control, .modal, .badge...)
-    • js/vbm-app.js  — comportamento compartilhado: modais, abas,
-      wizard, filtros, toasts, toggles. Auto-inicializa no DOMContentLoaded.
+    Tela de dados: mesma topbar do index.html, sem hero de imagem,
+    com o gráfico de Turnover centralizado na página.
 
   TEMA CLARO/ESCURO
     Alternado por body[data-bg="dark"] (persistido em localStorage
@@ -59,92 +52,39 @@ html, body {
 }
 
 body {
-  background: linear-gradient(160deg, #10131a 0%, var(--vbm-blue-dark) 100%);
-  background-attachment: fixed;
+  background: #eef1f6;
+  min-height: 100vh;
   color: var(--vbm-dark);
+}
+
+[data-bg="dark"] body,
+body[data-bg="dark"] {
+  background: linear-gradient(160deg, #10131a 0%, var(--vbm-blue-dark) 100%);
 }
 
 /* App layout */
 .app-layout { display: block; }
 .app-main { margin-left: 0; min-height: calc(100vh - 64px); }
-.page-content { padding: 1.75rem; padding-bottom: 0; }
-
-/* Hero */
-.dash-hero {
-  width: calc(100% + 3.5rem);
-  margin-top: calc(-1.75rem - 64px);
-  margin-left: -1.75rem;
-  margin-right: 0;
-  margin-bottom: 0;
-  border-radius: 0;
-  height: 100vh;
-  min-height: 100vh;
-  position: relative;
-  z-index: 1;
+.page-content {
+  padding: 1.75rem;
+  min-height: calc(100vh - 64px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-@supports (height: 100dvh) {
-  .dash-hero { height: 100dvh; min-height: 100dvh; }
-  .app-layout, .app-main { min-height: calc(100dvh - 64px); }
-}
-
-html, body { overflow-x: clip; overflow-y: auto; }
-
-.dash-hero-zoom {
-  position: absolute;
-  inset: 0;
-  animation: heroZoomIn 20s linear infinite alternate;
-}
-
-.dash-hero-bg-img {
-  opacity: 1;
-  mix-blend-mode: normal;
-  object-fit: cover;
-  object-position: left bottom;
-  width: 100%;
-  height: 100%;
-  animation: none;
-}
-
-@keyframes heroZoomIn {
-  from { transform: scale(1); }
-  to   { transform: scale(1.08); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .dash-hero-zoom { animation: none; }
-}
-
-.dash-hero-texto {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-}
-
-/* Topbar */
+/* Topbar (sempre sólida — não há hero para "revelar" o fundo) */
 .topnav {
   position: sticky;
   top: 0;
   z-index: 100;
   height: 64px;
-  background: transparent;
+  background: var(--vbm-blue-dark);
   display: flex;
   align-items: center;
   padding: 0 2rem;
   gap: 0;
   border-bottom: 1px solid rgba(255,255,255,.05);
-  box-shadow: none;
-  transition: background .3s var(--ease-out), box-shadow .3s var(--ease-out);
-}
-
-@supports (backdrop-filter: blur(1px)) {
-  .topnav { backdrop-filter: blur(4px) saturate(120%); }
-}
-
-.topnav.scrolled {
-  background: var(--vbm-blue-dark);
   box-shadow: 0 2px 20px rgba(13,38,64,.18);
 }
 
@@ -309,33 +249,44 @@ html, body { overflow-x: clip; overflow-y: auto; }
 }
 
 @media (max-width: 768px) {
-  .dash-hero {
-    width: calc(100% + 2rem);
-    margin-top: calc(-1rem - 64px);
-    margin-left: -1rem;
-  }
   .page-content { padding: 1rem; }
 }
 
+/* ═══════════════════════════════════════════════════
+   CHART CARD (Turnover)
+═══════════════════════════════════════════════════ */
+
+.chart-card {
+  width: 100%;
+  max-width: 460px;
+  background: #ffffff;
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(10,20,35,.18), 0 2px 8px rgba(10,20,35,.08);
+  padding: 1.5rem 1.5rem 1.25rem;
+}
+
+.chart-card-title {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: #1a2942;
+}
+
+.chart-card-subtitle {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 400;
+  font-size: .78rem;
+  color: #8b96a8;
+  margin-top: 2px;
+  margin-bottom: 1rem;
+}
+
+.chart-svg-wrap { width: 100%; }
+
 /* Tema escuro */
-[data-bg="dark"] {
-  background: radial-gradient(ellipse 80% 50% at 72% 6%, rgba(60,181,229,.10) 0%, transparent 55%),
-              linear-gradient(160deg, #10131a 0%, var(--vbm-blue-dark) 100%);
-  background-attachment: fixed;
+[data-bg="dark"] .chart-card {
+  background: #ffffff; /* mantém cartão claro, como no modelo, mesmo no tema escuro */
 }
-
-[data-bg="dark"] .topnav {
-  background: transparent;
-  border-bottom-color: rgba(255,255,255,.05);
-}
-
-[data-bg="dark"] .topnav.scrolled {
-  background: rgba(13,38,64,.92);
-  box-shadow: 0 2px 24px rgba(0,0,0,.4);
-}
-
-[data-bg="dark"] .topnav-link { color: rgba(255,255,255,.65); }
-[data-bg="dark"] .topnav-link:hover { color: #fff; }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -385,30 +336,14 @@ html, body { overflow-x: clip; overflow-y: auto; }
 <main class="app-main">
 <div class="page-content">
 
-<!-- Hero -->
-<div class="dash-hero" id="dashHero">
-  <div class="dash-hero-zoom">
-    <img src="assets/images/BM Linkedln.jpg" class="dash-hero-bg-img" alt="Quartely Dashboard"/>
+  <!-- Chart Card -->
+  <div class="chart-card" id="chartCard">
+    <div class="chart-card-title" data-i18n="chart.title">Turnover</div>
+    <div class="chart-card-subtitle">(%)</div>
+    <div class="chart-svg-wrap">
+      <svg id="turnoverChart" width="100%" viewBox="0 0 420 260"></svg>
+    </div>
   </div>
-  <div class="dash-hero-texto" id="heroText">
-    <svg width="100%" height="100%" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <style>
-          .hero-antetitulo { font-family: 'Poppins', sans-serif; font-weight: 800; font-size: 22px; letter-spacing: 3px; fill: #5fd0ff; }
-          .hero-linha { font-family: 'Poppins', sans-serif; font-weight: 800; font-size: 120px; letter-spacing: -2px; fill: #ffffff; }
-          .hero-subtitulo { font-family: 'Poppins', sans-serif; font-weight: 400; font-size: 28px; fill: #d6e8f4; fill-opacity: .78; }
-        </style>
-      </defs>
-
-      <text class="hero-antetitulo" x="50" y="120">QUARTELY DASHBOARD</text>
-
-      <text class="hero-linha" x="50" y="280">Financial</text>
-      <text class="hero-linha" x="50" y="380">Insight.</text>
-
-      <text class="hero-subtitulo" x="50" y="450">Real-time Financial Dashboard</text>
-    </svg>
-  </div>
-</div>
 
 </div>
 </main>
@@ -416,6 +351,8 @@ html, body { overflow-x: clip; overflow-y: auto; }
 
 <!-- Font Awesome -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+<!-- D3.js -->
+<script src="js/vendor/d3.min.js"></script>
 
 <script>
 // ─── Tema ───
@@ -431,17 +368,13 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-// ─── Scroll effect ───
-window.addEventListener('scroll', () => {
-  const topnav = document.getElementById('topnav');
-  topnav.classList.toggle('scrolled', window.scrollY > 0);
-});
-
 // ─── Menu links ───
 document.querySelectorAll('.topnav-link').forEach(link => {
   link.addEventListener('click', (e) => {
-    document.querySelectorAll('.topnav-link').forEach(l => l.classList.remove('active'));
-    e.target.closest('.topnav-link').classList.add('active');
+    if (link.getAttribute('href').startsWith('#')) {
+      document.querySelectorAll('.topnav-link').forEach(l => l.classList.remove('active'));
+      e.target.closest('.topnav-link').classList.add('active');
+    }
   });
 });
 
@@ -449,11 +382,13 @@ document.querySelectorAll('.topnav-link').forEach(link => {
 const i18n = {
   'pt-BR': {
     'nav.quartely': 'Quartely',
-    'nav.monthly': 'Monthly'
+    'nav.monthly': 'Monthly',
+    'chart.title': 'Turnover'
   },
   'en': {
     'nav.quartely': 'Quarterly',
-    'nav.monthly': 'Monthly'
+    'nav.monthly': 'Monthly',
+    'chart.title': 'Turnover'
   }
 };
 
@@ -470,6 +405,119 @@ function applyI18n(lang) {
 
 const savedLang = localStorage.getItem('vdt-lang') || 'pt-BR';
 applyI18n(savedLang);
+
+// ═══════════════════════════════════════════════════
+// TURNOVER CHART (D3.js)
+// ═══════════════════════════════════════════════════
+const turnoverData = [
+  { label: 'Sep B', value: 0.60, kind: 'budget' },
+  { label: 'Sep F', value: 0.60, kind: 'actual' },
+  { label: 'Q3B',   value: 1.65, kind: 'budget' },
+  { label: 'Q3F',   value: 1.33, kind: 'actual' },
+  { label: '26B',   value: 7.39, kind: 'budget' },
+  { label: '26A',   value: 6.25, kind: 'actual' }
+];
+
+function renderTurnoverChart() {
+  const svg = d3.select('#turnoverChart');
+  svg.selectAll('*').remove();
+
+  const width = 420, height = 260;
+  const margin = { top: 44, right: 10, bottom: 30, left: 10 };
+  const innerWidth = width - margin.left - margin.right;
+  const innerHeight = height - margin.top - margin.bottom;
+
+  const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+
+  const x = d3.scaleBand()
+    .domain(turnoverData.map(d => d.label))
+    .range([0, innerWidth])
+    .paddingInner(0.32)
+    .paddingOuter(0.15);
+
+  const yMax = d3.max(turnoverData, d => d.value) * 1.35;
+  const y = d3.scaleLinear().domain([0, yMax]).range([innerHeight, 0]);
+
+  const colorFor = d => d.kind === 'budget' ? '#c6ccd6' : '#3cb5e5';
+
+  // Bars
+  g.selectAll('rect.bar')
+    .data(turnoverData)
+    .enter()
+    .append('rect')
+    .attr('class', 'bar')
+    .attr('x', d => x(d.label))
+    .attr('y', d => y(d.value))
+    .attr('width', x.bandwidth())
+    .attr('height', d => innerHeight - y(d.value))
+    .attr('rx', 3)
+    .attr('fill', colorFor);
+
+  // Value labels above bars
+  g.selectAll('text.value')
+    .data(turnoverData)
+    .enter()
+    .append('text')
+    .attr('class', 'value')
+    .attr('x', d => x(d.label) + x.bandwidth() / 2)
+    .attr('y', d => y(d.value) - 8)
+    .attr('text-anchor', 'middle')
+    .attr('font-family', 'Poppins, sans-serif')
+    .attr('font-weight', 600)
+    .attr('font-size', '11px')
+    .attr('fill', '#3a4658')
+    .text(d => d.value.toFixed(2).replace('.', ','));
+
+  // X axis labels
+  g.selectAll('text.xlabel')
+    .data(turnoverData)
+    .enter()
+    .append('text')
+    .attr('class', 'xlabel')
+    .attr('x', d => x(d.label) + x.bandwidth() / 2)
+    .attr('y', innerHeight + 20)
+    .attr('text-anchor', 'middle')
+    .attr('font-family', 'Poppins, sans-serif')
+    .attr('font-weight', 500)
+    .attr('font-size', '10.5px')
+    .attr('fill', '#6b7c93')
+    .text(d => d.label);
+
+  // Percentage change badges between pairs
+  for (let i = 0; i < turnoverData.length; i += 2) {
+    const a = turnoverData[i];
+    const b = turnoverData[i + 1];
+    const pct = a.value === 0 ? 0 : ((b.value - a.value) / a.value) * 100;
+    const pctLabel = (pct >= 0 ? '' : '') + pct.toFixed(1).replace('.', ',').replace('-0,0', '0,0') + '%';
+
+    const xa = x(a.label) + x.bandwidth() / 2;
+    const xb = x(b.label) + x.bandwidth() / 2;
+    const xMid = (xa + xb) / 2;
+    const topY = Math.min(y(a.value), y(b.value)) - 26;
+
+    // Dashed connector
+    g.append('line')
+      .attr('x1', xa).attr('x2', xb)
+      .attr('y1', topY + 12).attr('y2', topY + 12)
+      .attr('stroke', '#e0554f')
+      .attr('stroke-width', 1)
+      .attr('stroke-dasharray', '3,2');
+
+    // Percentage label
+    g.append('text')
+      .attr('x', xMid)
+      .attr('y', topY)
+      .attr('text-anchor', 'middle')
+      .attr('font-family', 'Poppins, sans-serif')
+      .attr('font-weight', 600)
+      .attr('font-size', '10.5px')
+      .attr('fill', '#e0554f')
+      .text(pctLabel);
+  }
+}
+
+renderTurnoverChart();
+window.addEventListener('resize', renderTurnoverChart);
 </script>
 
 </body>
