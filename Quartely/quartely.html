@@ -8,14 +8,16 @@
     Tela de dados: mesma topbar do index.html, sem hero de imagem,
     com o gráfico de Turnover centralizado na página.
 
+  SISTEMA DE DELTA (portado de uma medida DAX/Power BI)
+    O visual "cota de diferença" abaixo é a versão web do componente:
+    mesmas classes CSS, mesma animação e mesma lógica de comparação
+    (Budget do mesmo período, senão a coluna anterior), porém
+    implementado em HTML/CSS/JS puro — sem DAX, sem Power BI, com os
+    dados vindos de um array JS (ver `chartData` no fim do arquivo).
+
   TEMA CLARO/ESCURO
     Alternado por body[data-bg="dark"] (persistido em localStorage
-    'vdt-theme'). Toda regra de cor precisa do par claro + escuro.
-
-  INTERNACIONALIZAÇÃO (i18n)
-    Marque o elemento com data-i18n / -title / -aria / -placeholder e
-    cadastre a chave nos DOIS dicionários (pt-BR e en) no fim do arquivo.
-    Idioma persistido em localStorage 'vdt-lang'.
+    'vdt-theme').
   ═══════════════════════════════════════════════════════════════════
 -->
 <head>
@@ -128,10 +130,7 @@ body[data-bg="dark"] {
 }
 
 .topnav-link:hover { color: #fff; }
-
-.topnav-link.active {
-  color: #fff;
-}
+.topnav-link.active { color: #fff; }
 
 .topnav-link::after {
   content: '';
@@ -148,10 +147,7 @@ body[data-bg="dark"] {
   transition: width .3s var(--ease-out), opacity .3s var(--ease-out);
 }
 
-.topnav-link.active::after {
-  width: 60%;
-  opacity: 1;
-}
+.topnav-link.active::after { width: 60%; opacity: 1; }
 
 .topnav-sep {
   width: 1px;
@@ -198,100 +194,205 @@ body[data-bg="dark"] {
   flex-shrink: 0;
 }
 
-.topnav-user-text {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  line-height: 1.3;
-}
+.topnav-user-text { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.3; }
 
 .topnav-user-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
+  width: 32px; height: 32px; border-radius: 50%;
   background: linear-gradient(145deg, var(--vbm-blue-light), var(--vbm-blue-dark));
   border: 1.5px solid rgba(255,255,255,.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: 'Poppins', sans-serif;
-  font-weight: 700;
-  font-size: 11px;
-  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Poppins', sans-serif; font-weight: 700; font-size: 11px; color: #fff;
   flex-shrink: 0;
 }
 
-.topnav-user-name {
-  font-family: 'Poppins', sans-serif;
-  font-weight: 600;
-  font-size: 11.5px;
-  color: #fff;
-  white-space: nowrap;
-}
-
+.topnav-user-name { font-family: 'Poppins', sans-serif; font-weight: 600; font-size: 11.5px; color: #fff; white-space: nowrap; }
 .topnav-user-role {
-  font-family: 'Poppins', sans-serif;
-  font-weight: 600;
-  font-size: 9px;
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  color: rgba(255,255,255,.6);
-  white-space: nowrap;
+  font-family: 'Poppins', sans-serif; font-weight: 600; font-size: 9px; letter-spacing: .1em;
+  text-transform: uppercase; color: rgba(255,255,255,.6); white-space: nowrap;
 }
 
 @media (max-width: 960px) {
   .topnav-links { display: none; }
   .topnav-user-role { display: none; }
 }
-
-@media (max-width: 540px) {
-  .topnav-user-name { display: none; }
-}
-
-@media (max-width: 768px) {
-  .page-content { padding: 1rem; }
-}
-
-/* ═══════════════════════════════════════════════════
-   CHART CARD (Turnover)
-═══════════════════════════════════════════════════ */
-
-.chart-card {
-  width: 100%;
-  max-width: 460px;
-  background: #ffffff;
-  border-radius: 14px;
-  box-shadow: 0 12px 40px rgba(10,20,35,.18), 0 2px 8px rgba(10,20,35,.08);
-  padding: 1.5rem 1.5rem 1.25rem;
-}
-
-.chart-card-title {
-  font-family: 'Poppins', sans-serif;
-  font-weight: 700;
-  font-size: 1.05rem;
-  color: #1a2942;
-}
-
-.chart-card-subtitle {
-  font-family: 'Poppins', sans-serif;
-  font-weight: 400;
-  font-size: .78rem;
-  color: #8b96a8;
-  margin-top: 2px;
-  margin-bottom: 1rem;
-}
-
-.chart-svg-wrap { width: 100%; }
-
-/* Tema escuro */
-[data-bg="dark"] .chart-card {
-  background: #ffffff; /* mantém cartão claro, como no modelo, mesmo no tema escuro */
-}
+@media (max-width: 540px) { .topnav-user-name { display: none; } }
+@media (max-width: 768px) { .page-content { padding: 1rem; } }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(0,0,0,.14); border-radius: 100px; }
 [data-bg="dark"] ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.14); }
+
+/* ════════════════════════════════════════════════════════════════════
+   GRÁFICO DE TURNOVER — sistema de "cota de diferença" (delta)
+   Portado de uma medida DAX/Power BI: mesmas classes, mesma animação,
+   mesma lógica de comparação (Budget do período, senão a coluna
+   anterior). Aqui roda como HTML/CSS/JS estático, sem DAX.
+   ════════════════════════════════════════════════════════════════════ */
+.main-wrapper, .main-wrapper *, .main-wrapper *::before, .main-wrapper *::after { box-sizing: border-box; }
+
+.main-wrapper {
+  --gap: clamp(10px, 3vw, 30px);
+  --folga: clamp(34px, 7.5vh, 48px);
+  --barw: 74%;
+  --ink-strong: #0F172A;
+  --ink-soft: #6B7280;
+  /* Tokens do delta, definidos uma única vez:
+     --stroke  linhas de nível e base do fio guia (cinza-azulado neutro)
+     --hair    ponta fraca do fio guia (nasce esmaecida perto da pílula)
+     --glass   preenchimento da pílula (slate-100, não branco puro) */
+  --stroke: rgba(100,116,139,.38);
+  --hair: rgba(100,116,139,.14);
+  --glass: rgba(241,245,249,.82);
+
+  width: 100%; max-width: 760px;
+  height: min(70vh, 560px); min-height: 420px;
+  display: flex; flex-direction: column;
+  font-family: 'Vale Sans Medium', 'Segoe UI', 'system-ui', sans-serif;
+  padding: 20px 20px 14px;
+  background: #FFFFFF; border-radius: 14px; border: 1px solid #E2E8F0;
+  box-shadow: 0 12px 40px rgba(10,20,35,.12), 0 2px 8px rgba(10,20,35,.06);
+  overflow: hidden;
+}
+
+.chart-header { flex-shrink: 0; }
+.chart-title { color: #316866; font-family: 'Vale Sans Medium', 'Segoe UI', sans-serif; font-size: 1.4rem; font-weight: 400; margin: 0; }
+.chart-subtitle { color: #9CA3AF; font-family: 'Vale Sans', 'Segoe UI', sans-serif; font-size: 1.05rem; margin: 0; font-weight: 200; }
+
+/* área do gráfico — gap em px garante que a distância centro-a-centro
+   entre colunas vizinhas seja (100% + gap), o que permite ancorar a
+   cota no vão sem depender da ordem do eixo */
+.chart-area {
+  position: relative; display: flex; align-items: flex-end; justify-content: center;
+  gap: var(--gap); width: 100%; flex: 1; min-width: 0;
+  margin-top: calc(var(--folga) + 40px);
+  margin-bottom: clamp(22px, 5vh, 28px);
+}
+.chart-area::before {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; z-index: 1;
+  background: linear-gradient(90deg, rgba(203,213,225,0), #CBD5E1 8%, #CBD5E1 92%, rgba(203,213,225,0));
+}
+
+.col-wrapper { position: relative; flex: 1 1 0; max-width: 96px; min-width: 30px; height: 100%; }
+.col-wrapper::after {
+  content: ''; position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+  width: 46%; height: 7px; background: var(--pill-bg); border-radius: 4px; z-index: 2;
+}
+
+/* barra */
+.bar {
+  position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+  width: var(--barw); height: var(--h); border-radius: 4px 4px 2px 2px; z-index: 3;
+  background-color: var(--c);
+  background-image: linear-gradient(180deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,0) 42%, rgba(15,23,42,.06) 100%);
+  box-shadow: 0 1px 2px rgba(15,23,42,.07);
+  animation: growBar .95s cubic-bezier(.16,.84,.28,1) both;
+}
+@keyframes growBar { from { height: 0; } to { height: var(--h); } }
+.col-wrapper:hover .bar { filter: brightness(1.04); }
+
+.value-label {
+  position: absolute; bottom: calc(var(--h) + 7px); left: 50%; transform: translateX(-50%);
+  white-space: nowrap; color: var(--ink-strong); font-family: 'Vale Sans', 'Segoe UI', sans-serif;
+  font-size: .8rem; font-variant-numeric: tabular-nums; z-index: 6;
+}
+.axis-label {
+  position: absolute; bottom: -22px; left: 0; width: 100%; text-align: center;
+  font-size: clamp(.80rem, 2vh, .8rem); color: var(--ink-soft); font-weight: 500;
+}
+
+/* ────────────────────────────────────────────────────────────────────
+   COTA DE DIFERENÇA — anatomia (5 peças, ordem de leitura):
+     .dref   linha de nível da coluna-BASE, tracejada (projeção)
+     .dnow   linha de nível da coluna ATUAL, sólida (fato medido)
+     .dspan  haste vertical entre os dois níveis — o comprimento É o delta
+     .dfill  faixa que preenche o intervalo, dando massa à haste
+     .dtrack fio guia do nível mais alto até a pílula
+     .dpill  o número, em vidro fosco, flutuando acima do par
+   Partido de cor: linhas de nível, fio guia e pílula são neutros.
+   Só o número, a haste e a faixa carregam a cor do estado (--tint).
+   ──────────────────────────────────────────────────────────────────── */
+.is-up   { --ink: #157F5C; --tint: 21,127,92; }
+.is-down { --ink: #C0393F; --tint: 192,57,63; }
+.is-flat { --ink: #64748B; --tint: 100,116,139; }
+.dcnx.no-tint { --tint: 100,116,139; }
+
+.dcnx {
+  position: absolute; top: 0; bottom: 0; z-index: 7; pointer-events: none;
+  width: calc(100% - var(--barw) + var(--gap));
+}
+.a-l { right: calc(50% + var(--barw) / 2); --org: left;  --orgr: right; }
+.a-r { left:  calc(50% + var(--barw) / 2); --org: right; --orgr: left;  }
+
+.dref, .dnow {
+  position: absolute; left: -2px; right: -2px; height: 0;
+  animation: dLine .55s .34s cubic-bezier(.22,.9,.24,1) forwards;
+}
+.dref { bottom: var(--h-base); border-top: 1px dashed var(--stroke); transform: scaleX(0); transform-origin: var(--org) center; }
+.dnow { bottom: var(--h);      border-top: 1px solid  var(--stroke); transform: scaleX(0); transform-origin: var(--orgr) center; }
+@keyframes dLine { to { transform: scaleX(1); } }
+
+/* modo colapsado — delta fisicamente pequeno (ver CFG.limiarCota) */
+.dcnx.tight .dref { display: none; }
+
+.dfill {
+  position: absolute; left: 0; right: 0; bottom: var(--h-min); height: var(--h-dif);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 14%, #000 86%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 14%, #000 86%, transparent 100%);
+  opacity: 0; animation: dFade .6s .62s ease-out forwards;
+}
+.dfill.up { background: linear-gradient(180deg, rgba(var(--tint),.17), rgba(var(--tint),.04)); }
+.dfill.dn { background: repeating-linear-gradient(135deg, rgba(var(--tint),.14) 0 3px, transparent 3px 7px); }
+@keyframes dFade { to { opacity: 1; } }
+
+.dspan {
+  position: absolute; left: 50%; bottom: var(--h-min); height: var(--h-dif); width: 2px;
+  border-radius: 1px; background: rgba(var(--tint),.55);
+  transform: translateX(-50%) scaleY(0); transform-origin: bottom center;
+  animation: dSpan .55s .48s cubic-bezier(.2,.85,.25,1) forwards;
+}
+@keyframes dSpan { to { transform: translateX(-50%) scaleY(1); } }
+
+.dtrack {
+  position: absolute; left: 50%; bottom: var(--h-max); width: 1px;
+  height: calc(var(--folga) + var(--lift, 0px)); transform: translateX(-50%);
+  background: linear-gradient(180deg, var(--hair) 0%, var(--stroke) 100%);
+  opacity: 0; animation: dFade .5s .70s ease-out forwards;
+}
+
+.dpill {
+  position: absolute; left: 50%; bottom: calc(var(--h-max) + var(--folga) + var(--lift, 0px));
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 11px; border-radius: 999px; border: 0;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  backdrop-filter: blur(12px) saturate(150%);
+  color: var(--ink);
+  font-family: 'Vale Sans', 'Segoe UI', sans-serif;
+  font-size: clamp(.76rem, 2.2vh, .82rem); font-weight: 400; line-height: 1.15;
+  white-space: nowrap; font-variant-numeric: tabular-nums; letter-spacing: .01em;
+  box-shadow: 0 2px 12px rgba(15,23,42,.05);
+  opacity: 0; transform: translate(-50%, 8px) scale(.96);
+  animation: dPill .5s .78s cubic-bezier(.2,.85,.25,1) forwards;
+}
+@keyframes dPill { to { opacity: 1; transform: translate(-50%, 0) scale(1); } }
+
+.abs { color: #94A3B8; font-weight: 400; font-size: .68rem; padding-left: 7px; border-left: 1px solid rgba(148,163,184,.35); }
+
+@media (prefers-reduced-motion: reduce) {
+  .bar         { animation: none; height: var(--h); }
+  .dref,.dnow  { animation: none; transform: none; }
+  .dspan       { animation: none; transform: translateX(-50%); }
+  .dfill       { animation: none; opacity: 1; }
+  .dtrack      { animation: none; opacity: 1; }
+  .dpill       { animation: none; opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+
+@media (max-width: 640px) {
+  .main-wrapper { padding: 16px 14px 12px; }
+  .chart-title { font-size: 1.15rem; }
+  .chart-subtitle { font-size: .9rem; }
+}
 </style>
 </head>
 <body>
@@ -306,9 +407,7 @@ body[data-bg="dark"] {
     <a href="quartely.html" class="topnav-link active" data-i18n="nav.quartely">
       <i class="fa-solid fa-chart-line"></i> <span>Quartely</span>
     </a>
-
     <div class="topnav-sep"></div>
-
     <a href="#monthly" class="topnav-link" data-i18n="nav.monthly">
       <i class="fa-solid fa-calendar"></i> <span>Monthly</span>
     </a>
@@ -336,13 +435,12 @@ body[data-bg="dark"] {
 <main class="app-main">
 <div class="page-content">
 
-  <!-- Chart Card -->
-  <div class="chart-card" id="chartCard">
-    <div class="chart-card-title" data-i18n="chart.title">Turnover</div>
-    <div class="chart-card-subtitle">(%)</div>
-    <div class="chart-svg-wrap">
-      <svg id="turnoverChart" width="100%" viewBox="0 0 420 260"></svg>
+  <div class="main-wrapper" id="chartWrapper">
+    <div class="chart-header">
+      <p class="chart-title" data-i18n="chart.title">Turnover</p>
+      <p class="chart-subtitle">(%)</p>
     </div>
+    <div class="chart-area" id="chartArea"></div>
   </div>
 
 </div>
@@ -351,8 +449,6 @@ body[data-bg="dark"] {
 
 <!-- Font Awesome -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
-<!-- D3.js -->
-<script src="js/vendor/d3.min.js"></script>
 
 <script>
 // ─── Tema ───
@@ -380,140 +476,151 @@ document.querySelectorAll('.topnav-link').forEach(link => {
 
 // ─── i18n ───
 const i18n = {
-  'pt-BR': {
-    'nav.quartely': 'Quartely',
-    'nav.monthly': 'Monthly',
-    'chart.title': 'Turnover'
-  },
-  'en': {
-    'nav.quartely': 'Quarterly',
-    'nav.monthly': 'Monthly',
-    'chart.title': 'Turnover'
-  }
+  'pt-BR': { 'nav.quartely': 'Quartely', 'nav.monthly': 'Monthly', 'chart.title': 'Turnover' },
+  'en':    { 'nav.quartely': 'Quarterly', 'nav.monthly': 'Monthly', 'chart.title': 'Turnover' }
 };
-
 function applyI18n(lang) {
   document.documentElement.lang = lang;
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const key = el.getAttribute('data-i18n');
-    if (i18n[lang] && i18n[lang][key]) {
-      el.textContent = i18n[lang][key];
-    }
+    if (i18n[lang] && i18n[lang][key]) el.textContent = i18n[lang][key];
   });
   localStorage.setItem('vdt-lang', lang);
 }
+applyI18n(localStorage.getItem('vdt-lang') || 'pt-BR');
 
-const savedLang = localStorage.getItem('vdt-lang') || 'pt-BR';
-applyI18n(savedLang);
+// ════════════════════════════════════════════════════════════════════
+// GRÁFICO DE TURNOVER — motor de renderização (porte do sistema DAX)
+// ------------------------------------------------------------------------
+// Nenhuma linha de DAX/Power BI aqui: os dados vêm de `chartData` (troque
+// por uma chamada a /api/chart-data quando o backend estiver disponível)
+// e toda a lógica de comparação (Budget do período > coluna anterior) e
+// geometria da "cota de diferença" foi reimplementada em JS puro, gerando
+// exatamente as mesmas classes/CSS do componente original.
+// ════════════════════════════════════════════════════════════════════
 
-// ═══════════════════════════════════════════════════
-// TURNOVER CHART (D3.js)
-// ═══════════════════════════════════════════════════
-const turnoverData = [
-  { label: 'Sep B', value: 0.60, kind: 'budget' },
-  { label: 'Sep F', value: 0.60, kind: 'actual' },
-  { label: 'Q3B',   value: 1.65, kind: 'budget' },
-  { label: 'Q3F',   value: 1.33, kind: 'actual' },
-  { label: '26B',   value: 7.39, kind: 'budget' },
-  { label: '26A',   value: 6.25, kind: 'actual' }
+const chartData = [
+  { type: 'Sep B', value: 0.60 },
+  { type: 'Sep F', value: 0.60 },
+  { type: 'Q3B',   value: 1.65 },
+  { type: 'Q3F',   value: 1.33 },
+  { type: '26B',   value: 7.39 },
+  { type: '26A',   value: 6.25 }
 ];
 
+// Painel de controle (equivalente às VARs de configuração do DAX)
+const CFG = {
+  limiarCota: 1.2,      // pp de altura abaixo do qual a cota colapsa
+  tingirCota: true,     // haste/faixa recebem a cor do estado
+  exibirBanda: true,    // desenha a faixa (.dfill) além da haste
+  exibirDeltaAbs: false,// acrescenta o delta absoluto ao lado do %
+  casasDecimais: 2
+};
+
+const COLORS = {
+  actual: '#3CB5E5', plan: '#B2B7FF', default: '#D1D5DB',
+  pillActual: '#CFEAF7', pillPlan: '#E0E7FF', pillDefault: '#E5E7EB'
+};
+
+function formatNumber(v, decimals) {
+  return v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+}
+function formatPct(v) {
+  const s = (v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  return (v > 0 ? '+' : '') + s + '%';
+}
+
 function renderTurnoverChart() {
-  const svg = d3.select('#turnoverChart');
-  svg.selectAll('*').remove();
+  const data = chartData.map(d => ({ type: d.type, value: Number(d.value.toFixed(CFG.casasDecimais)) }));
+  const maxValue = Math.max(...data.map(d => d.value));
 
-  const width = 420, height = 260;
-  const margin = { top: 44, right: 10, bottom: 30, left: 10 };
-  const innerWidth = width - margin.left - margin.right;
-  const innerHeight = height - margin.top - margin.bottom;
+  const html = data.map((row, i) => {
+    const index1 = i + 1; // índice 1-based, como o VIndex do DAX
+    const type = row.type.trim();
+    const value = row.value;
+    const lastChar = type.slice(-1).toUpperCase();
+    const isActualOrFcst = lastChar === 'A' || lastChar === 'F';
 
-  const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+    const barHeightPct = maxValue === 0 ? 0 : (value / maxValue) * 100;
+    const formattedValue = formatNumber(value, CFG.casasDecimais);
+    const pillColor = isActualOrFcst ? COLORS.pillActual : lastChar === 'P' ? COLORS.pillPlan : COLORS.pillDefault;
+    const barColor  = isActualOrFcst ? COLORS.actual     : lastChar === 'P' ? COLORS.plan     : COLORS.default;
 
-  const x = d3.scaleBand()
-    .domain(turnoverData.map(d => d.label))
-    .range([0, innerWidth])
-    .paddingInner(0.32)
-    .paddingOuter(0.15);
+    const upperType = type.toUpperCase();
+    const isYear = upperType.includes('24') || upperType.includes('25') || upperType.includes('26');
+    const isQuarter = upperType.includes('Q');
+    const barOpacity = isYear ? 1 : isQuarter ? 0.8 : 0.6;
 
-  const yMax = d3.max(turnoverData, d => d.value) * 1.35;
-  const y = d3.scaleLinear().domain([0, yMax]).range([innerHeight, 0]);
+    // ── Base de comparação: Budget do mesmo período > coluna anterior ──
+    const baseName = type.length > 1 ? type.slice(0, -1) : '';
+    const budgetIndex = data.findIndex(d => d.type.trim().toUpperCase() === (baseName + 'B').toUpperCase());
+    const budgetVal = budgetIndex >= 0 ? data[budgetIndex].value : undefined;
 
-  const colorFor = d => d.kind === 'budget' ? '#c6ccd6' : '#3cb5e5';
+    const prevRow = i > 0 ? data[i - 1] : undefined;
+    const prevLastChar = prevRow ? prevRow.type.trim().slice(-1).toUpperCase() : undefined;
+    const isPrevActualOrFcst = prevLastChar === 'A' || prevLastChar === 'F';
+    const isRealSequence = isActualOrFcst && isPrevActualOrFcst;
 
-  // Bars
-  g.selectAll('rect.bar')
-    .data(turnoverData)
-    .enter()
-    .append('rect')
-    .attr('class', 'bar')
-    .attr('x', d => x(d.label))
-    .attr('y', d => y(d.value))
-    .attr('width', x.bandwidth())
-    .attr('height', d => innerHeight - y(d.value))
-    .attr('rx', 3)
-    .attr('fill', colorFor);
+    const usaBudget = !isRealSequence && budgetVal !== undefined && budgetVal !== 0;
+    const usaPrev = !usaBudget && (isRealSequence || index1 % 2 === 0);
 
-  // Value labels above bars
-  g.selectAll('text.value')
-    .data(turnoverData)
-    .enter()
-    .append('text')
-    .attr('class', 'value')
-    .attr('x', d => x(d.label) + x.bandwidth() / 2)
-    .attr('y', d => y(d.value) - 8)
-    .attr('text-anchor', 'middle')
-    .attr('font-family', 'Poppins, sans-serif')
-    .attr('font-weight', 600)
-    .attr('font-size', '11px')
-    .attr('fill', '#3a4658')
-    .text(d => d.value.toFixed(2).replace('.', ','));
+    let baseValue, baseIndex;
+    if (usaBudget) { baseValue = budgetVal; baseIndex = budgetIndex; }
+    else if (usaPrev && prevRow) { baseValue = prevRow.value; baseIndex = i - 1; }
 
-  // X axis labels
-  g.selectAll('text.xlabel')
-    .data(turnoverData)
-    .enter()
-    .append('text')
-    .attr('class', 'xlabel')
-    .attr('x', d => x(d.label) + x.bandwidth() / 2)
-    .attr('y', innerHeight + 20)
-    .attr('text-anchor', 'middle')
-    .attr('font-family', 'Poppins, sans-serif')
-    .attr('font-weight', 500)
-    .attr('font-size', '10.5px')
-    .attr('fill', '#6b7c93')
-    .text(d => d.label);
+    const deltaAbs = baseValue !== undefined ? value - baseValue : undefined;
+    const deltaPct = (isActualOrFcst && baseValue !== undefined && baseValue !== 0) ? deltaAbs / baseValue : undefined;
+    const hasDelta = deltaPct !== undefined;
 
-  // Percentage change badges between pairs
-  for (let i = 0; i < turnoverData.length; i += 2) {
-    const a = turnoverData[i];
-    const b = turnoverData[i + 1];
-    const pct = a.value === 0 ? 0 : ((b.value - a.value) / a.value) * 100;
-    const pctLabel = (pct >= 0 ? '' : '') + pct.toFixed(1).replace('.', ',').replace('-0,0', '0,0') + '%';
+    const deltaClass = !hasDelta ? '' : deltaPct > 0.001 ? 'is-up' : deltaPct < -0.001 ? 'is-down' : 'is-flat';
+    const deltaText = hasDelta ? formatPct(deltaPct) : '';
+    const deltaAbsText = deltaAbs !== undefined ? (deltaAbs > 0 ? '+' : '') + formatNumber(deltaAbs, CFG.casasDecimais) : '';
 
-    const xa = x(a.label) + x.bandwidth() / 2;
-    const xb = x(b.label) + x.bandwidth() / 2;
-    const xMid = (xa + xb) / 2;
-    const topY = Math.min(y(a.value), y(b.value)) - 26;
+    const side = (baseIndex !== undefined && baseIndex > i) ? 'R' : 'L';
+    const anchorClass = side === 'R' ? 'a-r' : 'a-l';
+    const tintClass = CFG.tingirCota ? '' : ' no-tint';
 
-    // Dashed connector
-    g.append('line')
-      .attr('x1', xa).attr('x2', xb)
-      .attr('y1', topY + 12).attr('y2', topY + 12)
-      .attr('stroke', '#e0554f')
-      .attr('stroke-width', 1)
-      .attr('stroke-dasharray', '3,2');
+    // ── Geometria da cota ──
+    const baseHeightPct = baseValue !== undefined && maxValue !== 0 ? (baseValue / maxValue) * 100 : 0;
+    const hMax = Math.max(barHeightPct, baseHeightPct);
+    const hMin = Math.min(barHeightPct, baseHeightPct);
+    const hDif = hMax - hMin;
+    const cotaVisivel = hDif >= CFG.limiarCota;
+    const tightClass = cotaVisivel ? '' : ' tight';
 
-    // Percentage label
-    g.append('text')
-      .attr('x', xMid)
-      .attr('y', topY)
-      .attr('text-anchor', 'middle')
-      .attr('font-family', 'Poppins, sans-serif')
-      .attr('font-weight', 600)
-      .attr('font-size', '10.5px')
-      .attr('fill', '#e0554f')
-      .text(pctLabel);
-  }
+    const cH = barHeightPct.toFixed(1) + '%';
+    const cHBase = baseHeightPct.toFixed(1) + '%';
+    const cHMax = hMax.toFixed(1) + '%';
+    const cHMin = hMin.toFixed(1) + '%';
+    const cHDif = hDif.toFixed(1) + '%';
+
+    let htmlFaixa = '';
+    if (hasDelta && cotaVisivel && CFG.exibirBanda) {
+      htmlFaixa = `<div class="dfill ${deltaAbs >= 0 ? 'up' : 'dn'}"></div>`;
+    }
+    const htmlHaste = (hasDelta && cotaVisivel) ? '<span class="dspan"></span>' : '';
+    const htmlAbs = CFG.exibirDeltaAbs ? `<span class="abs">${deltaAbsText}</span>` : '';
+
+    let htmlCota = '';
+    if (hasDelta) {
+      htmlCota = `<div class="dcnx ${anchorClass} ${deltaClass}${tintClass}${tightClass}" style="--h-base:${cHBase}; --h-min:${cHMin}; --h-dif:${cHDif}; --h-max:${cHMax};">
+        ${htmlFaixa}
+        <span class="dref"></span><span class="dnow"></span>
+        ${htmlHaste}
+        <span class="dtrack"></span>
+        <div class="dpill"><span>${deltaText}</span>${htmlAbs}</div>
+      </div>`;
+    }
+
+    return `<div class="col-wrapper" style="--h:${cH}; --pill-bg:${pillColor};">
+      ${htmlCota}
+      <span class="value-label">${formattedValue}</span>
+      <div class="bar" style="--c:${barColor}; opacity:${barOpacity};"></div>
+      <span class="axis-label">${type}</span>
+    </div>`;
+  }).join('');
+
+  document.getElementById('chartArea').innerHTML = html;
 }
 
 renderTurnoverChart();
