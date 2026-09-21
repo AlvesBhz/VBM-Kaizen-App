@@ -181,15 +181,26 @@
   });
 
   function loadAprovadores() {
-    setState(txt("adm.loadingApprovers", "Carregando aprovadores..."), false);
+    // Recarga (já existe algo na tela): overlay por cima da lista atual
+    // em vez do setState de sempre, que ESCONDE listEl inteiro — a lista
+    // anterior continua visível, só esmaecida, até a resposta chegar.
+    // Primeira carga (nada ainda): mantém o texto "Carregando…" de
+    // sempre, porque não há o que sobrepor.
+    var usaOverlay = window.VBMLoading && ultimaLista.length > 0;
+    if (usaOverlay) VBMLoading.overlay(listEl, true, { texto: txt("adm.loadingApprovers", "Carregando aprovadores...") });
+    else setState(txt("adm.loadingApprovers", "Carregando aprovadores..."), false);
     return fetch("/api/aprovadores")
       .then(function (res) {
         if (!res.ok) return res.json().then(function (e) { throw new Error(e.error || res.statusText); });
         return res.json();
       })
-      .then(renderList)
+      .then(function (rows) {
+        if (usaOverlay) VBMLoading.overlay(listEl, false);
+        return renderList(rows);
+      })
       .catch(function (err) {
         console.error("[aprovadores] erro ao carregar:", err);
+        if (usaOverlay) VBMLoading.overlay(listEl, false);
         setState("Erro ao carregar aprovadores: " + err.message, true);
       });
   }
@@ -406,7 +417,7 @@
       if (window.showToast) showToast("warning", "Campo obrigatório", "Busque e selecione o usuário na lista.");
       return;
     }
-    if (btnSaveAdd) btnSaveAdd.disabled = true;
+    if (btnSaveAdd) { if (window.VBMLoading) VBMLoading.botao(btnSaveAdd, true); else btnSaveAdd.disabled = true; }
     fetch("/api/aprovadores", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -429,10 +440,14 @@
         if (window.showToast) showToast("error", "Erro ao inserir", err.message);
       })
       .finally(function () {
-        // Reabilita só se ainda houver alguém selecionado: depois de um
-        // salvamento bem-sucedido o formulário é limpo e o botão tem de
-        // continuar desabilitado.
-        if (btnSaveAdd) btnSaveAdd.disabled = !buscaAdd.id();
+        if (btnSaveAdd) {
+          if (window.VBMLoading) VBMLoading.botao(btnSaveAdd, false);
+          // Reabilita só se ainda houver alguém selecionado: depois de um
+          // salvamento bem-sucedido o formulário é limpo e o botão tem de
+          // continuar desabilitado. VBMLoading.botao(false) sempre libera
+          // o botão — esta linha reaplica a regra de cima por cima.
+          btnSaveAdd.disabled = !buscaAdd.id();
+        }
       });
   }
 
@@ -465,7 +480,7 @@
       if (window.showToast) showToast("warning", "Campo obrigatório", "Busque e selecione o usuário na lista.");
       return;
     }
-    if (btnSaveEdit) btnSaveEdit.disabled = true;
+    if (btnSaveEdit) { if (window.VBMLoading) VBMLoading.botao(btnSaveEdit, true); else btnSaveEdit.disabled = true; }
     fetch("/api/aprovadores/" + encodeURIComponent(idEmEdicao), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -488,7 +503,10 @@
         if (window.showToast) showToast("error", "Erro ao salvar", err.message);
       })
       .finally(function () {
-        if (btnSaveEdit) btnSaveEdit.disabled = !buscaEdit.id();
+        if (btnSaveEdit) {
+          if (window.VBMLoading) VBMLoading.botao(btnSaveEdit, false);
+          btnSaveEdit.disabled = !buscaEdit.id();
+        }
       });
   }
 

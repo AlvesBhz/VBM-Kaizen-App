@@ -311,9 +311,18 @@ window.criarCadastroBilingue = function (cfg) {
   // Recarrega sempre do banco — nunca reaproveita estado anterior,
   // então o ativo/inativo exibido é o SG_ATIVO atual.
   function carregarLista() {
+    // Overlay por cima da lista ATUAL (padrão global — window.VBMLoading
+    // em vbm-app.js), em vez de apagar tudo para o texto "Carregando…":
+    // recarregar depois de ativar/desativar/editar um item piscava a
+    // aba inteira em branco por um instante. Na primeira carga da aba
+    // (nada na tela ainda) cai na rede de segurança de sempre.
+    if (window.VBMLoading && jaCarregouAlgumaVez) {
+      VBMLoading.overlay(list, true, { texto: cfg.textoCarregando });
+    } else {
+      list.innerHTML = "";
+      list.appendChild(statusEl(cfg.textoCarregando, false));
+    }
     jaCarregouAlgumaVez = true;
-    list.innerHTML = "";
-    list.appendChild(statusEl(cfg.textoCarregando, false));
 
     // cache: "no-store" — esta leitura acontece logo depois de gravar e
     // precisa refletir a gravação. Sem isso, uma resposta guardada em
@@ -334,6 +343,7 @@ window.criarCadastroBilingue = function (cfg) {
       })
       .catch(function (err) {
         console.error("[" + cfg.rota + "] falha ao carregar lista:", err);
+        if (window.VBMLoading) VBMLoading.overlay(list, false);
         list.innerHTML = "";
         var box = statusEl("", true);
         box.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> <span></span>';
@@ -406,7 +416,7 @@ window.criarCadastroBilingue = function (cfg) {
       return;
     }
 
-    if (editSaveBtn) editSaveBtn.disabled = true;
+    if (editSaveBtn) { if (window.VBMLoading) VBMLoading.botao(editSaveBtn, true); else editSaveBtn.disabled = true; }
     fetch("/api/" + cfg.rota + "/" + encodeURIComponent(idEmEdicao), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -429,7 +439,7 @@ window.criarCadastroBilingue = function (cfg) {
         if (window.showToast) showToast("error", "Erro ao salvar", err.message);
       })
       .finally(function () {
-        if (editSaveBtn) editSaveBtn.disabled = false;
+        if (editSaveBtn) { if (window.VBMLoading) VBMLoading.botao(editSaveBtn, false); else editSaveBtn.disabled = false; }
       });
   }
 
@@ -453,7 +463,7 @@ window.criarCadastroBilingue = function (cfg) {
       return;
     }
 
-    if (addSaveBtn) addSaveBtn.disabled = true;
+    if (addSaveBtn) { if (window.VBMLoading) VBMLoading.botao(addSaveBtn, true); else addSaveBtn.disabled = true; }
     fetch("/api/" + cfg.rota, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -477,7 +487,7 @@ window.criarCadastroBilingue = function (cfg) {
         if (window.showToast) showToast("error", "Erro ao criar", err.message);
       })
       .finally(function () {
-        if (addSaveBtn) addSaveBtn.disabled = false;
+        if (addSaveBtn) { if (window.VBMLoading) VBMLoading.botao(addSaveBtn, false); else addSaveBtn.disabled = false; }
       });
   }
 

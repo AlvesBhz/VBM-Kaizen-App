@@ -2217,9 +2217,16 @@ div.admin-hero-title { font-size: min(clamp(1.8rem, 4vw, 2.6rem), max(1.35rem, 7
   position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
   color: var(--vbm-blue);
 }
-.btn-primary.vbm-btn-loading .vbm-spinner { color: #fff; }
+/* Botões de fundo sólido (primário, sucesso, perigo — Aprovar/
+   Rejeitar/Solicitar alteração da Aprovação): spinner branco, senão o
+   azul padrão sobre verde/vermelho fica com contraste ruim. */
+.btn-primary.vbm-btn-loading .vbm-spinner,
+.btn-success.vbm-btn-loading .vbm-spinner,
+.btn-danger.vbm-btn-loading .vbm-spinner { color: #fff; }
 [data-bg="dark"] .vbm-btn-loading .vbm-spinner { color: var(--vbm-blue-light); }
-[data-bg="dark"] .btn-primary.vbm-btn-loading .vbm-spinner { color: #fff; }
+[data-bg="dark"] .btn-primary.vbm-btn-loading .vbm-spinner,
+[data-bg="dark"] .btn-success.vbm-btn-loading .vbm-spinner,
+[data-bg="dark"] .btn-danger.vbm-btn-loading .vbm-spinner { color: #fff; }
 
 /* ── 8. Preferência de movimento reduzido.
    21 animações infinitas (orbes, brilho, zoom da hero)

@@ -157,13 +157,26 @@
   }
 
   function carregar() {
+    // Overlay no WRAP da tabela (padrão global — window.VBMLoading), não
+    // na tbody: linha absoluta dentro de <tbody> não é um contêiner de
+    // posicionamento confiável entre navegadores. As linhas atuais
+    // continuam na tela, só esmaecidas, até a resposta nova chegar.
+    var wrap = tbody.closest(".data-table-wrap");
+    if (window.VBMLoading && wrap && jaCarregou) {
+      VBMLoading.overlay(wrap, true, { texto: "Carregando…" });
+    } else {
+      tbody.innerHTML = linhaAviso("Carregando usuários…", false);
+    }
     jaCarregou = true;
-    tbody.innerHTML = linhaAviso("Carregando usuários…", false);
     return fetch("/api/usuarios" + parametros())
       .then(comoJson)
-      .then(render)
+      .then(function (dados) {
+        if (window.VBMLoading && wrap) VBMLoading.overlay(wrap, false);
+        return render(dados);
+      })
       .catch(function (err) {
         console.error("[usuarios] falha ao carregar:", err);
+        if (window.VBMLoading && wrap) VBMLoading.overlay(wrap, false);
         tbody.innerHTML = linhaAviso("Erro ao carregar usuários: " + err.message, true);
       });
   }
@@ -316,7 +329,7 @@
       if (window.showToast) showToast("warning", "Campo obrigatório", erro);
       return;
     }
-    if (btnAdd) btnAdd.disabled = true;
+    if (btnAdd) { if (window.VBMLoading) VBMLoading.botao(btnAdd, true); else btnAdd.disabled = true; }
     enviar("/api/usuarios", "POST", corpo)
       .then(function () {
         if (window.closeModal) closeModal("modalAddUser");
@@ -332,7 +345,7 @@
         console.error("[usuarios] falha ao inserir:", err);
         if (window.showToast) showToast("error", "Erro ao salvar", err.message);
       })
-      .finally(function () { if (btnAdd) btnAdd.disabled = false; });
+      .finally(function () { if (btnAdd) { if (window.VBMLoading) VBMLoading.botao(btnAdd, false); else btnAdd.disabled = false; } });
   }
 
   // ── Editar ──
@@ -361,7 +374,7 @@
     // A chave vem do registro aberto, não dos campos travados: o que
     // identifica a linha é o que foi clicado.
     corpo.CD_MATRICULA = chaveEmEdicao.matricula;
-    if (btnEdit) btnEdit.disabled = true;
+    if (btnEdit) { if (window.VBMLoading) VBMLoading.botao(btnEdit, true); else btnEdit.disabled = true; }
     enviar("/api/usuarios/" + encodeURIComponent(chaveEmEdicao.id), "PUT", corpo)
       .then(function () {
         if (window.closeModal) closeModal("modalEditUser");
@@ -374,7 +387,7 @@
         console.error("[usuarios] falha ao salvar:", err);
         if (window.showToast) showToast("error", "Erro ao salvar", err.message);
       })
-      .finally(function () { if (btnEdit) btnEdit.disabled = false; });
+      .finally(function () { if (btnEdit) { if (window.VBMLoading) VBMLoading.botao(btnEdit, false); else btnEdit.disabled = false; } });
   }
 
   // ── Ativar/Desativar — grava SG_ATIVO no banco, nunca só visual ──

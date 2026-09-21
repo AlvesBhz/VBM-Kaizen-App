@@ -672,9 +672,18 @@ function mostrarFoto(idImg, idVazio, url) {
 function botoesDecisao() {
   return Array.prototype.slice.call(document.querySelectorAll('.ap-actions [data-decisao]'));
 }
-function travarDecisao(travado) {
+// tipo: qual botão foi clicado — só ELE ganha o spinner (VBMLoading),
+// os outros dois só ficam desabilitados, para não travar como se
+// tivessem sido clicados também.
+function travarDecisao(travado, tipo) {
   decisaoEmCurso = travado;
-  botoesDecisao().forEach(function (b) { b.disabled = travado; });
+  botoesDecisao().forEach(function (b) {
+    if (window.VBMLoading && b.dataset.decisao === tipo) {
+      VBMLoading.botao(b, travado);
+    } else {
+      b.disabled = travado;
+    }
+  });
 }
 
 // Fecha o pop-up de ampliação se ele estiver aberto. O bloco de decisão
@@ -704,7 +713,7 @@ function decidir(tipo) {
     return;
   }
 
-  travarDecisao(true);
+  travarDecisao(true, tipo);
   var idDecidido = kaizenSelecionadoId;   // a fila recarrega e troca a seleção
   fetch('/api/kaizens/' + kaizenSelecionadoId + '/' + cfg.rota, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -743,7 +752,7 @@ function decidir(tipo) {
       // falha de rede seria punir quem já escreveu.
       showToast('error', txt('ap.decisionError', 'Erro ao registrar'), err.message);
     })
-    .finally(function () { travarDecisao(false); });
+    .finally(function () { travarDecisao(false, tipo); });
 }
 
 function atualizarContador() {
@@ -809,6 +818,11 @@ function atualizarContador() {
     // lida como se fosse o Kaizen: preencherDetalhe via setText() só
     // sabe mostrar "—" para cada campo ausente, e a tela parecia "vazia"
     // em vez de dizer que a busca falhou.
+    //
+    // Overlay no painel: sem ele, trocar de item na fila deixava os
+    // dados do Kaizen ANTERIOR na tela até a resposta nova chegar —
+    // renderização parcial/enganosa por um instante.
+    if (window.VBMLoading) VBMLoading.overlay(panel, true);
     fetch('/api/kaizens/' + id, { headers: { Accept: 'application/json' } })
       .then(function (r) {
         if (r.ok) return r.json();
@@ -824,6 +838,9 @@ function atualizarContador() {
       .catch(function (err) {
         showToast('error', txt('ap.loadFailed', 'Não foi possível carregar o Kaizen'),
           err.message + (err.sql ? '\n\nSQL: ' + err.sql : ''), 12000);
+      })
+      .finally(function () {
+        if (window.VBMLoading) VBMLoading.overlay(panel, false);
       });
   }
 
@@ -833,6 +850,12 @@ function atualizarContador() {
   });
 
   function carregarFila() {
+    // A fila recarrega depois de CADA decisão (recarregarAprovacao), não
+    // só na abertura da tela — sem o overlay, cada aprovar/rejeitar
+    // apagava a lista para "Carregando…" por um instante. Ela continua
+    // visível por baixo, só esmaecida, até a nova chegar (ver
+    // window.VBMLoading em vbm-app.js).
+    if (window.VBMLoading) VBMLoading.overlay(fila, true);
     fetch('/api/aprovacoes', { headers: { Accept: 'application/json' } })
       .then(function (r) { return r.ok ? r.json() : []; })
       .then(function (itens) {
