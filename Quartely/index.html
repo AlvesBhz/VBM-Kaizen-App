@@ -66,53 +66,67 @@
 
   <!-- Main Container -->
   <div class="chart-main">
-    <!-- Filters Sidebar -->
-    <aside class="chart-filters-panel" id="filters-panel">
-      <div class="filters-header">
-        <h2 class="filters-title" data-i18n="filters">Filtros</h2>
-        <button class="filters-toggle" id="filters-toggle" aria-label="Toggle filters panel">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="23 6 13 16"></polyline>
-            <polyline points="13 6 23 16"></polyline>
+    <!-- Filters Toolbar -->
+    <div class="filters-toolbar">
+      <div class="filters-container">
+        <!-- Years Dropdown -->
+        <div class="filter-dropdown-wrapper">
+          <select id="years-filter" class="filter-dropdown" multiple>
+            <option value="">Todos os anos</option>
+          </select>
+        </div>
+
+        <!-- Sites Dropdown -->
+        <div class="filter-dropdown-wrapper">
+          <select id="sites-filter" class="filter-dropdown" multiple>
+            <option value="">Todos os sites</option>
+          </select>
+        </div>
+
+        <!-- Products Dropdown -->
+        <div class="filter-dropdown-wrapper">
+          <select id="products-filter" class="filter-dropdown" multiple>
+            <option value="">Todos os produtos</option>
+          </select>
+        </div>
+
+        <!-- Views Dropdown -->
+        <div class="filter-dropdown-wrapper">
+          <select id="views-filter" class="filter-dropdown" multiple>
+            <option value="">Todas as visualizações</option>
+          </select>
+        </div>
+
+        <!-- Horizons Dropdown -->
+        <div class="filter-dropdown-wrapper">
+          <select id="horizons-filter" class="filter-dropdown" multiple>
+            <option value="">Todos os horizontes</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="filters-actions">
+        <!-- Clear Filters Button -->
+        <button class="btn-clear-filters" id="clear-filters" data-i18n="clearFilters">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 6h18"></path>
+            <path d="M8 6v12a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V6"></path>
+            <line x1="9" y1="6" x2="9" y2="3h6v3"></line>
           </svg>
+          Limpar Filtros
+        </button>
+
+        <!-- Export Excel Button (optional) -->
+        <button class="btn-export" id="export-btn" title="Export to Excel">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          Export Excel
         </button>
       </div>
-
-      <div class="filters-content">
-        <!-- Years Filter -->
-        <div class="filter-group">
-          <label class="filter-label" data-i18n="years">Anos</label>
-          <div class="filter-options" id="years-filter"></div>
-        </div>
-
-        <!-- Sites Filter -->
-        <div class="filter-group">
-          <label class="filter-label" data-i18n="sites">Sites</label>
-          <div class="filter-options" id="sites-filter"></div>
-        </div>
-
-        <!-- Products Filter -->
-        <div class="filter-group">
-          <label class="filter-label" data-i18n="products">Produtos</label>
-          <div class="filter-options" id="products-filter"></div>
-        </div>
-
-        <!-- Views Filter (NM_TYPE) -->
-        <div class="filter-group">
-          <label class="filter-label" data-i18n="views">Visualizações</label>
-          <div class="filter-options" id="views-filter"></div>
-        </div>
-
-        <!-- Horizons Filter (Type) -->
-        <div class="filter-group">
-          <label class="filter-label" data-i18n="horizons">Horizontes</label>
-          <div class="filter-options" id="horizons-filter"></div>
-        </div>
-
-        <!-- Clear Filters Button -->
-        <button class="btn-clear-filters" id="clear-filters" data-i18n="clearFilters">Limpar Filtros</button>
-      </div>
-    </aside>
+    </div>
 
     <!-- Chart Container -->
     <main class="chart-container">

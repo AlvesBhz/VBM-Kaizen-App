@@ -16,13 +16,6 @@ function toggleTheme() {
   applyTheme(newTheme);
 }
 
-// ── Language Management ──────────────────────────────────────────
-document.getElementById('language-select').addEventListener('change', (e) => {
-  const lang = e.target.value;
-  setLanguage(lang);
-  renderChart(window.chartData, window.activeFilters);
-});
-
 // ── Global State ─────────────────────────────────────────────────
 let chartData = [];
 let filteredData = [];
@@ -41,7 +34,7 @@ let distinctValues = {
   horizons: []
 };
 
-// ── API Call ─────────────────────────────────────────────────────
+// ── API Calls ──────────────────────────────────────────────────
 async function fetchChartData() {
   showState('loading');
   try {
@@ -56,11 +49,23 @@ async function fetchChartData() {
     }
 
     extractFilters(chartData);
-    renderFilters();
+    await renderFilters();
     applyFilters();
   } catch (err) {
     console.error('Fetch error:', err);
     showState('error', err.message);
+  }
+}
+
+async function fetchSites() {
+  try {
+    const response = await fetch('/api/filters/sites');
+    if (!response.ok) return [];
+    const sites = await response.json();
+    return sites.map(s => String(s.ID_SITE || s));
+  } catch (err) {
+    console.error('Fetch sites error:', err);
+    return [];
   }
 }
 
@@ -77,9 +82,8 @@ function showState(state, errorMessage = '') {
 }
 
 // ── Filter Extraction ───────────────────────────────────────────
-function extractFilters(data) {
+async function extractFilters(data) {
   const years = new Set();
-  const sites = new Set();
   const products = new Set();
   const views = new Set();
   const horizons = new Set();
@@ -87,17 +91,19 @@ function extractFilters(data) {
   data.forEach(row => {
     if (row.DT_REF) {
       const year = new Date(row.DT_REF).getFullYear();
-      years.add(year);
+      years.add(String(year));
     }
-    if (row.ID_SITE) sites.add(String(row.ID_SITE));
     if (row.ID_OPERACAO) products.add(String(row.ID_OPERACAO));
     if (row.NM_TYPE) views.add(row.NM_TYPE);
     if (row.Type) horizons.add(row.Type);
   });
 
+  // Fetch sites from API
+  const sitesFromAPI = await fetchSites();
+
   distinctValues = {
-    years: Array.from(years).sort((a, b) => a - b),
-    sites: Array.from(sites).sort(),
+    years: Array.from(years).sort(),
+    sites: sitesFromAPI.sort(),
     products: Array.from(products).sort(),
     views: Array.from(views).sort(),
     horizons: Array.from(horizons).sort()
@@ -125,32 +131,29 @@ function renderFilters() {
   ];
 
   filterGroups.forEach(group => {
-    const container = document.getElementById(group.id);
-    container.innerHTML = '';
+    const select = document.getElementById(group.id);
+
+    // Clear existing options except the first one
+    while (select.options.length > 1) {
+      select.remove(1);
+    }
 
     group.values.forEach(value => {
-      const label = document.createElement('label');
-      label.className = 'filter-checkbox';
+      const option = document.createElement('option');
+      option.value = String(value);
+      option.textContent = String(value);
+      option.selected = activeFilters[group.key].has(String(value));
+      select.appendChild(option);
+    });
 
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.checked = activeFilters[group.key].has(String(value));
-      checkbox.addEventListener('change', () => {
-        const strVal = String(value);
-        if (checkbox.checked) {
-          activeFilters[group.key].add(strVal);
-        } else {
-          activeFilters[group.key].delete(strVal);
-        }
-        applyFilters();
-      });
+    // Add change listener
+    select.addEventListener('change', () => {
+      const selectedValues = Array.from(select.selectedOptions)
+        .filter(opt => opt.value !== '')
+        .map(opt => opt.value);
 
-      const span = document.createElement('span');
-      span.textContent = String(value);
-
-      label.appendChild(checkbox);
-      label.appendChild(span);
-      container.appendChild(label);
+      activeFilters[group.key] = new Set(selectedValues);
+      applyFilters();
     });
   });
 }
@@ -158,18 +161,18 @@ function renderFilters() {
 // ── Filter Application ──────────────────────────────────────────
 function applyFilters() {
   filteredData = chartData.filter(row => {
-    const year = new Date(row.DT_REF).getFullYear();
+    const year = String(new Date(row.DT_REF).getFullYear());
     const site = String(row.ID_SITE);
     const product = String(row.ID_OPERACAO);
     const view = row.NM_TYPE;
     const horizon = row.Type;
 
     return (
-      activeFilters.years.has(year) &&
-      activeFilters.sites.has(site) &&
-      activeFilters.products.has(product) &&
-      activeFilters.views.has(view) &&
-      activeFilters.horizons.has(horizon)
+      (activeFilters.years.size === 0 || activeFilters.years.has(year)) &&
+      (activeFilters.sites.size === 0 || activeFilters.sites.has(site)) &&
+      (activeFilters.products.size === 0 || activeFilters.products.has(product)) &&
+      (activeFilters.views.size === 0 || activeFilters.views.has(view)) &&
+      (activeFilters.horizons.size === 0 || activeFilters.horizons.has(horizon))
     );
   });
 
@@ -328,23 +331,34 @@ function renderChart(data, filters) {
 // ── Event Listeners ─────────────────────────────────────────────
 document.getElementById('clear-filters').addEventListener('click', () => {
   activeFilters = {
-    years: new Set(distinctValues.years),
-    sites: new Set(distinctValues.sites),
-    products: new Set(distinctValues.products),
-    views: new Set(distinctValues.views),
-    horizons: new Set(distinctValues.horizons)
+    years: new Set(),
+    sites: new Set(),
+    products: new Set(),
+    views: new Set(),
+    horizons: new Set()
   };
+
+  // Reset all select elements
+  ['years-filter', 'sites-filter', 'products-filter', 'views-filter', 'horizons-filter'].forEach(id => {
+    const select = document.getElementById(id);
+    Array.from(select.options).forEach(opt => {
+      opt.selected = opt.value === '';
+    });
+  });
+
   window.activeFilters = activeFilters;
-  renderFilters();
   applyFilters();
 });
 
 document.getElementById('retry-btn').addEventListener('click', fetchChartData);
 
-document.getElementById('filters-toggle').addEventListener('click', () => {
-  const panel = document.getElementById('filters-panel');
-  panel.classList.toggle('collapsed');
-});
+// Export button (optional - can be implemented later)
+const exportBtn = document.getElementById('export-btn');
+if (exportBtn) {
+  exportBtn.addEventListener('click', () => {
+    console.log('Export functionality to be implemented');
+  });
+}
 
 // ── Responsive Resize ───────────────────────────────────────────
 window.addEventListener('resize', () => {

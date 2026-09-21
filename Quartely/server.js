@@ -521,6 +521,22 @@ app.get("/api/chart-data", async (req, res) => {
   }
 });
 
+// ── Endpoint de filtros (Sites) ─────────────────────────────────
+app.get("/api/filters/sites", async (req, res) => {
+  try {
+    const sql = `
+      SELECT DISTINCT ID_SITE FROM IBP.SITES
+      WHERE ID_SITE IS NOT NULL
+      ORDER BY ID_SITE ASC
+    `;
+    const sites = await runQuery(sql);
+    res.json(sites);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Rotas de página ────────────────────────────────────────────
 app.get("/", (req, res) => {
   res.set("Cache-Control", "no-store");
