@@ -231,6 +231,16 @@ body[data-bg="dark"] {
    como uma continuação dele, não como um bloco novo.
    ════════════════════════════════════════════════════════════════════ */
 .filters-bar-wrap { padding: .85rem 1.5rem 0; }
+.data-fallback-banner {
+  display: flex; align-items: center; gap: .6rem;
+  margin: .85rem 1.5rem 0; padding: .65rem 1rem;
+  background: rgba(245, 158, 11, .12); border: 1px solid rgba(245, 158, 11, .45);
+  border-radius: 10px; color: #B45309; font-size: .85rem; font-weight: 600;
+}
+[data-bg="dark"] .data-fallback-banner {
+  background: rgba(245, 158, 11, .16); border-color: rgba(245, 158, 11, .5); color: #FBBF24;
+}
+.data-fallback-banner i { color: #F59E0B; }
 /* Grid de 3 colunas (1fr / auto / 1fr): a coluna central do grupo de
    filtros fica matematicamente centralizada na barra INDEPENDENTE da
    largura do botão "Limpar Filtros" à direita — a 1ª coluna (vazia) e a
@@ -644,6 +654,14 @@ body:not([data-bg]) .qf-panel { background: rgba(20,32,48,.96); }
   <div class="filters-bar" id="filtersBar"></div>
 </div>
 
+<!-- Só aparece quando /api/chart-data ou /api/sites falha e a página cai
+     no fixture local de teste (ver loadQuartelyData) — nunca deveria
+     mostrar dado real, então precisa ficar visível, não só no console. -->
+<div class="data-fallback-banner" id="dataFallbackBanner" role="alert" style="display:none;">
+  <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+  <span id="dataFallbackText"></span>
+</div>
+
 <!-- ═══ MAIN ═══ -->
 <div class="app-layout">
 <main class="app-main">
@@ -1032,21 +1050,36 @@ const QUARTERLY_VISOES = ['QUARTER', 'SEMESTER', 'YEAR'];
 function isQuarterlyVisao(row) { return QUARTERLY_VISOES.includes(row.CD_VISAO); }
 
 // ── Carga de dados: API real, com fallback local ────────────────────────
+// Mostra/esconde o aviso de "dado de exemplo" — precisa ser visível na
+// própria página, não só um console.warn, senão o fixture local passa
+// por dado real (foi exatamente essa confusão que motivou o banner).
+function setDataFallbackWarning(active, detail) {
+  const banner = document.getElementById('dataFallbackBanner');
+  const text = document.getElementById('dataFallbackText');
+  if (!banner || !text) return;
+  banner.style.display = active ? 'flex' : 'none';
+  if (active) {
+    text.textContent = `Não foi possível carregar os dados do servidor (${detail}) — exibindo dados de exemplo, não o resultado real da QUARTELY.sql. Verifique a conexão com o Azure SQL e os logs do servidor.`;
+  }
+}
+
 async function loadQuartelyData() {
   try {
     const [chartRes, sitesRes] = await Promise.all([
       fetch('/api/chart-data'),
       fetch('/api/sites')
     ]);
-    if (!chartRes.ok || !sitesRes.ok) throw new Error('API indisponível');
+    if (!chartRes.ok || !sitesRes.ok) throw new Error(`HTTP ${chartRes.status}/${sitesRes.status}`);
     const chartRows = await chartRes.json();
     const sitesList = await sitesRes.json();
     const siteNameById = new Map(sitesList.map(s => [s.ID_SITE ?? s.id_site, s.NM_SITE ?? s.nm_site]));
+    setDataFallbackWarning(false);
     return chartRows
       .map(r => ({ ...r, NM_SITE: siteNameById.get(r.ID_SITE) ?? null }))
       .filter(isQuarterlyVisao);
   } catch (err) {
     console.warn('[quartely] /api indisponível, usando fixture local:', err.message);
+    setDataFallbackWarning(true, err.message);
     return buildFallbackRows().filter(isQuarterlyVisao);
   }
 }
