@@ -770,6 +770,236 @@ app.use((req, res, next) => {
   res.status(404).set("Cache-Control", "no-store").json({ error: "Não encontrado." });
 });
 
+// ------------------------------------------------------------------
+// Quartely — API de dados do sub-projeto Quartely/ (ver
+// Quartely/INTEGRATION.md). O front-end estático (Quartely/quartely.html,
+// css, assets) já é servido pelo express.static(__dirname) logo abaixo,
+// mas o backend PRÓPRIO do Quartely (Quartely/server.js, com estas
+// mesmas duas rotas em /api/chart-data e /api/sites) é um processo
+// Express separado que nunca roda em produção — o app.yaml deste
+// projeto manda `npm start` → node server.js NESTA raiz. Sem estas duas
+// rotas aqui, /Quartely/api/chart-data e /Quartely/api/sites voltavam
+// 404 (nenhum arquivo estático nem rota bate com esse caminho) e a
+// página caía silenciosamente no fixture de teste do front-end.
+// Mesma query/cache de Quartely/server.js, linha por linha —
+// reaproveitando o pool e o runQuery() já existentes aqui, sem abrir
+// uma segunda conexão com o mesmo Azure SQL.
+const QUARTELY_CACHE_TTL_MS = 5 * 60 * 1000;
+const quartelyCache = new Map();
+
+async function quartelyComCache(chave, buscar) {
+  const item = quartelyCache.get(chave);
+  if (item && item.expiraEm > Date.now()) return item.dados;
+  const dados = await buscar();
+  quartelyCache.set(chave, { dados, expiraEm: Date.now() + QUARTELY_CACHE_TTL_MS });
+  return dados;
+}
+
+app.get('/Quartely/api/chart-data', async (req, res) => {
+  try {
+    const dados = await quartelyComCache('chart-data', async () => {
+      const chartSql = `
+DECLARE @DT_INI AS DATE, @DT_FIM AS DATE, @DT_REF AS DATE
+
+SET @DT_INI = '2025-01-01'
+SET @DT_FIM = CAST(DATEADD(MONTH, 0, CONCAT(YEAR(DATEFROMPARTS(YEAR(DATEADD(MONTH, 0, GETDATE()-1)), MONTH(DATEADD(MONTH, -1, GETDATE()-1)), 1)), '-12-01')) AS DATE)
+SET @DT_REF = (SELECT DATEADD(MONTH, -1, DT_INI) AS DT_INI_MENOS_1_MES FROM IBP.CONTROLE_PROCESSOS WHERE ID_PROCESSO = 2)
+
+-- QUARTER
+SELECT
+  DATEADD(QUARTER, DATEDIFF(QUARTER, 0, PVC.DT_REF), 0) AS DT_REF,
+  PVC.ID_SISTEMA, PVC.ID_SITE, PVC.ID_OPERACAO, PVC.ID_KPI,
+  DASH.NM_KPIS_DASH AS 'NM_KPI', DASH.SG_UNID, DASH.ID_ORDEM,
+  CASE WHEN UnpivotedData.Type = 'Budget' THEN 0 WHEN UnpivotedData.Type = 'Supply' THEN 1 ELSE 2 END AS 'ORDEM_GRAFICO',
+  CASE WHEN UnpivotedData.Type = 'Budget' THEN 0 WHEN UnpivotedData.Type = 'Supply' THEN 2 ELSE 1 END AS 'ID_TYPE',
+  CASE WHEN UnpivotedData.Type = 'Budget' THEN 'Budget' WHEN UnpivotedData.Type = 'Supply' THEN 'Plan' ELSE 'Act/Fcst' END AS 'NM_TYPE',
+  CONCAT(
+    'Q', DATEPART(QUARTER, PVC.DT_REF),
+    CASE
+      WHEN UnpivotedData.Type = 'Budget' THEN 'B'
+      WHEN UnpivotedData.Type = 'Supply' THEN 'P'
+      WHEN UnpivotedData.Type = 'Forecast'
+           AND EOMONTH(DATEFROMPARTS(YEAR(PVC.DT_REF), DATEPART(QUARTER, PVC.DT_REF) * 3, 1)) <= CAST(@DT_REF AS DATE)
+        THEN 'A'
+      WHEN UnpivotedData.Type = 'Forecast' THEN 'F'
+    END
+  ,' ', (RIGHT(YEAR(PVC.DT_REF), 2))) AS 'Type',
+  SUM(CASE WHEN UnpivotedData.Value IS NULL THEN 0 ELSE UnpivotedData.Value END) AS [Value],
+  'QUARTER' AS CD_VISAO, 'Trimestral' AS NM_VISAO, 2 AS ORDEM_VISAO,
+  YEAR(PVC.DT_REF) AS ORDEM_ANO, DATEPART(QUARTER, PVC.DT_REF) AS ORDEM_PERIODO,
+  CASE WHEN UnpivotedData.Type = 'Budget' THEN 1 WHEN UnpivotedData.Type = 'Supply' THEN 2 ELSE 3 END AS ORDEM_SERIE
+FROM
+  IBP.PEDRAVISAOCONSOLIDADA PVC
+  INNER JOIN IBP.DASHBOARD DASH
+    ON PVC.ID_SISTEMA = DASH.ID_SISTEMA
+    AND CONCAT(PVC.ID_SITE, PVC.ID_OPERACAO, PVC.ID_KPI) = CONCAT(DASH.ID_SITE, DASH.ID_OPERACAO, DASH.ID_KPI)
+  CROSS APPLY (
+    SELECT 'Budget' AS Type, PVC.VL_ORC * DASH.VL_FATOR AS Value
+    UNION ALL
+    SELECT 'Supply' AS Type, PVC.VL_SUPPLY * DASH.VL_FATOR AS Value
+    UNION ALL
+    SELECT 'Forecast' AS Type,
+    CASE
+      WHEN PVC.DT_REF <= DATEFROMPARTS(YEAR(DATEADD(MONTH, -1, @DT_REF)), MONTH(DATEADD(MONTH, -1, @DT_REF)), 1) AND PVC.VL_REAL IS NULL THEN 0
+      WHEN PVC.DT_REF <= DATEFROMPARTS(YEAR(DATEADD(MONTH, -1, @DT_REF)), MONTH(DATEADD(MONTH, -1, @DT_REF)), 1) AND PVC.VL_REAL IS NOT NULL THEN PVC.VL_REAL * DASH.VL_FATOR
+      ELSE PVC.VL_PROJ * DASH.VL_FATOR
+    END AS Value
+  ) AS UnpivotedData
+WHERE
+  PVC.DT_REF BETWEEN @DT_INI AND @DT_FIM
+  AND DASH.ID_DASH = 21
+GROUP BY
+  DATEADD(QUARTER, DATEDIFF(QUARTER, 0, PVC.DT_REF), 0),
+  YEAR(PVC.DT_REF), DATEPART(QUARTER, PVC.DT_REF),
+  PVC.ID_SISTEMA, PVC.ID_SITE, PVC.ID_OPERACAO, PVC.ID_KPI,
+  DASH.NM_KPIS_DASH, DASH.SG_UNID, DASH.ID_ORDEM, UnpivotedData.Type
+
+UNION ALL
+
+-- SEMESTER
+SELECT
+  DATEFROMPARTS(YEAR(PVC.DT_REF), CASE WHEN MONTH(PVC.DT_REF) BETWEEN 1 AND 6 THEN 1 ELSE 7 END, 1) AS DT_REF,
+  PVC.ID_SISTEMA, PVC.ID_SITE, PVC.ID_OPERACAO, PVC.ID_KPI,
+  DASH.NM_KPIS_DASH AS 'NM_KPI', DASH.SG_UNID, DASH.ID_ORDEM,
+  CASE WHEN UnpivotedData.Type = 'Budget' THEN 0 WHEN UnpivotedData.Type = 'Supply' THEN 1 ELSE 2 END AS 'ORDEM_GRAFICO',
+  CASE WHEN UnpivotedData.Type = 'Budget' THEN 0 WHEN UnpivotedData.Type = 'Supply' THEN 2 ELSE 1 END AS 'ID_TYPE',
+  CASE WHEN UnpivotedData.Type = 'Budget' THEN 'Budget' WHEN UnpivotedData.Type = 'Supply' THEN 'Plan' ELSE 'Act/Fcst' END AS 'NM_TYPE',
+  CONCAT(
+    CASE WHEN MONTH(PVC.DT_REF) BETWEEN 1 AND 6 THEN 'H1' ELSE 'H2' END,
+    CASE
+      WHEN UnpivotedData.Type = 'Budget' THEN 'B'
+      WHEN UnpivotedData.Type = 'Supply' THEN 'P'
+      WHEN UnpivotedData.Type = 'Forecast'
+           AND EOMONTH(DATEFROMPARTS(YEAR(PVC.DT_REF), CASE WHEN MONTH(PVC.DT_REF) BETWEEN 1 AND 6 THEN 6 ELSE 12 END, 1)) <= CAST(@DT_REF AS DATE)
+        THEN 'A'
+      WHEN UnpivotedData.Type = 'Forecast' THEN 'F'
+    END
+  ,' ', (RIGHT(YEAR(PVC.DT_REF), 2))) AS 'Type',
+  SUM(CASE WHEN UnpivotedData.Value IS NULL THEN 0 ELSE UnpivotedData.Value END) AS [Value],
+  'SEMESTER' AS CD_VISAO, 'Semestral' AS NM_VISAO, 3 AS ORDEM_VISAO,
+  YEAR(PVC.DT_REF) AS ORDEM_ANO,
+  CASE WHEN MONTH(PVC.DT_REF) BETWEEN 1 AND 6 THEN 1 ELSE 2 END AS ORDEM_PERIODO,
+  CASE WHEN UnpivotedData.Type = 'Budget' THEN 1 WHEN UnpivotedData.Type = 'Supply' THEN 2 ELSE 3 END AS ORDEM_SERIE
+FROM
+  IBP.PEDRAVISAOCONSOLIDADA PVC
+  INNER JOIN IBP.DASHBOARD DASH
+    ON PVC.ID_SISTEMA = DASH.ID_SISTEMA
+    AND CONCAT(PVC.ID_SITE, PVC.ID_OPERACAO, PVC.ID_KPI) = CONCAT(DASH.ID_SITE, DASH.ID_OPERACAO, DASH.ID_KPI)
+  CROSS APPLY (
+    SELECT 'Budget' AS Type, PVC.VL_ORC * DASH.VL_FATOR AS Value
+    UNION ALL
+    SELECT 'Supply' AS Type, PVC.VL_SUPPLY * DASH.VL_FATOR AS Value
+    UNION ALL
+    SELECT 'Forecast' AS Type,
+    CASE
+      WHEN PVC.DT_REF <= DATEFROMPARTS(YEAR(DATEADD(MONTH, -1, @DT_REF)), MONTH(DATEADD(MONTH, -1, @DT_REF)), 1) AND PVC.VL_REAL IS NULL THEN 0
+      WHEN PVC.DT_REF <= DATEFROMPARTS(YEAR(DATEADD(MONTH, -1, @DT_REF)), MONTH(DATEADD(MONTH, -1, @DT_REF)), 1) AND PVC.VL_REAL IS NOT NULL THEN PVC.VL_REAL * DASH.VL_FATOR
+      ELSE PVC.VL_PROJ * DASH.VL_FATOR
+    END AS Value
+  ) AS UnpivotedData
+WHERE
+  PVC.DT_REF BETWEEN @DT_INI AND @DT_FIM
+  AND DASH.ID_DASH = 21
+GROUP BY
+  YEAR(PVC.DT_REF),
+  CASE WHEN MONTH(PVC.DT_REF) BETWEEN 1 AND 6 THEN 1 ELSE 7 END,
+  CASE WHEN MONTH(PVC.DT_REF) BETWEEN 1 AND 6 THEN 1 ELSE 2 END,
+  PVC.ID_SISTEMA, PVC.ID_SITE, PVC.ID_OPERACAO, PVC.ID_KPI,
+  DASH.NM_KPIS_DASH, DASH.SG_UNID, DASH.ID_ORDEM, UnpivotedData.Type,
+  CONCAT(
+    CASE WHEN MONTH(PVC.DT_REF) BETWEEN 1 AND 6 THEN 'H1' ELSE 'H2' END,
+    CASE
+      WHEN UnpivotedData.Type = 'Budget' THEN 'B'
+      WHEN UnpivotedData.Type = 'Supply' THEN 'P'
+      WHEN UnpivotedData.Type = 'Forecast'
+           AND EOMONTH(DATEFROMPARTS(YEAR(PVC.DT_REF), CASE WHEN MONTH(PVC.DT_REF) BETWEEN 1 AND 6 THEN 6 ELSE 12 END, 1)) <= CAST(@DT_REF AS DATE)
+        THEN 'A'
+      WHEN UnpivotedData.Type = 'Forecast' THEN 'F'
+    END
+  ,' ', (RIGHT(YEAR(PVC.DT_REF), 2)))
+
+UNION ALL
+
+-- YEAR
+SELECT
+  DATEFROMPARTS(YEAR(PVC.DT_REF), 1, 1) AS DT_REF,
+  PVC.ID_SISTEMA, PVC.ID_SITE, PVC.ID_OPERACAO, PVC.ID_KPI,
+  DASH.NM_KPIS_DASH AS 'NM_KPI', DASH.SG_UNID, DASH.ID_ORDEM,
+  CASE WHEN UnpivotedData.Type = 'Budget' THEN 6 ELSE 7 END AS 'ORDEM_GRAFICO',
+  CASE WHEN UnpivotedData.Type = 'Budget' THEN 0 WHEN UnpivotedData.Type = 'Supply' THEN 2 ELSE 1 END AS 'ID_TYPE',
+  CASE WHEN UnpivotedData.Type = 'Budget' THEN 'Budget' WHEN UnpivotedData.Type = 'Supply' THEN 'Plan' ELSE 'Act/Fcst' END AS 'NM_TYPE',
+  CASE
+    WHEN UnpivotedData.Type = 'Budget' THEN CONCAT(RIGHT(YEAR(PVC.DT_REF), 2), 'B')
+    WHEN UnpivotedData.Type = 'Supply' THEN CONCAT(RIGHT(YEAR(PVC.DT_REF), 2), 'P')
+    WHEN UnpivotedData.Type = 'Forecast' AND YEAR(PVC.DT_REF) < YEAR(@DT_REF) THEN CONCAT(RIGHT(YEAR(PVC.DT_REF), 2), 'A')
+    WHEN UnpivotedData.Type = 'Forecast' THEN CONCAT(RIGHT(YEAR(PVC.DT_REF), 2), 'F')
+  END AS 'Type',
+  SUM(CASE WHEN UnpivotedData.Value IS NULL THEN 0 ELSE UnpivotedData.Value END) AS [Value],
+  'YEAR' AS CD_VISAO, 'Anual' AS NM_VISAO, 4 AS ORDEM_VISAO,
+  YEAR(PVC.DT_REF) AS ORDEM_ANO, YEAR(PVC.DT_REF) AS ORDEM_PERIODO,
+  CASE WHEN UnpivotedData.Type = 'Budget' THEN 1 WHEN UnpivotedData.Type = 'Supply' THEN 2 ELSE 3 END AS ORDEM_SERIE
+FROM
+  IBP.PEDRAVISAOCONSOLIDADA PVC
+  INNER JOIN IBP.DASHBOARD DASH
+    ON PVC.ID_SISTEMA = DASH.ID_SISTEMA
+    AND CONCAT(PVC.ID_SITE, PVC.ID_OPERACAO, PVC.ID_KPI) = CONCAT(DASH.ID_SITE, DASH.ID_OPERACAO, DASH.ID_KPI)
+  CROSS APPLY (
+    SELECT 'Budget' AS Type, PVC.VL_ORC * DASH.VL_FATOR AS Value
+    UNION ALL
+    SELECT 'Supply' AS Type, PVC.VL_SUPPLY * DASH.VL_FATOR AS Value
+    UNION ALL
+    SELECT 'Forecast' AS Type,
+    CASE
+      WHEN PVC.DT_REF <= DATEFROMPARTS(YEAR(DATEADD(MONTH, -1, @DT_REF)), MONTH(DATEADD(MONTH, -1, @DT_REF)), 1) AND PVC.VL_REAL IS NULL THEN 0
+      WHEN PVC.DT_REF <= DATEFROMPARTS(YEAR(DATEADD(MONTH, -1, @DT_REF)), MONTH(DATEADD(MONTH, -1, @DT_REF)), 1) AND PVC.VL_REAL IS NOT NULL THEN PVC.VL_REAL * DASH.VL_FATOR
+      ELSE PVC.VL_PROJ * DASH.VL_FATOR
+    END AS Value
+  ) AS UnpivotedData
+WHERE
+  PVC.DT_REF BETWEEN @DT_INI AND @DT_FIM
+  AND DASH.ID_DASH = 21
+GROUP BY
+  YEAR(PVC.DT_REF), PVC.ID_SISTEMA, PVC.ID_SITE, PVC.ID_OPERACAO, PVC.ID_KPI,
+  DASH.NM_KPIS_DASH, DASH.SG_UNID, DASH.ID_ORDEM, UnpivotedData.Type
+
+ORDER BY ORDEM_ANO, ORDEM_VISAO, ORDEM_PERIODO, ORDEM_SERIE`;
+      const result = await runQuery(chartSql);
+      return result.recordset;
+    });
+    res.json(dados);
+  } catch (err) {
+    console.error('[quartely] Erro ao buscar chart-data:', err.message);
+    res.status(500).json({ error: 'Failed to fetch chart data' });
+  }
+});
+
+// A origem correta é IBP.DASHBOARD.ID_SITE (todo site configurado para
+// este dashboard), não IBP.PEDRAVISAOCONSOLIDADA — RIGHT JOIN a partir
+// de DASHBOARD (filtrado por ID_DASH = 21), resolvendo o nome em SITES.
+app.get('/Quartely/api/sites', async (req, res) => {
+  try {
+    const dados = await quartelyComCache('sites', async () => {
+      const sitesSql = `
+SELECT DISTINCT
+  S.ID_SITE,
+  LTRIM(RTRIM(S.NM_SITE)) AS NM_SITE
+FROM IBP.SITES S
+RIGHT JOIN IBP.DASHBOARD D
+  ON D.ID_SITE = S.ID_SITE
+WHERE D.ID_DASH = 21
+  AND S.NM_SITE IS NOT NULL
+  AND LTRIM(RTRIM(S.NM_SITE)) <> ''
+ORDER BY NM_SITE`;
+      const result = await runQuery(sitesSql);
+      return result.recordset;
+    });
+    res.json(dados);
+  } catch (err) {
+    console.error('[quartely] Erro ao buscar sites:', err.message);
+    res.status(500).json({ error: 'Failed to fetch sites' });
+  }
+});
+
 app.use(
   express.static(__dirname, {
     etag: true,
