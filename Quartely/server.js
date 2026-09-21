@@ -125,34 +125,376 @@ async function withCache(key, fetcher) {
 async function getChartData() {
   return withCache("chart-data", async () => {
     const sql = `
-      DECLARE @DT_INI AS DATE, @DT_FIM AS DATE, @DT_REF AS DATE
-      SET @DT_INI = '2025-01-01'
-      SET @DT_FIM = CAST(DATEADD(MONTH, 0, CONCAT(YEAR(DATEFROMPARTS(YEAR(DATEADD(MONTH, 0, GETDATE()-1)), MONTH(DATEADD(MONTH, -1, GETDATE()-1)), 1)), '-12-01')) AS DATE)
-      SET @DT_REF = (SELECT DATEADD(MONTH, -1, DT_INI) AS DT_INI_MENOS_1_MES FROM IBP.CONTROLE_PROCESSOS WHERE ID_PROCESSO = 2)
+DECLARE @DT_INI AS DATE, @DT_FIM AS DATE, @DT_REF AS DATE
 
-      -- MESES
-      SELECT
-        PVC.DT_REF, PVC.ID_SISTEMA, PVC.ID_SITE, PVC.ID_OPERACAO, PVC.ID_KPI,
-        DASH.NM_KPIS_DASH AS NM_KPI, DASH.ID_ORDEM,
-        CASE WHEN UnpivotedData.Type = 'Budget' THEN 0 WHEN UnpivotedData.Type = 'Supply' THEN 1 ELSE 2 END AS ORDEM_GRAFICO,
-        CASE WHEN UnpivotedData.Type = 'Budget' THEN 0 WHEN UnpivotedData.Type = 'Supply' THEN 2 ELSE 1 END AS ID_TYPE,
-        CASE WHEN UnpivotedData.Type = 'Budget' THEN 'Budget' WHEN UnpivotedData.Type = 'Supply' THEN 'Plan' ELSE 'Act/Fcst' END AS NM_TYPE,
-        CASE WHEN UnpivotedData.Type = 'Budget' THEN CONCAT(FORMAT(DT_REF, 'MMM'),' B')
-          WHEN UnpivotedData.Type = 'Supply' THEN CONCAT(FORMAT(DT_REF, 'MMM'),' P')
-          WHEN UnpivotedData.Type = 'Forecast' AND PVC.DT_REF <= @DT_REF THEN CONCAT(FORMAT(DT_REF, 'MMM'),' A')
-          WHEN UnpivotedData.Type = 'Forecast' THEN CONCAT(FORMAT(DT_REF, 'MMM'),' F') END AS Type,
-        CASE WHEN UnpivotedData.Value IS NULL THEN 0 ELSE UnpivotedData.Value END AS Value
-      FROM IBP.PEDRAVISAOCONSOLIDADA PVC
-      INNER JOIN IBP.DASHBOARD DASH ON PVC.ID_SISTEMA = DASH.ID_SISTEMA AND CONCAT(PVC.ID_SITE, PVC.ID_OPERACAO, PVC.ID_KPI) = CONCAT(DASH.ID_SITE, DASH.ID_OPERACAO, DASH.ID_KPI)
-      CROSS APPLY (
-        SELECT 'Budget' AS Type, PVC.VL_ORC * DASH.VL_FATOR AS Value
-        UNION ALL SELECT 'Supply' AS Type, PVC.VL_SUPPLY * DASH.VL_FATOR AS Value
-        UNION ALL SELECT 'Forecast' AS Type,
-          CASE WHEN PVC.DT_REF <= DATEFROMPARTS(YEAR(DATEADD(MONTH, -1, @DT_REF)), MONTH(DATEADD(MONTH, -1, @DT_REF)), 1) AND PVC.VL_REAL IS NULL THEN 0
-            WHEN PVC.DT_REF <= DATEFROMPARTS(YEAR(DATEADD(MONTH, -1, @DT_REF)), MONTH(DATEADD(MONTH, -1, @DT_REF)), 1) AND PVC.VL_REAL IS NOT NULL THEN PVC.VL_REAL * DASH.VL_FATOR
-            ELSE PVC.VL_PROJ * DASH.VL_FATOR END AS Value
-      ) AS UnpivotedData
-      WHERE PVC.DT_REF BETWEEN @DT_INI AND @DT_FIM AND DASH.ID_DASH = 21
+SET @DT_INI = '2025-01-01'
+SET @DT_FIM = CAST(DATEADD(MONTH, 0, CONCAT(YEAR(DATEFROMPARTS(YEAR(DATEADD(MONTH, 0, GETDATE()-1)), MONTH(DATEADD(MONTH, -1, GETDATE()-1)), 1)), '-12-01')) AS DATE)
+SET @DT_REF = (SELECT DATEADD(MONTH, -1, DT_INI) AS DT_INI_MENOS_1_MES FROM IBP.CONTROLE_PROCESSOS WHERE ID_PROCESSO = 2)
+
+-- MONTH
+SELECT
+  PVC.DT_REF,
+  PVC.ID_SISTEMA,
+  PVC.ID_SITE,
+  PVC.ID_OPERACAO,
+  PVC.ID_KPI,
+  DASH.NM_KPIS_DASH AS 'NM_KPI',
+  DASH.ID_ORDEM,
+  CASE WHEN UnpivotedData.Type = 'Budget' THEN 0
+    WHEN UnpivotedData.Type = 'Supply' THEN 1
+    ELSE 2 END AS 'ORDEM_GRAFICO',
+  CASE WHEN UnpivotedData.Type = 'Budget' THEN 0
+    WHEN UnpivotedData.Type = 'Supply' THEN 2
+    ELSE 1 END AS 'ID_TYPE',
+  CASE WHEN UnpivotedData.Type = 'Budget' THEN 'Budget'
+    WHEN UnpivotedData.Type = 'Supply' THEN 'Plan'
+    ELSE 'Act/Fcst' END AS 'NM_TYPE',
+  CASE WHEN UnpivotedData.Type = 'Budget' THEN CONCAT(FORMAT(DT_REF, 'MMM'),' B')
+    WHEN UnpivotedData.Type = 'Supply' THEN CONCAT(FORMAT(DT_REF, 'MMM'),' P')
+    WHEN UnpivotedData.Type = 'Forecast'  AND PVC.DT_REF <= @DT_REF THEN CONCAT(FORMAT(DT_REF, 'MMM'),' A')
+    WHEN UnpivotedData.Type = 'Forecast'  THEN CONCAT(FORMAT(DT_REF, 'MMM'),' F')
+  END AS 'Type',
+  CASE WHEN UnpivotedData.Value IS NULL THEN 0 ELSE UnpivotedData.Value END AS [Value]
+FROM
+  IBP.PEDRAVISAOCONSOLIDADA PVC
+  INNER JOIN IBP.DASHBOARD DASH
+    ON PVC.ID_SISTEMA = DASH.ID_SISTEMA
+    AND CONCAT(PVC.ID_SITE, PVC.ID_OPERACAO, PVC.ID_KPI) = CONCAT(DASH.ID_SITE, DASH.ID_OPERACAO, DASH.ID_KPI)
+  CROSS APPLY (
+    SELECT 'Budget' AS Type, PVC.VL_ORC  * DASH.VL_FATOR AS Value
+    UNION ALL
+    SELECT 'Supply' AS Type, PVC.VL_SUPPLY  * DASH.VL_FATOR AS Value
+    UNION ALL
+    SELECT 'Forecast' AS Type,
+    CASE WHEN PVC.DT_REF <= DATEFROMPARTS(YEAR(DATEADD(MONTH, -1, @DT_REF)), MONTH(DATEADD(MONTH, -1, @DT_REF)), 1) AND PVC.VL_REAL IS NULL THEN 0
+      WHEN PVC.DT_REF <= DATEFROMPARTS(YEAR(DATEADD(MONTH, -1, @DT_REF)), MONTH(DATEADD(MONTH, -1, @DT_REF)), 1) AND PVC.VL_REAL IS NOT NULL THEN PVC.VL_REAL  * DASH.VL_FATOR
+    ELSE PVC.VL_PROJ  * DASH.VL_FATOR END AS Value
+  ) AS UnpivotedData
+WHERE
+  PVC.DT_REF  BETWEEN @DT_INI  AND @DT_FIM
+  AND DASH.ID_DASH = 21
+
+UNION ALL
+
+-- QUARTER
+SELECT
+  DATEADD(
+    QUARTER,
+    DATEDIFF(QUARTER, 0, PVC.DT_REF),
+    0
+  ) AS DT_REF,
+  PVC.ID_SISTEMA,
+  PVC.ID_SITE,
+  PVC.ID_OPERACAO,
+  PVC.ID_KPI,
+  DASH.NM_KPIS_DASH AS 'NM_KPI',
+  DASH.ID_ORDEM,
+  CASE
+    WHEN UnpivotedData.Type = 'Budget' THEN 0
+    WHEN UnpivotedData.Type = 'Supply' THEN 1
+    ELSE 2
+  END AS 'ORDEM_GRAFICO',
+  CASE
+    WHEN UnpivotedData.Type = 'Budget' THEN 0
+    WHEN UnpivotedData.Type = 'Supply' THEN 2
+    ELSE 1
+  END AS 'ID_TYPE',
+  CASE
+    WHEN UnpivotedData.Type = 'Budget' THEN 'Budget'
+    WHEN UnpivotedData.Type = 'Supply' THEN 'Plan'
+    ELSE 'Act/Fcst'
+  END AS 'NM_TYPE',
+  CONCAT(
+    'Q',
+    DATEPART(QUARTER, PVC.DT_REF),
+    CASE
+      WHEN UnpivotedData.Type = 'Budget' THEN 'B'
+      WHEN UnpivotedData.Type = 'Supply' THEN 'P'
+      WHEN UnpivotedData.Type = 'Forecast'
+        AND EOMONTH(
+          DATEFROMPARTS(
+            YEAR(PVC.DT_REF),
+            DATEPART(QUARTER, PVC.DT_REF) * 3,
+            1
+          )
+        ) <= CAST(@DT_REF AS DATE)
+      THEN 'A'
+      WHEN UnpivotedData.Type = 'Forecast' THEN 'F'
+    END
+  ) AS 'Type',
+  SUM(
+    CASE
+      WHEN UnpivotedData.Value IS NULL THEN 0
+      ELSE UnpivotedData.Value
+    END
+  ) AS [Value]
+FROM
+  IBP.PEDRAVISAOCONSOLIDADA PVC
+  INNER JOIN IBP.DASHBOARD DASH
+    ON PVC.ID_SISTEMA = DASH.ID_SISTEMA
+    AND CONCAT(
+      PVC.ID_SITE,
+      PVC.ID_OPERACAO,
+      PVC.ID_KPI
+    ) = CONCAT(
+      DASH.ID_SITE,
+      DASH.ID_OPERACAO,
+      DASH.ID_KPI
+    )
+  CROSS APPLY (
+    SELECT
+      'Budget' AS Type,
+      PVC.VL_ORC * DASH.VL_FATOR AS Value
+    UNION ALL
+    SELECT
+      'Supply' AS Type,
+      PVC.VL_SUPPLY * DASH.VL_FATOR AS Value
+    UNION ALL
+    SELECT
+      'Forecast' AS Type,
+      CASE
+        WHEN PVC.DT_REF <= DATEFROMPARTS(
+          YEAR(DATEADD(MONTH, -1, @DT_REF)),
+          MONTH(DATEADD(MONTH, -1, @DT_REF)),
+          1
+        )
+        AND PVC.VL_REAL IS NULL
+        THEN 0
+        WHEN PVC.DT_REF <= DATEFROMPARTS(
+          YEAR(DATEADD(MONTH, -1, @DT_REF)),
+          MONTH(DATEADD(MONTH, -1, @DT_REF)),
+          1
+        )
+        AND PVC.VL_REAL IS NOT NULL
+        THEN PVC.VL_REAL * DASH.VL_FATOR
+        ELSE PVC.VL_PROJ * DASH.VL_FATOR
+      END AS Value
+  ) AS UnpivotedData
+WHERE
+  PVC.DT_REF BETWEEN @DT_INI AND @DT_FIM
+  AND DASH.ID_DASH = 21
+GROUP BY
+  DATEADD(
+    QUARTER,
+    DATEDIFF(QUARTER, 0, PVC.DT_REF),
+    0
+  ),
+  YEAR(PVC.DT_REF),
+  DATEPART(QUARTER, PVC.DT_REF),
+  PVC.ID_SISTEMA,
+  PVC.ID_SITE,
+  PVC.ID_OPERACAO,
+  PVC.ID_KPI,
+  DASH.NM_KPIS_DASH,
+  DASH.ID_ORDEM,
+  UnpivotedData.Type
+
+UNION ALL
+
+-- SEMESTER
+SELECT
+  DATEFROMPARTS(
+    YEAR(PVC.DT_REF),
+    CASE
+      WHEN MONTH(PVC.DT_REF) BETWEEN 1 AND 6 THEN 1
+      ELSE 7
+    END,
+    1
+  ) AS DT_REF,
+  PVC.ID_SISTEMA,
+  PVC.ID_SITE,
+  PVC.ID_OPERACAO,
+  PVC.ID_KPI,
+  DASH.NM_KPIS_DASH AS 'NM_KPI',
+  DASH.ID_ORDEM,
+  CASE
+    WHEN UnpivotedData.Type = 'Budget' THEN 0
+    WHEN UnpivotedData.Type = 'Supply' THEN 1
+    ELSE 2
+  END AS 'ORDEM_GRAFICO',
+  CASE
+    WHEN UnpivotedData.Type = 'Budget' THEN 0
+    WHEN UnpivotedData.Type = 'Supply' THEN 2
+    ELSE 1
+  END AS 'ID_TYPE',
+  CASE
+    WHEN UnpivotedData.Type = 'Budget' THEN 'Budget'
+    WHEN UnpivotedData.Type = 'Supply' THEN 'Plan'
+    ELSE 'Act/Fcst'
+  END AS 'NM_TYPE',
+  CASE
+    WHEN MONTH(PVC.DT_REF) BETWEEN 1 AND 6 THEN 'H1'
+    WHEN MONTH(PVC.DT_REF) BETWEEN 7 AND 12 THEN 'H2'
+  END AS 'Type',
+  SUM(
+    CASE
+      WHEN UnpivotedData.Value IS NULL THEN 0
+      ELSE UnpivotedData.Value
+    END
+  ) AS [Value]
+FROM
+  IBP.PEDRAVISAOCONSOLIDADA PVC
+  INNER JOIN IBP.DASHBOARD DASH
+    ON PVC.ID_SISTEMA = DASH.ID_SISTEMA
+    AND CONCAT(
+      PVC.ID_SITE,
+      PVC.ID_OPERACAO,
+      PVC.ID_KPI
+    ) = CONCAT(
+      DASH.ID_SITE,
+      DASH.ID_OPERACAO,
+      DASH.ID_KPI
+    )
+  CROSS APPLY (
+    SELECT
+      'Budget' AS Type,
+      PVC.VL_ORC * DASH.VL_FATOR AS Value
+    UNION ALL
+    SELECT
+      'Supply' AS Type,
+      PVC.VL_SUPPLY * DASH.VL_FATOR AS Value
+    UNION ALL
+    SELECT
+      'Forecast' AS Type,
+      CASE
+        WHEN PVC.DT_REF <= DATEFROMPARTS(
+          YEAR(DATEADD(MONTH, -1, @DT_REF)),
+          MONTH(DATEADD(MONTH, -1, @DT_REF)),
+          1
+        )
+        AND PVC.VL_REAL IS NULL
+        THEN 0
+        WHEN PVC.DT_REF <= DATEFROMPARTS(
+          YEAR(DATEADD(MONTH, -1, @DT_REF)),
+          MONTH(DATEADD(MONTH, -1, @DT_REF)),
+          1
+        )
+        AND PVC.VL_REAL IS NOT NULL
+        THEN PVC.VL_REAL * DASH.VL_FATOR
+        ELSE PVC.VL_PROJ * DASH.VL_FATOR
+      END AS Value
+  ) AS UnpivotedData
+WHERE
+  PVC.DT_REF BETWEEN @DT_INI AND @DT_FIM
+  AND DASH.ID_DASH = 21
+GROUP BY
+  YEAR(PVC.DT_REF),
+  CASE
+    WHEN MONTH(PVC.DT_REF) BETWEEN 1 AND 6 THEN 1
+    ELSE 7
+  END,
+  CASE
+    WHEN MONTH(PVC.DT_REF) BETWEEN 1 AND 6 THEN 'H1'
+    WHEN MONTH(PVC.DT_REF) BETWEEN 7 AND 12 THEN 'H2'
+  END,
+  PVC.ID_SISTEMA,
+  PVC.ID_SITE,
+  PVC.ID_OPERACAO,
+  PVC.ID_KPI,
+  DASH.NM_KPIS_DASH,
+  DASH.ID_ORDEM,
+  UnpivotedData.Type
+
+UNION ALL
+
+-- YEAR
+SELECT
+  DATEFROMPARTS(
+    YEAR(PVC.DT_REF),
+    1,
+    1
+  ) AS DT_REF,
+  PVC.ID_SISTEMA,
+  PVC.ID_SITE,
+  PVC.ID_OPERACAO,
+  PVC.ID_KPI,
+  DASH.NM_KPIS_DASH AS 'NM_KPI',
+  DASH.ID_ORDEM,
+  CASE
+    WHEN UnpivotedData.Type = 'Budget' THEN 6
+    ELSE 7
+  END AS 'ORDEM_GRAFICO',
+  CASE
+    WHEN UnpivotedData.Type = 'Budget' THEN 0
+    WHEN UnpivotedData.Type = 'Supply' THEN 2
+    ELSE 1
+  END AS 'ID_TYPE',
+  CASE
+    WHEN UnpivotedData.Type = 'Budget' THEN 'Budget'
+    WHEN UnpivotedData.Type = 'Supply' THEN 'Plan'
+    ELSE 'Act/Fcst'
+  END AS 'NM_TYPE',
+  CASE
+    WHEN UnpivotedData.Type = 'Budget'
+      THEN CONCAT(RIGHT(YEAR(PVC.DT_REF), 2), 'B')
+    WHEN UnpivotedData.Type = 'Supply'
+      THEN CONCAT(RIGHT(YEAR(PVC.DT_REF), 2), 'P')
+    WHEN UnpivotedData.Type = 'Forecast'
+      AND YEAR(PVC.DT_REF) < YEAR(@DT_REF)
+      THEN CONCAT(RIGHT(YEAR(PVC.DT_REF), 2), 'A')
+    WHEN UnpivotedData.Type = 'Forecast'
+      THEN CONCAT(RIGHT(YEAR(PVC.DT_REF), 2), 'F')
+  END AS 'Type',
+  SUM(
+    CASE
+      WHEN UnpivotedData.Value IS NULL THEN 0
+      ELSE UnpivotedData.Value
+    END
+  ) AS [Value]
+FROM
+  IBP.PEDRAVISAOCONSOLIDADA PVC
+  INNER JOIN IBP.DASHBOARD DASH
+    ON PVC.ID_SISTEMA = DASH.ID_SISTEMA
+    AND CONCAT(
+      PVC.ID_SITE,
+      PVC.ID_OPERACAO,
+      PVC.ID_KPI
+    ) = CONCAT(
+      DASH.ID_SITE,
+      DASH.ID_OPERACAO,
+      DASH.ID_KPI
+    )
+  CROSS APPLY (
+    SELECT
+      'Budget' AS Type,
+      PVC.VL_ORC * DASH.VL_FATOR AS Value
+    UNION ALL
+    SELECT
+      'Supply' AS Type,
+      PVC.VL_SUPPLY * DASH.VL_FATOR AS Value
+    UNION ALL
+    SELECT
+      'Forecast' AS Type,
+      CASE
+        WHEN PVC.DT_REF <= DATEFROMPARTS(
+          YEAR(DATEADD(MONTH, -1, @DT_REF)),
+          MONTH(DATEADD(MONTH, -1, @DT_REF)),
+          1
+        )
+        AND PVC.VL_REAL IS NULL
+        THEN 0
+        WHEN PVC.DT_REF <= DATEFROMPARTS(
+          YEAR(DATEADD(MONTH, -1, @DT_REF)),
+          MONTH(DATEADD(MONTH, -1, @DT_REF)),
+          1
+        )
+        AND PVC.VL_REAL IS NOT NULL
+        THEN PVC.VL_REAL * DASH.VL_FATOR
+        ELSE PVC.VL_PROJ * DASH.VL_FATOR
+      END AS Value
+  ) AS UnpivotedData
+WHERE
+  PVC.DT_REF BETWEEN @DT_INI AND @DT_FIM
+  AND DASH.ID_DASH = 21
+GROUP BY
+  YEAR(PVC.DT_REF),
+  PVC.ID_SISTEMA,
+  PVC.ID_SITE,
+  PVC.ID_OPERACAO,
+  PVC.ID_KPI,
+  DASH.NM_KPIS_DASH,
+  DASH.ID_ORDEM,
+  UnpivotedData.Type
     `;
 
     const rows = await runQuery(sql);
