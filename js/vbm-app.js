@@ -549,6 +549,94 @@
     });
   };
 
+  /* ── Loading (window.VBMLoading) ──
+     Padrão único reutilizável, nas três formas descritas em
+     vbm-app.css (.vbm-spinner / .vbm-loading-overlay /
+     .vbm-loading-fullpage). Antes cada tela tinha o próprio jeito de
+     indicar carregamento — texto "Carregando…" solto na Biblioteca,
+     swap manual de innerHTML no botão de enviar do Novo Kaizen, nada
+     nos demais lugares. Aqui thread para o sistema inteiro usar igual.
+
+     botao(el, true/false, opts): trava contra duplo clique — desabilita
+     o elemento e troca o conteúdo por um spinner, sem mudar a largura;
+     restaura o HTML de antes ao desligar. Chamável em qualquer botão
+     (<button> ou <a class="btn">), então cabe em Salvar, Aprovar,
+     Rejeitar, Exportar — qualquer ação que não pode rodar duas vezes ao
+     mesmo tempo.
+
+     overlay(container, true/false, opts): cobre o CONTAINER passado
+     (precisa de position:relative ou position:absolute — se não tiver,
+     esta função aplica position:relative nele) com o spinner
+     centralizado; o conteúdo anterior continua por baixo, sem sumir
+     nem saltar de tamanho. Serve para listas, cards e corpo de modal.
+     opts.texto: legenda abaixo do spinner (ex.: "Carregando…").
+
+     fullpage(true/false): cobre a janela inteira — troca de tela. Um
+     elemento só, reaproveitado. */
+  window.VBMLoading = (function () {
+    const BOTAO_KEY = 'vbmHtmlOriginal';
+
+    function botao(el, ligar, opts) {
+      if (!el) return;
+      opts = opts || {};
+      if (ligar) {
+        if (el.dataset[BOTAO_KEY] == null) el.dataset[BOTAO_KEY] = el.innerHTML;
+        el.disabled = true;
+        el.classList.add('vbm-btn-loading');
+        el.setAttribute('aria-busy', 'true');
+        el.innerHTML = '<span class="vbm-spinner" aria-hidden="true"></span>' +
+          (opts.texto ? '<span>' + opts.texto + '</span>' : '');
+      } else {
+        el.disabled = false;
+        el.classList.remove('vbm-btn-loading');
+        el.removeAttribute('aria-busy');
+        if (el.dataset[BOTAO_KEY] != null) {
+          el.innerHTML = el.dataset[BOTAO_KEY];
+          delete el.dataset[BOTAO_KEY];
+        }
+      }
+    }
+
+    function overlay(container, ligar, opts) {
+      if (!container) return;
+      opts = opts || {};
+      let el = container.querySelector(':scope > .vbm-loading-overlay');
+      if (ligar) {
+        const posicao = getComputedStyle(container).position;
+        if (posicao === 'static') container.style.position = 'relative';
+        if (!el) {
+          el = document.createElement('div');
+          el.className = 'vbm-loading-overlay';
+          el.innerHTML = '<span class="vbm-spinner" aria-hidden="true"></span>' +
+            (opts.texto ? '<span class="vbm-loading-texto"></span>' : '');
+          container.appendChild(el);
+        }
+        const texto = el.querySelector('.vbm-loading-texto');
+        if (texto) texto.textContent = opts.texto || '';
+        el.setAttribute('aria-busy', 'true');
+      } else if (el) {
+        el.remove();
+      }
+    }
+
+    let fullpageEl = null;
+    function fullpage(ligar) {
+      if (ligar) {
+        if (!fullpageEl) {
+          fullpageEl = document.createElement('div');
+          fullpageEl.className = 'vbm-loading-fullpage';
+          fullpageEl.innerHTML = '<span class="vbm-spinner vbm-spinner-lg" aria-hidden="true"></span>';
+          document.body.appendChild(fullpageEl);
+        }
+        fullpageEl.classList.add('open');
+      } else if (fullpageEl) {
+        fullpageEl.classList.remove('open');
+      }
+    }
+
+    return { botao: botao, overlay: overlay, fullpage: fullpage };
+  })();
+
   /* CSS do relatório — vive aqui, e não no vbm-app.css, porque a janela
      de impressão é um documento separado: puxar a folha do app traria
      centenas de regras de tela para um papel.

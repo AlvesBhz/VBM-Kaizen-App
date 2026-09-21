@@ -38,7 +38,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>VBM Kaizen — Novo Kaizen</title>
 <link href="css/fontawesome-subset.css?v=20260920-1" rel="stylesheet"/>
-<link href="css/vbm-app.css?v=20260916-2" rel="stylesheet"/>
+<link href="css/vbm-app.css?v=20260921-1" rel="stylesheet"/>
 <!-- Poppins servida pelo próprio app (css/poppins.css + assets/fonts/poppins).
      Vinha de fonts.googleapis.com: em rede sem saída para a internet o
      pedido ficava pendente e o evento load da página nunca disparava. -->
@@ -1244,7 +1244,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
   </div>
 </div>
 
-<script src="js/vbm-app.js?v=20260915-1"></script>
+<script src="js/vbm-app.js?v=20260921-1"></script>
 <!-- Dados do usuário logado (Microsoft Graph) — reaproveita o token do
      login já existente; sem MSAL próprio, sem alterar o fluxo de auth. -->
 <script src="js/usuario-graph.js?v=20260912-1"></script>
@@ -3515,9 +3515,7 @@ window.validacaoWizard = (function () {
       descricao_resultado_outros: flResultadoOutros ? valor('descricao_resultado_outros') : '',
     };
 
-    submitBtn.disabled = true;
-    var textoOriginal = submitBtn.innerHTML;
-    submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Enviando imagens...</span>';
+    VBMLoading.botao(submitBtn, true, { texto: 'Enviando imagens...' });
 
     // Upload das imagens só agora (não mais ao escolher o arquivo — ver
     // uploadImagemSeSelecionada acima): evita lixo no volume se a
@@ -3529,7 +3527,7 @@ window.validacaoWizard = (function () {
       .then(function () {
         payload.url_imagem_antes = valor('url_imagem_antes');
         payload.url_imagem_depois = valor('url_imagem_depois');
-        submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Enviando...</span>';
+        VBMLoading.botao(submitBtn, true, { texto: 'Enviando...' });
         // Modo de edição: PUT no próprio registro. O ID vem da navegação
         // (kaizen-novo.html?id=), nunca do corpo — quem decide o que
         // atualizar é a URL, e o servidor confere permissão de novo.
@@ -3587,8 +3585,7 @@ window.validacaoWizard = (function () {
       })
       .catch(function (err) {
         showToast('error', 'Erro ao enviar', err.message || 'Não foi possível enviar o Kaizen.');
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = textoOriginal;
+        VBMLoading.botao(submitBtn, false);
       });
   });
 })();
