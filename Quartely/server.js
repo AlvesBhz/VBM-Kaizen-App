@@ -228,7 +228,17 @@ SELECT
   CASE WHEN UnpivotedData.Type = 'Budget' THEN 0 WHEN UnpivotedData.Type = 'Supply' THEN 1 ELSE 2 END AS 'ORDEM_GRAFICO',
   CASE WHEN UnpivotedData.Type = 'Budget' THEN 0 WHEN UnpivotedData.Type = 'Supply' THEN 2 ELSE 1 END AS 'ID_TYPE',
   CASE WHEN UnpivotedData.Type = 'Budget' THEN 'Budget' WHEN UnpivotedData.Type = 'Supply' THEN 'Plan' ELSE 'Act/Fcst' END AS 'NM_TYPE',
-  CASE WHEN MONTH(PVC.DT_REF) BETWEEN 1 AND 6 THEN 'H1' WHEN MONTH(PVC.DT_REF) BETWEEN 7 AND 12 THEN 'H2' END AS 'Type',
+  CONCAT(
+    CASE WHEN MONTH(PVC.DT_REF) BETWEEN 1 AND 6 THEN 'H1' ELSE 'H2' END,
+    CASE
+      WHEN UnpivotedData.Type = 'Budget' THEN 'B'
+      WHEN UnpivotedData.Type = 'Supply' THEN 'P'
+      WHEN UnpivotedData.Type = 'Forecast'
+           AND EOMONTH(DATEFROMPARTS(YEAR(PVC.DT_REF), CASE WHEN MONTH(PVC.DT_REF) BETWEEN 1 AND 6 THEN 6 ELSE 12 END, 1)) <= CAST(@DT_REF AS DATE)
+        THEN 'A'
+      WHEN UnpivotedData.Type = 'Forecast' THEN 'F'
+    END
+  ) AS 'Type',
   SUM(CASE WHEN UnpivotedData.Value IS NULL THEN 0 ELSE UnpivotedData.Value END) AS [Value],
   'SEMESTER' AS CD_VISAO, 'Semestral' AS NM_VISAO, 3 AS ORDEM_VISAO,
   YEAR(PVC.DT_REF) AS ORDEM_ANO,
@@ -257,10 +267,23 @@ WHERE
 GROUP BY
   YEAR(PVC.DT_REF),
   CASE WHEN MONTH(PVC.DT_REF) BETWEEN 1 AND 6 THEN 1 ELSE 7 END,
-  CASE WHEN MONTH(PVC.DT_REF) BETWEEN 1 AND 6 THEN 'H1' WHEN MONTH(PVC.DT_REF) BETWEEN 7 AND 12 THEN 'H2' END,
   CASE WHEN MONTH(PVC.DT_REF) BETWEEN 1 AND 6 THEN 1 ELSE 2 END,
   PVC.ID_SISTEMA, PVC.ID_SITE, PVC.ID_OPERACAO, PVC.ID_KPI,
-  DASH.NM_KPIS_DASH, DASH.SG_UNID, DASH.ID_ORDEM, UnpivotedData.Type
+  DASH.NM_KPIS_DASH, DASH.SG_UNID, DASH.ID_ORDEM, UnpivotedData.Type,
+  -- SQL Server exige a expressão de 'Type' repetida verbatim no GROUP BY
+  -- quando ela aparece fora de uma agregação — os CASEs numéricos acima
+  -- não bastam para cobrir o ramo Forecast A/F, que depende de EOMONTH
+  CONCAT(
+    CASE WHEN MONTH(PVC.DT_REF) BETWEEN 1 AND 6 THEN 'H1' ELSE 'H2' END,
+    CASE
+      WHEN UnpivotedData.Type = 'Budget' THEN 'B'
+      WHEN UnpivotedData.Type = 'Supply' THEN 'P'
+      WHEN UnpivotedData.Type = 'Forecast'
+           AND EOMONTH(DATEFROMPARTS(YEAR(PVC.DT_REF), CASE WHEN MONTH(PVC.DT_REF) BETWEEN 1 AND 6 THEN 6 ELSE 12 END, 1)) <= CAST(@DT_REF AS DATE)
+        THEN 'A'
+      WHEN UnpivotedData.Type = 'Forecast' THEN 'F'
+    END
+  )
 
 UNION ALL
 

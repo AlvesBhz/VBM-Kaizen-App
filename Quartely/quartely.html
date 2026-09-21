@@ -906,10 +906,18 @@ let filterOptions = {};    // opções de cada combobox, derivadas de allRows
 // inteiro comentado — a Quarterly nunca recebe linhas 'MONTH' dela. Este
 // fixture não gera nenhuma; ver também o filtro de defesa em loadQuartelyData.
 //
-// Trimestral/Semestral usam uma janela de UM ano (o mesmo padrão de
-// @DT_INI/@DT_FIM da QUARTELY.sql real) — só a granularidade Anual compara
-// vários anos, como o bloco YEAR da query original faz (rótulos '25B'/'26B'
-// com o ano embutido).
+// [CORREÇÃO — causa-raiz do bug "faltam horizontes em 2025/2026"]
+// A janela real da QUARTELY.sql é @DT_INI = '2025-01-01' até
+// @DT_FIM ≈ dezembro do ano corrente (calculado a partir de GETDATE()) —
+// ou seja, DOIS anos inteiros, não um. Uma versão anterior deste fixture
+// só gerava Trimestral/Semestral para um único "ano corrente", então
+// filtrar por Ano=2025 esvaziava esses dois horizontes (só sobrava Anual,
+// que já era multi-ano) — o filtro em si nunca teve bug; era o fixture que
+// não representava a janela completa da query real. Corrigido abaixo:
+// Trimestral e Semestral agora cobrem os DOIS anos, com todos os 4
+// trimestres e os 2 semestres em cada um — igual ao que UNION ALL +
+// CROSS APPLY (Budget/Supply/Forecast) produzem para cada período dentro
+// de @DT_INI..@DT_FIM na query real.
 function buildFallbackRows() {
   const sites = [
     { ID_SITE: 1,  NM_SITE: 'Clydach | CNR' },
@@ -928,8 +936,9 @@ function buildFallbackRows() {
     { NM_KPI: 'Production', SG_UNID: 'kt' },
     { NM_KPI: 'Recovery',   SG_UNID: '%' }
   ];
-  const CURRENT_YEAR = 2026;
-  const ANNUAL_YEARS = [2025, 2026];
+  const WINDOW_YEARS = [2025, 2026]; // @DT_INI..@DT_FIM reais cobrem os dois
+  const CURRENT_YEAR = 2026;         // ano em curso — decide Act ('A') vs Fcst ('F')
+  const CURRENT_QUARTER = 3;         // "hoje" ~ set/2026 -> Q1-Q3 fechados, Q4 em aberto
   const rows = [];
 
   const mk = (dtRef, site, product, nmType, type, ordemSerie, ordemVisao, nmVisao, ordemPeriodo, value) => rows.push({
@@ -951,21 +960,39 @@ function buildFallbackRows() {
       const seed = (site.ID_SITE + product.NM_KPI.length) % 7;
       const base = 0.5 + seed * 0.3;
 
-      // TRIMESTRAL — Budget, Plan, Act/Fcst (garante a presença de Plan)
-      mk(`${CURRENT_YEAR}-07-01`, site, product, 'Budget',   'Q3B', 1, 2, 'Trimestral', 3, base * 2.6);
-      mk(`${CURRENT_YEAR}-07-01`, site, product, 'Plan',     'Q3P', 2, 2, 'Trimestral', 3, base * 2.4);
-      mk(`${CURRENT_YEAR}-07-01`, site, product, 'Act/Fcst', 'Q3F', 3, 2, 'Trimestral', 3, base * 2.2);
-
-      // SEMESTRAL — preserva o modelo atual (só H1/H2, sem série separada)
-      mk(`${CURRENT_YEAR}-01-01`, site, product, 'Budget',   'H1', 1, 3, 'Semestral', 1, base * 5);
-      mk(`${CURRENT_YEAR}-07-01`, site, product, 'Act/Fcst', 'H2', 3, 3, 'Semestral', 2, base * 4.6);
-
-      // ANUAL — múltiplos anos (aqui a comparação ano a ano é real)
-      ANNUAL_YEARS.forEach(year => {
+      WINDOW_YEARS.forEach(year => {
         const yy = String(year).slice(-2);
-        const yearBase = base * (year === CURRENT_YEAR ? 1 : 0.92);
-        mk(`${year}-01-01`, site, product, 'Budget',   `${yy}B`, 1, 4, 'Anual', year, yearBase * 12.3);
-        mk(`${year}-01-01`, site, product, 'Act/Fcst', `${yy}A`, 3, 4, 'Anual', year, yearBase * 10.4);
+        const yearFactor = year === CURRENT_YEAR ? 1 : 0.92;
+
+        // TRIMESTRAL — Q1..Q4, Budget/Plan/Act-Fcst em cada um
+        for (let q = 1; q <= 4; q++) {
+          const isClosed = year < CURRENT_YEAR || (year === CURRENT_YEAR && q <= CURRENT_QUARTER);
+          const fcstSuffix = isClosed ? 'A' : 'F';
+          const qFactor = 1 + (q - 1) * 0.18;
+          const dtRef = `${year}-${String((q - 1) * 3 + 1).padStart(2, '0')}-01`;
+          mk(dtRef, site, product, 'Budget',   `Q${q}B`, 1, 2, 'Trimestral', q, base * 2.6 * qFactor * yearFactor);
+          mk(dtRef, site, product, 'Plan',     `Q${q}P`, 2, 2, 'Trimestral', q, base * 2.4 * qFactor * yearFactor);
+          mk(dtRef, site, product, 'Act/Fcst', `Q${q}${fcstSuffix}`, 3, 2, 'Trimestral', q, base * 2.2 * qFactor * yearFactor);
+        }
+
+        // SEMESTRAL — H1/H2 em cada ano, com sufixo B/P/A/F (mesmo padrão
+        // de série que Trimestral/Anual, corrigido junto com o server.js)
+        [{ h: 1, month: '01', closed: year < CURRENT_YEAR || (year === CURRENT_YEAR && CURRENT_QUARTER >= 2) },
+         { h: 2, month: '07', closed: year < CURRENT_YEAR || (year === CURRENT_YEAR && CURRENT_QUARTER >= 4) }]
+          .forEach(({ h, month, closed }) => {
+            const fcstSuffix = closed ? 'A' : 'F';
+            const hFactor = h === 1 ? 5 : 4.6;
+            const dtRef = `${year}-${month}-01`;
+            mk(dtRef, site, product, 'Budget',   `H${h}B`, 1, 3, 'Semestral', h, base * hFactor * yearFactor);
+            mk(dtRef, site, product, 'Plan',     `H${h}P`, 2, 3, 'Semestral', h, base * (hFactor - 0.3) * yearFactor);
+            mk(dtRef, site, product, 'Act/Fcst', `H${h}${fcstSuffix}`, 3, 3, 'Semestral', h, base * (hFactor - 0.5) * yearFactor);
+          });
+
+        // ANUAL — Budget/Plan/Act-Fcst, ano corrente em aberto ('F')
+        const yearClosed = year < CURRENT_YEAR;
+        mk(`${year}-01-01`, site, product, 'Budget',   `${yy}B`, 1, 4, 'Anual', year, base * 12.3 * yearFactor);
+        mk(`${year}-01-01`, site, product, 'Plan',     `${yy}P`, 2, 4, 'Anual', year, base * 11.6 * yearFactor);
+        mk(`${year}-01-01`, site, product, 'Act/Fcst', `${yy}${yearClosed ? 'A' : 'F'}`, 3, 4, 'Anual', year, base * 10.4 * yearFactor);
       });
     });
   });
