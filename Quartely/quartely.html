@@ -230,10 +230,20 @@ body[data-bg="dark"] {
    sobre o mesmo fundo do topnav (--vbm-blue-dark), então o "vidro" lê
    como uma continuação dele, não como um bloco novo.
    ════════════════════════════════════════════════════════════════════ */
+.filters-bar-wrap { padding: .85rem 1.5rem 0; }
+/* Grid de 3 colunas (1fr / auto / 1fr): a coluna central do grupo de
+   filtros fica matematicamente centralizada na barra INDEPENDENTE da
+   largura do botão "Limpar Filtros" à direita — a 1ª coluna (vazia) e a
+   3ª (onde mora o botão) têm sempre a mesma largura (1fr cada), então o
+   conteúdo do meio nunca puxa para um lado. Um flex com margin:auto no
+   grupo central não conseguia essa garantia: o auto-margin reparte o
+   espaço livre, mas a largura do próprio botão continuava a desequilibrar
+   visualmente os dois vãos. */
 .filters-bar {
   position: relative; z-index: 20;
-  display: flex; flex-wrap: wrap; align-items: center; gap: .6rem;
-  padding: .85rem 2rem;
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: .6rem;
+  padding: .7rem 1.1rem;
+  border-radius: .75rem;
   /* Base sólida (mesma cor do topnav) + véu translúcido por cima: o vidro
      precisa de um fundo escuro garantido — esta página não tem hero para
      "emprestar" o dela, e sem base sólida o texto branco perdia contraste
@@ -241,9 +251,12 @@ body[data-bg="dark"] {
   background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02)), var(--vbm-blue-dark);
   backdrop-filter: blur(16px) saturate(140%);
   -webkit-backdrop-filter: blur(16px) saturate(140%);
-  border-bottom: 1px solid rgba(255,255,255,.10);
+  border: 1px solid rgba(255,255,255,.10);
   box-shadow: 0 8px 24px rgba(10,20,35,.14);
 }
+
+.qf-fields-center { grid-column: 2; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: .6rem; }
+.qf-clear-btn { grid-column: 3; justify-self: end; }
 
 .qf-field { position: relative; flex: 0 0 auto; }
 
@@ -262,7 +275,18 @@ body[data-bg="dark"] {
 .qf-trigger i.qf-icon { font-size: .72rem; color: rgba(255,255,255,.55); flex-shrink: 0; }
 .qf-trigger:hover { background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.24); }
 .qf-field.open .qf-trigger { background: rgba(255,255,255,.12); border-color: var(--vbm-blue); }
-.qf-trigger-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qf-trigger-label {
+  flex: 1; display: flex; align-items: center; gap: .3rem;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.qf-badge {
+  flex-shrink: 0;
+  padding: .1rem .4rem; border-radius: .3rem;
+  background: rgba(60,181,229,.22); border: 1px solid rgba(60,181,229,.4);
+  color: #fff; font-size: .62rem; font-weight: 600; letter-spacing: .02em;
+  text-transform: uppercase;
+}
+.qf-badge-more { background: rgba(255,255,255,.14); border-color: rgba(255,255,255,.22); }
 .qf-chevron { font-size: .6rem; color: rgba(255,255,255,.45); transition: transform .2s; flex-shrink: 0; }
 .qf-field.open .qf-chevron { transform: rotate(180deg); color: var(--vbm-blue-light); }
 
@@ -300,6 +324,21 @@ body:not([data-bg]) .qf-panel { background: rgba(20,32,48,.96); }
 }
 .qf-search input::placeholder { color: rgba(255,255,255,.35); }
 
+/* Toolbar "Selecionar Todos / Limpar Seleção" — apenas nos filtros de
+   multiseleção (Ano, Site, Visão, Horizonte). O Product é seleção única
+   e usa a linha-rádio "Todos os Products" já existente na lista. */
+.qf-panel-actions {
+  display: flex; gap: .9rem; margin-bottom: .4rem; padding: 0 .1rem .4rem;
+  border-bottom: 1px solid rgba(255,255,255,.1);
+}
+.qf-action-link {
+  background: none; border: none; padding: 0; cursor: pointer;
+  font-family: 'Poppins', sans-serif; font-size: .66rem; font-weight: 600;
+  color: var(--vbm-blue-light); letter-spacing: .01em;
+  transition: color .14s;
+}
+.qf-action-link:hover { color: #fff; text-decoration: underline; }
+
 .qf-options { max-height: 220px; overflow-y: auto; }
 .qf-options::-webkit-scrollbar { width: 6px; }
 .qf-options::-webkit-scrollbar-thumb { background: rgba(255,255,255,.18); border-radius: 100px; }
@@ -331,22 +370,27 @@ body:not([data-bg]) .qf-panel { background: rgba(20,32,48,.96); }
 
 .qf-clear-btn {
   display: flex; align-items: center; gap: .4rem;
-  padding: .5rem .85rem; margin-left: auto;
+  padding: .5rem .85rem;
   background: rgba(255,255,255,.06);
   border: 1px solid rgba(255,255,255,.14);
   border-radius: .55rem;
   color: rgba(255,255,255,.82);
   font-family: 'Poppins', sans-serif; font-weight: 500; font-size: .72rem;
   cursor: pointer; transition: background .18s, border-color .18s, color .18s;
+  white-space: nowrap;
 }
 .qf-clear-btn:hover { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.26); color: #fff; }
 .qf-clear-btn i { font-size: .68rem; }
 
+/* Telas menores: a grade de 3 colunas vira 1, cada item quebra em sua
+   própria linha organizada — grupo de filtros primeiro, botão por último
+   (mesma ordem visual do desktop, só empilhada). */
 @media (max-width: 960px) {
-  .filters-bar { padding: .75rem 1rem; }
+  .filters-bar { grid-template-columns: 1fr; padding: .75rem 1rem; }
+  .qf-fields-center { grid-column: 1; justify-content: flex-start; }
+  .qf-clear-btn { grid-column: 1; justify-self: stretch; justify-content: center; }
   .qf-field { flex: 1 1 auto; min-width: 130px; }
   .qf-trigger { min-width: 0; width: 100%; }
-  .qf-clear-btn { margin-left: 0; flex: 1 1 100%; justify-content: center; }
 }
 
 /* ════════════════════════════════════════════════════════════════════
@@ -569,7 +613,9 @@ body:not([data-bg]) .qf-panel { background: rgba(20,32,48,.96); }
 </nav>
 
 <!-- ═══ FILTROS ═══ -->
-<div class="filters-bar" id="filtersBar"></div>
+<div class="filters-bar-wrap">
+  <div class="filters-bar" id="filtersBar"></div>
+</div>
 
 <!-- ═══ MAIN ═══ -->
 <div class="app-layout">
@@ -578,7 +624,7 @@ body:not([data-bg]) .qf-panel { background: rgba(20,32,48,.96); }
 
   <div class="main-wrapper" id="chartWrapper">
     <div class="chart-header">
-      <p class="chart-title" data-i18n="chart.title">Turnover</p>
+      <p class="chart-title" id="chartTitle" data-i18n="chart.title">Turnover</p>
       <p class="chart-subtitle">(%)</p>
     </div>
     <div class="chart-area" id="chartArea"></div>
@@ -765,45 +811,70 @@ function renderTurnoverChart(sourceRows) {
 }
 
 // ════════════════════════════════════════════════════════════════════
-// ÁREA DE FILTROS — Ano / Site / Visão / Horizonte / Product
+// ÁREA DE FILTROS — Ano / Site / Visão (Série) / Horizonte / Product
 // ------------------------------------------------------------------------
-// Fonte dos dados: QUARTELY.sql (DT_REF, ID_SITE, NM_KPI, NM_TYPE, Type,
-// Value), mais uma junção com IBP.SITES só para resolver NM_SITE — exata-
-// mente como pedido:
+// Fonte: QUARTELY.sql — DT_REF, ID_SITE, NM_KPI, NM_TYPE, Type e as chaves
+// técnicas de ordenação ORDEM_VISAO/ORDEM_ANO/ORDEM_PERIODO/ORDEM_SERIE
+// (uma por bloco MONTH/QUARTER/SEMESTER/YEAR da UNION ALL), mais a junção
+// com IBP.SITES só para resolver NM_SITE:
 //   SELECT DISTINCT Q.ID_SITE, S.NM_SITE FROM QUARTELY_RESULT Q
-//   LEFT JOIN IBP.SITES S ON Q.ID_SITE = S.ID_SITE
+//   LEFT JOIN IBP.SITES S ON S.ID_SITE = Q.ID_SITE
 // Nenhuma lista de opções é escrita à mão: todo combobox é preenchido
-// extraindo valores distintos das linhas que chegam de /api/chart-data e
-// /api/sites. Sem essas rotas (ambiente sem Azure SQL), cai num fixture
-// local do mesmo formato — o motor de filtros não muda uma linha entre
-// os dois casos.
+// extraindo valores distintos das linhas de /api/chart-data e /api/sites.
+// Sem essas rotas (ambiente sem Azure SQL), cai num fixture local do
+// mesmo formato — o motor de filtros e de ordenação não muda uma linha
+// entre os dois casos.
+//
+// ORDENAÇÃO — nunca por texto de rótulo, sempre pelas chaves técnicas,
+// na mesma ordem usada no back-end e no front-end (Ano → Visão → Período
+// → Série, conforme padrão adotado para todo o sistema):
+//   ORDEM_ANO, ORDEM_VISAO, ORDEM_PERIODO, ORDEM_SERIE
 // ════════════════════════════════════════════════════════════════════
 
+const SERIE_ORDER = { 'Budget': 1, 'Plan': 2, 'Act/Fcst': 3 }; // negócio, não alfabético
+function serieOrder(nmType) { return SERIE_ORDER[nmType] ?? 99; }
+
+function compareByTechnicalKeys(a, b) {
+  return (a.ORDEM_ANO - b.ORDEM_ANO)
+      || (a.ORDEM_VISAO - b.ORDEM_VISAO)
+      || (a.ORDEM_PERIODO - b.ORDEM_PERIODO)
+      || (a.ORDEM_SERIE - b.ORDEM_SERIE);
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
 const FILTER_DEFS = [
-  { key: 'ano',        label: 'Ano',        icon: 'fa-calendar-days',  multiple: false, allLabel: 'Todos os anos',       searchable: false },
-  { key: 'sites',      label: 'Site',       icon: 'fa-location-dot',   multiple: true,  allLabel: 'Todos os sites',      searchable: true  },
-  { key: 'visoes',     label: 'Visão',      icon: 'fa-eye',            multiple: true,  allLabel: 'Todas as visões',     searchable: false },
-  { key: 'horizontes', label: 'Horizonte',  icon: 'fa-timeline',       multiple: true,  allLabel: 'Todos os horizontes', searchable: true  },
-  { key: 'products',   label: 'Product',    icon: 'fa-tags',           multiple: true,  allLabel: 'Todos os Products',   searchable: true  }
+  { key: 'ano',        label: 'Ano',        icon: 'fa-calendar-days', multiple: true,  allLabel: 'Todos os anos',       searchable: false },
+  { key: 'sites',      label: 'Site',       icon: 'fa-location-dot',  multiple: true,  allLabel: 'Todos os sites',      searchable: true  },
+  { key: 'visoes',     label: 'Visão',      icon: 'fa-eye',           multiple: true,  allLabel: 'Todas as visões',     searchable: false },
+  { key: 'horizontes', label: 'Horizonte',  icon: 'fa-timeline',      multiple: true,  allLabel: 'Todos os horizontes', searchable: true  },
+  { key: 'product',    label: 'Product',    icon: 'fa-tags',          multiple: false, allLabel: 'Todos os Products',   searchable: true  }
 ];
 
-// filterState: null/vazio == "Todos" (sem restrição) em cada dimensão
+// filterState: Set vazio (multi) ou null (single) == "Todos" (sem restrição)
 const filterState = {
-  ano: null,
+  ano: new Set(),
   sites: new Set(),
   visoes: new Set(),
   horizontes: new Set(),
-  products: new Set()
+  product: null
 };
 
 let allRows = [];          // linhas cruas de QUARTELY.sql (+ NM_SITE já resolvido)
 let filterOptions = {};    // opções de cada combobox, derivadas de allRows
 
-// ── Fixture local (mesmo formato de QUARTELY.sql) ──────────────────────
+// ── Fixture local (mesmo formato de QUARTELY.sql, chaves técnicas incluídas) ──
 // Usado apenas quando /api/chart-data e /api/sites não respondem (ex.:
 // ambiente de desenvolvimento sem conexão com o Azure SQL). Gerado, não
 // hardcoded como lista de opções — os combobox extraem os valores destas
 // linhas exatamente como extrairiam de linhas vindas do banco.
+//
+// Mensal/Trimestral/Semestral usam uma janela de UM ano (o mesmo padrão
+// de @DT_INI/@DT_FIM da QUARTELY.sql real, que cobre uma janela corrente
+// fixa) — só a granularidade Anual compara vários anos, exatamente como o
+// bloco YEAR da query original faz (rótulos '25B'/'26B' com o ano embutido).
 function buildFallbackRows() {
   const sites = [
     { ID_SITE: 10, NM_SITE: 'Salobo' },
@@ -811,30 +882,44 @@ function buildFallbackRows() {
     { ID_SITE: 12, NM_SITE: 'Onça Puma' }
   ];
   const products = ['Turnover', 'Production'];
-  const years = [2025, 2026];
+  const CURRENT_YEAR = 2026;
+  const ANNUAL_YEARS = [2025, 2026];
   const rows = [];
 
-  const mkRow = (dtRef, site, product, nmType, type, idType, value) => rows.push({
-    DT_REF: dtRef, ID_SITE: site.ID_SITE, NM_SITE: site.NM_SITE,
-    NM_KPI: product, ID_TYPE: idType, NM_TYPE: nmType, Type: type,
+  const mk = (dtRef, site, product, nmType, type, ordemSerie, ordemVisao, nmVisao, ordemPeriodo, value) => rows.push({
+    DT_REF: dtRef, ID_SITE: site.ID_SITE, NM_SITE: site.NM_SITE, NM_KPI: product,
+    NM_TYPE: nmType, Type: type,
+    CD_VISAO: nmVisao === 'Mensal' ? 'MONTH' : nmVisao === 'Trimestral' ? 'QUARTER' : nmVisao === 'Semestral' ? 'SEMESTER' : 'YEAR',
+    NM_VISAO: nmVisao, ORDEM_VISAO: ordemVisao,
+    ORDEM_ANO: new Date(dtRef).getUTCFullYear(), ORDEM_PERIODO: ordemPeriodo, ORDEM_SERIE: ordemSerie,
     Value: Number(value.toFixed(2))
   });
 
-  years.forEach(year => {
-    products.forEach(product => {
-      sites.forEach(site => {
-        const seed = (site.ID_SITE + product.length + year) % 7;
-        const base = 0.5 + seed * 0.3;
-        const yy = String(year).slice(-2);
+  products.forEach(product => {
+    sites.forEach(site => {
+      const seed = (site.ID_SITE + product.length) % 7;
+      const base = 0.5 + seed * 0.3;
 
-        mkRow(`${year}-09-01`, site, product, 'Budget',   'Sep B', 0, base);
-        mkRow(`${year}-09-01`, site, product, 'Act/Fcst', 'Sep F', 1, base * 1.05);
-        mkRow(`${year}-07-01`, site, product, 'Budget',   'Q3B',   0, base * 2.6);
-        mkRow(`${year}-07-01`, site, product, 'Act/Fcst', 'Q3F',   1, base * 2.2);
-        mkRow(`${year}-01-01`, site, product, 'Budget',   'H1',    0, base * 5);
-        mkRow(`${year}-07-01`, site, product, 'Act/Fcst', 'H2',    1, base * 4.6);
-        mkRow(`${year}-01-01`, site, product, 'Budget',   `${yy}B`, 0, base * 12.3);
-        mkRow(`${year}-01-01`, site, product, 'Act/Fcst', `${yy}A`, 1, base * 10.4);
+      // MENSAL — Budget, Plan, Act/Fcst (garante a presença de Plan)
+      mk(`${CURRENT_YEAR}-09-01`, site, product, 'Budget',   'Sep B', 1, 1, 'Mensal', 9, base);
+      mk(`${CURRENT_YEAR}-09-01`, site, product, 'Plan',     'Sep P', 2, 1, 'Mensal', 9, base * 1.02);
+      mk(`${CURRENT_YEAR}-09-01`, site, product, 'Act/Fcst', 'Sep F', 3, 1, 'Mensal', 9, base * 1.05);
+
+      // TRIMESTRAL
+      mk(`${CURRENT_YEAR}-07-01`, site, product, 'Budget',   'Q3B', 1, 2, 'Trimestral', 3, base * 2.6);
+      mk(`${CURRENT_YEAR}-07-01`, site, product, 'Plan',     'Q3P', 2, 2, 'Trimestral', 3, base * 2.4);
+      mk(`${CURRENT_YEAR}-07-01`, site, product, 'Act/Fcst', 'Q3F', 3, 2, 'Trimestral', 3, base * 2.2);
+
+      // SEMESTRAL — preserva o modelo atual (só H1/H2, sem série separada)
+      mk(`${CURRENT_YEAR}-01-01`, site, product, 'Budget',   'H1', 1, 3, 'Semestral', 1, base * 5);
+      mk(`${CURRENT_YEAR}-07-01`, site, product, 'Act/Fcst', 'H2', 3, 3, 'Semestral', 2, base * 4.6);
+
+      // ANUAL — múltiplos anos (aqui a comparação ano a ano é real)
+      ANNUAL_YEARS.forEach(year => {
+        const yy = String(year).slice(-2);
+        const yearBase = base * (year === CURRENT_YEAR ? 1 : 0.92);
+        mk(`${year}-01-01`, site, product, 'Budget',   `${yy}B`, 1, 4, 'Anual', year, yearBase * 12.3);
+        mk(`${year}-01-01`, site, product, 'Act/Fcst', `${yy}A`, 3, 4, 'Anual', year, yearBase * 10.4);
       });
     });
   });
@@ -852,86 +937,136 @@ async function loadQuartelyData() {
     const chartRows = await chartRes.json();
     const sitesList = await sitesRes.json();
     const siteNameById = new Map(sitesList.map(s => [s.ID_SITE ?? s.id_site, s.NM_SITE ?? s.nm_site]));
-    return chartRows.map(r => ({ ...r, NM_SITE: siteNameById.get(r.ID_SITE) || `Site ${r.ID_SITE}` }));
+    return chartRows.map(r => ({ ...r, NM_SITE: siteNameById.get(r.ID_SITE) ?? null }));
   } catch (err) {
     console.warn('[quartely] /api indisponível, usando fixture local:', err.message);
     return buildFallbackRows();
   }
 }
 
-// ── Extração dinâmica das opções de cada combobox ───────────────────────
+// ── Extração dinâmica das opções de cada combobox — nenhuma lista fixa,
+//    tudo derivado de `rows`; ordenação sempre por chave técnica ───────
 function buildFilterOptions(rows) {
   const anosSet = new Set();
-  const sitesMap = new Map();
+  const sitesMap = new Map();     // ID_SITE -> { label, hasName }
   const visoesSet = new Set();
-  const horizonMinDate = new Map(); // Type -> menor DT_REF (para ordenar cronologicamente)
+  const horizonRep = new Map();   // Type -> linha representativa (chaves técnicas)
   const productsSet = new Set();
 
   rows.forEach(r => {
-    anosSet.add(new Date(r.DT_REF).getUTCFullYear());
-    if (!sitesMap.has(r.ID_SITE)) sitesMap.set(r.ID_SITE, r.NM_SITE || `Site ${r.ID_SITE}`);
+    anosSet.add(r.ORDEM_ANO);
+    if (!sitesMap.has(r.ID_SITE)) {
+      sitesMap.set(r.ID_SITE, { label: r.NM_SITE || `Site ${r.ID_SITE}`, hasName: !!r.NM_SITE });
+    }
     visoesSet.add(r.NM_TYPE);
-    productsSet.add(r.NM_KPI);
-    const cur = horizonMinDate.get(r.Type);
-    if (!cur || r.DT_REF < cur) horizonMinDate.set(r.Type, r.DT_REF);
+    if (r.NM_KPI && String(r.NM_KPI).trim() !== '') productsSet.add(String(r.NM_KPI).trim());
+    if (!horizonRep.has(r.Type)) horizonRep.set(r.Type, r);
   });
 
   return {
+    // Ano: distinto, sem duplicidade, do mais recente para o mais antigo
     ano: Array.from(anosSet).sort((a, b) => b - a).map(y => ({ value: String(y), label: String(y) })),
-    sites: Array.from(sitesMap, ([value, label]) => ({ value: String(value), label }))
-      .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR')),
-    visoes: Array.from(visoesSet).sort((a, b) => a.localeCompare(b, 'pt-BR')).map(v => ({ value: v, label: v })),
-    horizontes: Array.from(horizonMinDate.entries())
-      .sort((a, b) => a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0)
+
+    // Site: TODOS os ID_SITE da query completa, nome via LEFT JOIN IBP.SITES,
+    // sem nome por último (mesmo tratamento de ausência do resto do projeto:
+    // rótulo "Site {ID}" — ver applyI18n/formatNumber para o mesmo padrão de
+    // fallback textual usado alhures no arquivo)
+    sites: Array.from(sitesMap, ([value, { label, hasName }]) => ({ value: String(value), label, hasName }))
+      .sort((a, b) => (a.hasName === b.hasName ? 0 : a.hasName ? -1 : 1)
+        || a.label.localeCompare(b.label, 'pt-BR')
+        || (Number(a.value) - Number(b.value)))
+      .map(({ value, label }) => ({ value, label })),
+
+    // Visão (campo NM_TYPE = "Série" na QUARTELY.sql): ordem de negócio
+    // Budget → Plan → Act/Fcst, nunca alfabética
+    visoes: Array.from(visoesSet)
+      .sort((a, b) => serieOrder(a) - serieOrder(b))
+      .map(v => ({ value: v, label: v })),
+
+    // Horizonte (campo Type): ordenado pelas chaves técnicas de cada bloco
+    // de origem (ORDEM_VISAO/ORDEM_ANO/ORDEM_PERIODO/ORDEM_SERIE), nunca
+    // pelo texto do rótulo — a mesma regra usada para ordenar o gráfico
+    horizontes: Array.from(horizonRep.entries())
+      .sort((a, b) => compareByTechnicalKeys(a[1], b[1]))
       .map(([type]) => ({ value: type, label: type })),
-    products: Array.from(productsSet).sort((a, b) => a.localeCompare(b, 'pt-BR')).map(p => ({ value: p, label: p }))
+
+    // Product (NM_KPI): distinto, sem nulos/vazios, alfabético
+    product: Array.from(productsSet).sort((a, b) => a.localeCompare(b, 'pt-BR')).map(p => ({ value: p, label: p }))
   };
 }
 
 // ── Aplica o filtro + agrega por Type (mesmo SUM/GROUP BY já usado nas
-//    seções Quarter/Semester/Year da própria QUARTELY.sql) ──────────────
+//    seções Quarter/Semester/Year da própria QUARTELY.sql), depois ordena
+//    pelas MESMAS chaves técnicas do filtro Horizonte — nunca pelo rótulo
+//    de Type — antes de montar categorias/valores para o gráfico ───────
 function getFilteredChartRows() {
-  const anoFiltro = filterState.ano;
   const rows = allRows.filter(r => {
-    if (anoFiltro !== null && String(new Date(r.DT_REF).getUTCFullYear()) !== anoFiltro) return false;
+    if (filterState.ano.size && !filterState.ano.has(String(r.ORDEM_ANO))) return false;
     if (filterState.sites.size && !filterState.sites.has(String(r.ID_SITE))) return false;
     if (filterState.visoes.size && !filterState.visoes.has(r.NM_TYPE)) return false;
     if (filterState.horizontes.size && !filterState.horizontes.has(r.Type)) return false;
-    if (filterState.products.size && !filterState.products.has(r.NM_KPI)) return false;
+    if (filterState.product !== null && r.NM_KPI !== filterState.product) return false;
     return true;
   });
 
-  const sums = new Map(); // Type -> { value, minDate }
+  const sums = new Map(); // Type -> { value, ORDEM_ANO, ORDEM_VISAO, ORDEM_PERIODO, ORDEM_SERIE }
   rows.forEach(r => {
-    const acc = sums.get(r.Type) || { value: 0, minDate: r.DT_REF };
+    const acc = sums.get(r.Type) || {
+      value: 0, ORDEM_ANO: r.ORDEM_ANO, ORDEM_VISAO: r.ORDEM_VISAO,
+      ORDEM_PERIODO: r.ORDEM_PERIODO, ORDEM_SERIE: r.ORDEM_SERIE
+    };
     acc.value += r.Value;
-    if (r.DT_REF < acc.minDate) acc.minDate = r.DT_REF;
     sums.set(r.Type, acc);
   });
 
-  return Array.from(sums, ([type, acc]) => ({ type, value: acc.value, _sortDate: acc.minDate }))
-    .sort((a, b) => a._sortDate < b._sortDate ? -1 : a._sortDate > b._sortDate ? 1 : 0)
+  // 1) filtrar (já feito acima) -> 2) ordenar pelas chaves técnicas ->
+  // 3) só então montar o array final type/value que o gráfico consome —
+  // categoria e valor seguem sempre o mesmo índice, um único sort.
+  return Array.from(sums, ([type, acc]) => ({ type, ...acc }))
+    .sort(compareByTechnicalKeys)
     .map(({ type, value }) => ({ type, value }));
 }
 
+// Título do gráfico reflete o Product selecionado (seleção única). Sem
+// seleção, usa o NM_KPI se só existir um na base completa (caso real de
+// produção, onde a query já é escopada a um único dashboard/KPI); com mais
+// de um (fixture local de teste), mantém o rótulo genérico do card.
+function updateChartTitle() {
+  const titleEl = document.getElementById('chartTitle');
+  if (filterState.product) { titleEl.textContent = filterState.product; return; }
+  const distinct = filterOptions.product || [];
+  titleEl.textContent = distinct.length === 1 ? distinct[0].label : 'Turnover';
+}
+
 function applyFilters() {
+  updateChartTitle();
   renderTurnoverChart(getFilteredChartRows());
 }
 
-// ── Componente reutilizável de combobox (single ou multi-select) ────────
-function triggerLabel(def) {
+// ── Componente reutilizável de combobox (single ou multi-select, com
+//    badges + "Selecionar Todos"/"Limpar Seleção" para multiseleção) ────
+function renderTriggerLabel(def) {
+  const labelEl = document.querySelector(`[data-field="${def.key}"] .qf-trigger-label`);
   if (!def.multiple) {
-    if (filterState[def.key] === null) return def.allLabel;
-    const opt = filterOptions[def.key].find(o => o.value === filterState[def.key]);
-    return opt ? opt.label : def.allLabel;
+    if (filterState[def.key] === null) { labelEl.textContent = def.allLabel; return; }
+    const opt = (filterOptions[def.key] || []).find(o => o.value === filterState[def.key]);
+    labelEl.textContent = opt ? opt.label : def.allLabel;
+    return;
   }
   const set = filterState[def.key];
-  if (set.size === 0) return def.allLabel;
-  if (set.size === 1) {
-    const opt = filterOptions[def.key].find(o => o.value === [...set][0]);
-    return opt ? opt.label : def.allLabel;
-  }
-  return `${set.size} selecionados`;
+  if (set.size === 0) { labelEl.textContent = def.allLabel; return; }
+  const labels = [...set].map(v => (filterOptions[def.key] || []).find(o => o.value === v)?.label || v);
+  const shown = labels.slice(0, 2);
+  const rest = labels.length - shown.length;
+  labelEl.innerHTML = shown.map(l => `<span class="qf-badge">${escapeHtml(l)}</span>`).join('')
+    + (rest > 0 ? `<span class="qf-badge qf-badge-more">+${rest}</span>` : '');
+}
+
+function optionRowHtml(def, value, label, checked) {
+  const radioClass = def.multiple ? '' : ' qf-radio';
+  return `<div class="qf-option${radioClass}${checked ? ' is-checked' : ''}" data-value="${escapeHtml(value)}">
+    <span class="qf-check"><i class="fa-solid fa-check"></i></span><span>${escapeHtml(label)}</span>
+  </div>`;
 }
 
 function renderFilterOptions(def, searchTerm) {
@@ -940,19 +1075,20 @@ function renderFilterOptions(def, searchTerm) {
   const options = filterOptions[def.key] || [];
   const visible = term ? options.filter(o => o.label.toLowerCase().includes(term)) : options;
 
-  const allChecked = def.multiple ? filterState[def.key].size === 0 : filterState[def.key] === null;
-  let html = `<div class="qf-option qf-option-all${def.multiple ? '' : ' qf-radio'}${allChecked ? ' is-checked' : ''}" data-value="__all__">
-    <span class="qf-check"><i class="fa-solid fa-check"></i></span><span>${def.allLabel}</span>
-  </div>`;
+  let html = '';
+  // Seleção única (Product): mantém a linha-rádio "Todos os Products".
+  // Multiseleção (Ano/Site/Visão/Horizonte): sem linha "Todos" na lista —
+  // a ação equivalente vira o link "Limpar Seleção" no topo do painel.
+  if (!def.multiple) {
+    html += optionRowHtml(def, '__all__', def.allLabel, filterState[def.key] === null);
+  }
 
   if (!visible.length && term) {
-    html += `<div class="qf-option-empty">Nenhum resultado para "${searchTerm}"</div>`;
+    html += `<div class="qf-option-empty">Nenhum resultado para "${escapeHtml(searchTerm)}"</div>`;
   } else {
     html += visible.map(opt => {
       const checked = def.multiple ? filterState[def.key].has(opt.value) : filterState[def.key] === opt.value;
-      return `<div class="qf-option${def.multiple ? '' : ' qf-radio'}${checked ? ' is-checked' : ''}" data-value="${opt.value.replace(/"/g, '&quot;')}">
-        <span class="qf-check"><i class="fa-solid fa-check"></i></span><span>${opt.label}</span>
-      </div>`;
+      return optionRowHtml(def, opt.value, opt.label, checked);
     }).join('');
   }
   container.innerHTML = html;
@@ -961,8 +1097,7 @@ function renderFilterOptions(def, searchTerm) {
     el.addEventListener('click', () => {
       const value = el.getAttribute('data-value');
       if (value === '__all__') {
-        if (def.multiple) filterState[def.key].clear();
-        else filterState[def.key] = null;
+        filterState[def.key] = null; // só ocorre em campos de seleção única
       } else if (def.multiple) {
         const set = filterState[def.key];
         set.has(value) ? set.delete(value) : set.add(value);
@@ -971,7 +1106,7 @@ function renderFilterOptions(def, searchTerm) {
         closeAllPanels();
       }
       renderFilterOptions(def, document.querySelector(`[data-panel="${def.key}"] .qf-search input`)?.value);
-      document.querySelector(`[data-field="${def.key}"] .qf-trigger-label`).textContent = triggerLabel(def);
+      renderTriggerLabel(def);
       applyFilters();
     });
   });
@@ -981,9 +1116,14 @@ function closeAllPanels() {
   document.querySelectorAll('.qf-field.open').forEach(f => f.classList.remove('open'));
 }
 
+function resetFilterField(def) {
+  if (def.multiple) filterState[def.key].clear();
+  else filterState[def.key] = null;
+}
+
 function buildFiltersBar() {
   const bar = document.getElementById('filtersBar');
-  bar.innerHTML = FILTER_DEFS.map(def => `
+  bar.innerHTML = `<div class="qf-fields-center">` + FILTER_DEFS.map(def => `
     <div class="qf-field" data-field="${def.key}">
       <button type="button" class="qf-trigger" data-trigger="${def.key}">
         <i class="fa-solid ${def.icon} qf-icon"></i>
@@ -992,10 +1132,14 @@ function buildFiltersBar() {
       </button>
       <div class="qf-panel" data-panel="${def.key}">
         ${def.searchable ? `<div class="qf-search"><i class="fa-solid fa-magnifying-glass"></i><input type="text" placeholder="Buscar ${def.label.toLowerCase()}..."/></div>` : ''}
+        ${def.multiple ? `<div class="qf-panel-actions">
+          <button type="button" class="qf-action-link" data-action="select-all">Selecionar Todos</button>
+          <button type="button" class="qf-action-link" data-action="clear-selection">Limpar Seleção</button>
+        </div>` : ''}
         <div class="qf-options" id="qfOptions-${def.key}"></div>
       </div>
     </div>
-  `).join('') + `
+  `).join('') + `</div>
     <button type="button" class="qf-clear-btn" id="qfClearBtn">
       <i class="fa-solid fa-arrow-rotate-left"></i> Limpar Filtros
     </button>
@@ -1017,19 +1161,31 @@ function buildFiltersBar() {
       searchInput.addEventListener('click', (e) => e.stopPropagation());
     }
     field.querySelector('.qf-panel').addEventListener('click', (e) => e.stopPropagation());
+
+    field.querySelectorAll('.qf-action-link').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const set = filterState[def.key];
+        if (btn.getAttribute('data-action') === 'select-all') {
+          set.clear();
+          (filterOptions[def.key] || []).forEach(o => set.add(o.value));
+        } else {
+          set.clear();
+        }
+        renderFilterOptions(def, searchInput ? searchInput.value : undefined);
+        renderTriggerLabel(def);
+        applyFilters();
+      });
+    });
   });
 
   document.addEventListener('click', closeAllPanels);
 
   document.getElementById('qfClearBtn').addEventListener('click', () => {
-    filterState.ano = null;
-    filterState.sites.clear();
-    filterState.visoes.clear();
-    filterState.horizontes.clear();
-    filterState.products.clear();
     FILTER_DEFS.forEach(def => {
+      resetFilterField(def);
       renderFilterOptions(def);
-      document.querySelector(`[data-field="${def.key}"] .qf-trigger-label`).textContent = triggerLabel(def);
+      renderTriggerLabel(def);
     });
     applyFilters();
   });
