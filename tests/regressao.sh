@@ -1,6 +1,6 @@
 #!/bin/bash
 # Bateria de regressão trazida para o repositório em 20/09/2026 (era
-# scratchpad de sessão). 8 suítes, cada uma com o dublê (fake-mssql-*.js
+# scratchpad de sessão). 9 suítes, cada uma com o dublê (fake-mssql-*.js
 # — intercepta o módulo "mssql" antes do server.js carregar, nunca abre
 # conexão de verdade) e a porta que ela espera.
 #
@@ -33,3 +33,4 @@ rodar 3995 preload.js        teste-fechar.js
 rodar 3997 preload-sites.js  teste-site-aprovador.js teste-grupos-admin.js
 rodar 3998 preload-captura.js varre-modais.js
 rodar 3999 preload-muitos.js conf-masonry.js
+rodar 4000 preload-gate.js   teste-gate-mdm.js

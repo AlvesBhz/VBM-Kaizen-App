@@ -31,8 +31,8 @@ de banco nem de rede.
 bash tests/regressao.sh
 ```
 
-Sobe o app em 5 portas diferentes (3994/3995/3997/3998/3999), uma por
-grupo de suítes, cada uma com o dublê que espera. `tests/env-exemplo.sh`
+Sobe o app em 6 portas diferentes (3994/3995/3997/3998/3999/4000), uma
+por grupo de suítes, cada uma com o dublê que espera. `tests/env-exemplo.sh`
 fornece variáveis de ambiente fictícias — nunca credenciais reais (ver
 o alerta dentro do próprio arquivo).
 
@@ -59,6 +59,7 @@ qual porta (`BASE`) ele espera — nem todas usam o mesmo par.
 | `teste-grupos-admin.js` | Administração de grupos |
 | `varre-modais.js` | Varredura geral de modais |
 | `conf-masonry.js` | Layout em grade (masonry) da Biblioteca |
+| `teste-gate-mdm.js` | Bloqueio de acesso a quem não está no MDM — página inteira (`/`, index.html, biblioteca.html, kaizen-novo.html) e API, por URL direta, sem regredir admin.html/aprovacao.html |
 
 **Fora desta bateria** (não trazidas ainda, mas seguem o mesmo padrão —
 ver histórico de commits de "Exportar Excel" e "paginação real"):

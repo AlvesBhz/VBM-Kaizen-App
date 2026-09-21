@@ -588,13 +588,27 @@ const ARQUIVO_COM_HASH_NO_NOME = /(?:^|[\\/])[0-9a-f]{8,}_[^\\/]+$/i;
 const ATIVO_ESTATICO = /\.(?:png|jpe?g|gif|webp|svg|ico|woff2?|ttf|eot|mp4|webm)$/i;
 
 // ------------------------------------------------------------------
-// Controle de acesso (kzn_admin / kzn_aprovador)
+// Controle de acesso (kzn_admin / kzn_aprovador / MDM)
 // ------------------------------------------------------------------
-// Duas páginas são restritas e o critério é o CADASTRO no banco, pelo
-// ID_USUARIO do MDM:
+// Páginas restritas e o critério de cada uma, sempre pelo CADASTRO no
+// banco, pelo ID_USUARIO do MDM:
 //
-//   admin.html     -> kzn_admin      (SG_ATIVO='S')
-//   aprovacao.html -> kzn_aprovador  (SG_ATIVO='S')
+//   admin.html                             -> kzn_admin    (SG_ATIVO='S')
+//   aprovacao.html                         -> kzn_aprovador (SG_ATIVO='S')
+//   /, index.html, biblioteca.html,
+//   kaizen-novo.html                       -> "membro": só precisa
+//                                              EXISTIR no MDM (mesma
+//                                              tabela, sem exigir papel).
+//
+// "Membro" não é KZN_KAIZEN_HIERARQUIA: aquela tabela é uma FOTOGRAFIA
+// por KAIZEN (1 linha por ID_KAIZEN, os 8 níveis do líder no momento da
+// gravação — ver FULL_KAIZEN_HIER_TABLE), não uma lista de usuários
+// autorizados. Usá-la aqui bloquearia qualquer pessoa que ainda não
+// tenha liderado um Kaizen, mesmo com acesso legítimo — trocaria um
+// buraco de segurança por uma regressão funcional. kzn_mdm_hierarquia
+// (via perfilDeAcesso) já é a tabela que o sistema usa para controle de
+// acesso em toda a aplicação (admin/aprovador acima, e o gate da API
+// logo abaixo) — é dela que "membro" também lê.
 //
 // A identidade vem do MESMO lugar que já grava o ID_USUARIO nos
 // cadastros: o cabeçalho X-Forwarded-Email do proxy do Databricks Apps
@@ -609,6 +623,10 @@ const ATIVO_ESTATICO = /\.(?:png|jpe?g|gif|webp|svg|ico|woff2?|ttf|eot|mp4|webm)
 const PAGINAS_RESTRITAS = {
   "/admin.html": "admin",
   "/aprovacao.html": "aprovador",
+  "/": "membro",
+  "/index.html": "membro",
+  "/biblioteca.html": "membro",
+  "/kaizen-novo.html": "membro",
 };
 
 // Perfil do usuário da requisição, em UMA consulta (MDM + os dois
@@ -699,13 +717,17 @@ async function perfilDeAcesso(req) {
 // Página de bloqueio: autossuficiente de propósito (só a folha de
 // estilo pública do app), para não carregar nenhum script, dado ou
 // componente da página restrita — o usuário sem permissão não recebe
-// nada além desta mensagem.
+// nada além desta mensagem. "membro" é o caso geral (fora do MDM);
+// admin/aprovador mantêm a mensagem de sempre, citando a tabela certa.
 function paginaAcessoNegado(papel) {
-  const tabela = papel === "admin" ? "KZN_ADMIN" : "KZN_APROVADOR";
+  const titulo = "Acesso não autorizado";
+  const mensagem = papel === "membro"
+    ? "Seu usuário não possui acesso ao Sistema Kaizen. Caso necessite acesso, entre em contato com o administrador da aplicação."
+    : `Seu usuário não está cadastrado em <strong>${papel === "admin" ? "KZN_ADMIN" : "KZN_APROVADOR"}</strong>. Procure um administrador do VBM Kaizen para solicitar acesso.`;
   return `<!DOCTYPE html>
 <html lang="pt-BR"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Acesso não autorizado — VBM Kaizen</title>
+<title>${titulo} — VBM Kaizen</title>
 <link rel="stylesheet" href="css/vbm-app.css">
 <style>
   .acesso-negado { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:1.5rem; }
@@ -716,27 +738,38 @@ function paginaAcessoNegado(papel) {
     display:flex; align-items:center; justify-content:center; }
   .acesso-negado h1 { font-size:1.15rem; color:var(--vbm-dark); margin:0 0 .5rem; }
   .acesso-negado p { font-size:.85rem; color:var(--vbm-mid); margin:0 0 .35rem; line-height:1.5; }
-  .acesso-negado a { display:inline-block; margin-top:1.5rem; }
+  .acesso-negado .acoes { display:flex; gap:.6rem; justify-content:center; margin-top:1.5rem; flex-wrap:wrap; }
 </style></head>
 <body><div class="acesso-negado"><div class="caixa">
   <div class="marca" aria-hidden="true">!</div>
-  <h1>Acesso não autorizado</h1>
-  <p>Seu usuário não está cadastrado em <strong>${tabela}</strong>. Procure um administrador do VBM Kaizen para solicitar acesso.</p>
+  <h1>${titulo}</h1>
+  <p>${mensagem}</p>
   <p><em>You are not authorized to view this page.</em></p>
-  <a class="btn btn-primary" href="index.html">Voltar ao início</a>
+  <div class="acoes">
+    <button type="button" class="btn btn-outline" onclick="location.reload()">Atualizar</button>
+    <a class="btn btn-primary" href="index.html">Voltar ao início</a>
+  </div>
 </div></div></body></html>`;
 }
 
 // Gate das PÁGINAS — antes do express.static, senão o HTML restrito
 // seria entregue pelo servidor de estáticos sem passar por aqui.
+// "membro" só exige EXISTIR no MDM (perfil.idUsuario); admin/aprovador
+// exigem o papel específico. Log com usuário (e-mail do proxy, mesmo
+// sem correspondência no MDM), página, motivo e data — sem dado
+// sensível: nenhuma linha de log tem o corpo da resposta nem conteúdo
+// da tela, só a decisão de acesso.
 app.use(async (req, res, next) => {
   const papel = PAGINAS_RESTRITAS[req.path.toLowerCase()];
   if (!papel) return next();
 
   const perfil = await perfilDeAcesso(req);
-  if (perfil[papel]) return next();
+  const liberado = papel === "membro" ? !!perfil.idUsuario : perfil[papel];
+  if (liberado) return next();
 
-  console.warn(`[acesso] ${req.path} bloqueado (papel exigido: ${papel})`);
+  const email = req.get("X-Forwarded-Email") || "(sem cabeçalho X-Forwarded-Email)";
+  const motivo = papel === "membro" ? "fora do MDM (kzn_mdm_hierarquia)" : `papel exigido: ${papel}`;
+  console.warn(`[acesso] NEGADO usuario="${email}" pagina="${req.path}" motivo="${motivo}" em ${new Date().toISOString()}`);
   res.status(403).set("Cache-Control", "no-store").type("html").send(paginaAcessoNegado(papel));
 });
 
