@@ -1016,21 +1016,6 @@ function getDefaultColorForBar(barType) {
   return DEFAULT_SERIES_COLORS[lastChar] || DEFAULT_SERIES_COLORS.default;
 }
 
-// Atualiza a UI dos color pickers para refletir as cores atuais
-function updateColorPickerUI() {
-  const panel = document.getElementById('colorConfigPanel');
-  if (!panel) return;
-
-  panel.querySelectorAll('.color-swatch').forEach(swatch => {
-    const key = swatch.getAttribute('data-color-key');
-    swatch.style.backgroundColor = COLORS[key];
-  });
-  panel.querySelectorAll('.color-input').forEach(input => {
-    const key = input.getAttribute('data-color-key');
-    input.value = COLORS[key];
-  });
-}
-
 // Extrai o tipo de horizonte (Trimestre, Semestre, Anual) do core do período
 function getHorizonType(core) {
   if (/^Q\d/i.test(core)) return 'QUARTER';
