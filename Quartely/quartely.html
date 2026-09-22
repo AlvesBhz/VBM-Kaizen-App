@@ -459,12 +459,11 @@ body:not([data-bg]) .qf-panel { background: rgba(20,32,48,.96); }
   min-height: 360px;
   max-width: 96vw;
   max-height: calc(100vh - 140px);
-  display: flex; flex-direction: column;
+  display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto 1fr; gap: 16px;
   font-family: 'Vale Sans Medium', 'Segoe UI', 'system-ui', sans-serif;
   padding: 20px 20px 14px;
   background: var(--chart-bg); border-radius: 14px; border: 1px solid #E2E8F0;
   box-shadow: 0 12px 40px rgba(10,20,35,.12), 0 2px 8px rgba(10,20,35,.06);
-  overflow: auto;
   resize: both;
   transition: background-color .2s ease;
 }
@@ -472,7 +471,7 @@ body:not([data-bg]) .qf-panel { background: rgba(20,32,48,.96); }
 /* Alça de resize — reforça visualmente o canto nativo do navegador */
 .main-wrapper::-webkit-resizer { background: transparent; }
 
-.chart-header { flex-shrink: 0; }
+.chart-header { grid-column: 1; flex-shrink: 0; }
 .chart-title { color: #316866; font-family: 'Vale Sans Medium', 'Segoe UI', sans-serif; font-size: 1.4rem; font-weight: 400; margin: 0; }
 .chart-subtitle { color: #9CA3AF; font-family: 'Vale Sans', 'Segoe UI', sans-serif; font-size: 1.05rem; margin: 0; font-weight: 200; }
 
@@ -484,6 +483,7 @@ body:not([data-bg]) .qf-panel { background: rgba(20,32,48,.96); }
   gap: var(--gap); width: 100%; flex: 1; min-width: 0;
   margin-top: calc(var(--folga) + 40px);
   margin-bottom: clamp(22px, 5vh, 28px);
+  grid-column: 1; grid-row: 2;
 }
 .chart-area::before {
   content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; z-index: 1;
@@ -611,49 +611,81 @@ body:not([data-bg]) .qf-panel { background: rgba(20,32,48,.96); }
 }
 
 /* ════════════════════════════════════════════════════════════════════
-   CONFIGURADOR DE CORES — painel discreto e responsivo
+   CONFIGURADOR DE CORES — painel lateral com cores por barra
 ═════════════════════════════════════════════════════════════════════ */
 .color-config-panel {
-  display: flex; gap: 1.2rem; align-items: center; justify-content: center;
-  padding: 14px 16px; margin-bottom: 16px;
+  grid-column: 2; grid-row: 1 / 3;
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 14px;
   background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 10px;
-  flex-wrap: wrap;
+  width: 180px; overflow-y: auto; flex-shrink: 0;
 }
 [data-bg="dark"] .color-config-panel {
   background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.1);
 }
 
-.color-item {
-  display: flex; align-items: center; gap: 8px;
-}
-.color-swatch {
-  flex-shrink: 0; width: 24px; height: 24px;
-  border-radius: 6px; cursor: pointer; transition: transform .2s;
-  border: 1.5px solid rgba(0,0,0,.1); box-shadow: 0 1px 3px rgba(0,0,0,.08);
-}
-.color-swatch:hover { transform: scale(1.08); }
-[data-bg="dark"] .color-swatch { border-color: rgba(255,255,255,.2); }
-
-.color-label {
-  font-size: .72rem; font-weight: 500; color: #4B5563;
-  white-space: nowrap;
-}
-[data-bg="dark"] .color-label { color: rgba(255,255,255,.75); }
-
-.color-input { display: none; }
-
-.color-reset-btn {
-  font-size: .7rem; padding: .35rem .7rem;
+.color-reset-icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; padding: 0;
   background: #E5E7EB; border: 1px solid #D1D5DB;
   border-radius: .4rem; cursor: pointer; color: #374151;
-  transition: background .2s; white-space: nowrap;
+  transition: background .2s; font-size: 14px;
+  align-self: center; margin-bottom: 4px;
 }
-.color-reset-btn:hover { background: #D1D5DB; }
-[data-bg="dark"] .color-reset-btn {
+.color-reset-icon:hover { background: #D1D5DB; }
+[data-bg="dark"] .color-reset-icon {
   background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.18);
   color: rgba(255,255,255,.8);
 }
-[data-bg="dark"] .color-reset-btn:hover { background: rgba(255,255,255,.15); }
+[data-bg="dark"] .color-reset-icon:hover { background: rgba(255,255,255,.15); }
+
+.color-item {
+  display: flex; align-items: center; gap: 8px; padding: 8px;
+  border-radius: 6px; cursor: pointer;
+  transition: background .15s;
+  position: relative;
+}
+.color-item:hover { background: rgba(0,0,0,.03); }
+[data-bg="dark"] .color-item:hover { background: rgba(255,255,255,.05); }
+
+.color-swatch {
+  flex-shrink: 0; width: 20px; height: 20px;
+  border-radius: 4px; cursor: pointer; transition: transform .2s;
+  border: 1.5px solid rgba(0,0,0,.1); box-shadow: 0 1px 2px rgba(0,0,0,.08);
+}
+.color-swatch:hover { transform: scale(1.15); }
+.color-swatch.has-palette { cursor: pointer; }
+[data-bg="dark"] .color-swatch { border-color: rgba(255,255,255,.2); }
+
+.color-label {
+  font-size: .7rem; font-weight: 500; color: #4B5563;
+  white-space: nowrap; flex: 1; overflow: hidden; text-overflow: ellipsis;
+}
+[data-bg="dark"] .color-label { color: rgba(255,255,255,.75); }
+
+/* Paleta de cores flutuante */
+.color-palette {
+  position: absolute; top: 100%; left: 0; z-index: 1000;
+  display: none; flex-wrap: wrap; gap: 6px;
+  padding: 10px; background: #fff; border: 1px solid #D1D5DB;
+  border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,.15);
+  width: max-content; margin-top: 4px;
+}
+.color-palette.active { display: flex; }
+[data-bg="dark"] .color-palette {
+  background: rgba(20,32,48,.96); border-color: rgba(255,255,255,.14);
+}
+
+.palette-color {
+  width: 24px; height: 24px; border-radius: 50%;
+  border: 2px solid transparent; cursor: pointer;
+  transition: transform .15s, border-color .15s;
+}
+.palette-color:hover { transform: scale(1.1); }
+.palette-color.active { border-color: #333; }
+[data-bg="dark"] .palette-color.active { border-color: #fff; }
+
+.color-input { display: none; }
 
 @media (max-width: 768px) {
   .color-config-panel { gap: .8rem; padding: 10px 12px; margin-bottom: 12px; }
@@ -799,17 +831,35 @@ const CFG = {
 // Primary: #3CB5E5 (azul claro), #1B40BF (azul escuro)
 // Neutrals: #333333 (text), #888888 (mid), #CCCCCC (light), #FFFFFF (white), #F6F6F6 (off-white)
 // Feedback: #1BA13A (success), #CC7700 (warning), #DC2626 (error)
+
+// Paleta limitada de cores VBM para seleção
+const PALETTE_COLORS = [
+  '#3CB5E5', // Primary Blue
+  '#7DD3F0', // Light Blue
+  '#1B40BF', // Dark Blue
+  '#CCCCCC', // Light Gray
+  '#888888', // Mid Gray
+  '#1BA13A', // Success Green
+  '#DC2626', // Error Red
+  '#CC7700', // Warning Orange
+  '#D8F7FD', // Pale Blue
+  '#F6F6F6', // Off-white
+];
+
 const COLORS = {
-  actual: '#3CB5E5',    // Primary Blue — valores Actual (realizados)
-  plan: '#7DD3F0',      // Light Blue — valores Plan (planejados)
-  default: '#CCCCCC',   // Light Gray — valores Default (padrão)
   bgChart: '#F6F6F6',   // Off-white — fundo do gráfico (neutro)
-  pillActual: '#D8F7FD',// Pale Blue — pílula de delta Actual
-  pillPlan: '#E8F4FF',  // Pale Blue — pílula de delta Plan
-  pillDefault: '#E8E8E8'// Pale Gray — pílula de delta Default
 };
 
-const DEFAULT_COLORS = { ...COLORS };
+// Cores padrão para cada tipo de série (por último caractere)
+const DEFAULT_SERIES_COLORS = {
+  'A': '#3CB5E5', // Actual (Primary Blue)
+  'F': '#3CB5E5', // Forecast (Primary Blue)
+  'P': '#7DD3F0', // Plan (Light Blue)
+  'B': '#CCCCCC', // Budget (Light Gray)
+  'default': '#CCCCCC'
+};
+
+const DEFAULT_COLORS = { ...COLORS, ...DEFAULT_SERIES_COLORS };
 
 // Carrega cores personalizadas do localStorage ou restaura padrões
 function loadColorPreferences() {
@@ -838,9 +888,14 @@ function applyChartBackgroundColor() {
 
 // Restaura cores padrão
 function resetColorsToDefault() {
-  Object.assign(COLORS, DEFAULT_COLORS);
+  // Remove todas as cores personalizadas de barras específicas
+  const keysToRemove = Object.keys(COLORS).filter(k => k !== 'bgChart');
+  keysToRemove.forEach(k => delete COLORS[k]);
+
+  // Restaura a cor de fundo padrão
+  COLORS.bgChart = '#F6F6F6';
+
   saveColorPreferences();
-  updateColorPickerUI();
   applyChartBackgroundColor();
   renderTurnoverChart(getFilteredChartRows());
 }
@@ -853,57 +908,112 @@ function formatPct(v) {
   return (v > 0 ? '+' : '') + s + '%';
 }
 
-// Renderiza o painel de configuração de cores
-function renderColorConfigPanel() {
+// Renderiza o painel de configuração de cores com opções dinâmicas para cada barra visível
+function renderColorConfigPanel(visibleBarTypes = []) {
   const panel = document.getElementById('colorConfigPanel');
-  const colorDefs = [
-    { key: 'actual', label: 'Actual' },
-    { key: 'plan', label: 'Plan' },
-    { key: 'default', label: 'Default' },
-    { key: 'bgChart', label: 'Background' }
-  ];
+  if (!panel) return;
 
-  const html = colorDefs.map(def => `
-    <div class="color-item">
-      <input type="color" class="color-input" data-color-key="${def.key}" value="${COLORS[def.key]}" />
-      <div class="color-swatch" data-color-key="${def.key}" style="background-color: ${COLORS[def.key]};" title="Clique para alterar a cor de ${def.label}"></div>
-      <span class="color-label">${def.label}</span>
+  let html = `<button type="button" class="color-reset-icon" id="colorResetIcon" title="Restaurar cores padrão">↺</button>`;
+
+  // Gera um item de cor para cada barra visível
+  if (visibleBarTypes.length > 0) {
+    html += visibleBarTypes.map(barType => {
+      const colorKey = barType.trim();
+      const currentColor = COLORS[colorKey] || getDefaultColorForBar(barType);
+      return `
+        <div class="color-item" data-bar-type="${colorKey}">
+          <div class="color-swatch has-palette" data-bar-type="${colorKey}" style="background-color: ${currentColor};" title="Clique para alterar a cor de ${colorKey}"></div>
+          <span class="color-label">${colorKey}</span>
+          <div class="color-palette" data-bar-type="${colorKey}"></div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // Adiciona opção de cor de fundo
+  html += `
+    <div class="color-item" data-bar-type="bgChart">
+      <div class="color-swatch has-palette" data-bar-type="bgChart" style="background-color: ${COLORS.bgChart};" title="Clique para alterar a cor do fundo"></div>
+      <span class="color-label">Fundo</span>
+      <div class="color-palette" data-bar-type="bgChart"></div>
     </div>
-  `).join('') + `
-    <button type="button" class="color-reset-btn" id="colorResetBtn" title="Restaurar cores padrão">Restaurar Padrão</button>
   `;
 
   panel.innerHTML = html;
 
-  // Listeners para os swatches de cor
-  panel.querySelectorAll('.color-swatch').forEach(swatch => {
-    swatch.addEventListener('click', () => {
-      const input = panel.querySelector(`[data-color-key="${swatch.getAttribute('data-color-key')}"].color-input`);
-      if (input) input.click();
+  // Popula as paletas de cores
+  panel.querySelectorAll('.color-swatch.has-palette').forEach(swatch => {
+    const barType = swatch.getAttribute('data-bar-type');
+    const palette = panel.querySelector(`.color-palette[data-bar-type="${barType}"]`);
+    if (palette) {
+      palette.innerHTML = PALETTE_COLORS.map(color => `
+        <div class="palette-color" data-color="${color}" style="background-color: ${color};"></div>
+      `).join('');
+    }
+  });
+
+  // Listeners para os swatches — abre/fecha a paleta
+  panel.querySelectorAll('.color-swatch.has-palette').forEach(swatch => {
+    swatch.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const barType = swatch.getAttribute('data-bar-type');
+      const palette = panel.querySelector(`.color-palette[data-bar-type="${barType}"]`);
+
+      // Fecha outras paletas abertas
+      panel.querySelectorAll('.color-palette.active').forEach(p => {
+        if (p !== palette) p.classList.remove('active');
+      });
+
+      palette.classList.toggle('active');
     });
   });
 
-  // Listeners para os inputs de cor
-  panel.querySelectorAll('.color-input').forEach(input => {
-    input.addEventListener('change', () => {
-      const key = input.getAttribute('data-color-key');
-      COLORS[key] = input.value;
+  // Listeners para as cores na paleta
+  panel.querySelectorAll('.palette-color').forEach(colorOption => {
+    colorOption.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const color = colorOption.getAttribute('data-color');
+      const palette = colorOption.closest('.color-palette');
+      const barType = palette.getAttribute('data-bar-type');
 
-      // Atualiza o swatch visualmente
-      const swatch = panel.querySelector(`[data-color-key="${key}"].color-swatch`);
-      if (swatch) swatch.style.backgroundColor = input.value;
+      // Atualiza a cor
+      COLORS[barType] = color;
+
+      // Atualiza o swatch
+      const swatch = palette.previousElementSibling;
+      if (swatch) swatch.style.backgroundColor = color;
 
       // Atualiza fundo do gráfico se necessário
-      if (key === 'bgChart') applyChartBackgroundColor();
+      if (barType === 'bgChart') applyChartBackgroundColor();
 
-      // Persiste e re-renderiza o gráfico
+      // Fecha a paleta
+      palette.classList.remove('active');
+
+      // Persiste e re-renderiza
       saveColorPreferences();
       renderTurnoverChart(getFilteredChartRows());
     });
   });
 
   // Listener para o botão de restaurar
-  document.getElementById('colorResetBtn').addEventListener('click', resetColorsToDefault);
+  const resetIcon = document.getElementById('colorResetIcon');
+  if (resetIcon) {
+    resetIcon.addEventListener('click', resetColorsToDefault);
+  }
+
+  // Fecha paletas ao clicar fora
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.color-item')) {
+      panel.querySelectorAll('.color-palette.active').forEach(p => p.classList.remove('active'));
+    }
+  });
+}
+
+// Retorna a cor padrão para uma barra baseada no seu tipo
+function getDefaultColorForBar(barType) {
+  if (!barType) return DEFAULT_SERIES_COLORS.default;
+  const lastChar = barType.trim().slice(-1).toUpperCase();
+  return DEFAULT_SERIES_COLORS[lastChar] || DEFAULT_SERIES_COLORS.default;
 }
 
 // Atualiza a UI dos color pickers para refletir as cores atuais
@@ -943,11 +1053,16 @@ function renderTurnoverChart(sourceRows) {
   // não um gráfico quebrado (pode acontecer com filtros muito restritivos).
   if (!sourceRows.length) {
     chartAreaEl.innerHTML = '<p class="chart-empty-state" data-i18n="chart.empty">Nenhum dado para os filtros selecionados.</p>';
+    renderColorConfigPanel([]); // Limpa o painel quando não há dados
     return;
   }
 
   const data = sourceRows.map(d => ({ type: d.type, value: Number(d.value.toFixed(CFG.casasDecimais)) }));
   const maxValue = Math.max(...data.map(d => d.value), 0);
+
+  // Extrai os tipos de barra visíveis para atualizar o painel de cores
+  const visibleBarTypes = data.map(d => d.type.trim());
+  renderColorConfigPanel(visibleBarTypes);
 
   const html = data.map((row, i) => {
     const index1 = i + 1; // índice 1-based, como o VIndex do DAX
@@ -959,8 +1074,12 @@ function renderTurnoverChart(sourceRows) {
 
     const barHeightPct = maxValue === 0 ? 0 : (value / maxValue) * 100;
     const formattedValue = formatNumber(value, CFG.casasDecimais);
-    const pillColor = isActualOrFcst ? COLORS.pillActual : lastChar === 'P' ? COLORS.pillPlan : COLORS.pillDefault;
-    const barColor  = isActualOrFcst ? COLORS.actual     : lastChar === 'P' ? COLORS.plan     : COLORS.default;
+
+    // Cor da barra: usa a cor personalizada ou a cor padrão do tipo
+    const barColor = COLORS[type] || getDefaultColorForBar(type);
+
+    // Cor da pílula: versão pálida da cor da barra (ou padrão)
+    const pillColor = isActualOrFcst ? '#D8F7FD' : lastChar === 'P' ? '#E8F4FF' : '#E8E8E8';
 
     // Anual não tem prefixo de letra (core começa direto pelo ano: "25B"),
     // Trimestral começa com "Q", o restante (Semestral, "H1B") cai no piso.
