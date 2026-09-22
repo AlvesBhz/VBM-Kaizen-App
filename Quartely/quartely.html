@@ -1059,36 +1059,55 @@ function setDataFallbackWarning(active, detail) {
   if (!banner || !text) return;
   banner.style.display = active ? 'flex' : 'none';
   if (active) {
-    text.textContent = `Não foi possível carregar os dados do servidor (${detail}) — exibindo dados de exemplo, não o resultado real da QUARTELY.sql. Verifique a conexão com o Azure SQL e os logs do servidor.`;
+    text.textContent = `Exibindo DADOS DE EXEMPLO, não o resultado real da QUARTELY.sql. Nenhum endpoint respondeu — ${detail}. Se o status for 404, o servidor publicado ainda não tem estas rotas (verifique se o deploy pegou o commit novo); se for 500, as rotas existem e o erro está na consulta ao Azure SQL (veja os logs do app).`;
   }
 }
 
-async function loadQuartelyData() {
-  try {
-    // Caminho relativo (sem "/" inicial): resolve a partir do diretório
-    // da própria página (new URL('api/chart-data', location.href)), não
-    // da raiz do domínio. Necessário porque este app pode ser publicado
-    // sob um subcaminho (ex.: .../Quartely/quartely.html no Databricks
-    // Apps) — um fetch('/api/...') com barra inicial ignoraria esse
-    // subcaminho e bateria na raiz do domínio, gerando 404 mesmo com o
-    // servidor respondendo normalmente em <subcaminho>/api/....
-    const [chartRes, sitesRes] = await Promise.all([
-      fetch('api/chart-data'),
-      fetch('api/sites')
-    ]);
-    if (!chartRes.ok || !sitesRes.ok) throw new Error(`HTTP ${chartRes.status}/${sitesRes.status}`);
-    const chartRows = await chartRes.json();
-    const sitesList = await sitesRes.json();
-    const siteNameById = new Map(sitesList.map(s => [s.ID_SITE ?? s.id_site, s.NM_SITE ?? s.nm_site]));
-    setDataFallbackWarning(false);
-    return chartRows
-      .map(r => ({ ...r, NM_SITE: siteNameById.get(r.ID_SITE) ?? null }))
-      .filter(isQuarterlyVisao);
-  } catch (err) {
-    console.warn('[quartely] /api indisponível, usando fixture local:', err.message);
-    setDataFallbackWarning(true, err.message);
-    return buildFallbackRows().filter(isQuarterlyVisao);
+// Caminhos candidatos da API. De dentro do navegador não dá para saber
+// se o app está publicado sob um subcaminho (.../Quartely/quartely.html
+// no Databricks Apps) nem se a plataforma remove esse prefixo antes de
+// chegar ao servidor — e errar essa aposta devolve 404 com o servidor
+// funcionando. Em vez de apostar, tenta os candidatos na ordem e para no
+// primeiro que responder. O servidor registra os MESMOS handlers em
+// todos esses caminhos (ver QUARTELY_BASES no server.js da raiz).
+const QUARTELY_API_BASES = ['api/', '../api/', '/api/', '/Quartely/api/'];
+
+function basesDaApiResolvidas() {
+  const vistas = new Set();
+  for (const base of QUARTELY_API_BASES) {
+    try { vistas.add(new URL(base, location.href).href); } catch (e) { /* base inválida: ignora */ }
   }
+  return [...vistas];
+}
+
+async function buscarJsonDaApi(baseHref, recurso) {
+  const url = new URL(recurso, baseHref);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${url.pathname} → ${res.status}`);
+  return res.json();
+}
+
+async function loadQuartelyData() {
+  const tentativas = [];
+  for (const base of basesDaApiResolvidas()) {
+    try {
+      const [chartRows, sitesList] = await Promise.all([
+        buscarJsonDaApi(base, 'chart-data'),
+        buscarJsonDaApi(base, 'sites')
+      ]);
+      const siteNameById = new Map(sitesList.map(s => [s.ID_SITE ?? s.id_site, s.NM_SITE ?? s.nm_site]));
+      setDataFallbackWarning(false);
+      console.info(`[quartely] dados reais carregados de ${new URL(base).pathname}`);
+      return chartRows
+        .map(r => ({ ...r, NM_SITE: siteNameById.get(r.ID_SITE) ?? null }))
+        .filter(isQuarterlyVisao);
+    } catch (err) {
+      tentativas.push(err.message);
+    }
+  }
+  console.warn('[quartely] nenhum endpoint respondeu, usando fixture local:', tentativas.join(' | '));
+  setDataFallbackWarning(true, tentativas.join(' | '));
+  return buildFallbackRows().filter(isQuarterlyVisao);
 }
 
 // ── Filtros dinâmicos e dependentes ─────────────────────────────────────

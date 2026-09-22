@@ -795,7 +795,7 @@ async function quartelyComCache(chave, buscar) {
   return dados;
 }
 
-app.get('/Quartely/api/chart-data', async (req, res) => {
+async function quartelyChartData(req, res) {
   try {
     const dados = await quartelyComCache('chart-data', async () => {
       const chartSql = `
@@ -969,14 +969,14 @@ ORDER BY ORDEM_ANO, ORDEM_VISAO, ORDEM_PERIODO, ORDEM_SERIE`;
     res.json(dados);
   } catch (err) {
     console.error('[quartely] Erro ao buscar chart-data:', err.message);
-    res.status(500).json({ error: 'Failed to fetch chart data' });
+    res.status(500).json({ error: 'Failed to fetch chart data', detalhe: err.message });
   }
-});
+}
 
 // A origem correta é IBP.DASHBOARD.ID_SITE (todo site configurado para
 // este dashboard), não IBP.PEDRAVISAOCONSOLIDADA — RIGHT JOIN a partir
 // de DASHBOARD (filtrado por ID_DASH = 21), resolvendo o nome em SITES.
-app.get('/Quartely/api/sites', async (req, res) => {
+async function quartelySites(req, res) {
   try {
     const dados = await quartelyComCache('sites', async () => {
       const sitesSql = `
@@ -996,9 +996,28 @@ ORDER BY NM_SITE`;
     res.json(dados);
   } catch (err) {
     console.error('[quartely] Erro ao buscar sites:', err.message);
-    res.status(500).json({ error: 'Failed to fetch sites' });
+    res.status(500).json({ error: 'Failed to fetch sites', detalhe: err.message });
   }
-});
+}
+
+// Os MESMOS dois handlers registrados em todos os caminhos candidatos.
+// Não sabemos, de fora, se o Databricks Apps entrega o caminho completo
+// ("/Quartely/api/...") ou já sem o prefixo da pasta ("/api/..."), e
+// errar essa aposta é o que vinha devolvendo 404 e derrubando a página
+// no fixture. Registrar os quatro custa nada (é o mesmo handler, com
+// cache compartilhado) e elimina a adivinhação de vez.
+const QUARTELY_BASES = ['/Quartely/api', '/quartely/api', '/api', '/api/quartely'];
+
+for (const base of QUARTELY_BASES) {
+  app.get(`${base}/chart-data`, quartelyChartData);
+  app.get(`${base}/sites`, quartelySites);
+  // Diagnóstico SEM banco: separa "código novo não publicado" (404 aqui)
+  // de "publicado, mas o banco falha" (200 aqui + 500 nas rotas acima).
+  // Abra no navegador: <url-do-app>/Quartely/api/ping
+  app.get(`${base}/ping`, (req, res) => {
+    res.json({ ok: true, rotaCasada: `${base}/ping`, caminhoRecebido: req.originalUrl });
+  });
+}
 
 app.use(
   express.static(__dirname, {
