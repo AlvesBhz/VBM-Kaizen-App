@@ -3,3 +3,11 @@ package-lock.json
 tests/.reg-*.log
 tests/sql-capturado.txt
 tests/*.png
+
+# Pacotes de entrega gerados na raiz (cópias de arquivos que já estão
+# versionados aqui) — artefato de trabalho, não fonte.
+/*.tar.gz
+
+# Sobra do preparo da imagem: cópia idêntica da que vale, versionada em
+# Quartely/assets/images/VALE-products-clean.webp. Nada referencia esta.
+/VALE-products-clean.webp
