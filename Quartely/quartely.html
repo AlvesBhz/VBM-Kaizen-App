@@ -614,13 +614,14 @@ body:not([data-bg]) .qf-panel { background: rgba(20,32,48,.96); }
 }
 
 /* ════════════════════════════════════════════════════════════════════
-   CONFIGURADOR DE CORES — painel horizontal inferior
+   CONFIGURADOR DE CORES — barra horizontal estreita inferior
 ═════════════════════════════════════════════════════════════════════ */
 .color-config-panel {
-  display: flex; flex-direction: row; align-items: center; gap: 12px;
-  padding: 14px;
-  background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 10px;
-  width: 100%; overflow-x: auto; overflow-y: hidden; flex-shrink: 0;
+  display: flex; flex-direction: row; align-items: center; gap: 10px;
+  padding: 8px 12px;
+  background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 8px;
+  width: 100%; overflow-x: auto; overflow-y: visible; flex-shrink: 0;
+  position: relative; z-index: 10;
 }
 [data-bg="dark"] .color-config-panel {
   background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.1);
@@ -642,8 +643,8 @@ body:not([data-bg]) .qf-panel { background: rgba(20,32,48,.96); }
 [data-bg="dark"] .color-reset-icon:hover { background: rgba(255,255,255,.15); }
 
 .color-item {
-  display: flex; align-items: center; gap: 8px; padding: 6px 10px;
-  border-radius: 6px; cursor: pointer;
+  display: flex; align-items: center; gap: 6px; padding: 4px 8px;
+  border-radius: 4px; cursor: pointer;
   transition: background .15s;
   position: relative;
   flex-shrink: 0;
@@ -652,31 +653,32 @@ body:not([data-bg]) .qf-panel { background: rgba(20,32,48,.96); }
 [data-bg="dark"] .color-item:hover { background: rgba(255,255,255,.05); }
 
 .color-swatch {
-  flex-shrink: 0; width: 18px; height: 18px;
-  border-radius: 3px; cursor: pointer; transition: transform .2s;
-  border: 1.5px solid rgba(0,0,0,.1); box-shadow: 0 1px 2px rgba(0,0,0,.08);
+  flex-shrink: 0; width: 16px; height: 16px;
+  border-radius: 2px; cursor: pointer; transition: transform .2s;
+  border: 1px solid rgba(0,0,0,.12); box-shadow: 0 1px 2px rgba(0,0,0,.06);
 }
-.color-swatch:hover { transform: scale(1.15); }
+.color-swatch:hover { transform: scale(1.1); }
 .color-swatch.has-palette { cursor: pointer; }
 [data-bg="dark"] .color-swatch { border-color: rgba(255,255,255,.2); }
 
 .color-label {
-  font-size: .65rem; font-weight: 500; color: #4B5563;
-  white-space: nowrap; flex: 0 0 auto; overflow: hidden; text-overflow: ellipsis; max-width: 60px;
+  font-size: .62rem; font-weight: 500; color: #4B5563;
+  white-space: nowrap; flex: 0 0 auto; overflow: hidden; text-overflow: ellipsis; max-width: 50px;
 }
 [data-bg="dark"] .color-label { color: rgba(255,255,255,.75); }
 
-/* Paleta de cores flutuante */
+/* Paleta de cores flutuante — aparece acima da barra, na frente */
 .color-palette {
-  position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); z-index: 1000;
+  position: fixed; z-index: 9999;
   display: none; flex-wrap: wrap; gap: 6px;
   padding: 10px; background: #fff; border: 1px solid #D1D5DB;
-  border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,.15);
-  width: max-content; margin-bottom: 8px;
+  border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.20);
+  width: max-content;
 }
 .color-palette.active { display: flex; }
 [data-bg="dark"] .color-palette {
   background: rgba(20,32,48,.96); border-color: rgba(255,255,255,.14);
+  box-shadow: 0 8px 24px rgba(0,0,0,.40);
 }
 
 .palette-color {
@@ -962,7 +964,7 @@ function renderColorConfigPanel(visibleBarTypes = []) {
     }
   });
 
-  // Listeners para os swatches — abre/fecha a paleta
+  // Listeners para os swatches — abre/fecha a paleta (posicionada em fixed, na frente)
   panel.querySelectorAll('.color-swatch.has-palette').forEach(swatch => {
     swatch.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -974,7 +976,16 @@ function renderColorConfigPanel(visibleBarTypes = []) {
         if (p !== palette) p.classList.remove('active');
       });
 
-      palette.classList.toggle('active');
+      // Posiciona a paleta (fixed, acima do swatch, na frente do gráfico)
+      if (!palette.classList.contains('active')) {
+        const rect = swatch.getBoundingClientRect();
+        palette.style.left = (rect.left + rect.width / 2) + 'px';
+        palette.style.top = (rect.top - 8) + 'px';
+        palette.style.transform = 'translateX(-50%) translateY(-100%)';
+        palette.classList.add('active');
+      } else {
+        palette.classList.remove('active');
+      }
     });
   });
 
