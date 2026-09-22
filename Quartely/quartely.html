@@ -445,13 +445,13 @@ body:not([data-bg]) .qf-panel { background: rgba(20,32,48,.96); }
   --ink-strong: #0F172A;
   --ink-soft: #6B7280;
   --chart-bg: #FFFFFF;
-  /* Tokens do delta, definidos uma única vez:
-     --stroke  linhas de nível e base do fio guia (cinza-azulado neutro)
-     --hair    ponta fraca do fio guia (nasce esmaecida perto da pílula)
-     --glass   preenchimento da pílula (slate-100, não branco puro) */
-  --stroke: rgba(100,116,139,.38);
-  --hair: rgba(100,116,139,.14);
-  --glass: rgba(241,245,249,.82);
+  /* Tokens do delta (paleta VBM):
+     --stroke  linhas de nível (Mid Gray com transparência)
+     --hair    ponta fraca do fio guia (Light Gray esmaecido)
+     --glass   preenchimento da pílula (Off-white translúcido) */
+  --stroke: rgba(136,136,136,.38);
+  --hair: rgba(204,204,204,.14);
+  --glass: rgba(246,246,246,.92);
 
   width: min(92vw, 1200px);
   height: min(76vh, 720px);
@@ -533,9 +533,10 @@ body:not([data-bg]) .qf-panel { background: rgba(20,32,48,.96); }
    Partido de cor: linhas de nível, fio guia e pílula são neutros.
    Só o número, a haste e a faixa carregam a cor do estado (--tint).
    ──────────────────────────────────────────────────────────────────── */
-.is-up   { --ink: #157F5C; --tint: 21,127,92; }
-.is-down { --ink: #C0393F; --tint: 192,57,63; }
-.is-flat { --ink: #64748B; --tint: 100,116,139; }
+/* Cores de feedback (VBM): Success, Error, Neutral */
+.is-up   { --ink: #1BA13A; --tint: 27,161,58; }   /* Success Green */
+.is-down { --ink: #DC2626; --tint: 220,38,38; }   /* Error Red */
+.is-flat { --ink: #888888; --tint: 136,136,136; } /* Mid Gray */
 .dcnx.no-tint { --tint: 100,116,139; }
 
 .dcnx {
@@ -794,10 +795,18 @@ const CFG = {
   casasDecimais: 2
 };
 
+// Paleta VBM — alinhada ao design system corporativo
+// Primary: #3CB5E5 (azul claro), #1B40BF (azul escuro)
+// Neutrals: #333333 (text), #888888 (mid), #CCCCCC (light), #FFFFFF (white), #F6F6F6 (off-white)
+// Feedback: #1BA13A (success), #CC7700 (warning), #DC2626 (error)
 const COLORS = {
-  actual: '#3CB5E5', plan: '#B2B7FF', default: '#D1D5DB',
-  pillActual: '#CFEAF7', pillPlan: '#E0E7FF', pillDefault: '#E5E7EB',
-  bgChart: '#FFFFFF'
+  actual: '#3CB5E5',    // Primary Blue — valores Actual (realizados)
+  plan: '#7DD3F0',      // Light Blue — valores Plan (planejados)
+  default: '#CCCCCC',   // Light Gray — valores Default (padrão)
+  bgChart: '#F6F6F6',   // Off-white — fundo do gráfico (neutro)
+  pillActual: '#D8F7FD',// Pale Blue — pílula de delta Actual
+  pillPlan: '#E8F4FF',  // Pale Blue — pílula de delta Plan
+  pillDefault: '#E8E8E8'// Pale Gray — pílula de delta Default
 };
 
 const DEFAULT_COLORS = { ...COLORS };
