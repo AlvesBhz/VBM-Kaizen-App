@@ -454,26 +454,30 @@ body:not([data-bg]) .qf-panel { background: rgba(20,32,48,.96); }
   --glass: rgba(246,246,246,.92);
 
   width: min(92vw, 1200px);
-  height: min(76vh, 720px);
   min-width: 420px;
-  min-height: 360px;
   max-width: 96vw;
-  max-height: calc(100vh - 140px);
-  display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto 1fr; gap: 16px;
+  display: flex; flex-direction: column; gap: 16px;
   font-family: 'Vale Sans Medium', 'Segoe UI', 'system-ui', sans-serif;
-  padding: 20px 20px 14px;
-  background: var(--chart-bg); border-radius: 14px; border: 1px solid #E2E8F0;
-  box-shadow: 0 12px 40px rgba(10,20,35,.12), 0 2px 8px rgba(10,20,35,.06);
-  resize: both;
+  background: transparent;
   transition: background-color .2s ease;
 }
 
 /* Alça de resize — reforça visualmente o canto nativo do navegador */
 .main-wrapper::-webkit-resizer { background: transparent; }
 
-.chart-header { grid-column: 1; flex-shrink: 0; }
+.chart-header { flex-shrink: 0; }
 .chart-title { color: #316866; font-family: 'Vale Sans Medium', 'Segoe UI', sans-serif; font-size: 1.4rem; font-weight: 400; margin: 0; }
 .chart-subtitle { color: #9CA3AF; font-family: 'Vale Sans', 'Segoe UI', sans-serif; font-size: 1.05rem; margin: 0; font-weight: 200; }
+
+/* Container do gráfico com fundo */
+.chart-container {
+  display: flex; flex-direction: column;
+  width: 100%; height: min(76vh, 720px); min-height: 360px;
+  padding: 20px 20px 14px;
+  background: var(--chart-bg); border-radius: 14px; border: 1px solid #E2E8F0;
+  box-shadow: 0 12px 40px rgba(10,20,35,.12), 0 2px 8px rgba(10,20,35,.06);
+  resize: both;
+}
 
 /* área do gráfico — gap em px garante que a distância centro-a-centro
    entre colunas vizinhas seja (100% + gap), o que permite ancorar a
@@ -483,7 +487,6 @@ body:not([data-bg]) .qf-panel { background: rgba(20,32,48,.96); }
   gap: var(--gap); width: 100%; flex: 1; min-width: 0;
   margin-top: calc(var(--folga) + 40px);
   margin-bottom: clamp(22px, 5vh, 28px);
-  grid-column: 1; grid-row: 2;
 }
 .chart-area::before {
   content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; z-index: 1;
@@ -611,14 +614,13 @@ body:not([data-bg]) .qf-panel { background: rgba(20,32,48,.96); }
 }
 
 /* ════════════════════════════════════════════════════════════════════
-   CONFIGURADOR DE CORES — painel lateral com cores por barra
+   CONFIGURADOR DE CORES — painel horizontal inferior
 ═════════════════════════════════════════════════════════════════════ */
 .color-config-panel {
-  grid-column: 2; grid-row: 1 / 3;
-  display: flex; flex-direction: column; gap: 12px;
+  display: flex; flex-direction: row; align-items: center; gap: 12px;
   padding: 14px;
   background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 10px;
-  width: 180px; overflow-y: auto; flex-shrink: 0;
+  width: 100%; overflow-x: auto; overflow-y: hidden; flex-shrink: 0;
 }
 [data-bg="dark"] .color-config-panel {
   background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.1);
@@ -630,7 +632,7 @@ body:not([data-bg]) .qf-panel { background: rgba(20,32,48,.96); }
   background: #E5E7EB; border: 1px solid #D1D5DB;
   border-radius: .4rem; cursor: pointer; color: #374151;
   transition: background .2s; font-size: 14px;
-  align-self: center; margin-bottom: 4px;
+  flex-shrink: 0;
 }
 .color-reset-icon:hover { background: #D1D5DB; }
 [data-bg="dark"] .color-reset-icon {
@@ -640,17 +642,18 @@ body:not([data-bg]) .qf-panel { background: rgba(20,32,48,.96); }
 [data-bg="dark"] .color-reset-icon:hover { background: rgba(255,255,255,.15); }
 
 .color-item {
-  display: flex; align-items: center; gap: 8px; padding: 8px;
+  display: flex; align-items: center; gap: 8px; padding: 6px 10px;
   border-radius: 6px; cursor: pointer;
   transition: background .15s;
   position: relative;
+  flex-shrink: 0;
 }
 .color-item:hover { background: rgba(0,0,0,.03); }
 [data-bg="dark"] .color-item:hover { background: rgba(255,255,255,.05); }
 
 .color-swatch {
-  flex-shrink: 0; width: 20px; height: 20px;
-  border-radius: 4px; cursor: pointer; transition: transform .2s;
+  flex-shrink: 0; width: 18px; height: 18px;
+  border-radius: 3px; cursor: pointer; transition: transform .2s;
   border: 1.5px solid rgba(0,0,0,.1); box-shadow: 0 1px 2px rgba(0,0,0,.08);
 }
 .color-swatch:hover { transform: scale(1.15); }
@@ -658,18 +661,18 @@ body:not([data-bg]) .qf-panel { background: rgba(20,32,48,.96); }
 [data-bg="dark"] .color-swatch { border-color: rgba(255,255,255,.2); }
 
 .color-label {
-  font-size: .7rem; font-weight: 500; color: #4B5563;
-  white-space: nowrap; flex: 1; overflow: hidden; text-overflow: ellipsis;
+  font-size: .65rem; font-weight: 500; color: #4B5563;
+  white-space: nowrap; flex: 0 0 auto; overflow: hidden; text-overflow: ellipsis; max-width: 60px;
 }
 [data-bg="dark"] .color-label { color: rgba(255,255,255,.75); }
 
 /* Paleta de cores flutuante */
 .color-palette {
-  position: absolute; top: 100%; left: 0; z-index: 1000;
+  position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); z-index: 1000;
   display: none; flex-wrap: wrap; gap: 6px;
   padding: 10px; background: #fff; border: 1px solid #D1D5DB;
   border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,.15);
-  width: max-content; margin-top: 4px;
+  width: max-content; margin-bottom: 8px;
 }
 .color-palette.active { display: flex; }
 [data-bg="dark"] .color-palette {
@@ -688,15 +691,20 @@ body:not([data-bg]) .qf-panel { background: rgba(20,32,48,.96); }
 .color-input { display: none; }
 
 @media (max-width: 768px) {
-  .color-config-panel { gap: .8rem; padding: 10px 12px; margin-bottom: 12px; }
-  .color-label { font-size: .65rem; }
-  .color-reset-btn { font-size: .65rem; padding: .3rem .6rem; }
+  .color-config-panel { gap: 8px; padding: 10px 12px; }
+  .color-label { font-size: .6rem; max-width: 50px; }
+  .color-swatch { width: 16px; height: 16px; }
+  .color-reset-icon { width: 24px; height: 24px; font-size: 12px; }
 }
 
 @media (max-width: 640px) {
-  .main-wrapper { padding: 16px 14px 12px; }
+  .chart-container { padding: 16px 14px 12px; }
   .chart-title { font-size: 1.15rem; }
   .chart-subtitle { font-size: .9rem; }
+  .color-config-panel { gap: 6px; padding: 8px 10px; }
+  .color-item { padding: 4px 8px; gap: 6px; }
+  .color-label { font-size: .55rem; max-width: 40px; }
+  .color-swatch { width: 14px; height: 14px; }
 }
 </style>
 </head>
@@ -754,12 +762,14 @@ body:not([data-bg]) .qf-panel { background: rgba(20,32,48,.96); }
 <div class="page-content">
 
   <div class="main-wrapper" id="chartWrapper">
-    <div class="chart-header">
-      <p class="chart-title" id="chartTitle" data-i18n="chart.title">Turnover</p>
-      <p class="chart-subtitle" id="chartSubtitle">(%)</p>
+    <div class="chart-container">
+      <div class="chart-header">
+        <p class="chart-title" id="chartTitle" data-i18n="chart.title">Turnover</p>
+        <p class="chart-subtitle" id="chartSubtitle">(%)</p>
+      </div>
+      <div class="chart-area" id="chartArea"></div>
     </div>
     <div class="color-config-panel" id="colorConfigPanel"></div>
-    <div class="chart-area" id="chartArea"></div>
   </div>
 
 </div>
