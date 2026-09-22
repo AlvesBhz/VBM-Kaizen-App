@@ -444,6 +444,7 @@ body:not([data-bg]) .qf-panel { background: rgba(20,32,48,.96); }
   --barw: 74%;
   --ink-strong: #0F172A;
   --ink-soft: #6B7280;
+  --chart-bg: #FFFFFF;
   /* Tokens do delta, definidos uma única vez:
      --stroke  linhas de nível e base do fio guia (cinza-azulado neutro)
      --hair    ponta fraca do fio guia (nasce esmaecida perto da pílula)
@@ -461,10 +462,11 @@ body:not([data-bg]) .qf-panel { background: rgba(20,32,48,.96); }
   display: flex; flex-direction: column;
   font-family: 'Vale Sans Medium', 'Segoe UI', 'system-ui', sans-serif;
   padding: 20px 20px 14px;
-  background: #FFFFFF; border-radius: 14px; border: 1px solid #E2E8F0;
+  background: var(--chart-bg); border-radius: 14px; border: 1px solid #E2E8F0;
   box-shadow: 0 12px 40px rgba(10,20,35,.12), 0 2px 8px rgba(10,20,35,.06);
   overflow: auto;
   resize: both;
+  transition: background-color .2s ease;
 }
 
 /* Alça de resize — reforça visualmente o canto nativo do navegador */
@@ -607,6 +609,57 @@ body:not([data-bg]) .qf-panel { background: rgba(20,32,48,.96); }
   .dpill       { animation: none; opacity: 1; transform: translate(-50%, 0) scale(1); }
 }
 
+/* ════════════════════════════════════════════════════════════════════
+   CONFIGURADOR DE CORES — painel discreto e responsivo
+═════════════════════════════════════════════════════════════════════ */
+.color-config-panel {
+  display: flex; gap: 1.2rem; align-items: center; justify-content: center;
+  padding: 14px 16px; margin-bottom: 16px;
+  background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 10px;
+  flex-wrap: wrap;
+}
+[data-bg="dark"] .color-config-panel {
+  background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.1);
+}
+
+.color-item {
+  display: flex; align-items: center; gap: 8px;
+}
+.color-swatch {
+  flex-shrink: 0; width: 24px; height: 24px;
+  border-radius: 6px; cursor: pointer; transition: transform .2s;
+  border: 1.5px solid rgba(0,0,0,.1); box-shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+.color-swatch:hover { transform: scale(1.08); }
+[data-bg="dark"] .color-swatch { border-color: rgba(255,255,255,.2); }
+
+.color-label {
+  font-size: .72rem; font-weight: 500; color: #4B5563;
+  white-space: nowrap;
+}
+[data-bg="dark"] .color-label { color: rgba(255,255,255,.75); }
+
+.color-input { display: none; }
+
+.color-reset-btn {
+  font-size: .7rem; padding: .35rem .7rem;
+  background: #E5E7EB; border: 1px solid #D1D5DB;
+  border-radius: .4rem; cursor: pointer; color: #374151;
+  transition: background .2s; white-space: nowrap;
+}
+.color-reset-btn:hover { background: #D1D5DB; }
+[data-bg="dark"] .color-reset-btn {
+  background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.18);
+  color: rgba(255,255,255,.8);
+}
+[data-bg="dark"] .color-reset-btn:hover { background: rgba(255,255,255,.15); }
+
+@media (max-width: 768px) {
+  .color-config-panel { gap: .8rem; padding: 10px 12px; margin-bottom: 12px; }
+  .color-label { font-size: .65rem; }
+  .color-reset-btn { font-size: .65rem; padding: .3rem .6rem; }
+}
+
 @media (max-width: 640px) {
   .main-wrapper { padding: 16px 14px 12px; }
   .chart-title { font-size: 1.15rem; }
@@ -672,6 +725,7 @@ body:not([data-bg]) .qf-panel { background: rgba(20,32,48,.96); }
       <p class="chart-title" id="chartTitle" data-i18n="chart.title">Turnover</p>
       <p class="chart-subtitle" id="chartSubtitle">(%)</p>
     </div>
+    <div class="color-config-panel" id="colorConfigPanel"></div>
     <div class="chart-area" id="chartArea"></div>
   </div>
 
@@ -742,8 +796,45 @@ const CFG = {
 
 const COLORS = {
   actual: '#3CB5E5', plan: '#B2B7FF', default: '#D1D5DB',
-  pillActual: '#CFEAF7', pillPlan: '#E0E7FF', pillDefault: '#E5E7EB'
+  pillActual: '#CFEAF7', pillPlan: '#E0E7FF', pillDefault: '#E5E7EB',
+  bgChart: '#FFFFFF'
 };
+
+const DEFAULT_COLORS = { ...COLORS };
+
+// Carrega cores personalizadas do localStorage ou restaura padrões
+function loadColorPreferences() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('vdt-chart-colors') || 'null');
+    if (saved && typeof saved === 'object') {
+      Object.assign(COLORS, saved);
+    }
+  } catch (e) { /* localStorage indisponível — usa padrão */ }
+}
+
+// Persiste cores no localStorage
+function saveColorPreferences() {
+  try {
+    localStorage.setItem('vdt-chart-colors', JSON.stringify(COLORS));
+  } catch (e) { /* localStorage indisponível — sessão segue sem persistir */ }
+}
+
+// Atualiza variável CSS do fundo do gráfico
+function applyChartBackgroundColor() {
+  const wrapper = document.getElementById('chartWrapper');
+  if (wrapper) {
+    wrapper.style.setProperty('--chart-bg', COLORS.bgChart);
+  }
+}
+
+// Restaura cores padrão
+function resetColorsToDefault() {
+  Object.assign(COLORS, DEFAULT_COLORS);
+  saveColorPreferences();
+  updateColorPickerUI();
+  applyChartBackgroundColor();
+  renderTurnoverChart(getFilteredChartRows());
+}
 
 function formatNumber(v, decimals) {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
@@ -751,6 +842,89 @@ function formatNumber(v, decimals) {
 function formatPct(v) {
   const s = (v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   return (v > 0 ? '+' : '') + s + '%';
+}
+
+// Renderiza o painel de configuração de cores
+function renderColorConfigPanel() {
+  const panel = document.getElementById('colorConfigPanel');
+  const colorDefs = [
+    { key: 'actual', label: 'Actual' },
+    { key: 'plan', label: 'Plan' },
+    { key: 'default', label: 'Default' },
+    { key: 'bgChart', label: 'Background' }
+  ];
+
+  const html = colorDefs.map(def => `
+    <div class="color-item">
+      <input type="color" class="color-input" data-color-key="${def.key}" value="${COLORS[def.key]}" />
+      <div class="color-swatch" data-color-key="${def.key}" style="background-color: ${COLORS[def.key]};" title="Clique para alterar a cor de ${def.label}"></div>
+      <span class="color-label">${def.label}</span>
+    </div>
+  `).join('') + `
+    <button type="button" class="color-reset-btn" id="colorResetBtn" title="Restaurar cores padrão">Restaurar Padrão</button>
+  `;
+
+  panel.innerHTML = html;
+
+  // Listeners para os swatches de cor
+  panel.querySelectorAll('.color-swatch').forEach(swatch => {
+    swatch.addEventListener('click', () => {
+      const input = panel.querySelector(`[data-color-key="${swatch.getAttribute('data-color-key')}"].color-input`);
+      if (input) input.click();
+    });
+  });
+
+  // Listeners para os inputs de cor
+  panel.querySelectorAll('.color-input').forEach(input => {
+    input.addEventListener('change', () => {
+      const key = input.getAttribute('data-color-key');
+      COLORS[key] = input.value;
+
+      // Atualiza o swatch visualmente
+      const swatch = panel.querySelector(`[data-color-key="${key}"].color-swatch`);
+      if (swatch) swatch.style.backgroundColor = input.value;
+
+      // Atualiza fundo do gráfico se necessário
+      if (key === 'bgChart') applyChartBackgroundColor();
+
+      // Persiste e re-renderiza o gráfico
+      saveColorPreferences();
+      renderTurnoverChart(getFilteredChartRows());
+    });
+  });
+
+  // Listener para o botão de restaurar
+  document.getElementById('colorResetBtn').addEventListener('click', resetColorsToDefault);
+}
+
+// Atualiza a UI dos color pickers para refletir as cores atuais
+function updateColorPickerUI() {
+  const panel = document.getElementById('colorConfigPanel');
+  if (!panel) return;
+
+  panel.querySelectorAll('.color-swatch').forEach(swatch => {
+    const key = swatch.getAttribute('data-color-key');
+    swatch.style.backgroundColor = COLORS[key];
+  });
+  panel.querySelectorAll('.color-input').forEach(input => {
+    const key = input.getAttribute('data-color-key');
+    input.value = COLORS[key];
+  });
+}
+
+// Extrai o tipo de horizonte (Trimestre, Semestre, Anual) do core do período
+function getHorizonType(core) {
+  if (/^Q\d/i.test(core)) return 'QUARTER';
+  if (/^H\d/i.test(core)) return 'SEMESTER';
+  if (/^\d{2,4}[A-Z]/i.test(core)) return 'YEAR';
+  return null;
+}
+
+// Valida se dois períodos podem ser comparados (mesmo tipo de horizonte)
+function isValidComparison(core1, core2) {
+  const type1 = getHorizonType(core1);
+  const type2 = getHorizonType(core2);
+  return type1 !== null && type1 === type2;
 }
 
 function renderTurnoverChart(sourceRows) {
@@ -788,10 +962,15 @@ function renderTurnoverChart(sourceRows) {
     // ── Base de comparação: Budget do mesmo período > coluna anterior ──
     // O Budget correspondente precisa ser do MESMO ano (mesmo yearSuffix),
     // senão um Act/Fcst de 2026 poderia parear com o Budget de 2025.
+    // NOVO: também valida que ambos os períodos são do mesmo tipo (Trimestre,
+    // Semestre ou Anual) — Q4 nunca compara com H1, H2 nunca com Ano.
     const baseName = core.length > 1 ? core.slice(0, -1) : '';
     const budgetIndex = data.findIndex(d => {
       const dSplit = splitTypeLabel(d.type.trim());
-      return dSplit.core.toUpperCase() === (baseName + 'B').toUpperCase() && dSplit.yearSuffix === yearSuffix;
+      const budgetCore = (baseName + 'B').toUpperCase();
+      return dSplit.core.toUpperCase() === budgetCore
+        && dSplit.yearSuffix === yearSuffix
+        && isValidComparison(core, dSplit.core);
     });
     const budgetVal = budgetIndex >= 0 ? data[budgetIndex].value : undefined;
 
@@ -800,8 +979,12 @@ function renderTurnoverChart(sourceRows) {
     const isPrevActualOrFcst = prevLastChar === 'A' || prevLastChar === 'F';
     const isRealSequence = isActualOrFcst && isPrevActualOrFcst;
 
+    // NOVO: valida que a coluna anterior também é do mesmo tipo de horizonte
+    const prevIsValidType = prevRow ? isValidComparison(core, splitTypeLabel(prevRow.type.trim()).core) : false;
+    const isValidPrevSequence = isRealSequence && prevIsValidType;
+
     const usaBudget = !isRealSequence && budgetVal !== undefined && budgetVal !== 0;
-    const usaPrev = !usaBudget && (isRealSequence || index1 % 2 === 0);
+    const usaPrev = !usaBudget && (isValidPrevSequence || index1 % 2 === 0);
 
     let baseValue, baseIndex;
     if (usaBudget) { baseValue = budgetVal; baseIndex = budgetIndex; }
@@ -1289,6 +1472,7 @@ function refreshFiltersAndChart() {
     });
     updateChartTitle();
     updateChartUnit();
+    renderColorConfigPanel();
     renderTurnoverChart(getFilteredChartRows());
   } finally {
     setFiltersBusy(false);
@@ -1532,6 +1716,8 @@ function applyDefaultFilters(rows) {
 
 async function initQuartelyPage() {
   setFiltersInitialLoading(true);
+  loadColorPreferences();    // carrega cores salvas do localStorage
+  applyChartBackgroundColor(); // aplica cor de fundo ao wrapper
   allRows = await loadQuartelyData();
   applyDefaultFilters(allRows);
   buildFiltersBar();     // cria o DOM primeiro — refreshFiltersAndChart já popula tudo
