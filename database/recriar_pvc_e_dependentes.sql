@@ -1,100 +1,86 @@
 /* =====================================================================
-   RECRIAR do zero CI.KZN_PEDRAVISAOCONSOLIDADA e suas dependentes
+   RECRIA CI.KZN_PEDRAVISAOCONSOLIDADA e suas 6 dependentes, do zero
    ---------------------------------------------------------------------
-   *** APAGA DADOS DE FORMA DEFINITIVA - USO EM TESTE/VALIDACAO ***
+   Recria VAZIO. Só use com a base limpa — a E1 confere isso e ABORTA se
+   encontrar qualquer linha, em qualquer uma das 7 tabelas.
 
-   Derruba e recria, ja no formato final (ID_STATUS, DS_MOTIVO e os
-   campos de texto em VARCHAR(300)), as 7 tabelas do bloco do Kaizen:
+   Substitui o recriar_pvc_e_dependentes.sql, que ficou defasado e
+   reverteria silenciosamente: NM_KAIZEN(100), DS_COMPARA_META,
+   DS_RESULTADO_ALCANCADO, DT_CRIACAO, SG_GM/URL_GM/ID_TIPO_KAIZEN,
+   UQ_KZN_PVC_KAIZEN_LIDER e a nova PK de KZN_KAIZEN_HIERARQUIA.
 
-     DROP  (dependentes primeiro)      CREATE (o pai primeiro)
-     1. KZN_LOG_..._DETALHE            1. KZN_PEDRAVISAOCONSOLIDADA
-     2. KZN_LOG_PEDRAVISAOCONSOLIDADA  2. KZN_LOG_PEDRAVISAOCONSOLIDADA
-     3. KZN_MEMBROS_EQUIPE             3. KZN_LOG_..._DETALHE
-     4. KZN_RESULTADO_KAIZEN           4. KZN_MEMBROS_EQUIPE
-     5. KZN_KAIZEN_HIERARQUIA          5. KZN_RESULTADO_KAIZEN
-     6. KZN_KAIZEN_DESPERDICIO         6. KZN_KAIZEN_HIERARQUIA
-     7. KZN_PEDRAVISAOCONSOLIDADA      7. KZN_KAIZEN_DESPERDICIO
+   ORDEM (a FK composta da hierarquia exige o UNIQUE, que exige a PVC):
+     DROP   dependentes -> PVC
+     CREATE PVC (com PK, UNIQUE, FKs de saida e indices) -> dependentes
+            -> sequences -> triggers
 
-   NAO toca nas tabelas de cadastro (KZN_STATUS, KZN_CATEGORIA,
-   KZN_MDM_HIERARQUIA, KZN_APROVADOR, KZN_MOEDA, ...): elas sao o
-   destino das FKs, nao dependentes.
+   Sequences NAO sao recriadas se ja existirem: sobrevivem ao DROP TABLE e
+   recria-las zeraria o contador.
 
-   TRAVA: a ETAPA 1 (DROP) so roda com @CONFIRMO = 'SIM'. Sem isso o
-   script nao apaga nada, e as etapas seguintes viram no-op (as tabelas
-   ja existem). Ajuste a variavel logo abaixo.
-
-   Os CREATE e os triggers abaixo sao copia fiel do script completo
-   (DDL_SCRIPT_DB.sql), secoes 13 a 17b, 18 e 19.
-
-   Schema: 'CI'.
+   Tudo em UMA transacao. Schema: 'ci'.
    ===================================================================== */
 
 SET NOCOUNT ON;
 SET XACT_ABORT ON;
 
 /* =====================================================================
-   ETAPA 1 - DROP (ordem inversa das dependencias)
+   E1 - TRAVA: nenhuma das 7 tabelas pode ter linhas
    ===================================================================== */
-DECLARE @CONFIRMO VARCHAR(3) = 'NAO';   -- <<< troque para 'SIM' para apagar de verdade
+DECLARE @t TABLE (TABELA SYSNAME, LINHAS INT);
+DECLARE @nome SYSNAME, @sql NVARCHAR(MAX), @qt INT, @i INT = 1;
+DECLARE @lista TABLE (ORDEM INT, NOME SYSNAME);
+INSERT INTO @lista VALUES
+  (1,'KZN_LOG_PEDRAVISAOCONSOLIDADA_DETALHE'),(2,'KZN_LOG_PEDRAVISAOCONSOLIDADA'),
+  (3,'KZN_MEMBROS_EQUIPE'),(4,'KZN_RESULTADO_KAIZEN'),(5,'KZN_KAIZEN_HIERARQUIA'),
+  (6,'KZN_KAIZEN_DESPERDICIO'),(7,'KZN_PEDRAVISAOCONSOLIDADA');
 
-IF @CONFIRMO <> 'SIM'
+WHILE @i <= 7
 BEGIN
-    PRINT 'ETAPA 1 NAO executada - @CONFIRMO diferente de ''SIM''. Nada foi apagado.';
-    PRINT 'As etapas seguintes so criam o que estiver faltando.';
+    SELECT @nome = NOME FROM @lista WHERE ORDEM = @i;
+    IF OBJECT_ID('CI.' + @nome, 'U') IS NOT NULL
+    BEGIN
+        SET @sql = N'SELECT @c = COUNT(*) FROM CI.' + QUOTENAME(@nome) + N';';
+        EXEC sp_executesql @sql, N'@c INT OUTPUT', @c = @qt OUTPUT;
+        INSERT INTO @t VALUES (@nome, @qt);
+    END
+    SET @i += 1;
 END
-ELSE
+
+SELECT TABELA, LINHAS FROM @t ORDER BY TABELA;
+
+IF EXISTS (SELECT 1 FROM @t WHERE LINHAS > 0)
 BEGIN
-    -- Derruba qualquer FK que aponte para as 7 tabelas, venha de onde vier
-    DECLARE @sqlFk nvarchar(max) = N'';
-    SELECT @sqlFk = @sqlFk + N'ALTER TABLE ' + QUOTENAME(OBJECT_SCHEMA_NAME(fk.parent_object_id)) + N'.'
-                  + QUOTENAME(OBJECT_NAME(fk.parent_object_id)) + N' DROP CONSTRAINT ' + QUOTENAME(fk.name) + N';'
-    FROM   sys.foreign_keys fk
-    WHERE  fk.referenced_object_id IN (
-               OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA'), OBJECT_ID('CI.KZN_LOG_PEDRAVISAOCONSOLIDADA'),
-               OBJECT_ID('CI.KZN_LOG_PEDRAVISAOCONSOLIDADA_DETALHE'), OBJECT_ID('CI.KZN_MEMBROS_EQUIPE'),
-               OBJECT_ID('CI.KZN_RESULTADO_KAIZEN'), OBJECT_ID('CI.KZN_KAIZEN_HIERARQUIA'),
-               OBJECT_ID('CI.KZN_KAIZEN_DESPERDICIO'));
-    IF @sqlFk <> N'' EXEC sp_executesql @sqlFk;
-
-    DROP TABLE IF EXISTS CI.KZN_LOG_PEDRAVISAOCONSOLIDADA_DETALHE;
-    DROP TABLE IF EXISTS CI.KZN_LOG_PEDRAVISAOCONSOLIDADA;
-    DROP TABLE IF EXISTS CI.KZN_MEMBROS_EQUIPE;
-    DROP TABLE IF EXISTS CI.KZN_RESULTADO_KAIZEN;
-    DROP TABLE IF EXISTS CI.KZN_KAIZEN_HIERARQUIA;
-    DROP TABLE IF EXISTS CI.KZN_KAIZEN_DESPERDICIO;
-    DROP TABLE IF EXISTS CI.KZN_PEDRAVISAOCONSOLIDADA;
-
-    -- Tabelas vazias de novo: as sequences do log voltam a contar do 1
-    IF EXISTS (SELECT 1 FROM sys.sequences WHERE schema_id = SCHEMA_ID('CI') AND name = 'SEQ_KZN_LOG_PVC')
-        ALTER SEQUENCE CI.SEQ_KZN_LOG_PVC RESTART WITH 1;
-    IF EXISTS (SELECT 1 FROM sys.sequences WHERE schema_id = SCHEMA_ID('CI') AND name = 'SEQ_KZN_LOG_PVC_DETALHE')
-        ALTER SEQUENCE CI.SEQ_KZN_LOG_PVC_DETALHE RESTART WITH 1;
-
-    PRINT 'ETAPA 1 ok - 7 tabelas removidas e sequences reiniciadas.';
+    RAISERROR('Abortado: ha tabela(s) com registros (ver acima). Este script recria VAZIO e apagaria esses dados.', 16, 1);
+    RETURN;
 END
-GO
+
+/* Sem GO entre a trava e o DROP, DE PROPOSITO: RAISERROR + RETURN
+   encerram apenas o batch em que aparecem. */
+
+BEGIN TRANSACTION;
+BEGIN TRY
 
 /* =====================================================================
-   ETAPA 2 - Sequences do log (criadas se ainda nao existirem)
+   E2 - DROP (dependentes primeiro)
    ===================================================================== */
-IF NOT EXISTS (SELECT 1 FROM sys.sequences WHERE schema_id = SCHEMA_ID('CI') AND name = 'SEQ_KZN_LOG_PVC')
-    CREATE SEQUENCE CI.SEQ_KZN_LOG_PVC AS INT START WITH 1 INCREMENT BY 1;
-IF NOT EXISTS (SELECT 1 FROM sys.sequences WHERE schema_id = SCHEMA_ID('CI') AND name = 'SEQ_KZN_LOG_PVC_DETALHE')
-    CREATE SEQUENCE CI.SEQ_KZN_LOG_PVC_DETALHE AS INT START WITH 1 INCREMENT BY 1;
-GO
+IF OBJECT_ID('CI.KZN_LOG_PEDRAVISAOCONSOLIDADA_DETALHE','U') IS NOT NULL DROP TABLE CI.KZN_LOG_PEDRAVISAOCONSOLIDADA_DETALHE;
+IF OBJECT_ID('CI.KZN_LOG_PEDRAVISAOCONSOLIDADA','U')         IS NOT NULL DROP TABLE CI.KZN_LOG_PEDRAVISAOCONSOLIDADA;
+IF OBJECT_ID('CI.KZN_MEMBROS_EQUIPE','U')                    IS NOT NULL DROP TABLE CI.KZN_MEMBROS_EQUIPE;
+IF OBJECT_ID('CI.KZN_RESULTADO_KAIZEN','U')                  IS NOT NULL DROP TABLE CI.KZN_RESULTADO_KAIZEN;
+IF OBJECT_ID('CI.KZN_KAIZEN_HIERARQUIA','U')                 IS NOT NULL DROP TABLE CI.KZN_KAIZEN_HIERARQUIA;
+IF OBJECT_ID('CI.KZN_KAIZEN_DESPERDICIO','U')                IS NOT NULL DROP TABLE CI.KZN_KAIZEN_DESPERDICIO;
+IF OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA','U')             IS NOT NULL DROP TABLE CI.KZN_PEDRAVISAOCONSOLIDADA;
+PRINT 'E2 ok - 7 tabelas removidas.';
 
 /* =====================================================================
-   ETAPA 3 - CREATE (o pai primeiro, depois as dependentes)
+   E3 - CREATE: PVC primeiro (PK + UNIQUE + FKs de saida + indices)
    ===================================================================== */
-/* --- 1. CI.KZN_PEDRAVISAOCONSOLIDADA --- */
-IF OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA', 'U') IS NULL
-BEGIN
     CREATE TABLE CI.KZN_PEDRAVISAOCONSOLIDADA
     (
         ID_KAIZEN                  INT                             NOT NULL,
         ID_USUARIO_CADASTRO        INT                             NOT NULL,   -- FK -> MDM: quem registrou
         ID_USUARIO_LIDER           INT                             NOT NULL,   -- FK -> MDM: líder do Kaizen  -- ASSUNÇÃO: NOT NULL
-        NM_KAIZEN                  VARCHAR(30)                     NOT NULL,
+        NM_KAIZEN                  VARCHAR(100)                    NOT NULL,
         ID_CATEGORIA               INT                             NOT NULL,
         ID_REPLICACAO              INT                                 NULL,   -- ASSUNÇÃO: opcional
         DS_PROBLEMA                VARCHAR(300)                        NULL,
@@ -106,20 +92,32 @@ BEGIN
         URL_IMG_DEPOIS              VARCHAR(300)                       NULL,
         DS_ESTADO_DEPOIS           VARCHAR(300)                        NULL,
         URL_REFERENCIA             VARCHAR(300)                       NULL,
-        ID_DESPERDICIO             INT                                 NULL,
+        DS_COMPARA_META            VARCHAR(300)                        NULL,   -- era ID_DESPERDICIO (INT); virou texto livre
         DS_LICOES_APRENDIDAS       VARCHAR(300)                        NULL,
         VL_RESULTADO_FINANCEIRO    DECIMAL(18,2)                      NULL,
         ID_MOEDA                   INT                                 NULL,
-        DS_RESULTADO_ESPERADO      VARCHAR(300)                        NULL,
-        DT_CRIACAO                 DATETIME2(3)                    NOT NULL
-            CONSTRAINT DF_KZN_PVC_DT_CRIACAO DEFAULT (SYSDATETIME()),
+        DS_RESULTADO_ALCANCADO     VARCHAR(300)                        NULL,   -- era DS_RESULTADO_ESPERADO
+        -- DT_CRIACAO foi REMOVIDA (pedido do time, nesta rodada). A data de
+        -- criação do Kaizen passou a viver exclusivamente na linha 'C' de
+        -- CI.KZN_LOG_PEDRAVISAOCONSOLIDADA (DT_OPERACAO), gravada pelo
+        -- trigger TR_KZN_PVC_INS — ver seções 14 e 19. Para lê-la:
+        --   LEFT JOIN CI.KZN_LOG_PEDRAVISAOCONSOLIDADA l
+        --          ON l.ID_KAIZEN = p.ID_KAIZEN AND l.TP_OPERACAO = 'C'
         DT_CONCLUSAO               DATE                                NULL,
         DS_MOTIVO                  VARCHAR(300)                        NULL,   -- justificativa da reprovação, em texto livre (antes era ID_MOTIVO -> CI.KZN_MOTIVO_REPROVACAO, tabela aposentada)
-        DT_ATUALIZACAO             DATETIME2(3)                    NOT NULL
-            CONSTRAINT DF_KZN_PVC_DT_ATUALIZACAO DEFAULT (SYSDATETIME()),
+        DT_CRIACAO                 DATETIME2(3)                    NOT NULL
+            CONSTRAINT DF_KZN_PVC_DT_CRIACAO DEFAULT (SYSDATETIME()),   -- era DT_ATUALIZACAO
         ID_USUARIO_ATUALIZACAO     INT                             NOT NULL,   -- app envia a cada INSERT/UPDATE (quem está agindo)
+        SG_GM                      VARCHAR(1)                      NOT NULL
+            CONSTRAINT DF_KZN_PVC_SG_GM DEFAULT ('N'),                          -- ASSUNÇÃO: 'S'/'N'
+        URL_GM                     VARCHAR(300)                        NULL,
+        ID_TIPO_KAIZEN             INT                             NOT NULL
+            CONSTRAINT DF_KZN_PVC_ID_TIPO_KAIZEN DEFAULT (0),                   -- CI.KZN_TIPO_KAIZEN (seção 12c). Sem FK de banco: PK composta no destino
 
         CONSTRAINT PK_KZN_PVC                      PRIMARY KEY CLUSTERED (ID_KAIZEN),
+        -- Apoio pra FK composta de CI.KZN_KAIZEN_HIERARQUIA (seção 17). Não
+        -- muda regra nenhuma: ID_KAIZEN já é a PK, então o par já era único.
+        CONSTRAINT UQ_KZN_PVC_KAIZEN_LIDER         UNIQUE (ID_KAIZEN, ID_USUARIO_LIDER),
         CONSTRAINT FK_KZN_PVC_USUARIO_CADASTRO     FOREIGN KEY (ID_USUARIO_CADASTRO)
             REFERENCES CI.KZN_MDM_HIERARQUIA (ID_USUARIO),
         CONSTRAINT FK_KZN_PVC_USUARIO_LIDER        FOREIGN KEY (ID_USUARIO_LIDER)
@@ -141,12 +139,14 @@ BEGIN
     CREATE NONCLUSTERED INDEX IX_KZN_PVC_STATUS        ON CI.KZN_PEDRAVISAOCONSOLIDADA (ID_STATUS);
     CREATE NONCLUSTERED INDEX IX_KZN_PVC_CATEGORIA     ON CI.KZN_PEDRAVISAOCONSOLIDADA (ID_CATEGORIA);
     CREATE NONCLUSTERED INDEX IX_KZN_PVC_USUARIO_LIDER ON CI.KZN_PEDRAVISAOCONSOLIDADA (ID_USUARIO_LIDER);
-END
-GO
 
-/* --- 2. CI.KZN_LOG_PEDRAVISAOCONSOLIDADA --- */
-IF OBJECT_ID('CI.KZN_LOG_PEDRAVISAOCONSOLIDADA', 'U') IS NULL
-BEGIN
+    CREATE NONCLUSTERED INDEX IX_KZN_PVC_TIPO_KAIZEN  ON CI.KZN_PEDRAVISAOCONSOLIDADA (ID_TIPO_KAIZEN);
+
+PRINT 'E3 ok - CI.KZN_PEDRAVISAOCONSOLIDADA criada.';
+
+/* =====================================================================
+   E4 - CREATE das dependentes
+   ===================================================================== */
     CREATE TABLE CI.KZN_LOG_PEDRAVISAOCONSOLIDADA
     (
         ID_LOG                INT                             NOT NULL,
@@ -166,12 +166,6 @@ BEGIN
 
     CREATE NONCLUSTERED INDEX IX_KZN_LOG_PVC_KAIZEN
         ON CI.KZN_LOG_PEDRAVISAOCONSOLIDADA (ID_KAIZEN, DT_OPERACAO DESC);
-END
-GO
-
-/* --- 3. CI.KZN_LOG_PEDRAVISAOCONSOLIDADA_DETALHE --- */
-IF OBJECT_ID('CI.KZN_LOG_PEDRAVISAOCONSOLIDADA_DETALHE', 'U') IS NULL
-BEGIN
     CREATE TABLE CI.KZN_LOG_PEDRAVISAOCONSOLIDADA_DETALHE
     (
         ID_LOG_DETALHE   INT                             NOT NULL,
@@ -187,12 +181,6 @@ BEGIN
 
     CREATE NONCLUSTERED INDEX IX_KZN_LOG_PVC_DETALHE_LOG
         ON CI.KZN_LOG_PEDRAVISAOCONSOLIDADA_DETALHE (ID_LOG, NM_CAMPO);
-END
-GO
-
-/* --- 4. CI.KZN_MEMBROS_EQUIPE --- */
-IF OBJECT_ID('CI.KZN_MEMBROS_EQUIPE', 'U') IS NULL
-BEGIN
     CREATE TABLE CI.KZN_MEMBROS_EQUIPE
     (
         ID_KAIZEN       INT                             NOT NULL,
@@ -205,17 +193,14 @@ BEGIN
         -- ID_USUARIO NÃO tem FK de banco: CI.KZN_MDM_HIERARQUIA não tem
         -- UNIQUE/PK cobrindo ID_USUARIO sozinho (confirmado — ver correção acima)
     );
-END
-GO
-
-/* --- 5. CI.KZN_RESULTADO_KAIZEN --- */
-IF OBJECT_ID('CI.KZN_RESULTADO_KAIZEN', 'U') IS NULL
-BEGIN
     CREATE TABLE CI.KZN_RESULTADO_KAIZEN
     (
         ID_KAIZEN       INT                             NOT NULL,
         ID_RESULTADO    INT                             NOT NULL,
-        URL_ICONE       VARCHAR(200)                        NULL,
+        -- URL_ICONE foi REMOVIDA (pedido do time, nesta rodada). Era um
+        -- "override por ocorrência" do ícone do resultado, nunca usado pela
+        -- aplicação. O ícone padrão de cada resultado continua em
+        -- CI.KZN_RESULTADOS.URL_ICONE.
         DT_ATUALIZACAO  DATETIME2(3)                    NOT NULL
             CONSTRAINT DF_KZN_RESULTADO_KAIZEN_DT_ATUALIZACAO DEFAULT (SYSDATETIME()),
 
@@ -225,16 +210,10 @@ BEGIN
         -- ID_RESULTADO NÃO tem FK de banco: KZN_RESULTADOS agora tem PK composta
         -- (ID_RESULTADO, ID_IDIOMA); integridade fica sob responsabilidade da aplicação
     );
-END
-GO
-
-/* --- 6. CI.KZN_KAIZEN_HIERARQUIA --- */
-IF OBJECT_ID('CI.KZN_KAIZEN_HIERARQUIA', 'U') IS NULL
-BEGIN
     CREATE TABLE CI.KZN_KAIZEN_HIERARQUIA
     (
-        ID_KAIZEN_HIERARQUIA   INT                             NOT NULL,
         ID_KAIZEN              INT                             NOT NULL,
+        ID_USUARIO_LIDER       INT                             NOT NULL,
         NM_HIERARQUIA_N1       VARCHAR(80)                         NULL,
         NM_HIERARQUIA_N2       VARCHAR(80)                         NULL,
         NM_HIERARQUIA_N3       VARCHAR(80)                         NULL,
@@ -246,19 +225,15 @@ BEGIN
         DT_ATUALIZACAO         DATETIME2(3)                    NOT NULL
             CONSTRAINT DF_KZN_KAIZEN_HIERARQUIA_DT_ATUALIZACAO DEFAULT (SYSDATETIME()),
 
-        CONSTRAINT PK_KZN_KAIZEN_HIERARQUIA        PRIMARY KEY CLUSTERED (ID_KAIZEN_HIERARQUIA),
+        CONSTRAINT PK_KZN_KAIZEN_HIERARQUIA        PRIMARY KEY CLUSTERED (ID_KAIZEN),
         CONSTRAINT FK_KZN_KAIZEN_HIERARQUIA_KAIZEN FOREIGN KEY (ID_KAIZEN)
-            REFERENCES CI.KZN_PEDRAVISAOCONSOLIDADA (ID_KAIZEN)
+            REFERENCES CI.KZN_PEDRAVISAOCONSOLIDADA (ID_KAIZEN),
+        -- FK composta: garante que o líder da fotografia seja o líder daquele
+        -- Kaizen. Depende de UQ_KZN_PVC_KAIZEN_LIDER na seção 13.
+        CONSTRAINT FK_KZN_KAIZEN_HIERARQUIA_LIDER  FOREIGN KEY (ID_KAIZEN, ID_USUARIO_LIDER)
+            REFERENCES CI.KZN_PEDRAVISAOCONSOLIDADA (ID_KAIZEN, ID_USUARIO_LIDER)
     );
-
-    CREATE NONCLUSTERED INDEX IX_KZN_KAIZEN_HIERARQUIA_KAIZEN
-        ON CI.KZN_KAIZEN_HIERARQUIA (ID_KAIZEN);
-END
-GO
-
-/* --- 7. CI.KZN_KAIZEN_DESPERDICIO --- */
-IF OBJECT_ID('CI.KZN_KAIZEN_DESPERDICIO', 'U') IS NULL
-BEGIN
+    -- Sem índice avulso em ID_KAIZEN: agora ele é a PK clusterizada.
     CREATE TABLE CI.KZN_KAIZEN_DESPERDICIO
     (
         ID_KAIZEN       INT                             NOT NULL,
@@ -272,19 +247,40 @@ BEGIN
         -- ID_DESPERDICIO NÃO tem FK de banco: KZN_DESPERDICIO tem PK composta
         -- (ID_DESPERDICIO, ID_IDIOMA); integridade fica sob responsabilidade da aplicação
     );
-END
+
+PRINT 'E4 ok - 6 dependentes criadas.';
+
+/* =====================================================================
+   E5 - SEQUENCES (so se nao existirem: recriar zeraria o contador)
+   ===================================================================== */
+IF OBJECT_ID('CI.SEQ_KZN_LOG_PVC','SO') IS NULL
+    CREATE SEQUENCE CI.SEQ_KZN_LOG_PVC AS INT START WITH 1 INCREMENT BY 1;
+IF OBJECT_ID('CI.SEQ_KZN_LOG_PVC_DETALHE','SO') IS NULL
+    CREATE SEQUENCE CI.SEQ_KZN_LOG_PVC_DETALHE AS INT START WITH 1 INCREMENT BY 1;
+PRINT 'E5 ok - sequences conferidas.';
+
+COMMIT TRANSACTION;
+
+END TRY
+BEGIN CATCH
+    IF XACT_STATE() <> 0 ROLLBACK TRANSACTION;
+    PRINT 'ERRO - nada foi alterado (rollback aplicado): ' + ERROR_MESSAGE();
+    THROW;
+END CATCH
 GO
 
 /* =====================================================================
-   ETAPA 4 - TRIGGERS (vao junto com as tabelas no DROP)
+   E6 - TRIGGERS (fora da transacao: CREATE TRIGGER exige batch proprio)
    ===================================================================== */
 CREATE OR ALTER TRIGGER CI.TR_KZN_PVC_INS ON CI.KZN_PEDRAVISAOCONSOLIDADA AFTER INSERT AS
 BEGIN
     SET NOCOUNT ON;
     INSERT INTO CI.KZN_LOG_PEDRAVISAOCONSOLIDADA (ID_LOG, ID_KAIZEN, TP_OPERACAO, DT_OPERACAO, ID_USUARIO_OPERACAO)
-    SELECT NEXT VALUE FOR CI.SEQ_KZN_LOG_PVC, ID_KAIZEN, 'C', DT_CRIACAO, ID_USUARIO_CADASTRO
+    SELECT NEXT VALUE FOR CI.SEQ_KZN_LOG_PVC, ID_KAIZEN, 'C', SYSDATETIME(), ID_USUARIO_CADASTRO
     FROM inserted;
     -- Sem linha de detalhe aqui: criação não tem "valor anterior" a comparar.
+    -- Esta linha 'C' é o ÚNICO registro da data de criação do Kaizen desde
+    -- que a coluna DT_CRIACAO foi removida da tabela principal.
 END
 GO
 
@@ -292,9 +288,8 @@ CREATE OR ALTER TRIGGER CI.TR_KZN_PVC_UPD ON CI.KZN_PEDRAVISAOCONSOLIDADA AFTER 
 BEGIN
     SET NOCOUNT ON;
 
-    IF NOT UPDATE(DT_ATUALIZACAO)
-        UPDATE T SET DT_ATUALIZACAO = SYSDATETIME()
-        FROM CI.KZN_PEDRAVISAOCONSOLIDADA T JOIN inserted i ON i.ID_KAIZEN = T.ID_KAIZEN;
+    -- DT_CRIACAO NÃO é carimbada aqui: é data de criação, gravada no INSERT.
+    -- Sobrescrevê-la a cada UPDATE destruiria o dado original.
 
     -- Uma linha de cabeçalho de log por Kaizen afetado, capturando o
     -- ID_LOG recém-gerado (OUTPUT) pra ligar as linhas de detalhe geradas
@@ -302,20 +297,19 @@ BEGIN
     -- um Kaizen de uma vez, cada um com seu próprio ID_LOG.
     DECLARE @logMap TABLE (ID_KAIZEN INT NOT NULL PRIMARY KEY, ID_LOG INT NOT NULL);
 
-    -- Relê DT_ATUALIZACAO já corrigida acima, pra não gravar um SYSDATETIME()
-    -- ligeiramente diferente do que efetivamente ficou salvo na linha.
+    -- DT_OPERACAO = SYSDATETIME(): o instante real da alteração. Antes
+    -- vinha da coluna DT_ATUALIZACAO, que deixou de existir na tabela.
     INSERT INTO CI.KZN_LOG_PEDRAVISAOCONSOLIDADA (ID_LOG, ID_KAIZEN, TP_OPERACAO, DT_OPERACAO, ID_USUARIO_OPERACAO)
     OUTPUT inserted.ID_KAIZEN, inserted.ID_LOG INTO @logMap (ID_KAIZEN, ID_LOG)
-    SELECT NEXT VALUE FOR CI.SEQ_KZN_LOG_PVC, i.ID_KAIZEN, 'A', T.DT_ATUALIZACAO, i.ID_USUARIO_ATUALIZACAO
-    FROM inserted i
-    JOIN CI.KZN_PEDRAVISAOCONSOLIDADA T ON T.ID_KAIZEN = i.ID_KAIZEN;
+    SELECT NEXT VALUE FOR CI.SEQ_KZN_LOG_PVC, i.ID_KAIZEN, 'A', SYSDATETIME(), i.ID_USUARIO_ATUALIZACAO
+    FROM inserted i;
 
     -- Diff campo a campo (seção 14b) — 1 linha por coluna de negócio cujo
     -- valor mudou nesta atualização. Comparação NULL-segura: "NOT (d.COL =
     -- i.COL OR (d.COL IS NULL AND i.COL IS NULL))" trata NULL=NULL como
     -- "não mudou" e qualquer outra combinação (incluindo um lado NULL) como
-    -- mudança. DT_ATUALIZACAO e ID_USUARIO_ATUALIZACAO ficam de fora: já
-    -- são o metadado do cabeçalho gravado acima, não conteúdo auditado.
+    -- mudança. DT_CRIACAO e ID_USUARIO_ATUALIZACAO ficam de fora: a
+    -- primeira não muda, o segundo é metadado do cabeçalho gravado acima.
     INSERT INTO CI.KZN_LOG_PEDRAVISAOCONSOLIDADA_DETALHE (ID_LOG_DETALHE, ID_LOG, NM_CAMPO, VL_ANTERIOR, VL_NOVO)
     SELECT NEXT VALUE FOR CI.SEQ_KZN_LOG_PVC_DETALHE, x.ID_LOG, x.NM_CAMPO, x.VL_ANTERIOR, x.VL_NOVO
     FROM (
@@ -375,9 +369,9 @@ BEGIN
         FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
         WHERE NOT (d.URL_REFERENCIA = i.URL_REFERENCIA OR (d.URL_REFERENCIA IS NULL AND i.URL_REFERENCIA IS NULL))
         UNION ALL
-        SELECT lm.ID_LOG, 'ID_DESPERDICIO', CONVERT(VARCHAR(300), d.ID_DESPERDICIO), CONVERT(VARCHAR(300), i.ID_DESPERDICIO)
+        SELECT lm.ID_LOG, 'DS_COMPARA_META', CONVERT(VARCHAR(300), d.DS_COMPARA_META), CONVERT(VARCHAR(300), i.DS_COMPARA_META)
         FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
-        WHERE NOT (d.ID_DESPERDICIO = i.ID_DESPERDICIO OR (d.ID_DESPERDICIO IS NULL AND i.ID_DESPERDICIO IS NULL))
+        WHERE NOT (d.DS_COMPARA_META = i.DS_COMPARA_META OR (d.DS_COMPARA_META IS NULL AND i.DS_COMPARA_META IS NULL))
         UNION ALL
         SELECT lm.ID_LOG, 'DS_LICOES_APRENDIDAS', CONVERT(VARCHAR(300), d.DS_LICOES_APRENDIDAS), CONVERT(VARCHAR(300), i.DS_LICOES_APRENDIDAS)
         FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
@@ -391,13 +385,9 @@ BEGIN
         FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
         WHERE NOT (d.ID_MOEDA = i.ID_MOEDA OR (d.ID_MOEDA IS NULL AND i.ID_MOEDA IS NULL))
         UNION ALL
-        SELECT lm.ID_LOG, 'DS_RESULTADO_ESPERADO', CONVERT(VARCHAR(300), d.DS_RESULTADO_ESPERADO), CONVERT(VARCHAR(300), i.DS_RESULTADO_ESPERADO)
+        SELECT lm.ID_LOG, 'DS_RESULTADO_ALCANCADO', CONVERT(VARCHAR(300), d.DS_RESULTADO_ALCANCADO), CONVERT(VARCHAR(300), i.DS_RESULTADO_ALCANCADO)
         FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
-        WHERE NOT (d.DS_RESULTADO_ESPERADO = i.DS_RESULTADO_ESPERADO OR (d.DS_RESULTADO_ESPERADO IS NULL AND i.DS_RESULTADO_ESPERADO IS NULL))
-        UNION ALL
-        SELECT lm.ID_LOG, 'DT_CRIACAO', CONVERT(VARCHAR(300), d.DT_CRIACAO, 120), CONVERT(VARCHAR(300), i.DT_CRIACAO, 120)
-        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
-        WHERE NOT (d.DT_CRIACAO = i.DT_CRIACAO OR (d.DT_CRIACAO IS NULL AND i.DT_CRIACAO IS NULL))
+        WHERE NOT (d.DS_RESULTADO_ALCANCADO = i.DS_RESULTADO_ALCANCADO OR (d.DS_RESULTADO_ALCANCADO IS NULL AND i.DS_RESULTADO_ALCANCADO IS NULL))
         UNION ALL
         SELECT lm.ID_LOG, 'DT_CONCLUSAO', CONVERT(VARCHAR(300), d.DT_CONCLUSAO, 23), CONVERT(VARCHAR(300), i.DT_CONCLUSAO, 23)
         FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
@@ -406,6 +396,18 @@ BEGIN
         SELECT lm.ID_LOG, 'DS_MOTIVO', CONVERT(VARCHAR(300), d.DS_MOTIVO), CONVERT(VARCHAR(300), i.DS_MOTIVO)
         FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
         WHERE NOT (d.DS_MOTIVO = i.DS_MOTIVO OR (d.DS_MOTIVO IS NULL AND i.DS_MOTIVO IS NULL))
+        UNION ALL
+        SELECT lm.ID_LOG, 'SG_GM', CONVERT(VARCHAR(300), d.SG_GM), CONVERT(VARCHAR(300), i.SG_GM)
+        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
+        WHERE NOT (d.SG_GM = i.SG_GM OR (d.SG_GM IS NULL AND i.SG_GM IS NULL))
+        UNION ALL
+        SELECT lm.ID_LOG, 'URL_GM', CONVERT(VARCHAR(300), d.URL_GM), CONVERT(VARCHAR(300), i.URL_GM)
+        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
+        WHERE NOT (d.URL_GM = i.URL_GM OR (d.URL_GM IS NULL AND i.URL_GM IS NULL))
+        UNION ALL
+        SELECT lm.ID_LOG, 'ID_TIPO_KAIZEN', CONVERT(VARCHAR(300), d.ID_TIPO_KAIZEN), CONVERT(VARCHAR(300), i.ID_TIPO_KAIZEN)
+        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
+        WHERE NOT (d.ID_TIPO_KAIZEN = i.ID_TIPO_KAIZEN OR (d.ID_TIPO_KAIZEN IS NULL AND i.ID_TIPO_KAIZEN IS NULL))
     ) x;
 END
 GO
@@ -419,7 +421,6 @@ BEGIN
         JOIN inserted i ON i.ID_KAIZEN = T.ID_KAIZEN AND i.ID_USUARIO = T.ID_USUARIO;
 END
 GO
-
 CREATE OR ALTER TRIGGER CI.TR_KZN_RESULTADO_KAIZEN_UPD ON CI.KZN_RESULTADO_KAIZEN AFTER UPDATE AS
 BEGIN
     SET NOCOUNT ON;
@@ -429,7 +430,6 @@ BEGIN
         JOIN inserted i ON i.ID_KAIZEN = T.ID_KAIZEN AND i.ID_RESULTADO = T.ID_RESULTADO;
 END
 GO
-
 CREATE OR ALTER TRIGGER CI.TR_KZN_KAIZEN_HIERARQUIA_UPD ON CI.KZN_KAIZEN_HIERARQUIA AFTER UPDATE AS
 BEGIN
     SET NOCOUNT ON;
@@ -438,7 +438,6 @@ BEGIN
         FROM CI.KZN_KAIZEN_HIERARQUIA T JOIN inserted i ON i.ID_KAIZEN_HIERARQUIA = T.ID_KAIZEN_HIERARQUIA;
 END
 GO
-
 CREATE OR ALTER TRIGGER CI.TR_KZN_KZDESP_UPD ON CI.KZN_KAIZEN_DESPERDICIO AFTER UPDATE AS
 BEGIN
     SET NOCOUNT ON;
@@ -450,17 +449,26 @@ END
 GO
 
 /* =====================================================================
-   ETAPA 5 - CONFERENCIA
+   E7 - CONFERENCIA
    ===================================================================== */
-SELECT  TABELA = t.name,
-        LINHAS = SUM(p.rows),
-        SITUACAO = 'recriada'
-FROM        sys.tables t
-JOIN        sys.partitions p ON p.object_id = t.object_id AND p.index_id IN (0,1)
-WHERE       t.schema_id = SCHEMA_ID('CI')
-  AND       t.name IN ('KZN_PEDRAVISAOCONSOLIDADA','KZN_LOG_PEDRAVISAOCONSOLIDADA',
-                       'KZN_LOG_PEDRAVISAOCONSOLIDADA_DETALHE','KZN_MEMBROS_EQUIPE',
-                       'KZN_RESULTADO_KAIZEN','KZN_KAIZEN_HIERARQUIA','KZN_KAIZEN_DESPERDICIO')
-GROUP BY    t.name
-ORDER BY    t.name;
+SELECT  TABELA   = t.name,
+        COLUNAS  = (SELECT COUNT(*) FROM sys.columns      WHERE object_id = t.object_id),
+        PK_UQ    = (SELECT COUNT(*) FROM sys.key_constraints WHERE parent_object_id = t.object_id),
+        FK_SAIDA = (SELECT COUNT(*) FROM sys.foreign_keys WHERE parent_object_id = t.object_id),
+        INDICES  = (SELECT COUNT(*) FROM sys.indexes      WHERE object_id = t.object_id AND type IN (1,2)),
+        TRIGGERS = (SELECT COUNT(*) FROM sys.triggers     WHERE parent_id = t.object_id),
+        LINHAS   = (SELECT ISNULL(SUM(rows),0) FROM sys.partitions WHERE object_id = t.object_id AND index_id IN (0,1))
+FROM    sys.tables t
+WHERE   t.schema_id = SCHEMA_ID('CI')
+  AND   t.name IN ('KZN_PEDRAVISAOCONSOLIDADA','KZN_LOG_PEDRAVISAOCONSOLIDADA',
+                   'KZN_LOG_PEDRAVISAOCONSOLIDADA_DETALHE','KZN_MEMBROS_EQUIPE',
+                   'KZN_RESULTADO_KAIZEN','KZN_KAIZEN_HIERARQUIA','KZN_KAIZEN_DESPERDICIO')
+ORDER BY t.name;
+
+SELECT FK_DE_ENTRADA = fk.name,
+       FILHA = OBJECT_NAME(fk.parent_object_id),
+       CONFIAVEL = CASE WHEN fk.is_not_trusted = 1 THEN 'NAO' ELSE 'SIM' END
+FROM   sys.foreign_keys fk
+WHERE  fk.referenced_object_id = OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA')
+ORDER BY fk.name;
 GO
