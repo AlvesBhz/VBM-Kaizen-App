@@ -25,14 +25,15 @@ const rects = {
   MOEDA:             {x:1050, y:428,  w:260, h:208},
   TIPO_RESULTADO:    {x:1400, y:428,  w:260, h:186},
   STATUS:            {x:1750, y:428,  w:260, h:230},
+  TIPO_KAIZEN:       {x:2100, y:428,  w:260, h:208},
   RESULTADOS:        {x:525,  y:724,  w:260, h:252},
-  PVC:               {x:475,  y:1072, w:320, h:582},
+  PVC:               {x:475,  y:1072, w:320, h:692},
   LOG:               {x:885,  y:1072, w:300, h:164},
   LOG_DETALHE:       {x:1235, y:1072, w:300, h:164},
-  MEMBROS:           {x:350,  y:1764, w:260, h:120},
-  RESULTADO_KAIZEN:  {x:700,  y:1764, w:260, h:120},
-  KAIZEN_HIERARQUIA: {x:1050, y:1764, w:260, h:142},
-  KZDESP:            {x:1400, y:1764, w:260, h:120},
+  MEMBROS:           {x:350,  y:1824, w:260, h:120},
+  RESULTADO_KAIZEN:  {x:700,  y:1824, w:260, h:120},
+  KAIZEN_HIERARQUIA: {x:1050, y:1824, w:260, h:142},
+  KZDESP:            {x:1400, y:1824, w:260, h:120},
 };
 
 // métricas do CSS: 44px cabeçalho + 6px padding do corpo + 22px por linha
@@ -140,6 +141,9 @@ const rels = [
   // ['PVC','DESPERDICIO',15] removida: ID_DESPERDICIO virou DS_COMPARA_META
   // (VARCHAR(300) de texto livre), entao nao ha mais relacao com KZN_DESPERDICIO.
   ['PVC','MOEDA',18],
+  ['PVC','TIPO_KAIZEN',26],
+  ['TIPO_KAIZEN','IDIOMA',1],
+  ['TIPO_KAIZEN','MDM',5],
   ['LOG','PVC',1],
   ['LOG','MDM',4],
   ['LOG_DETALHE','LOG',1],
@@ -155,7 +159,7 @@ const rels = [
 
 // relações sem FK de banco (PK composta no destino) — desenhadas tracejadas
 const softRels = new Set([
-  'PVC>STATUS','PVC>CATEGORIA','PVC>REPLICACAO',
+  'PVC>STATUS','PVC>CATEGORIA','PVC>REPLICACAO','PVC>TIPO_KAIZEN',
   'RESULTADO_KAIZEN>RESULTADOS',
   'KZDESP>DESPERDICIO',
   'MEMBROS>MDM',

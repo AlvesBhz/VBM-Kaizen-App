@@ -861,6 +861,56 @@ IF OBJECT_ID('CI.KZN_STATUS', 'U') IS NOT NULL
 GO
 
 /* ==============================================================================
+   12c. TABELA: CI.KZN_TIPO_KAIZEN  (mestre de referência, pedido do time)
+   Mesmo molde de KZN_STATUS/KZN_CATEGORIA/KZN_REPLICACAO/KZN_MOEDA: 1 linha
+   por idioma, PK composta, UNIQUE de nome por idioma, índice por idioma com
+   INCLUDE do nome, SG_ATIVO com DEFAULT, DT_ATUALIZACAO com DEFAULT + trigger
+   (seção 18). FK de ID_USUARIO fica no ALTER guardado abaixo, pelo mesmo
+   motivo das irmãs (KZN_MDM_HIERARQUIA sem UNIQUE em ID_USUARIO sozinho).
+   ============================================================================== */
+IF OBJECT_ID('CI.KZN_TIPO_KAIZEN', 'U') IS NULL
+BEGIN
+    CREATE TABLE CI.KZN_TIPO_KAIZEN
+    (
+        ID_TIPO_KAIZEN  INT                             NOT NULL,
+        ID_IDIOMA       INT                             NOT NULL,
+        NM_TIPO_KAIZEN  VARCHAR(30)                     NOT NULL,
+        DS_TIPO_KAIZEN  VARCHAR(100)                        NULL,
+        SG_ATIVO        VARCHAR(1)                      NOT NULL
+            CONSTRAINT DF_KZN_TIPO_KAIZEN_SG_ATIVO DEFAULT ('S'),
+        ID_USUARIO      INT                                 NULL,
+        DT_ATUALIZACAO  DATETIME2(3)                    NOT NULL
+            CONSTRAINT DF_KZN_TIPO_KAIZEN_DT_ATUALIZACAO DEFAULT (SYSDATETIME()),
+
+        CONSTRAINT PK_KZN_TIPO_KAIZEN        PRIMARY KEY CLUSTERED (ID_TIPO_KAIZEN, ID_IDIOMA),
+        CONSTRAINT FK_KZN_TIPO_KAIZEN_IDIOMA FOREIGN KEY (ID_IDIOMA)
+            REFERENCES CI.KZN_IDIOMA (ID_IDIOMA),
+        CONSTRAINT UQ_KZN_TIPO_KAIZEN_NM     UNIQUE (ID_IDIOMA, NM_TIPO_KAIZEN)
+    );
+
+    CREATE NONCLUSTERED INDEX IX_KZN_TIPO_KAIZEN_ID_IDIOMA
+        ON CI.KZN_TIPO_KAIZEN (ID_IDIOMA) INCLUDE (NM_TIPO_KAIZEN);
+END
+GO
+
+IF OBJECT_ID('CI.KZN_TIPO_KAIZEN', 'U') IS NOT NULL
+   AND OBJECT_ID('CI.FK_KZN_TIPO_KAIZEN_USUARIO', 'F') IS NULL
+   AND EXISTS (
+        SELECT 1 FROM sys.indexes ix
+        WHERE ix.object_id = OBJECT_ID('CI.KZN_MDM_HIERARQUIA')
+          AND (ix.is_primary_key = 1 OR ix.is_unique = 1)
+          AND (SELECT COUNT(*) FROM sys.index_columns ic
+               WHERE ic.object_id = ix.object_id AND ic.index_id = ix.index_id) = 1
+          AND EXISTS (SELECT 1 FROM sys.index_columns ic
+                      JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+                      WHERE ic.object_id = ix.object_id AND ic.index_id = ix.index_id
+                        AND c.name = 'ID_USUARIO')
+   )
+    ALTER TABLE CI.KZN_TIPO_KAIZEN ADD CONSTRAINT FK_KZN_TIPO_KAIZEN_USUARIO
+        FOREIGN KEY (ID_USUARIO) REFERENCES CI.KZN_MDM_HIERARQUIA (ID_USUARIO);
+GO
+
+/* ==============================================================================
    13. TABELA: CI.KZN_PEDRAVISAOCONSOLIDADA  (tabela principal / transacional)
    ============================================================================== */
 IF OBJECT_ID('CI.KZN_PEDRAVISAOCONSOLIDADA', 'U') IS NULL
@@ -898,6 +948,13 @@ BEGIN
         DT_CRIACAO                 DATETIME2(3)                    NOT NULL
             CONSTRAINT DF_KZN_PVC_DT_CRIACAO DEFAULT (SYSDATETIME()),   -- era DT_ATUALIZACAO
         ID_USUARIO_ATUALIZACAO     INT                             NOT NULL,   -- app envia a cada INSERT/UPDATE (quem está agindo)
+        SG_GM                      VARCHAR(1)                      NOT NULL
+            CONSTRAINT DF_KZN_PVC_SG_GM DEFAULT ('N'),                          -- ASSUNÇÃO: 'S'/'N'
+        URL_GM                     VARCHAR(300)                        NULL,
+        ID_TIPO_KAIZEN             INT                             NOT NULL
+            CONSTRAINT DF_KZN_PVC_ID_TIPO_KAIZEN DEFAULT (0),                   -- CI.KZN_TIPO_KAIZEN (seção 12c). Sem FK de banco: PK composta no destino
+        PCT_DUPLICIDADE            FLOAT                               NULL,
+        ID_DUPLICIDADE             INT                                 NULL,
 
         CONSTRAINT PK_KZN_PVC                      PRIMARY KEY CLUSTERED (ID_KAIZEN),
         -- Apoio pra FK composta de CI.KZN_KAIZEN_HIERARQUIA (seção 17). Não
@@ -1986,6 +2043,16 @@ BEGIN
 END
 GO
 
+CREATE OR ALTER TRIGGER CI.TR_KZN_TIPO_KAIZEN_UPD ON CI.KZN_TIPO_KAIZEN AFTER UPDATE AS
+BEGIN
+    SET NOCOUNT ON;
+    IF NOT UPDATE(DT_ATUALIZACAO)
+        UPDATE T SET DT_ATUALIZACAO = SYSDATETIME()
+        FROM CI.KZN_TIPO_KAIZEN T JOIN inserted i
+          ON i.ID_TIPO_KAIZEN = T.ID_TIPO_KAIZEN AND i.ID_IDIOMA = T.ID_IDIOMA;
+END
+GO
+
 CREATE OR ALTER TRIGGER CI.TR_KZN_STATUS_UPD ON CI.KZN_STATUS AFTER UPDATE AS
 BEGIN
     SET NOCOUNT ON;
@@ -2218,6 +2285,26 @@ BEGIN
         SELECT lm.ID_LOG, 'DS_MOTIVO', CONVERT(VARCHAR(300), d.DS_MOTIVO), CONVERT(VARCHAR(300), i.DS_MOTIVO)
         FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
         WHERE NOT (d.DS_MOTIVO = i.DS_MOTIVO OR (d.DS_MOTIVO IS NULL AND i.DS_MOTIVO IS NULL))
+        UNION ALL
+        SELECT lm.ID_LOG, 'SG_GM', CONVERT(VARCHAR(300), d.SG_GM), CONVERT(VARCHAR(300), i.SG_GM)
+        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
+        WHERE NOT (d.SG_GM = i.SG_GM OR (d.SG_GM IS NULL AND i.SG_GM IS NULL))
+        UNION ALL
+        SELECT lm.ID_LOG, 'URL_GM', CONVERT(VARCHAR(300), d.URL_GM), CONVERT(VARCHAR(300), i.URL_GM)
+        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
+        WHERE NOT (d.URL_GM = i.URL_GM OR (d.URL_GM IS NULL AND i.URL_GM IS NULL))
+        UNION ALL
+        SELECT lm.ID_LOG, 'ID_TIPO_KAIZEN', CONVERT(VARCHAR(300), d.ID_TIPO_KAIZEN), CONVERT(VARCHAR(300), i.ID_TIPO_KAIZEN)
+        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
+        WHERE NOT (d.ID_TIPO_KAIZEN = i.ID_TIPO_KAIZEN OR (d.ID_TIPO_KAIZEN IS NULL AND i.ID_TIPO_KAIZEN IS NULL))
+        UNION ALL
+        SELECT lm.ID_LOG, 'PCT_DUPLICIDADE', CONVERT(VARCHAR(300), d.PCT_DUPLICIDADE), CONVERT(VARCHAR(300), i.PCT_DUPLICIDADE)
+        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
+        WHERE NOT (d.PCT_DUPLICIDADE = i.PCT_DUPLICIDADE OR (d.PCT_DUPLICIDADE IS NULL AND i.PCT_DUPLICIDADE IS NULL))
+        UNION ALL
+        SELECT lm.ID_LOG, 'ID_DUPLICIDADE', CONVERT(VARCHAR(300), d.ID_DUPLICIDADE), CONVERT(VARCHAR(300), i.ID_DUPLICIDADE)
+        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
+        WHERE NOT (d.ID_DUPLICIDADE = i.ID_DUPLICIDADE OR (d.ID_DUPLICIDADE IS NULL AND i.ID_DUPLICIDADE IS NULL))
     ) x;
 END
 GO
