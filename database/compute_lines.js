@@ -27,13 +27,14 @@ const rects = {
   STATUS:            {x:1750, y:428,  w:260, h:230},
   TIPO_KAIZEN:       {x:2100, y:428,  w:260, h:208},
   RESULTADOS:        {x:525,  y:724,  w:260, h:252},
-  PVC:               {x:475,  y:1072, w:320, h:692},
+  PVC:               {x:475,  y:1072, w:320, h:648},
   LOG:               {x:885,  y:1072, w:300, h:164},
   LOG_DETALHE:       {x:1235, y:1072, w:300, h:164},
   MEMBROS:           {x:350,  y:1824, w:260, h:120},
   RESULTADO_KAIZEN:  {x:700,  y:1824, w:260, h:120},
   KAIZEN_HIERARQUIA: {x:1050, y:1824, w:260, h:142},
   KZDESP:            {x:1400, y:1824, w:260, h:120},
+  ANALISE_DUP:       {x:1750, y:1824, w:260, h:164},
 };
 
 // métricas do CSS: 44px cabeçalho + 6px padding do corpo + 22px por linha
@@ -155,6 +156,7 @@ const rels = [
   ['KAIZEN_HIERARQUIA','PVC',1,2],    // ID_USUARIO_LIDER -> PVC.ID_USUARIO_LIDER (linha 2)
   ['KZDESP','PVC',0],
   ['KZDESP','DESPERDICIO',1],
+  ['ANALISE_DUP','PVC',0],
 ];
 
 // relações sem FK de banco (PK composta no destino) — desenhadas tracejadas
@@ -163,6 +165,7 @@ const softRels = new Set([
   'RESULTADO_KAIZEN>RESULTADOS',
   'KZDESP>DESPERDICIO',
   'MEMBROS>MDM',
+  'ANALISE_DUP>PVC',
 ]);
 
 // destino de cada ligação aponta pra linha 0 (1ª coluna) por padrão — em

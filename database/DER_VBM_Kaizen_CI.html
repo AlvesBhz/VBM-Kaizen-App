@@ -229,6 +229,7 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
 <path class="rel" d="M1050,1907 L932.5,1907 Q922.5,1907 922.5,1897 L922.5,1187 Q922.5,1177 912.5,1177 L795,1177" marker-end="url(#arrow-key)" data-from="e_KAIZEN_HIERARQUIA" data-to="e_PVC" data-fk-row="1" data-pk-row="2"/>
 <path class="rel" d="M1400,1885 L1107.5,1885 Q1097.5,1885 1097.5,1875 L1097.5,1143 Q1097.5,1133 1087.5,1133 L795,1133" marker-end="url(#arrow-key)" data-from="e_KZDESP" data-to="e_PVC" data-fk-row="0"/>
 <path class="rel soft" d="M1400,1907 L1190,1907 Q1180,1907 1180,1897 L1180,499 Q1180,489 1170,489 L960,489" marker-end="url(#arrow-key)" data-from="e_KZDESP" data-to="e_DESPERDICIO" data-fk-row="1"/>
+<path class="rel soft" d="M1750,1885 L1282.5,1885 Q1272.5,1885 1272.5,1875 L1272.5,1143 Q1272.5,1133 1262.5,1133 L795,1133" marker-end="url(#arrow-key)" data-from="e_ANALISE_DUP" data-to="e_PVC" data-fk-row="0"/>
 </svg>
 
 <div class="group-label" style="left:0;top:-26px;" data-i18n="group.masters">Mestres de referência</div>
@@ -400,7 +401,7 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
 </div>
 
 <div class="group-label" style="left:0;top:1046px;" data-i18n="group.main">Tabela principal &amp; auditoria</div>
-<div class="entity main" id="e_PVC" style="left:475px;top:1072px;width:320px;height:692px;">
+<div class="entity main" id="e_PVC" style="left:475px;top:1072px;width:320px;height:648px;">
   <div class="entity-head"><div class="entity-icon">KZ</div><div class="entity-title">KZN_PEDRAVISAOCONSOLIDADA</div></div>
   <div class="entity-body">
     <div class="field"><span class="field-name pk">ID_KAIZEN</span><span class="field-type">INT</span></div>
@@ -430,8 +431,6 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
     <div class="field"><span class="field-name">SG_GM</span><span class="field-type">VARCHAR(1)</span></div>
     <div class="field"><span class="field-name">URL_GM</span><span class="field-type">VARCHAR(300)</span></div>
     <div class="field"><span class="field-name fk">ID_TIPO_KAIZEN</span><span class="field-type">INT</span></div>
-    <div class="field"><span class="field-name">PCT_DUPLICIDADE</span><span class="field-type">FLOAT</span></div>
-    <div class="field"><span class="field-name">ID_DUPLICIDADE</span><span class="field-type">INT</span></div>
   </div>
 </div>
 <div class="entity log" id="e_LOG" style="left:885px;top:1072px;width:300px;height:164px;">
@@ -486,6 +485,16 @@ footer{margin-top:1.25rem;font-size:.68rem;color:var(--vbm-mid);}
   <div class="entity-body">
     <div class="field"><span class="field-name pk fk">ID_KAIZEN</span><span class="field-type">INT</span></div>
     <div class="field"><span class="field-name pk fk">ID_DESPERDICIO</span><span class="field-type">INT</span></div>
+    <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
+  </div>
+</div>
+<div class="entity aux" id="e_ANALISE_DUP" style="left:1750px;top:1824px;width:260px;height:164px;">
+  <div class="entity-head"><div class="entity-icon">AD</div><div class="entity-title">KZN_ANALISE_DUPLICIDADE</div></div>
+  <div class="entity-body">
+    <div class="field"><span class="field-name fk">ID_KAIZEN</span><span class="field-type">INT</span></div>
+    <div class="field"><span class="field-name">ID_KAIZEN_DUPLICADO</span><span class="field-type">INT</span></div>
+    <div class="field"><span class="field-name">PCT_DUPLICIDADE</span><span class="field-type">FLOAT</span></div>
+    <div class="field"><span class="field-name">STATUS_ANALISE</span><span class="field-type">VARCHAR(30)</span></div>
     <div class="field"><span class="field-name">DT_ATUALIZACAO</span><span class="field-type">DATETIME2</span></div>
   </div>
 </div>

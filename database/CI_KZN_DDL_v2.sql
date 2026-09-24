@@ -953,8 +953,6 @@ BEGIN
         URL_GM                     VARCHAR(300)                        NULL,
         ID_TIPO_KAIZEN             INT                             NOT NULL
             CONSTRAINT DF_KZN_PVC_ID_TIPO_KAIZEN DEFAULT (0),                   -- CI.KZN_TIPO_KAIZEN (seção 12c). Sem FK de banco: PK composta no destino
-        PCT_DUPLICIDADE            FLOAT                               NULL,
-        ID_DUPLICIDADE             INT                                 NULL,
 
         CONSTRAINT PK_KZN_PVC                      PRIMARY KEY CLUSTERED (ID_KAIZEN),
         -- Apoio pra FK composta de CI.KZN_KAIZEN_HIERARQUIA (seção 17). Não
@@ -1245,6 +1243,30 @@ BEGIN
         -- ID_DESPERDICIO NÃO tem FK de banco: KZN_DESPERDICIO tem PK composta
         -- (ID_DESPERDICIO, ID_IDIOMA); integridade fica sob responsabilidade da aplicação
     );
+END
+GO
+
+/* ==============================================================================
+   17c. TABELA: CI.KZN_ANALISE_DUPLICIDADE  (pedido do time)
+   Resultado da análise de duplicidade entre Kaizens. Sem PK: as colunas-chave
+   são NULL-áveis conforme especificado, não há candidata. Sem FK para a PVC:
+   não foi pedida — ID_KAIZEN e ID_KAIZEN_DUPLICADO ficam sob responsabilidade
+   da aplicação (relação desenhada tracejada no DER).
+   ============================================================================== */
+IF OBJECT_ID('CI.KZN_ANALISE_DUPLICIDADE', 'U') IS NULL
+BEGIN
+    CREATE TABLE CI.KZN_ANALISE_DUPLICIDADE
+    (
+        ID_KAIZEN            INT                                 NULL,
+        ID_KAIZEN_DUPLICADO  INT                                 NULL,
+        PCT_DUPLICIDADE      FLOAT                               NULL,
+        STATUS_ANALISE       VARCHAR(30)                         NULL,   -- ASSUNÇÃO: nulidade não informada no pedido
+        DT_ATUALIZACAO       DATETIME2(3)                    NOT NULL
+            CONSTRAINT DF_KZN_ANALISE_DUP_DT_ATUALIZACAO DEFAULT (SYSDATETIME())
+    );
+
+    CREATE NONCLUSTERED INDEX IX_KZN_ANALISE_DUP_KAIZEN
+        ON CI.KZN_ANALISE_DUPLICIDADE (ID_KAIZEN);
 END
 GO
 
@@ -2145,6 +2167,16 @@ BEGIN
 END
 GO
 
+CREATE OR ALTER TRIGGER CI.TR_KZN_ANALISE_DUP_UPD ON CI.KZN_ANALISE_DUPLICIDADE AFTER UPDATE AS
+BEGIN
+    SET NOCOUNT ON;
+    -- Sem PK, o carimbo casa pelo ID_KAIZEN das linhas afetadas.
+    IF NOT UPDATE(DT_ATUALIZACAO)
+        UPDATE T SET DT_ATUALIZACAO = SYSDATETIME()
+        FROM CI.KZN_ANALISE_DUPLICIDADE T JOIN inserted i ON i.ID_KAIZEN = T.ID_KAIZEN;
+END
+GO
+
 CREATE OR ALTER TRIGGER CI.TR_KZN_KZDESP_UPD ON CI.KZN_KAIZEN_DESPERDICIO AFTER UPDATE AS
 BEGIN
     SET NOCOUNT ON;
@@ -2297,14 +2329,6 @@ BEGIN
         SELECT lm.ID_LOG, 'ID_TIPO_KAIZEN', CONVERT(VARCHAR(300), d.ID_TIPO_KAIZEN), CONVERT(VARCHAR(300), i.ID_TIPO_KAIZEN)
         FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
         WHERE NOT (d.ID_TIPO_KAIZEN = i.ID_TIPO_KAIZEN OR (d.ID_TIPO_KAIZEN IS NULL AND i.ID_TIPO_KAIZEN IS NULL))
-        UNION ALL
-        SELECT lm.ID_LOG, 'PCT_DUPLICIDADE', CONVERT(VARCHAR(300), d.PCT_DUPLICIDADE), CONVERT(VARCHAR(300), i.PCT_DUPLICIDADE)
-        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
-        WHERE NOT (d.PCT_DUPLICIDADE = i.PCT_DUPLICIDADE OR (d.PCT_DUPLICIDADE IS NULL AND i.PCT_DUPLICIDADE IS NULL))
-        UNION ALL
-        SELECT lm.ID_LOG, 'ID_DUPLICIDADE', CONVERT(VARCHAR(300), d.ID_DUPLICIDADE), CONVERT(VARCHAR(300), i.ID_DUPLICIDADE)
-        FROM inserted i JOIN deleted d ON d.ID_KAIZEN = i.ID_KAIZEN JOIN @logMap lm ON lm.ID_KAIZEN = i.ID_KAIZEN
-        WHERE NOT (d.ID_DUPLICIDADE = i.ID_DUPLICIDADE OR (d.ID_DUPLICIDADE IS NULL AND i.ID_DUPLICIDADE IS NULL))
     ) x;
 END
 GO
