@@ -235,7 +235,18 @@ PRINT '  E2 - KZN_HIST_PEDRAVISAOCONSOLIDADA: ' + CAST(@@ROWCOUNT AS VARCHAR(10)
 
 /* =====================================================================
    E3 - Membros de equipe
+   ---------------------------------------------------------------------
+   A guia traz 1 linha sem ID_USUARIO (Kaizen 7295). Se a coluna for
+   NOT NULL, essa linha nao entra e derrubaria a carga inteira no meio —
+   a trava abaixo detecta isso ANTES de inserir e diz o que fazer.
    ===================================================================== */
+IF EXISTS (SELECT 1 FROM sys.columns
+           WHERE object_id = OBJECT_ID('CI.KZN_HIST_MEMBROS_EQUIPE')
+             AND name = 'ID_USUARIO' AND is_nullable = 0)
+BEGIN
+    RAISERROR('Abortado na E3: a guia KZN_HIST_MEMBROS_EQUIPE tem 1 linha sem ID_USUARIO (Kaizen 7295) e a coluna e NOT NULL. Preencha o ID na origem, ou rode: ALTER TABLE CI.KZN_HIST_MEMBROS_EQUIPE ALTER COLUMN ID_USUARIO INT NULL;', 16, 1);
+END
+
 INSERT INTO CI.KZN_HIST_MEMBROS_EQUIPE (ID_KAIZEN, ID_USUARIO, DT_ATUALIZACAO) VALUES
 (7281, 4303, '2026-01-01T05:52:19.000'),
 (7282, 10498, '2026-01-01T10:22:08.000'),
