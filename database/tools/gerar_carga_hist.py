@@ -6,7 +6,7 @@
 #  emite um script T-SQL de carga com valores literais (sem dependencia
 #  do arquivo no momento da execucao).
 #
-#      python3 gerar_carga_hist.py <planilha.xlsx> <id_ini> <id_fim> <saida.sql>
+#      python3 gerar_carga_hist.py <planilha.xlsx> <id_ini> <id_fim> <saida.sql> [rotulo]
 #
 #  A lista de Kaizens vem SEMPRE da guia KZN_HIST_PEDRAVISAOCONSOLIDADA;
 #  as auxiliares sao filtradas por essa lista, nao pela faixa, porque os
@@ -140,6 +140,7 @@ def maxlen(rows, idx):
 
 def main():
     src, ini, fim, out = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), sys.argv[4]
+    rotulo = sys.argv[5] if len(sys.argv) > 5 else ''   # ex.: 'PARTE 1 DE 3'
     wb = openpyxl.load_workbook(src, read_only=True, data_only=True)
 
     faltando = [g for g, *_ in [(GUIA_PVC,)] + [(a[0],) for a in AUX] if g not in wb.sheetnames]
@@ -178,6 +179,8 @@ def main():
     o = []
     w = o.append
     faixa = '%d a %d' % (ini, fim)
+    if rotulo:
+        faixa += ' — ' + rotulo
     w("""/* =====================================================================
    Carga do historico nas tabelas KZN_HIST_* — %d Kaizens (%s)
    Fonte: %s, apenas as guias
@@ -256,7 +259,7 @@ END
 
 IF EXISTS (SELECT 1 FROM CI.KZN_HIST_PEDRAVISAOCONSOLIDADA WHERE ID_KAIZEN BETWEEN %d AND %d)
 BEGIN
-    RAISERROR('Abortado: ja existem Kaizens na faixa %d-%d. Use apagar_dados_hist.sql antes de recarregar.', 16, 1);
+    RAISERROR('Abortado: ja existem Kaizens na faixa %d-%d. Para recarregar SO esta faixa, rode apagar_dados_hist.sql com @ID_INI = %d e @ID_FIM = %d.', 16, 1);
     RETURN;
 END
 
@@ -297,7 +300,7 @@ PRINT 'E0 - coluna de data da principal: ' + @dtCol;
        len(aux_rows['KZN_HIST_RESULTADO_KAIZEN']), len(hie),
        len(aux_rows['KZN_HIST_KAIZEN_DESPERDICIO']),
        _resumo_na(pvc),
-       ini, fim, ini, fim,
+       ini, fim, ini, fim, ini, fim,
        ',\n'.join("    (N'%s', N'%s', %d)" % r for r in req)))
 
     # guarda de ID_CATEGORIA: so faz sentido se a faixa tiver linha vazia
