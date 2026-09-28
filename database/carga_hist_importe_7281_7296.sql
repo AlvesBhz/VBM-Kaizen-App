@@ -1,6 +1,6 @@
 /* =====================================================================
    Carga do historico nas tabelas KZN_HIST_* — 16 Kaizens (7281 a 7296)
-   Fonte: a8751689-Extracao_Kaizen_2026_FINAL_IMPORTE.xlsx, apenas as guias
+   Fonte: c6b43f9f-Extracao_Kaizen_2026_FINAL_IMPORTE.xlsx, apenas as guias
    KZN_HIST_*. Valores literais: sem dependencia de arquivo externo.
 
    Volume: 16 Kaizens, 29 membros, 15 resultados, 16 hierarquias,

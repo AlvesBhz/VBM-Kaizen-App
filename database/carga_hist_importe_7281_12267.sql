@@ -1,35 +1,33 @@
 /* =====================================================================
    Carga do historico nas tabelas KZN_HIST_* — 4981 Kaizens (7281 a 12267)
-   Fonte: Extracao_Kaizen_2026_FINAL_IMPORTE.xlsx, apenas as guias
+   Fonte: c6b43f9f-Extracao_Kaizen_2026_FINAL_IMPORTE.xlsx, apenas as guias
    KZN_HIST_*. Valores literais: sem dependencia de arquivo externo.
 
    Volume: 4981 Kaizens, 4366 membros, 4569 resultados, 4981 hierarquias,
    6695 desperdicios. Auxiliares filtradas pela lista exata de Kaizens da
-   guia principal (IDs nao contiguos na faixa).
+   guia principal, nao pela faixa (os IDs nao sao contiguos).
 
    ---------------------------------------------------------------------
    1) '#N/A' NAS COLUNAS DE ID (erro de VLOOKUP na planilha)
 
    ID_USUARIO_CADASTRO, ID_USUARIO_LIDER, ID_APROVADOR e
-   ID_USUARIO_ATUALIZACAO trazem '#N/A' em algumas linhas. Entram no
-   staging como texto e sao convertidos por TRY_CONVERT: '#N/A' vira NULL.
+   ID_USUARIO_ATUALIZACAO podem trazer '#N/A'. Entram no staging como
+   texto e sao convertidos por TRY_CONVERT: '#N/A' vira NULL.
 
-   Em ID_APROVADOR (coluna NULL-avel) isso e aceitavel — 51 linhas.
-   Nas outras tres, que sao NOT NULL, o NULL derrubaria a carga. HOJE ha
-   exatamente 1 linha nessa situacao: o Kaizen 8284, com '#N/A' nas tres.
+   Em ID_APROVADOR (coluna NULL-avel) isso e aceitavel. Nas outras tres,
+   que sao NOT NULL, o NULL derrubaria a carga: a E1b detecta e ABORTA
+   listando as linhas. Para carregar o resto sem corrigir a origem,
+   troque @PULAR_INVALIDAS para 1 — as linhas problematicas (e suas
+   auxiliares) ficam de fora e sao listadas.
 
-   A E1b detecta e ABORTA listando as linhas. Para carregar o resto sem
-   corrigir a origem, troque @PULAR_INVALIDAS para 1 — as linhas
-   problematicas (e suas auxiliares) ficam de fora e sao listadas.
+   Nesta faixa: ID_USUARIO_CADASTRO em 1 linha(s); ID_USUARIO_LIDER em 1 linha(s); ID_APROVADOR em 51 linha(s); ID_USUARIO_ATUALIZACAO em 1 linha(s)
 
    2) TRUNCAMENTO
 
-   Tres colunas da principal chegam a 1361 caracteres, acima dos 1200 com
-   que as tabelas HIST podem ter sido criadas; na hierarquia os nomes
-   chegam a 88, acima dos 80 da tabela de producao. A E0.1 compara o
-   tamanho DECLARADO de cada coluna com o exigido por esta carga e ABORTA
-   listando as que nao comportam — o INSERT so avisa com Msg 8152 se
-   ANSI_WARNINGS estiver ligado; desligado, corta em silencio.
+   A E0.1 compara o tamanho DECLARADO de cada coluna com o exigido pelo
+   dado desta faixa e ABORTA listando as que nao comportam — o INSERT so
+   avisa com Msg 8152 se ANSI_WARNINGS estiver ligado; desligado, corta
+   em silencio.
 
    2b) COLUNA NOT NULL QUE ESTA CARGA NAO PREENCHE
 
@@ -48,7 +46,7 @@
    ---------------------------------------------------------------------
    A coluna de data da principal e resolvida em tempo de execucao:
    DT_CRIACAO se o renomear_dt_atualizacao_hist.sql ja rodou, senao
-   DT_ATUALIZACAO. DS_MOTIVO vem vazia nas 4981 linhas.
+   DT_ATUALIZACAO.
 
    Idempotente (aborta se ja houver Kaizen na faixa). Transacionado.
    So escreve em CI.KZN_HIST_*. Schema: 'ci'.
@@ -63,18 +61,6 @@ DECLARE @dtCol SYSNAME, @sql NVARCHAR(MAX), @qt INT;
 /* =====================================================================
    E0 - PRE-CHECAGENS
    ===================================================================== */
-IF OBJECT_ID('CI.KZN_HIST_PEDRAVISAOCONSOLIDADA','U') IS NULL
-BEGIN
-    RAISERROR('Abortado: tabelas CI.KZN_HIST_* nao existem. Rode criar_tabelas_hist.sql antes.', 16, 1);
-    RETURN;
-END
-
-IF EXISTS (SELECT 1 FROM CI.KZN_HIST_PEDRAVISAOCONSOLIDADA WHERE ID_KAIZEN BETWEEN 7281 AND 12267)
-BEGIN
-    RAISERROR('Abortado: ja existem Kaizens na faixa 7281-12267. Use apagar_dados_hist.sql antes de recarregar.', 16, 1);
-    RETURN;
-END
-
 DECLARE @tabs TABLE (TABELA SYSNAME PRIMARY KEY);
 INSERT INTO @tabs (TABELA) VALUES
     (N'KZN_HIST_PEDRAVISAOCONSOLIDADA'), (N'KZN_HIST_MEMBROS_EQUIPE'),
@@ -88,33 +74,36 @@ BEGIN
     RETURN;
 END
 
+IF EXISTS (SELECT 1 FROM CI.KZN_HIST_PEDRAVISAOCONSOLIDADA WHERE ID_KAIZEN BETWEEN 7281 AND 12267)
+BEGIN
+    RAISERROR('Abortado: ja existem Kaizens na faixa 7281-12267. Use apagar_dados_hist.sql antes de recarregar.', 16, 1);
+    RETURN;
+END
+
 /* ---------------------------------------------------------------------
    E0.1 - TRUNCAMENTO: tamanho declarado x tamanho exigido por esta carga
-   Medido coluna a coluna no arquivo-fonte. A hierarquia entra aqui porque
-   na producao NM_HIERARQUIA_N* e VARCHAR(80) e o dado chega a 88 — se a
-   HIST tiver sido recriada com as larguras da producao, cortaria calada.
    --------------------------------------------------------------------- */
 DECLARE @req TABLE (TABELA SYSNAME, COLUNA SYSNAME, TAM_NECESSARIO INT);
 INSERT INTO @req (TABELA, COLUNA, TAM_NECESSARIO) VALUES
-    (N'KZN_HIST_PEDRAVISAOCONSOLIDADA', N'DS_COMPARA_META', 1000),
-    (N'KZN_HIST_PEDRAVISAOCONSOLIDADA', N'DS_ESTADO_ANTES', 1361),
-    (N'KZN_HIST_PEDRAVISAOCONSOLIDADA', N'DS_ESTADO_DEPOIS', 1238),
-    (N'KZN_HIST_PEDRAVISAOCONSOLIDADA', N'DS_LICOES_APRENDIDAS', 1000),
-    (N'KZN_HIST_PEDRAVISAOCONSOLIDADA', N'DS_OBJETIVO', 785),
-    (N'KZN_HIST_PEDRAVISAOCONSOLIDADA', N'DS_PROBLEMA', 1260),
-    (N'KZN_HIST_PEDRAVISAOCONSOLIDADA', N'DS_RESULTADO_ALCANCADO', 1000),
     (N'KZN_HIST_PEDRAVISAOCONSOLIDADA', N'NM_KAIZEN', 209),
+    (N'KZN_HIST_PEDRAVISAOCONSOLIDADA', N'DS_PROBLEMA', 1260),
+    (N'KZN_HIST_PEDRAVISAOCONSOLIDADA', N'DS_OBJETIVO', 785),
     (N'KZN_HIST_PEDRAVISAOCONSOLIDADA', N'URL_IMG_ANTES', 34),
+    (N'KZN_HIST_PEDRAVISAOCONSOLIDADA', N'DS_ESTADO_ANTES', 1361),
     (N'KZN_HIST_PEDRAVISAOCONSOLIDADA', N'URL_IMG_DEPOIS', 35),
+    (N'KZN_HIST_PEDRAVISAOCONSOLIDADA', N'DS_ESTADO_DEPOIS', 1238),
     (N'KZN_HIST_PEDRAVISAOCONSOLIDADA', N'URL_REFERENCIA', 254),
-    (N'KZN_HIST_KAIZEN_HIERARQUIA',     N'NM_HIERARQUIA_N1', 35),
-    (N'KZN_HIST_KAIZEN_HIERARQUIA',     N'NM_HIERARQUIA_N2', 38),
-    (N'KZN_HIST_KAIZEN_HIERARQUIA',     N'NM_HIERARQUIA_N3', 56),
-    (N'KZN_HIST_KAIZEN_HIERARQUIA',     N'NM_HIERARQUIA_N4', 63),
-    (N'KZN_HIST_KAIZEN_HIERARQUIA',     N'NM_HIERARQUIA_N5', 86),
-    (N'KZN_HIST_KAIZEN_HIERARQUIA',     N'NM_HIERARQUIA_N6', 76),
-    (N'KZN_HIST_KAIZEN_HIERARQUIA',     N'NM_HIERARQUIA_N7', 88),
-    (N'KZN_HIST_KAIZEN_HIERARQUIA',     N'NM_HIERARQUIA_N8', 71);
+    (N'KZN_HIST_PEDRAVISAOCONSOLIDADA', N'DS_COMPARA_META', 1000),
+    (N'KZN_HIST_PEDRAVISAOCONSOLIDADA', N'DS_LICOES_APRENDIDAS', 1000),
+    (N'KZN_HIST_PEDRAVISAOCONSOLIDADA', N'DS_RESULTADO_ALCANCADO', 1000),
+    (N'KZN_HIST_KAIZEN_HIERARQUIA', N'NM_HIERARQUIA_N1', 35),
+    (N'KZN_HIST_KAIZEN_HIERARQUIA', N'NM_HIERARQUIA_N2', 38),
+    (N'KZN_HIST_KAIZEN_HIERARQUIA', N'NM_HIERARQUIA_N3', 56),
+    (N'KZN_HIST_KAIZEN_HIERARQUIA', N'NM_HIERARQUIA_N4', 63),
+    (N'KZN_HIST_KAIZEN_HIERARQUIA', N'NM_HIERARQUIA_N5', 86),
+    (N'KZN_HIST_KAIZEN_HIERARQUIA', N'NM_HIERARQUIA_N6', 76),
+    (N'KZN_HIST_KAIZEN_HIERARQUIA', N'NM_HIERARQUIA_N7', 88),
+    (N'KZN_HIST_KAIZEN_HIERARQUIA', N'NM_HIERARQUIA_N8', 71);
 
 /* max_length vem em BYTES: NVARCHAR gasta 2 por caractere, VARCHAR 1. */
 IF EXISTS (SELECT 1 FROM @req r
@@ -152,32 +141,58 @@ END
 
 /* ---------------------------------------------------------------------
    E0.2 - NOT NULL sem DEFAULT que esta carga NAO preenche
-   criar_tabelas_hist.sql copia tipo e nulidade da tabela de producao, mas
-   NAO copia constraint DEFAULT. Se a HIST foi criada DEPOIS de SG_GM e
-   ID_TIPO_KAIZEN entrarem na PVC, ela tem essas colunas NOT NULL e sem
-   DEFAULT — e o INSERT, que nao as lista, morreria com Msg 515 no meio da
-   carga. Melhor descobrir aqui, com o nome da coluna na tela.
    --------------------------------------------------------------------- */
 DECLARE @carregadas TABLE (TABELA SYSNAME, COLUNA SYSNAME);
 INSERT INTO @carregadas (TABELA, COLUNA)
 SELECT N'KZN_HIST_PEDRAVISAOCONSOLIDADA', v FROM (VALUES
-    (N'ID_KAIZEN'),(N'ID_USUARIO_CADASTRO'),(N'ID_USUARIO_LIDER'),(N'NM_KAIZEN'),
-    (N'ID_CATEGORIA'),(N'ID_REPLICACAO'),(N'DS_PROBLEMA'),(N'DS_OBJETIVO'),(N'ID_APROVADOR'),
-    (N'URL_IMG_ANTES'),(N'DS_ESTADO_ANTES'),(N'URL_IMG_DEPOIS'),(N'DS_ESTADO_DEPOIS'),
-    (N'URL_REFERENCIA'),(N'DS_COMPARA_META'),(N'DS_LICOES_APRENDIDAS'),
-    (N'VL_RESULTADO_FINANCEIRO'),(N'ID_MOEDA'),(N'DS_RESULTADO_ALCANCADO'),(N'DT_CONCLUSAO'),
-    (N'ID_USUARIO_ATUALIZACAO'),(N'DS_MOTIVO'),(N'ID_STATUS')) x(v)
+    (N'ID_KAIZEN'),
+    (N'ID_USUARIO_CADASTRO'),
+    (N'ID_USUARIO_LIDER'),
+    (N'NM_KAIZEN'),
+    (N'ID_CATEGORIA'),
+    (N'ID_REPLICACAO'),
+    (N'DS_PROBLEMA'),
+    (N'DS_OBJETIVO'),
+    (N'ID_APROVADOR'),
+    (N'URL_IMG_ANTES'),
+    (N'DS_ESTADO_ANTES'),
+    (N'URL_IMG_DEPOIS'),
+    (N'DS_ESTADO_DEPOIS'),
+    (N'URL_REFERENCIA'),
+    (N'DS_COMPARA_META'),
+    (N'DS_LICOES_APRENDIDAS'),
+    (N'VL_RESULTADO_FINANCEIRO'),
+    (N'ID_MOEDA'),
+    (N'DS_RESULTADO_ALCANCADO'),
+    (N'DT_CONCLUSAO'),
+    (N'ID_USUARIO_ATUALIZACAO'),
+    (N'DS_MOTIVO'),
+    (N'ID_STATUS')) x(v)
 UNION ALL SELECT N'KZN_HIST_PEDRAVISAOCONSOLIDADA', @dtCol
 UNION ALL SELECT N'KZN_HIST_MEMBROS_EQUIPE', v FROM (VALUES
-    (N'ID_KAIZEN'),(N'ID_USUARIO'),(N'DT_ATUALIZACAO')) x(v)
+    (N'ID_KAIZEN'),
+    (N'ID_USUARIO'),
+    (N'DT_ATUALIZACAO')) x(v)
 UNION ALL SELECT N'KZN_HIST_RESULTADO_KAIZEN', v FROM (VALUES
-    (N'ID_KAIZEN'),(N'ID_RESULTADO'),(N'DT_ATUALIZACAO')) x(v)
+    (N'ID_KAIZEN'),
+    (N'ID_RESULTADO'),
+    (N'DT_ATUALIZACAO')) x(v)
 UNION ALL SELECT N'KZN_HIST_KAIZEN_HIERARQUIA', v FROM (VALUES
-    (N'ID_KAIZEN'),(N'ID_USUARIO_LIDER'),(N'NM_HIERARQUIA_N1'),(N'NM_HIERARQUIA_N2'),
-    (N'NM_HIERARQUIA_N3'),(N'NM_HIERARQUIA_N4'),(N'NM_HIERARQUIA_N5'),(N'NM_HIERARQUIA_N6'),
-    (N'NM_HIERARQUIA_N7'),(N'NM_HIERARQUIA_N8'),(N'DT_ATUALIZACAO')) x(v)
+    (N'ID_KAIZEN'),
+    (N'ID_USUARIO_LIDER'),
+    (N'NM_HIERARQUIA_N1'),
+    (N'NM_HIERARQUIA_N2'),
+    (N'NM_HIERARQUIA_N3'),
+    (N'NM_HIERARQUIA_N4'),
+    (N'NM_HIERARQUIA_N5'),
+    (N'NM_HIERARQUIA_N6'),
+    (N'NM_HIERARQUIA_N7'),
+    (N'NM_HIERARQUIA_N8'),
+    (N'DT_ATUALIZACAO')) x(v)
 UNION ALL SELECT N'KZN_HIST_KAIZEN_DESPERDICIO', v FROM (VALUES
-    (N'ID_KAIZEN'),(N'ID_DESPERDICIO'),(N'DT_ATUALIZACAO')) x(v);
+    (N'ID_KAIZEN'),
+    (N'ID_DESPERDICIO'),
+    (N'DT_ATUALIZACAO')) x(v);
 
 IF EXISTS (
     SELECT 1
@@ -219,7 +234,6 @@ CREATE TABLE #PVC (
     DS_LICOES_APRENDIDAS NVARCHAR(MAX), VL_RESULTADO_FINANCEIRO DECIMAL(18,2), ID_MOEDA INT,
     DS_RESULTADO_ALCANCADO NVARCHAR(MAX), DT_CONCLUSAO DATE, DT_REG DATETIME2(3),
     TX_ATUALIZACAO NVARCHAR(50), DS_MOTIVO NVARCHAR(MAX), ID_STATUS INT);
-
 INSERT INTO #PVC VALUES (7281, N'81034776', N'81034776', N'Melhoria para instalação de FSL-2308SA-0021', NULL, N'Others/Outros', N'Problema com antigo fluxostato, para instalação do novo era necessário adequação de conexão na linha de água de selagem da BP-2308SA-32', N'Objetivo realizar adequação para instalação de fluxostato tipo IFM', N'10329', N'01 - Imagens/01 - Antes/7281.jpeg', N'Condição do fluxostato anterior, acumulou resíduo internamente vindo a danificar, necessário substituição.', N'01 - Imagens/02 - Depois/7281.jpeg', N'Melhoria consiste em instalação de instrumento mais robusto IFM, com adaptação de conexão soldada diretamente na linha de água de selagem, possibilitando utilizar redução que temos disponível no kanban.', NULL, N'SIM, problema resolvido, objetivo alcançado, Com a instalação de nossa melhoria, possibilitamos partida da BP-2308SA-32 2 em automático e não tivemos mais paradas da mesma por falha no FSL-2308SA-32', N'Adequar situações de forma segura e planejada ajuda na resolução de nossas pendências.', 0, NULL, N'arantir maior agilidade no processo de entrega dos materiais ao executante, por meio da padronização e identificação adequada das peças.', '2025-12-24T00:00:00.000', '2026-01-01T05:52:19.000', N'81034776', NULL, 1);
 INSERT INTO #PVC VALUES (7282, N'81029873', N'547667', N'Suporte dos calços da empilhadeira.', NULL, N'Others/Outros', N'Os calços da empilhadeira eram armazenados de forma inadequada e promoviam um ambiente desorganizado,  sem identificação e que dificultava a localização rápida dos calços.
 
