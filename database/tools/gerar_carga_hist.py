@@ -19,21 +19,28 @@ import sys, datetime, decimal
 import openpyxl
 
 GUIA_PVC = 'KZN_HIST_PEDRAVISAOCONSOLIDADA'
+# Cada auxiliar tem seu PROPRIO nome de staging. Reaproveitar '#T' com um
+# DROP no meio nao funciona: a carga toda roda num unico batch (nao pode
+# haver GO dentro da transacao nem depois de um RAISERROR de aborto), e o
+# SQL Server rejeita em TEMPO DE COMPILACAO um batch que declare o mesmo
+# nome de tabela temporaria duas vezes — Msg 2714, antes de executar a
+# primeira linha. O DROP e em tempo de execucao, tarde demais.
 AUX = [
-    # (guia, tabela destino, colunas, lote)
+    # (guia, tabela destino, colunas, staging, declaracao do staging, lote)
     ('KZN_HIST_MEMBROS_EQUIPE',     'KZN_HIST_MEMBROS_EQUIPE',
-     ['ID_KAIZEN', 'ID_USUARIO', 'DT_ATUALIZACAO'],
+     ['ID_KAIZEN', 'ID_USUARIO', 'DT_ATUALIZACAO'], '#MEM',
      'ID_KAIZEN INT, ID_USUARIO INT, DT_ATUALIZACAO DATETIME2(3)', 100),
     ('KZN_HIST_RESULTADO_KAIZEN',   'KZN_HIST_RESULTADO_KAIZEN',
-     ['ID_KAIZEN', 'ID_RESULTADO', 'DT_ATUALIZACAO'],
+     ['ID_KAIZEN', 'ID_RESULTADO', 'DT_ATUALIZACAO'], '#RES',
      'ID_KAIZEN INT, ID_RESULTADO INT, DT_ATUALIZACAO DATETIME2(3)', 100),
     ('KZN_HIST_KAIZEN_HIERARQUIA',  'KZN_HIST_KAIZEN_HIERARQUIA',
      ['ID_KAIZEN', 'ID_USUARIO_LIDER'] + ['NM_HIERARQUIA_N%d' % i for i in range(1, 9)] + ['DT_ATUALIZACAO'],
+     '#HIE',
      'ID_KAIZEN INT, ID_USUARIO_LIDER INT, ' +
      ', '.join('NM_HIERARQUIA_N%d NVARCHAR(MAX)' % i for i in range(1, 9)) +
      ', DT_ATUALIZACAO DATETIME2(3)', 50),
     ('KZN_HIST_KAIZEN_DESPERDICIO', 'KZN_HIST_KAIZEN_DESPERDICIO',
-     ['ID_KAIZEN', 'ID_DESPERDICIO', 'DT_ATUALIZACAO'],
+     ['ID_KAIZEN', 'ID_DESPERDICIO', 'DT_ATUALIZACAO'], '#DESP',
      'ID_KAIZEN INT, ID_DESPERDICIO INT, DT_ATUALIZACAO DATETIME2(3)', 100),
 ]
 
@@ -151,7 +158,7 @@ def main():
 
     idset = set(ids)
     aux_rows = {}
-    for guia, _dest, cols, _decl, _lote in AUX:
+    for guia, _dest, cols, _stg, _decl, _lote in AUX:
         rs = ler(wb, guia, len(cols), 1)
         aux_rows[guia] = [r for r in rs if int(r[0]) in idset]
 
@@ -354,7 +361,7 @@ CREATE TABLE #PVC (
 """ % (',\n'.join('    (N\'%s\')' % c for c in PVC_DESTINO),
        '\n'.join("UNION ALL SELECT N'%s', v FROM (VALUES\n%s) x(v)"
                  % (dest, ',\n'.join('    (N\'%s\')' % c for c in cols))
-                 for _g, dest, cols, _d, _l in AUX),
+                 for _g, dest, cols, _s, _d, _l in AUX),
        STAGING_PVC))
 
     for r in pvc:
@@ -425,26 +432,26 @@ PRINT '  E2 - KZN_HIST_PEDRAVISAOCONSOLIDADA: ' + CAST(@qt AS VARCHAR(10)) + ' l
                'KZN_HIST_RESULTADO_KAIZEN': 'E4 - Resultados',
                'KZN_HIST_KAIZEN_HIERARQUIA': 'E5 - Fotografia da hierarquia',
                'KZN_HIST_KAIZEN_DESPERDICIO': 'E6 - Desperdicios'}
-    for guia, dest, cols, decl, lote in AUX:
+    for guia, dest, cols, stg, decl, lote in AUX:
         rs = aux_rows[guia]
         kinds = ['int', 'int'] + ['txt'] * (len(cols) - 3) + ['dt'] if len(cols) > 3 else ['int', 'int', 'dt']
         w("""
 /* =====================================================================
    %s
    ===================================================================== */
-CREATE TABLE #T (%s);
-""" % (rotulos[guia], decl))
+CREATE TABLE %s (%s);
+""" % (rotulos[guia], stg, decl))
         for k in range(0, len(rs), lote):
             bloco = rs[k:k + lote]
-            w('INSERT INTO #T VALUES\n')
+            w('INSERT INTO %s VALUES\n' % stg)
             w(',\n'.join('(%s)' % ', '.join(lit(r[i], kinds[i]) for i in range(len(cols)))
                          for r in bloco) + ';\n')
         w("""INSERT INTO CI.%s (%s)
-SELECT %s FROM #T t
+SELECT %s FROM %s t
 WHERE EXISTS (SELECT 1 FROM #PVC p WHERE p.ID_KAIZEN = t.ID_KAIZEN);
 PRINT '  %s: ' + CAST(@@ROWCOUNT AS VARCHAR(10)) + ' linha(s).';
-DROP TABLE #T;
-""" % (dest, ', '.join(cols), ', '.join('t.' + c for c in cols), dest))
+DROP TABLE %s;
+""" % (dest, ', '.join(cols), ', '.join('t.' + c for c in cols), stg, dest, stg))
 
     w("""
 /* =====================================================================
