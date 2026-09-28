@@ -1,7 +1,7 @@
 /* =====================================================================
    Apaga os dados das tabelas KZN_HIST_*
    ---------------------------------------------------------------------
-   Por padrao apaga SO a faixa carregada (7281-7296), nao a tabela toda.
+   Por padrao apaga SO a faixa carregada (7281-12267), nao a tabela toda.
    Para limpar tudo, troque @SOMENTE_FAIXA para 0.
 
    As tabelas HIST nao tem FK entre si, entao a ordem nao e imposta pelo
@@ -19,8 +19,8 @@
 SET NOCOUNT ON;
 SET XACT_ABORT ON;
 
-DECLARE @SOMENTE_FAIXA BIT = 1;      -- 1 = so 7281-7296 | 0 = todas as linhas
-DECLARE @ID_INI INT = 7281, @ID_FIM INT = 7296;
+DECLARE @SOMENTE_FAIXA BIT = 1;      -- 1 = so 7281-12267 | 0 = todas as linhas
+DECLARE @ID_INI INT = 7281, @ID_FIM INT = 12267;
 
 DECLARE @tabelas TABLE (ORDEM INT PRIMARY KEY, NOME SYSNAME);
 INSERT INTO @tabelas (ORDEM, NOME) VALUES
