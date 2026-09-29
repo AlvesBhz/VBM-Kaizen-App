@@ -51,31 +51,38 @@ END
    E1 - ESTRUTURA A PARTIR DO CATALOGO
    Coluna calculada fica de fora (nao ha o que copiar como dado); IDENTITY
    nao e replicado — a copia recebe o valor da origem.
+
+   COLLATE DATABASE_DEFAULT nos nomes vindos do catalogo: sys.columns e
+   sys.types usam a collation do catalogo, os literais do script a do
+   banco, e o STRING_AGG nao concatena as duas (Msg 4191).
    ===================================================================== */
 SELECT  @cols = STRING_AGG(CONVERT(NVARCHAR(MAX),
-            '    ' + QUOTENAME(c.name) + ' '
+            N'    ' + QUOTENAME(x.nm) + N' '
           + CASE
-              WHEN ty.name IN ('varchar','char','varbinary','binary')
-                   THEN ty.name + '(' + CASE WHEN c.max_length = -1 THEN 'MAX' ELSE CAST(c.max_length AS VARCHAR(10)) END + ')'
-              WHEN ty.name IN ('nvarchar','nchar')
-                   THEN ty.name + '(' + CASE WHEN c.max_length = -1 THEN 'MAX' ELSE CAST(c.max_length / 2 AS VARCHAR(10)) END + ')'
-              WHEN ty.name IN ('decimal','numeric')
-                   THEN ty.name + '(' + CAST(c.precision AS VARCHAR(10)) + ',' + CAST(c.scale AS VARCHAR(10)) + ')'
-              WHEN ty.name IN ('datetime2','time','datetimeoffset')
-                   THEN ty.name + '(' + CAST(c.scale AS VARCHAR(10)) + ')'
-              ELSE ty.name
+              WHEN x.tp IN (N'varchar',N'char',N'varbinary',N'binary')
+                   THEN x.tp + N'(' + CASE WHEN c.max_length = -1 THEN N'MAX' ELSE CAST(c.max_length AS NVARCHAR(10)) END + N')'
+              WHEN x.tp IN (N'nvarchar',N'nchar')
+                   THEN x.tp + N'(' + CASE WHEN c.max_length = -1 THEN N'MAX' ELSE CAST(c.max_length / 2 AS NVARCHAR(10)) END + N')'
+              WHEN x.tp IN (N'decimal',N'numeric')
+                   THEN x.tp + N'(' + CAST(c.precision AS NVARCHAR(10)) + N',' + CAST(c.scale AS NVARCHAR(10)) + N')'
+              WHEN x.tp IN (N'datetime2',N'time',N'datetimeoffset')
+                   THEN x.tp + N'(' + CAST(c.scale AS NVARCHAR(10)) + N')'
+              ELSE x.tp
             END
-          + CASE WHEN c.collation_name IS NOT NULL THEN ' COLLATE ' + c.collation_name ELSE '' END
-          + CASE WHEN c.is_nullable = 1 THEN ' NULL' ELSE ' NOT NULL' END),
-            ',' + CHAR(13) + CHAR(10)) WITHIN GROUP (ORDER BY c.column_id),
-        @lista = STRING_AGG(CONVERT(NVARCHAR(MAX), QUOTENAME(c.name)), ', ') WITHIN GROUP (ORDER BY c.column_id)
+          + CASE WHEN x.col IS NOT NULL THEN N' COLLATE ' + x.col ELSE N'' END
+          + CASE WHEN c.is_nullable = 1 THEN N' NULL' ELSE N' NOT NULL' END),
+            N',' + NCHAR(13) + NCHAR(10)) WITHIN GROUP (ORDER BY c.column_id),
+        @lista = STRING_AGG(CONVERT(NVARCHAR(MAX), QUOTENAME(x.nm)), N', ') WITHIN GROUP (ORDER BY c.column_id)
 FROM    sys.columns c
 JOIN    sys.types   ty ON ty.user_type_id = c.user_type_id
+CROSS APPLY (SELECT nm  = CONVERT(NVARCHAR(128), c.name)           COLLATE DATABASE_DEFAULT,
+                    tp  = CONVERT(NVARCHAR(128), ty.name)          COLLATE DATABASE_DEFAULT,
+                    col = CONVERT(NVARCHAR(128), c.collation_name) COLLATE DATABASE_DEFAULT) x
 WHERE   c.object_id = @objId
   AND   c.is_computed = 0;
 
-SELECT  @pk = STRING_AGG(CONVERT(NVARCHAR(MAX), QUOTENAME(c.name)
-                  + CASE WHEN ic.is_descending_key = 1 THEN ' DESC' ELSE '' END), ', ')
+SELECT  @pk = STRING_AGG(CONVERT(NVARCHAR(MAX), QUOTENAME(CONVERT(NVARCHAR(128), c.name) COLLATE DATABASE_DEFAULT)
+                  + CASE WHEN ic.is_descending_key = 1 THEN N' DESC' ELSE N'' END), N', ')
               WITHIN GROUP (ORDER BY ic.key_ordinal)
 FROM    sys.indexes i
 JOIN    sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id AND ic.key_ordinal > 0
@@ -147,6 +154,7 @@ GO
 /* =====================================================================
    E3 - CONFERENCIA: estrutura lado a lado (vazio = identicas) e totais
    ===================================================================== */
+IF OBJECT_ID('CI.KZN_HIST_MDM_VBM_TERC', 'U') IS NOT NULL
 SELECT  COLUNA       = ISNULL(o.name, d.name),
         NA_ORIGEM    = ISNULL(o.tipo, '-- ausente --'),
         NA_COPIA     = ISNULL(d.tipo, '-- ausente --')
@@ -162,6 +170,12 @@ FULL JOIN (
 ) d ON d.name COLLATE DATABASE_DEFAULT = o.name COLLATE DATABASE_DEFAULT
 WHERE   o.name IS NULL OR d.name IS NULL OR o.tipo <> d.tipo;
 
-SELECT  ORIGEM = (SELECT COUNT(*) FROM CI.KZN_MDM_HIERARQUIA),
-        COPIA  = (SELECT COUNT(*) FROM CI.KZN_HIST_MDM_VBM_TERC);
+/* Dinamico e protegido: se o bloco anterior abortou antes do CREATE, a
+   copia nao existe e uma referencia estatica daria Msg 208. */
+IF OBJECT_ID('CI.KZN_HIST_MDM_VBM_TERC', 'U') IS NULL
+    PRINT 'Conferencia: CI.KZN_HIST_MDM_VBM_TERC nao existe (veja o erro acima).';
+ELSE
+    EXEC sp_executesql N'
+    SELECT  ORIGEM = (SELECT COUNT(*) FROM CI.KZN_MDM_HIERARQUIA),
+            COPIA  = (SELECT COUNT(*) FROM CI.KZN_HIST_MDM_VBM_TERC);';
 GO
