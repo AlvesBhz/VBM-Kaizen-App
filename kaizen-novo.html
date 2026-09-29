@@ -37,18 +37,12 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>VBM Kaizen — Novo Kaizen</title>
-<link href="css/vendor/e5e202e3c8995079_all.min.css" rel="stylesheet"/>
-<link href="css/vbm-app.css?v=20260819-1" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com" rel="preconnect"/>
-<link href="https://fonts.gstatic.com" rel="preconnect" crossorigin/>
-<!-- Poppins carregada SEM bloquear a renderização: como "print" o navegador
-     baixa a folha mas não espera por ela para pintar a tela; o onload a
-     promove para "all" e a fonte entra assim que chega. Antes, esta linha
-     era render-blocking — num ambiente sem saída para a internet a página
-     ficava em branco até o timeout do fonts.googleapis.com. O <noscript>
-     mantém o comportamento original quando não há JS. -->
-<link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet" media="print" onload="this.media='all';this.onload=null;"/>
-<noscript><link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet"/></noscript>
+<link href="css/fontawesome-subset.css?v=20260920-1" rel="stylesheet"/>
+<link href="css/vbm-app.css?v=20260921-1" rel="stylesheet"/>
+<!-- Poppins servida pelo próprio app (css/poppins.css + assets/fonts/poppins).
+     Vinha de fonts.googleapis.com: em rede sem saída para a internet o
+     pedido ficava pendente e o evento load da página nunca disparava. -->
+<link href="css/poppins.css?v=20260912-1" rel="stylesheet"/>
 <link href="assets/icons/a1922a98664cc516_favicon-32x32-1.png" rel="icon"/>
 <style>
 .app-layout{display:block;min-height:100vh}.app-main{margin-left:0}
@@ -125,8 +119,7 @@
 [data-bg="dark"] .settings-panel{background:var(--vbm-blue-deep);box-shadow:-16px 0 48px rgba(0,0,0,.45)}
 [data-bg="dark"] .settings-panel-head{border-bottom-color:rgba(255,255,255,.1)}
 [data-bg="dark"] .settings-panel-head h2{color:#fff}
-[data-bg="dark"] .settings-close{background:rgba(255,255,255,.08);color:rgba(255,255,255,.6)}
-[data-bg="dark"] .settings-close:hover{background:var(--vbm-blue);color:#fff}
+/* O fechar no tema escuro vem de css/vbm-app.css (regra única). */
 [data-bg="dark"] .settings-section-title{color:#fff}
 [data-bg="dark"] .settings-info{border-color:rgba(255,255,255,.25);color:rgba(255,255,255,.5)}
 [data-bg="dark"] .settings-divider{background:rgba(255,255,255,.1)}
@@ -330,6 +323,54 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 .form-control::placeholder { color: #a8a8a8; font-weight: 300; }
 [data-bg="dark"] .form-control::placeholder { color: rgba(255,255,255,.3); }
 .form-helper { font-size: .68rem; line-height: 1.5; }
+/* Contador de caracteres: divide a linha com o texto de ajuda do campo,
+   encostado à direita. Mesma escala do .form-helper para não virar um
+   segundo nível de informação. */
+.campo-contador-linha {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 1rem; margin-top: .3rem;
+}
+.campo-contador-linha .form-helper { margin: 0; }
+.campo-contador {
+  font-family: 'Poppins', sans-serif; font-size: .66rem; font-weight: 600;
+  color: var(--vbm-mid); white-space: nowrap; margin-left: auto;
+  font-variant-numeric: tabular-nums;   /* o número não "pula" ao digitar */
+}
+.campo-contador.no-limite { color: #c2770e; }
+[data-bg="dark"] .campo-contador { color: rgba(255,255,255,.55); }
+[data-bg="dark"] .campo-contador.no-limite { color: #f0b45f; }
+
+/* Data de Conclusão — o campo só precisa comportar "dd/mm/aaaa" e o
+   ícone do calendário; ocupando a coluna inteira ficava com uma sobra
+   enorme à direita. A largura é a do conteúdo, não a da coluna. */
+.campo-data { max-width: 11rem; }
+/* O ícone da esquerda aqui é um BOTÃO (abre o calendário), então precisa
+   receber clique — o .input-icon do vbm-app.css é decorativo e tem
+   pointer-events: none. O resto (posição, cor, transição no foco) vem
+   de lá e não é repetido. */
+.campo-data-botao {
+  pointer-events: auto; cursor: pointer;
+  background: none; border: 0; padding: 0; line-height: 1;
+  /* O z-index NÃO é enfeite. No MODO ESCURO o .form-control recebe
+     backdrop-filter, e backdrop-filter cria um contexto de empilhamento:
+     o input passa a pintar SOBRE este botão, que é posicionado e vem
+     antes dele no DOM. O clique parava no campo de texto e o calendário
+     não abria — só no escuro, porque no claro não há backdrop-filter.
+     Medido com elementFromPoint no centro do ícone: claro devolvia o
+     <i> do calendário, escuro devolvia #data_conclusao_texto. */
+  z-index: 2;
+}
+.campo-data-botao:focus-visible { outline: 2px solid var(--vbm-blue); outline-offset: 2px; border-radius: 3px; }
+/* O <input type="date"> de verdade fica recolhido: é ele que guarda o
+   valor em ISO, que o navegador valida e que abre o calendário. Não
+   pode ser display:none — o showPicker() só funciona em elemento que
+   está sendo renderizado. Encostado embaixo do campo para o calendário
+   abrir junto dele. */
+.campo-data-nativo {
+  position: absolute; left: .9rem; bottom: 0;
+  width: 1px; height: 1px; padding: 0; border: 0;
+  opacity: 0; pointer-events: none;
+}
 .field-tag-optional { font-weight: 400; }
 /* Textos dentro de componentes/"objetos" (toggle, checkbox de confirmação,
    zona de upload) estavam maiores que o restante da hierarquia — alinhados
@@ -337,6 +378,165 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 .toggle-label { font-size: .76rem; }
 .checkbox-label { font-size: .76rem; line-height: 1.5; }
 .photo-upload-text { font-size: .76rem; }
+/* ── Campo de imagem: o PALCO ──────────────────────────────────────
+   A evidência do Kaizen é quase sempre uma captura de sistema, densa e
+   larga. O desenho anterior punha essa captura numa moldura de altura
+   fixa que ela não preenchia (sobrava faixa vazia dos dois lados) e
+   jogava "Visualizar" e "Limpar" centralizados abaixo, soltos da imagem
+   que controlavam. Aqui a moldura é 16:9 e acompanha a imagem, as ações
+   flutuam SOBRE ela, e a legenda identifica o arquivo — nome, dimensão
+   e peso — antes do envio, que é quando os 10MB ainda dá para resolver.
+
+   Trocar deixou de exigir limpar antes: há um botão Substituir, e
+   arrastar outro arquivo sobre a imagem também troca. */
+.foto-palco[hidden] { display: none !important; }
+/* Âncora do aviso "Solte para substituir", que cobre a ficha inteira
+   (ver .e-ficha .foto-quadro { position: static }, adiante). */
+.foto-palco { position: relative; }
+.foto-quadro {
+  position: relative; overflow: hidden;
+  border: 1px solid #e3e9ee; border-radius: .65rem .65rem 0 0;
+  /* Xadrez claro: revela a margem branca do print em vez de fingir que
+     a imagem preenche a moldura. */
+  background: repeating-conic-gradient(#f4f7f9 0 25%, #eceff2 0 50%) 0 0/16px 16px;
+}
+.foto-quadro .photo-preview-img {
+  display: block; width: 100%; aspect-ratio: 16/9; max-height: none;
+  object-fit: contain; background: transparent; border-radius: 0;
+}
+.foto-barra {
+  position: absolute; top: .55rem; right: .55rem; z-index: 2;
+  display: flex; gap: .3rem; padding: .28rem;
+  background: rgba(255,255,255,.94); border: 1px solid #e3e9ee;
+  border-radius: .5rem; box-shadow: 0 2px 10px rgba(13,38,64,.12);
+}
+@supports (backdrop-filter: blur(1px)) { .foto-barra { backdrop-filter: blur(6px); } }
+.foto-bt {
+  width: 30px; height: 30px; border-radius: .4rem; cursor: pointer;
+  border: 1px solid transparent; background: transparent;
+  color: var(--vbm-blue-dark); font-size: .78rem;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background .15s, color .15s;
+}
+.foto-bt:hover { background: var(--vbm-blue-pale); }
+.foto-bt:focus-visible { outline: 2px solid var(--vbm-blue); outline-offset: 2px; }
+.foto-bt-perigo { color: #a32b2b; }
+.foto-bt-perigo:hover { background: #fdf2f2; }
+.foto-legenda {
+  display: flex; flex-wrap: wrap; gap: .3rem 1rem; align-items: center;
+  justify-content: space-between; padding: .5rem .7rem;
+  background: #fff; border: 1px solid #e3e9ee; border-top: 0;
+  border-radius: 0 0 .65rem .65rem; font-size: .7rem; color: var(--vbm-mid);
+}
+.foto-nome {
+  color: var(--vbm-text); font-weight: 500; font-size: .74rem; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.foto-dados { font-variant-numeric: tabular-nums; flex-shrink: 0; }
+/* Arrastar por cima da imagem substitui direto — sem passar pelo vazio. */
+.foto-quadro.arrastando { border-color: var(--vbm-blue-dark); }
+.foto-solta {
+  position: absolute; inset: 0; z-index: 3; display: grid; place-items: center;
+  background: rgba(232,247,253,.9); color: var(--vbm-blue-dark);
+  font-weight: 600; font-size: .8rem;
+}
+.foto-solta[hidden] { display: none !important; }
+/* A pré-visualização não é foto de capa: cortar o miolo esconde
+   justamente o que a pessoa precisa conferir. */
+.photo-preview-img { object-fit: contain; background: #f4f6f8; }
+[data-bg="dark"] .photo-preview-img { background: rgba(255,255,255,.04); }
+[data-bg="dark"] .foto-quadro {
+  border-color: rgba(255,255,255,.14);
+  background: repeating-conic-gradient(rgba(255,255,255,.05) 0 25%, rgba(255,255,255,.02) 0 50%) 0 0/16px 16px;
+}
+[data-bg="dark"] .foto-quadro .photo-preview-img { background: transparent; }
+[data-bg="dark"] .foto-legenda { background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.14); color: rgba(255,255,255,.55); }
+[data-bg="dark"] .foto-nome { color: var(--vbm-white); }
+[data-bg="dark"] .foto-barra { background: rgba(8,26,42,.9); border-color: rgba(255,255,255,.16); }
+[data-bg="dark"] .foto-bt { color: var(--vbm-blue-light); }
+[data-bg="dark"] .foto-bt:hover { background: rgba(60,181,229,.16); }
+[data-bg="dark"] .foto-bt-perigo { color: #e97b7b; }
+[data-bg="dark"] .foto-bt-perigo:hover { background: rgba(233,123,123,.16); }
+[data-bg="dark"] .foto-solta { background: rgba(13,38,64,.9); color: var(--vbm-blue-light); }
+
+/* ── Campo de imagem: a FICHA ──────────────────────────────────────
+   Uma linha só: miniatura à esquerda, nome e dimensão no centro, as
+   três ações à direita. É o layout de referência, e vale nos DOIS
+   modos — cadastro e edição. A classe vem na marcação; o
+   window.VBMFotoCampo.usarFicha() continua existindo para o modo de
+   edição e virou idempotente.
+
+   O palco 16:9 custava ~300 px por imagem. Em um formulário de quatro
+   etapas com duas imagens eram ~600 px de rolagem para dizer o que a
+   ficha diz em 102 px. Ler o print é trabalho do Ampliar.
+
+   Nenhum elemento é criado ou removido: a grade recoloca os três que já
+   existem. Por isso os manipuladores de Ampliar/Substituir/Remover, o
+   arrastar-e-soltar e a legenda continuam valendo sem uma linha a mais. */
+.foto-palco.e-ficha {
+  display: grid; grid-template-columns: 104px minmax(0, 1fr) auto;
+  gap: .9rem; align-items: center;
+  padding: .7rem; background: #fff;
+  border: 1px solid #e3e9ee; border-radius: .65rem;
+}
+.e-ficha .foto-quadro {
+  /* grid-row: 1 nos TRÊS não é enfeite. Com só grid-column declarado, a
+     colocação automática percorre a grade em ordem de documento: quadro
+     (col 1) e barra (col 3) entram na linha 1, mas quando chega a
+     legenda (col 2) o cursor já passou da coluna 3 e ela desce para uma
+     SEGUNDA linha. A ficha ia a 154 px em vez dos ~104 que justificam
+     ela existir. Fixar a linha põe os três lado a lado. */
+  grid-column: 1; grid-row: 1; height: 78px; border-radius: .45rem;
+  /* static de propósito: o "Solte para substituir" é position:absolute
+     com inset:0 e se ancora no primeiro ancestral posicionado. Com o
+     quadro relativo, o aviso cabia nos 104 px da miniatura — um alvo
+     que ninguém acerta. Solto, ele se ancora em .foto-palco e cobre a
+     ficha inteira, que é a área onde o arrastar já era aceito. */
+  position: static;
+}
+.e-ficha .foto-quadro .photo-preview-img {
+  /* contain, e não o "cover" do estudo: cortar o miolo de uma captura
+     de sistema esconde justamente o que identifica o arquivo. A
+     miniatura aqui é etiqueta, não capa — quem lê o print é o Ampliar. */
+  width: 100%; height: 78px; aspect-ratio: auto; object-fit: contain;
+}
+.e-ficha .foto-legenda {
+  grid-column: 2; grid-row: 1; display: block; padding: 0;
+  background: none; border: 0; border-radius: 0;
+}
+.e-ficha .foto-nome { display: block; font-size: .78rem; }
+.e-ficha .foto-dados { display: block; margin-top: .15rem; }
+.e-ficha .foto-barra {
+  grid-column: 3; grid-row: 1; position: static; padding: 0;
+  background: none; border: 0; box-shadow: none; backdrop-filter: none;
+  gap: .35rem;
+}
+.e-ficha .foto-bt {
+  width: 34px; height: 34px; border-radius: .5rem;
+  border: 1px solid #e3e9ee; background: #fff;
+}
+[data-bg="dark"] .foto-palco.e-ficha {
+  background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.14);
+}
+[data-bg="dark"] .e-ficha .foto-legenda { background: none; border: 0; }
+[data-bg="dark"] .e-ficha .foto-bt {
+  background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.16);
+}
+/* Em tela estreita a ficha empilha e a miniatura vira faixa — a grade
+   de três colunas em 320 px espremeria o nome do arquivo a nada. */
+@media (max-width: 620px) {
+  .foto-palco.e-ficha { grid-template-columns: 1fr; }
+  .e-ficha .foto-quadro { grid-column: 1; grid-row: 1; height: 130px; }
+  .e-ficha .foto-quadro .photo-preview-img { height: 130px; }
+  .e-ficha .foto-legenda { grid-column: 1; grid-row: 2; }
+  .e-ficha .foto-barra { grid-column: 1; grid-row: 3; }
+  .e-ficha .foto-barra { justify-content: flex-start; }
+}
+/* Modal da foto ampliada: mais largo que o de validação, e a imagem
+   inteira visível sem rolagem. */
+#modalFotoAmpliada .modal { width: 92vw; max-width: 1100px; }
+#modalFotoAmpliada .modal-body { padding-top: .25rem; }
+#modalFotoAmpliada img { width: 100%; max-height: 74vh; object-fit: contain; border-radius: .5rem; display: block; }
 
 /* ── Chip de membro da equipe (lista unificada Vale) ── */
 .team-chip-list { margin-top:.6rem; display:flex; flex-direction:column; gap:.4rem; }
@@ -505,7 +705,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
     <a href="admin.html" class="topnav-link"><i class="fa-solid fa-shield-halved"></i> <span data-i18n="nav.administracao">Administração</span></a>
   </div>
   <div class="topnav-actions">
-    <button class="settings-btn" id="settingsBtn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="settingsPanel" title="Configurações" data-i18n-title="settings.btnTitle">
+    <button class="settings-btn" id="settingsBtn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="settingsPanel" title="Configurações" data-i18n-title="settings.btnTitle" aria-label="Configurações">
       <svg width="17" height="17" viewBox="0 0 20 20" fill="none">
         <path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" stroke="currentColor" stroke-width="1.5" />
         <path d="M16.2 12.3a1.4 1.4 0 0 0 .28 1.54l.05.05a1.7 1.7 0 1 1-2.4 2.4l-.05-.05a1.4 1.4 0 0 0-1.54-.28 1.4 1.4 0 0 0-.85 1.28V17.4a1.7 1.7 0 0 1-3.4 0v-.08a1.4 1.4 0 0 0-.91-1.28 1.4 1.4 0 0 0-1.54.28l-.05.05a1.7 1.7 0 1 1-2.4-2.4l.05-.05a1.4 1.4 0 0 0 .28-1.54 1.4 1.4 0 0 0-1.28-.85H2.6a1.7 1.7 0 0 1 0-3.4h.08a1.4 1.4 0 0 0 1.28-.91 1.4 1.4 0 0 0-.28-1.54l-.05-.05a1.7 1.7 0 1 1 2.4-2.4l.05.05a1.4 1.4 0 0 0 1.54.28h.06a1.4 1.4 0 0 0 .85-1.28V2.6a1.7 1.7 0 0 1 3.4 0v.08a1.4 1.4 0 0 0 .85 1.28h.06a1.4 1.4 0 0 0 1.54-.28l.05-.05a1.7 1.7 0 1 1 2.4 2.4l-.05.05a1.4 1.4 0 0 0-.28 1.54v.06a1.4 1.4 0 0 0 1.28.85h.08a1.7 1.7 0 0 1 0 3.4h-.08a1.4 1.4 0 0 0-1.28.85Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
@@ -577,7 +777,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 
         <div style="position:relative;z-index:1;display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
           <div>
-            <div class="wizard-header-title" data-i18n="wiz.title">Novo Kaizen</div>
+            <div class="wizard-header-title" data-i18n="wiz.title" role="heading" aria-level="1">Novo Kaizen</div>
             <div class="wizard-header-sub" data-i18n="wiz.subtitle">Registre sua iniciativa de melhoria contínua em 4 etapas</div>
           </div>
         </div>
@@ -604,7 +804,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 
           <div class="form-grid form-grid-2">
             <div class="form-group">
-              <label class="form-label" data-i18n="f.projectLeader">Líder do Projeto <span class="req">*</span></label>
+              <label for="liderSearchWrap" class="form-label" data-i18n="f.projectLeader">Líder do Projeto: <span class="req">*</span></label>
               <div class="input-with-icon" id="liderSearchWrap" style="position:relative;">
                 <i class="fa-solid fa-magnifying-glass input-icon"></i>
                 <input type="text" class="form-control" id="id_lider_projeto" name="id_lider_projeto" autocomplete="off" placeholder="Digite o nome..." data-i18n-placeholder="f.namePlaceholder" required/>
@@ -616,31 +816,38 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
             </div>
 
             <div class="form-group">
-              <label class="form-label" data-i18n="f.kaizenTitle">Título do Kaizen <span class="req">*</span></label>
-              <input type="text" class="form-control" id="titulo_kaizen" name="titulo_kaizen" maxlength="30" placeholder="Ex.: Redução do tempo de setup" data-i18n-placeholder="f.kaizenTitlePlaceholder" required/>
-              <div class="form-helper" data-i18n="f.kaizenTitleHelper">Seja claro e objetivo. Máximo de 30 caracteres.</div>
+              <label for="titulo_kaizen" class="form-label" data-i18n="f.kaizenTitle">Título do Kaizen: <span class="req">*</span></label>
+              <input type="text" class="form-control" id="titulo_kaizen" name="titulo_kaizen" maxlength="100" placeholder="Ex.: Redução do tempo de setup" data-i18n-placeholder="f.kaizenTitlePlaceholder" required/>
+              <!-- ID_KAIZEN do registro em edição. Vazio = cadastro novo.
+                   É o que diferencia "o Kaizen mantendo o próprio título"
+                   de "outro Kaizen com o mesmo título": as duas checagens
+                   de duplicidade (a da Etapa 1 e a da gravação) mandam
+                   este valor para o servidor excluir o próprio registro
+                   da busca. Preenchido só pela carga da edição. -->
+              <input type="hidden" id="id_kaizen" name="id_kaizen" value=""/>
+              <div class="form-helper" data-i18n="f.kaizenTitleHelper">Seja claro e objetivo. Máximo de 100 caracteres.</div>
             </div>
 
             <div class="form-group">
-              <label class="form-label" data-i18n="f.category">Categoria <span class="req">*</span></label>
+              <label for="id_categoria" class="form-label" data-i18n="f.category">Categoria: <span class="req">*</span></label>
               <select class="form-control" id="id_categoria" name="id_categoria" required>
                 <option value="" data-i18n="f.selectCategory">Selecione a categoria...</option>
               </select>
             </div>
             <div class="form-group">
-              <label class="form-label" data-i18n="f.replicationPotential">Replicação em Potencial <span class="req">*</span></label>
+              <label for="id_replicacao_potencial" class="form-label" data-i18n="f.replicationPotential">Replicação em Potencial: <span class="req">*</span></label>
               <select class="form-control" id="id_replicacao_potencial" name="id_replicacao_potencial" required>
                 <option value="" data-i18n="f.select">Selecione...</option>
               </select>
             </div>
 
             <div class="form-group" style="grid-column:1/-1;">
-              <label class="form-label" data-i18n="f.problemDescription">Descrição do Problema <span class="req">*</span></label>
+              <label for="declaracao_problema" class="form-label" data-i18n="f.problemDescription">Descrição do Problema: <span class="req">*</span></label>
               <textarea class="form-control" id="declaracao_problema" name="declaracao_problema" rows="3" placeholder="Descreva claramente o problema ou a oportunidade identificada..." data-i18n-placeholder="f.problemPlaceholder" required></textarea>
               <div class="form-helper" data-i18n="f.problemHelper">Seja específico. Um bom problema bem descrito facilita a solução.</div>
             </div>
             <div class="form-group" style="grid-column:1/-1;">
-              <label class="form-label" data-i18n="f.goalObjective">Meta / Objetivo <span class="req">*</span></label>
+              <label for="meta_objetivo" class="form-label" data-i18n="f.goalObjective">Meta / Objetivo: <span class="req">*</span></label>
               <textarea class="form-control" id="meta_objetivo" name="meta_objetivo" rows="3" placeholder="Qual o resultado esperado com este Kaizen?" data-i18n-placeholder="f.goalPlaceholder" required></textarea>
             </div>
           </div>
@@ -649,15 +856,20 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 
           <div class="form-grid form-grid-2">
             <div class="form-group">
-              <label class="form-label" data-i18n="f.approver">Aprovador <span class="req">*</span></label>
+              <label for="id_aprovador" class="form-label" data-i18n="f.approver">Aprovador: <span class="req">*</span></label>
               <select class="form-control" id="id_aprovador" name="id_aprovador" required>
                 <option value="" data-i18n="f.selectApprover">Selecione o aprovador...</option>
               </select>
-              <div class="form-helper" data-i18n="f.approverHelper">Lista de aprovadores ativos (kzn_aprovador).</div>
+              <!-- Sem data-i18n: o texto leva a UNIDADE do líder, que só
+                   existe em tempo de execução. translatePanel() sobrescreve
+                   todo [data-i18n] pelo dicionário e devolveria o "{site}"
+                   cru na troca de idioma. Quem escreve aqui é dizerUnidade(),
+                   que reage tanto à troca de líder quanto à de idioma. -->
+              <div class="form-helper" id="ajudaAprovador">Lista de aprovadores ativos (kzn_aprovador).</div>
             </div>
 
             <div class="form-group" style="grid-column:1/2;">
-              <label class="form-label" data-i18n="f.valeTeamMembers">Membros da Equipe Vale <span class="field-tag-optional" data-i18n="f.optionalMax2">opcional · máx. 2</span></label>
+              <label for="teamSearchWrap" class="form-label" data-i18n="f.valeTeamMembers">Membros da Equipe Vale: <span class="field-tag-optional" data-i18n="f.optionalMax2">opcional · máx. 2</span></label>
               <div class="input-with-icon team-search-group" id="teamSearchWrap">
                 <i class="fa-solid fa-magnifying-glass input-icon"></i>
                 <input type="text" class="form-control" id="buscaMembroVale" autocomplete="off" placeholder="Buscar colaborador (MDM)... (Enter para adicionar)" data-i18n-placeholder="f.searchCollaborator"/>
@@ -674,7 +886,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
             </div>
 
             <div class="form-group" style="grid-column:2/3;">
-              <label class="form-label" data-i18n="f.externalMembers">Membros Externos (Terceiros) <span class="field-tag-optional" data-i18n="f.optionalMax1">opcional · máx. 1</span></label>
+              <label for="externoSearchWrap" class="form-label" data-i18n="f.externalMembers">Membros Externos (Terceiros): <span class="field-tag-optional" data-i18n="f.optionalMax1">opcional · máx. 1</span></label>
               <div class="input-with-icon team-search-group" id="externoSearchWrap">
                 <i class="fa-solid fa-user-plus input-icon"></i>
                 <input type="text" class="form-control" id="buscaMembroExterno" autocomplete="off" placeholder="Nome do membro externo... (Enter para adicionar)" data-i18n-placeholder="f.externalNamePlaceholder"/>
@@ -703,27 +915,53 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="wizard-panel-sub" data-i18n="wiz.panel2Sub">Documente como era a situação antes da melhoria — com evidência visual, se possível.</div>
 
           <div class="form-group">
-            <label class="form-label" data-i18n="f.imageBefore">Imagem do Antes <span class="req">*</span></label>
+            <label for="imagem_antes" class="form-label" data-i18n="f.imageBefore">Imagem do Antes: <span class="req">*</span></label>
             <div class="photo-upload-zone">
-              <input type="file" accept="image/*" id="imagem_antes" name="imagem_antes"/>
+              <input type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" id="imagem_antes" name="imagem_antes"/>
               <i class="fa-solid fa-camera photo-upload-icon"></i>
               <div class="photo-upload-text"><strong data-i18n="f.clickAddPhoto">Clique para adicionar foto</strong><br><span data-i18n="f.photoFormats">PNG, JPG, WEBP até 10MB</span></div>
             </div>
-            <img class="photo-preview-img" src="" alt="Foto do antes"/>
-            <!-- Preenchido pelo upload (POST /api/kaizens/imagem?tipo=antes) assim que o
-                 arquivo é escolhido — ver script "Upload de imagens" no fim da página. -->
+            <!-- Aparece assim que há foto escolhida (ou já gravada, na
+                 edição). Ficha de UMA LINHA: miniatura à esquerda,
+                 arquivo no centro, as três ações à direita. -->
+            <div class="foto-palco e-ficha" data-acoes-foto="imagem_antes" hidden>
+              <div class="foto-quadro">
+                <img class="photo-preview-img" src="" alt="Foto do antes"/>
+                <div class="foto-solta" data-foto-solta hidden><span data-i18n="f.photoDrop">Solte para substituir</span></div>
+              </div>
+              <!-- A barra de ações é IRMÃ do quadro, e não filha dele:
+                   assim ela é a TERCEIRA COLUNA da ficha, ao lado do
+                   arquivo, em vez de flutuar sobre a miniatura. -->
+              <div class="foto-barra">
+                <button type="button" class="foto-bt" data-foto-ver
+                        data-i18n-title="f.photoZoom" data-i18n-aria="f.photoZoom"
+                        title="Ampliar" aria-label="Ampliar"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
+                <button type="button" class="foto-bt" data-foto-trocar
+                        data-i18n-title="f.photoReplace" data-i18n-aria="f.photoReplace"
+                        title="Substituir" aria-label="Substituir"><i class="fa-solid fa-rotate-right"></i></button>
+                <button type="button" class="foto-bt foto-bt-perigo" data-foto-limpar
+                        data-i18n-title="f.photoRemove" data-i18n-aria="f.photoRemove"
+                        title="Remover" aria-label="Remover"><i class="fa-solid fa-xmark"></i></button>
+              </div>
+              <div class="foto-legenda">
+                <span class="foto-nome" data-foto-nome></span>
+                <span class="foto-dados" data-foto-dados></span>
+              </div>
+            </div>
+            <!-- Preenchido no envio (POST /api/kaizens/imagem?tipo=antes) —
+                 ver "Upload das imagens" no fim da página. -->
             <input type="hidden" id="url_imagem_antes" name="url_imagem_antes" value=""/>
             <div class="form-helper" id="uploadAntesStatus" style="display:none;"></div>
           </div>
 
           <div class="form-group">
-            <label class="form-label" data-i18n="f.descriptionBefore">Descrição do Antes <span class="req">*</span></label>
+            <label for="descricao_antes" class="form-label" data-i18n="f.descriptionBefore">Descrição do Antes: <span class="req">*</span></label>
             <textarea class="form-control" id="descricao_antes" name="descricao_antes" rows="4" placeholder="Descreva a situação e os problemas anteriores à melhoria..." data-i18n-placeholder="f.descriptionBeforePlaceholder" required></textarea>
             <div class="form-helper" data-i18n="f.descriptionBeforeHelper">Inclua dados quantitativos, se disponíveis — facilita medir o ganho depois.</div>
           </div>
 
           <div class="form-group">
-            <label class="form-label" data-i18n="f.wasteReduction">Redução de Desperdícios <span class="req">*</span></label> <span class="field-tag-multi"><i class="fa-solid fa-square-check"></i> <span data-i18n="f.multiSelect">seleção múltipla</span></span>
+            <label for="imagem_depois" class="form-label" data-i18n="f.wasteReduction">Redução de Desperdícios: <span class="req">*</span></label> <span class="field-tag-multi"><i class="fa-solid fa-square-check"></i> <span data-i18n="f.multiSelect">seleção múltipla</span></span>
             <div class="waste-tags-grid" id="wasteTagsGrid"><!-- populado via /api/desperdicios --></div>
           </div>
 
@@ -745,24 +983,51 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="wizard-panel-sub" data-i18n="wiz.panel3Sub">Mostre a solução aplicada e onde encontrar mais detalhes, se necessário.</div>
 
           <div class="form-group">
-            <label class="form-label" data-i18n="f.imageAfter">Imagem do Depois <span class="req">*</span></label>
+            <label class="form-label" data-i18n="f.imageAfter">Imagem do Depois: <span class="req">*</span></label>
             <div class="photo-upload-zone">
-              <input type="file" accept="image/*" id="imagem_depois" name="imagem_depois"/>
+              <input type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" id="imagem_depois" name="imagem_depois"/>
               <i class="fa-solid fa-camera photo-upload-icon"></i>
               <div class="photo-upload-text"><strong data-i18n="f.clickAddPhoto">Clique para adicionar foto</strong><br><span data-i18n="f.photoFormats">PNG, JPG, WEBP até 10MB</span></div>
             </div>
-            <img class="photo-preview-img" src="" alt="Foto do depois"/>
+            <div class="foto-palco e-ficha" data-acoes-foto="imagem_depois" hidden>
+              <div class="foto-quadro">
+                <img class="photo-preview-img" src="" alt="Foto do depois"/>
+                <div class="foto-solta" data-foto-solta hidden><span data-i18n="f.photoDrop">Solte para substituir</span></div>
+              </div>
+              <!-- A barra de ações é IRMÃ do quadro, e não filha dele:
+                   assim ela é a TERCEIRA COLUNA da ficha, ao lado do
+                   arquivo, em vez de flutuar sobre a miniatura. -->
+              <div class="foto-barra">
+                <button type="button" class="foto-bt" data-foto-ver
+                        data-i18n-title="f.photoZoom" data-i18n-aria="f.photoZoom"
+                        title="Ampliar" aria-label="Ampliar"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
+                <button type="button" class="foto-bt" data-foto-trocar
+                        data-i18n-title="f.photoReplace" data-i18n-aria="f.photoReplace"
+                        title="Substituir" aria-label="Substituir"><i class="fa-solid fa-rotate-right"></i></button>
+                <button type="button" class="foto-bt foto-bt-perigo" data-foto-limpar
+                        data-i18n-title="f.photoRemove" data-i18n-aria="f.photoRemove"
+                        title="Remover" aria-label="Remover"><i class="fa-solid fa-xmark"></i></button>
+              </div>
+              <div class="foto-legenda">
+                <span class="foto-nome" data-foto-nome></span>
+                <span class="foto-dados" data-foto-dados></span>
+              </div>
+            </div>
             <input type="hidden" id="url_imagem_depois" name="url_imagem_depois" value=""/>
             <div class="form-helper" id="uploadDepoisStatus" style="display:none;"></div>
           </div>
 
           <div class="form-group">
-            <label class="form-label" data-i18n="f.descriptionAfter">Descrição do Depois <span class="req">*</span></label>
+            <label for="descricao_depois" class="form-label" data-i18n="f.descriptionAfter">Descrição do Depois: <span class="req">*</span></label>
             <textarea class="form-control" id="descricao_depois" name="descricao_depois" rows="4" placeholder="Descreva a solução, melhorias, padronização e impactos positivos..." data-i18n-placeholder="f.descriptionAfterPlaceholder" required></textarea>
           </div>
 
           <div class="form-group">
-            <label class="form-label" data-i18n="f.extraLinks">Links / Documentos Extras</label> <span class="field-tag-optional" data-i18n="f.optional">opcional</span>
+            <!-- for="links_documentos": o rótulo apontava para
+                 id_resultado_financeiro, que é o combo de OUTRA etapa —
+                 clicar em "Links / Documentos Extras" levava o foco para
+                 lá. Copiar-e-colar antigo, achado ao renomear os campos. -->
+            <label for="links_documentos" class="form-label" data-i18n="f.extraLinks">Links / Documentos Extras: </label> <span class="field-tag-optional" data-i18n="f.optional">opcional</span>
             <div class="input-with-icon">
               <i class="fa-solid fa-link input-icon"></i>
               <input type="url" class="form-control" id="links_documentos" name="links_documentos" placeholder="https://... (SharePoint, evidências, anexos)" data-i18n-placeholder="f.extraLinksPlaceholder"/>
@@ -788,12 +1053,14 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           <div class="wizard-panel-sub" data-i18n="wiz.panel4Sub">Compartilhe o que foi aprendido e o valor gerado com esta melhoria.</div>
 
           <div class="form-group">
-            <label class="form-label" data-i18n="f.lessonsLearned">Lições Aprendidas</label> <span class="req">*</span>
+            <label class="form-label" data-i18n="f.lessonsLearned">Lições Aprendidas: <span class="req">*</span></label>
             <textarea class="form-control" id="licoes_aprendidas" name="licoes_aprendidas" rows="3" placeholder="O que foi aprendido durante este Kaizen? O que faria diferente?" data-i18n-placeholder="f.lessonsPlaceholder"></textarea>
           </div>
 
           <div class="form-group">
-            <label class="form-label" style="margin-bottom:.6rem;" data-i18n="f.financialResultQuestion">Este Kaizen gerou resultado? <span class="field-tag-optional" data-i18n="f.optional">opcional</span></label>
+            <!-- data-sem-dois-pontos: é PERGUNTA, não título de campo —
+                 termina em "?" e não leva ":". -->
+            <label class="form-label" style="margin-bottom:.6rem;" data-sem-dois-pontos data-i18n="f.financialResultQuestion">Este Kaizen gerou resultado? <span class="field-tag-optional" data-i18n="f.optional">opcional</span></label>
 
             <div style="display:flex;flex-direction:column;gap:1.1rem;">
               <div class="result-block" id="blocoResultadoFinanceiro">
@@ -808,21 +1075,24 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
                 <div class="form-group conditional-sub">
                   <div class="form-grid form-grid-3">
                     <div class="form-group" style="margin-bottom:0;">
-                      <label class="form-label" id="lblTipoResultadoFinanceiro" data-i18n="f.financialResultType">Tipo de Resultado Financeiro <span class="field-tag-conditional" data-i18n="f.conditional">Condicional</span></label>
+                      <label for="id_resultado_financeiro" class="form-label" id="lblTipoResultadoFinanceiro" data-i18n="f.financialResultType">Resultado: <span class="field-tag-conditional" data-i18n="f.conditional">Condicional</span></label>
+                      <!-- Sem <option> fixa: a lista vem de kzn_resultados
+                           (ID_TIPO_RESULTADO = 1). As duas que estavam aqui,
+                           "Saving" e "Cost Avoided", eram texto solto — não
+                           tinham valor, não existiam no banco e o que fosse
+                           escolhido não chegava a lugar nenhum. -->
                       <select class="form-control" id="id_resultado_financeiro" name="id_resultado_financeiro" disabled>
                         <option value="" data-i18n="f.select">Selecione...</option>
-                        <option data-i18n="f.financial.saving">Saving</option>
-                        <option data-i18n="f.financial.costAvoided">Cost Avoided</option>
                       </select>
                     </div>
                     <div class="form-group" style="margin-bottom:0;">
-                      <label class="form-label" data-i18n="f.resultCurrency">Moeda</label>
+                      <label for="moeda_resultado_financeiro" class="form-label" data-i18n="f.resultCurrency">Moeda: </label>
                       <select class="form-control" id="moeda_resultado_financeiro" name="moeda_resultado_financeiro" disabled>
                         <option value="" data-i18n="f.select">Selecione...</option>
                       </select>
                     </div>
                     <div class="form-group" style="margin-bottom:0;">
-                      <label class="form-label" data-i18n="f.resultValue">Valor Alcançado/Esperado</label>
+                      <label for="valor_resultado_financeiro" class="form-label" data-i18n="f.resultValue">Valor Alcançado/Esperado: </label>
                       <input type="number" step="0.01" min="0" class="form-control" id="valor_resultado_financeiro" name="valor_resultado_financeiro" placeholder="0,00" disabled/>
                     </div>
                   </div>
@@ -838,13 +1108,13 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
                 <div class="form-group conditional-sub">
                   <div class="form-grid form-grid-2">
                     <div class="form-group" style="margin-bottom:0;">
-                      <label class="form-label" id="lblTipoResultadoOutros" data-i18n="f.otherResultType">Tipo de Resultado <span class="field-tag-conditional" data-i18n="f.conditional">Condicional</span></label>
+                      <label for="id_resultado_outros" class="form-label" id="lblTipoResultadoOutros" data-i18n="f.otherResultType">Resultado: <span class="field-tag-conditional" data-i18n="f.conditional">Condicional</span></label>
                       <select class="form-control" id="id_resultado_outros" name="id_resultado_outros" disabled>
                         <option value="" data-i18n="f.select">Selecione...</option>
                       </select>
                     </div>
                     <div class="form-group" style="margin-bottom:0;">
-                      <label class="form-label" data-i18n="f.otherResultDescription">Descrição dos Resultados Alcançados</label>
+                      <label for="descricao_resultado_outros" class="form-label" data-i18n="f.otherResultDescription">Descrição dos Resultados Alcançados: </label>
                       <textarea class="form-control" id="descricao_resultado_outros" name="descricao_resultado_outros" rows="1" placeholder="Descreva os resultados alcançados..." data-i18n-placeholder="f.otherResultDescriptionPlaceholder" disabled></textarea>
                     </div>
                   </div>
@@ -857,8 +1127,48 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
             <input type="hidden" id="fl_resultado_financeiro" name="fl_resultado_financeiro" value="false"/>
           </div>
 
+          <!-- Data de Conclusão — grava em KZN_PEDRAVISAOCONSOLIDADA.
+               DT_CONCLUSAO, coluna do tipo DATE (só data, sem hora).
+               Fica FORA dos blocos "Resultado Financeiro" e "Outros
+               resultados" de propósito: aqueles dois são condicionais e
+               nascem desabilitados, e a conclusão do Kaizen não depende
+               de ele ter gerado um resultado ou outro.
+               O `max` é acertado por script para ONTEM — ver o bloco
+               "Data de Conclusão" no final da página.
+
+               POR QUE SÃO DOIS CAMPOS: um <input type="date"> mostra a
+               data no formato do NAVEGADOR/sistema, e nada na página
+               muda isso — nem o atributo lang, nem o idioma escolhido
+               aqui (testado). Como a data tem de acompanhar o idioma da
+               tela, quem aparece é um campo de texto formatado por nós
+               (dd/mm/aaaa em português, yyyy/mm/dd em inglês) e o
+               <input type="date"> fica recolhido ao lado, guardando o
+               valor em ISO e servindo de calendário quando o ícone é
+               clicado. O name= continua no campo de data: é dele que
+               sai o data_conclusao do envio, sempre em "YYYY-MM-DD".
+               Formatos: dd/mm/aaaa em português, yyyy/mm/dd em inglês. -->
           <div class="form-group">
-            <label class="form-label" data-i18n="f.comparisonWithGoal">Comparação com a Meta Inicial / Declaração do Problema</label> <span class="req">*</span>
+            <div class="form-grid form-grid-2">
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label" for="data_conclusao_texto" data-i18n="f.completionDate">Data de Conclusão: <span class="req">*</span></label>
+                <div class="input-with-icon campo-data">
+                  <button type="button" class="input-icon campo-data-botao" id="data_conclusao_abrir"
+                          data-i18n-aria="f.completionDateOpen" aria-label="Abrir calendário">
+                    <i class="fa-solid fa-calendar"></i>
+                  </button>
+                  <input type="text" class="form-control" id="data_conclusao_texto"
+                         inputmode="numeric" autocomplete="off" maxlength="10"
+                         placeholder="dd/mm/aaaa" data-i18n-placeholder="f.completionDateFormat"/>
+                  <input type="date" id="data_conclusao" name="data_conclusao"
+                         class="campo-data-nativo" tabindex="-1" aria-hidden="true"/>
+                </div>
+                <div class="form-helper" data-i18n="f.completionDateHelper">Data em que o Kaizen foi concluído. Deve ser anterior à data de hoje.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" data-i18n="f.comparisonWithGoal">Comparação com a Meta Inicial / Declaração do Problema: <span class="req">*</span></label>
             <textarea class="form-control" id="comparacao_meta_inicial" name="comparacao_meta_inicial" rows="3" placeholder="Compare o resultado obtido com a meta ou o problema originalmente declarado..." data-i18n-placeholder="f.comparisonWithGoalPlaceholder"></textarea>
           </div>
 
@@ -908,10 +1218,40 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
   </div>
 </div>
 
-<script src="js/vbm-app.js?v=20260817-1"></script>
+<!-- Foto ampliada, aberta pelo "Visualizar" das Etapas 2 e 3. Fica na
+     camada .confirm-backdrop pelo mesmo motivo do modal acima: os
+     listeners de initModals() só alcançam .modal-backdrop, e aqui o
+     fechamento é controlado neste arquivo (X, Escape e clique fora). -->
+<div class="confirm-backdrop" id="modalFotoAmpliada" role="dialog" aria-modal="true" aria-labelledby="tituloFotoAmpliada">
+  <div class="modal">
+    <div class="modal-head">
+      <!-- fa-camera, e não fa-image: o projeto serve um SUBCONJUNTO do
+           Font Awesome (72 ícones, css/fontawesome-subset.css). Classe
+           de fora do subconjunto não dá erro nenhum — rende um
+           quadradinho vazio, que foi o que apareceu no cabeçalho deste
+           modal. fa-camera está no subconjunto e é o mesmo ícone da
+           zona de upload deste campo. Antes de trocar uma classe fa-*,
+           confira a lista; database/README-subset-fontawesome.md
+           explica como regerar o subconjunto, se um ícone novo for
+           mesmo necessário. -->
+      <div class="modal-icon" style="--hue:60,181,229;background:var(--vbm-blue-pale);border-color:rgba(60,181,229,.28);"><i class="fa-solid fa-camera" style="color:var(--vbm-blue);"></i></div>
+      <div class="modal-title" id="tituloFotoAmpliada" data-i18n="f.photoView">Visualizar</div>
+      <button class="modal-close" type="button" data-fechar-foto aria-label="Fechar" data-i18n-aria="settings.close"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <img id="fotoAmpliada" src="" alt=""/>
+    </div>
+  </div>
+</div>
+
+<script src="js/vbm-app.js?v=20260921-1"></script>
 <!-- Dados do usuário logado (Microsoft Graph) — reaproveita o token do
      login já existente; sem MSAL próprio, sem alterar o fluxo de auth. -->
-<script src="js/usuario-graph.js?v=20260817-1"></script>
+<script src="js/usuario-graph.js?v=20260912-1"></script>
+<!-- Comunicados do cadastro: o servidor devolve as mensagens prontas e
+     estes dois enviam pelo Graph com o token de quem está logado. -->
+<script src="js/msal-config.js?v=20260915-1"></script>
+<script src="js/envio-email.js?v=20260915-1"></script>
 <script>
 // Garante que a página sempre abra rolada para o topo, exibindo o
 // cabeçalho do wizard por completo (evita restauração de scroll do navegador).
@@ -950,6 +1290,17 @@ function rotuloPessoa(p) {
   var nome = nomeDoEmail(p.CD_EMAIL || p.DS_EMAIL) || p.NM_USUARIO || '(sem nome)';
   var extra = [p.CD_EMAIL || p.DS_EMAIL, p.CD_MATRICULA, p.NM_POSICAO].filter(Boolean).join(' · ');
   return { nome: nome, extra: extra };
+}
+
+// Texto que vai para innerHTML sem passar por .textContent precisa
+// disto antes — nome de Membro Externo é digitado livre pela pessoa
+// (não escolhido de uma lista), grava no banco e volta pra tela em
+// mais de uma tela/edição: sem escapar, um nome com "<" ou "&" quebra
+// a estrutura do card, e HTML de verdade (script/img onerror) executa.
+function escaparHtml(txt) {
+  var d = document.createElement('div');
+  d.textContent = txt == null ? '' : String(txt);
+  return d.innerHTML;
 }
 
 // ─── Painel de Configurações (engrenagem) — replicado de Value Driver Tree ───
@@ -1015,6 +1366,12 @@ function rotuloPessoa(p) {
 (function () {
   var I18N = {
     'pt-BR': {
+      'a11y.abrirMenu': 'Abrir menu',
+      'a11y.expandir': 'Expandir',
+      'a11y.avancar': 'Avançar',
+      'a11y.voltar': 'Voltar',
+      'a11y.adicionar': 'Adicionar',
+      'common.fechar': 'Fechar',
       'settings.btnTitle': 'Configurações',
       'settings.title': 'Configurações',
       'settings.close': 'Fechar',
@@ -1068,7 +1425,14 @@ function rotuloPessoa(p) {
       'f.goalPlaceholder': 'Qual o resultado esperado com este Kaizen?',
       'f.approver': 'Aprovador',
       'f.selectApprover': 'Selecione o aprovador...',
-      'f.approverHelper': 'Lista filtrada automaticamente pelo grupo de aprovadores vinculado à unidade do líder do projeto (Sudbury, CA).',
+      // {site} é trocado em tempo de execução pela unidade do líder,
+      // que vem da kzn_mdm_hierarquia. O texto anterior trazia
+      // "(Sudbury, CA)" fixo no idioma — dizia a unidade errada para
+      // todo mundo, e a lista nem era filtrada.
+      'f.approverHelper': 'Lista de aprovadores ativos (kzn_aprovador).',
+      'f.approverHelperSite': 'Somente aprovadores da unidade {site} — a mesma do líder do projeto.',
+      'f.approverOtherSiteTitle': 'Aprovador de outra unidade',
+      'f.approverOtherSiteMsg': 'O aprovador gravado neste Kaizen não pertence à unidade do líder do projeto. Escolha um aprovador da lista.',
       'f.valeTeamMembers': 'Membros da Equipe Vale',
       'f.optionalMax2': 'opcional · máx. 2',
       'f.searchCollaborator': 'Buscar colaborador (MDM)... (Enter para adicionar)',
@@ -1080,7 +1444,19 @@ function rotuloPessoa(p) {
       'f.externalTeamHelperDefault': 'Membros externos não têm acesso ao sistema. Adicione até 1.',
       'f.imageBefore': 'Imagem do Antes',
       'f.clickAddPhoto': 'Clique para adicionar foto',
+      'email.failTitle': 'E-mail não enviado',
+      'email.failMsg': 'O registro foi salvo normalmente, mas o comunicado não saiu.',
+      'f.photoView': 'Visualizar',
+      'f.photoClear': 'Limpar',
+      'f.photoZoom': 'Ampliar',
+      'f.photoReplace': 'Substituir',
+      'f.photoRemove': 'Remover',
+      'f.photoDrop': 'Solte para substituir',
       'f.photoFormats': 'PNG, JPG, WEBP até 10MB',
+      'f.photoInvalidTitle': 'Formato não suportado',
+      'f.photoInvalidMsg': 'Envie a imagem em PNG, JPG ou WEBP.',
+      'f.photoTooBigTitle': 'Imagem muito grande',
+      'f.photoTooBigMsg': 'O tamanho máximo é 10MB.',
       'f.descriptionBefore': 'Descrição do Antes',
       'f.descriptionBeforePlaceholder': 'Descreva a situação e os problemas anteriores à melhoria...',
       'f.descriptionBeforeHelper': 'Inclua dados quantitativos, se disponíveis — facilita medir o ganho depois.',
@@ -1106,12 +1482,14 @@ function rotuloPessoa(p) {
       'f.financialResultQuestion': 'Este Kaizen gerou resultado?',
       'f.resultTypeFinancial': 'Financeiro',
       'f.resultTypeOthers': 'Outros',
-      'f.financialResultType': 'Tipo de Resultado Financeiro',
+      // Os dois combos apontam para kzn_resultados, que e' a tabela de
+      // RESULTADOS — nao de tipos. "Tipo" e' a classificacao
+      // (kzn_tipo_resultado), que aqui nem aparece: ela so decide QUAL
+      // lista cada combo recebe.
+      'f.financialResultType': 'Resultado',
       'f.conditional': 'Condicional',
-      'f.financial.saving': 'Saving',
-      'f.financial.costAvoided': 'Cost Avoided',
       'f.financialResultHelper': 'Visível apenas quando "Financeiro" está selecionado.',
-      'f.otherResultType': 'Tipo de Resultado',
+      'f.otherResultType': 'Resultado',
       'f.other.productivity': 'Produtividade',
       'f.other.safety': 'Saúde e Segurança',
       'f.other.production': 'Produção',
@@ -1125,6 +1503,11 @@ function rotuloPessoa(p) {
       'f.otherResultDescriptionPlaceholder': 'Descreva os resultados alcançados...',
       'f.comparisonWithGoal': 'Comparação com a Meta Inicial / Declaração do Problema',
       'f.comparisonWithGoalPlaceholder': 'Compare o resultado obtido com a meta ou o problema originalmente declarado...',
+      'f.completionDate': 'Data de Conclusão',
+      'f.completionDateHelper': 'Data em que o Kaizen foi concluído. Deve ser anterior à data de hoje.',
+      'f.completionDateInvalid': 'Data de Conclusão (deve ser anterior à data de hoje)',
+      'f.completionDateFormat': 'dd/mm/aaaa',
+      'f.completionDateOpen': 'Abrir calendário',
       'wiz.title': 'Novo Kaizen',
       'wiz.subtitle': 'Registre sua iniciativa de melhoria contínua em 4 etapas',
       'wiz.step1': 'Iniciativa',
@@ -1146,9 +1529,23 @@ function rotuloPessoa(p) {
       'wiz.stepOf3': 'Etapa 3 de 4',
       'wiz.stepOf4': 'Etapa 4 de 4',
       'wiz.submitForApproval': 'Enviar para Aprovação',
+      'edit.pageTitle': 'Alterando Kaizen',
+      'edit.pageSubtitle': 'Revise as informações e reenvie o Kaizen para aprovação',
+      'edit.submit': 'Salvar revisão',
+      'edit.savedTitle': 'Kaizen atualizado!',
+      'edit.savedMsg': 'Kaizen #{id} revisado e reenviado para aprovação.',
+      'edit.blockedTitle': 'Edição não permitida',
+      'edit.approverTitle': 'Aprovador indisponível',
+      'edit.approverMsg': 'O aprovador vinculado a este Kaizen está inativo ou não foi encontrado. Escolha outro para salvar.',
       'wiz.confirmSubmit': 'Confirmo que as informações são precisas e que estou ciente que este Kaizen será enviado para aprovação pelo aprovador responsável da minha unidade.'
     },
     'en': {
+      'a11y.abrirMenu': 'Open menu',
+      'a11y.expandir': 'Expand',
+      'a11y.avancar': 'Next',
+      'a11y.voltar': 'Back',
+      'a11y.adicionar': 'Add',
+      'common.fechar': 'Close',
       'settings.btnTitle': 'Settings',
       'settings.title': 'Settings',
       'settings.close': 'Close',
@@ -1202,7 +1599,10 @@ function rotuloPessoa(p) {
       'f.goalPlaceholder': 'What result is expected from this Kaizen?',
       'f.approver': 'Approver',
       'f.selectApprover': 'Select approver...',
-      'f.approverHelper': 'List automatically filtered by the approver group linked to the project leader\'s unit (Sudbury, CA).',
+      'f.approverHelper': 'Active approvers (kzn_aprovador).',
+      'f.approverHelperSite': 'Only approvers from the {site} site — the project leader\'s own.',
+      'f.approverOtherSiteTitle': 'Approver from another site',
+      'f.approverOtherSiteMsg': 'The approver saved on this Kaizen does not belong to the project leader\'s site. Pick one from the list.',
       'f.valeTeamMembers': 'Vale Team Members',
       'f.optionalMax2': 'optional · max. 2',
       'f.searchCollaborator': 'Search employee (MDM)... (Enter to add)',
@@ -1214,7 +1614,19 @@ function rotuloPessoa(p) {
       'f.externalTeamHelperDefault': 'External members don\'t have system access. Add up to 1.',
       'f.imageBefore': 'Before Image',
       'f.clickAddPhoto': 'Click to add photo',
+      'email.failTitle': 'E-mail not sent',
+      'email.failMsg': 'The record was saved normally, but the notice did not go out.',
+      'f.photoView': 'View',
+      'f.photoClear': 'Clear',
+      'f.photoZoom': 'Zoom in',
+      'f.photoReplace': 'Replace',
+      'f.photoRemove': 'Remove',
+      'f.photoDrop': 'Drop to replace',
       'f.photoFormats': 'PNG, JPG, WEBP up to 10MB',
+      'f.photoInvalidTitle': 'Unsupported format',
+      'f.photoInvalidMsg': 'Upload the image as PNG, JPG or WEBP.',
+      'f.photoTooBigTitle': 'Image too large',
+      'f.photoTooBigMsg': 'The maximum size is 10MB.',
       'f.descriptionBefore': 'Description of Before',
       'f.descriptionBeforePlaceholder': 'Describe the situation and problems prior to the improvement...',
       'f.descriptionBeforeHelper': 'Include quantitative data, if available — makes it easier to measure the gain later.',
@@ -1240,12 +1652,10 @@ function rotuloPessoa(p) {
       'f.financialResultQuestion': 'Did this Kaizen generate a result?',
       'f.resultTypeFinancial': 'Financial',
       'f.resultTypeOthers': 'Others',
-      'f.financialResultType': 'Financial Result Type',
+      'f.financialResultType': 'Result',
       'f.conditional': 'Conditional',
-      'f.financial.saving': 'Saving',
-      'f.financial.costAvoided': 'Cost Avoided',
       'f.financialResultHelper': 'Only visible when "Financial" is selected.',
-      'f.otherResultType': 'Result Type',
+      'f.otherResultType': 'Result',
       'f.other.productivity': 'Productivity',
       'f.other.safety': 'Health and Safety',
       'f.other.production': 'Production',
@@ -1259,6 +1669,11 @@ function rotuloPessoa(p) {
       'f.otherResultDescriptionPlaceholder': 'Describe the results achieved...',
       'f.comparisonWithGoal': 'Comparison with Initial Goal / Problem Statement',
       'f.comparisonWithGoalPlaceholder': 'Compare the result obtained with the originally stated goal or problem...',
+      'f.completionDate': 'Completion Date',
+      'f.completionDateHelper': 'Date the Kaizen was completed. Must be earlier than today.',
+      'f.completionDateInvalid': 'Completion Date (must be earlier than today)',
+      'f.completionDateFormat': 'yyyy/mm/dd',
+      'f.completionDateOpen': 'Open calendar',
       'wiz.title': 'New Kaizen',
       'wiz.subtitle': 'Register your continuous improvement initiative in 4 steps',
       'wiz.step1': 'Initiative',
@@ -1280,6 +1695,14 @@ function rotuloPessoa(p) {
       'wiz.stepOf3': 'Step 3 of 4',
       'wiz.stepOf4': 'Step 4 of 4',
       'wiz.submitForApproval': 'Submit for Approval',
+      'edit.pageTitle': 'Editing Kaizen',
+      'edit.pageSubtitle': 'Review the information and resubmit the Kaizen for approval',
+      'edit.submit': 'Save revision',
+      'edit.savedTitle': 'Kaizen updated!',
+      'edit.savedMsg': 'Kaizen #{id} revised and resubmitted for approval.',
+      'edit.blockedTitle': 'Editing not allowed',
+      'edit.approverTitle': 'Approver unavailable',
+      'edit.approverMsg': 'The approver linked to this Kaizen is inactive or was not found. Choose another one to save.',
       'wiz.confirmSubmit': "I confirm the information is accurate and I understand this Kaizen will be sent for approval to my unit's responsible approver."
     }
   };
@@ -1289,6 +1712,30 @@ function rotuloPessoa(p) {
   var settingsBtn = document.getElementById('settingsBtn');
   if (!select || !panel) return;
 
+  /* Escreve a tradução SEM destruir os filhos do elemento.
+
+     Era `el.textContent = dict[key]`, e isso apagava tudo que estivesse
+     dentro do rótulo: o "*" dos obrigatórios (span.req) e as etiquetas
+     "opcional" / "Condicional". Trocar o idioma fazia os asteriscos
+     sumirem da tela inteira, e só voltavam com F5 — o formulário deixava
+     de dizer o que é obrigatório. Aqui só o TEXTO do próprio elemento é
+     trocado; os filhos ficam onde estão.
+
+     O ":" dos rótulos entra AQUI, e não no dicionário: as mensagens de
+     pendência ("preencha os seguintes campos: Título do Kaizen") leem o
+     mesmo dicionário, e um "Título do Kaizen:" no meio da frase ficaria
+     errado. No dicionário mora o NOME do campo; o dois-pontos é enfeite
+     do rótulo. data-sem-dois-pontos isenta quem já termina em "?". */
+  function escreverTraducao(el, texto) {
+    if (el.classList.contains('form-label') && el.dataset.semDoisPontos == null) texto += ':';
+    var primeiro = null;
+    for (var n = el.firstChild; n; n = n.nextSibling) {
+      if (n.nodeType === 3) { primeiro = n; break; }   // 3 = nó de texto
+    }
+    if (primeiro) primeiro.nodeValue = texto;
+    else el.insertBefore(document.createTextNode(texto), el.firstChild);
+  }
+
   function translatePanel(lang) {
     var dict = I18N[lang] || I18N['pt-BR'];
     window.__i18n = dict;
@@ -1297,7 +1744,7 @@ function rotuloPessoa(p) {
     scope.forEach(function (root) {
       root.querySelectorAll('[data-i18n]').forEach(function (el) {
         var key = el.dataset.i18n;
-        if (dict[key] != null) el.textContent = dict[key];
+        if (dict[key] != null) escreverTraducao(el, dict[key]);
       });
       root.querySelectorAll('[data-i18n-html]').forEach(function (el) {
         var key = el.dataset.i18nHtml;
@@ -1437,9 +1884,9 @@ function createTeamPicker(opts) {
     if (nome) {
       slot.classList.add('filled');
       slot.innerHTML =
-        '<div class="team-chip-avatar" style="background:' + cor + ';">' + iniciais(nome) + '</div>' +
-        '<span class="team-slot-name">' + nome + (mat ? '<small>' + mat + '</small>' : '') + '</span>' +
-        '<button type="button" class="team-slot-remove" aria-label="' + (dict['common.remover'] || 'Remover') + '"><i class="fa-solid fa-xmark"></i></button>';
+        '<div class="team-chip-avatar" style="background:' + cor + ';">' + escaparHtml(iniciais(nome)) + '</div>' +
+        '<span class="team-slot-name">' + escaparHtml(nome) + (mat ? '<small>' + escaparHtml(mat) + '</small>' : '') + '</span>' +
+        '<button type="button" class="team-slot-remove" aria-label="' + escaparHtml(dict['common.remover'] || 'Remover') + '"><i class="fa-solid fa-xmark"></i></button>';
     } else {
       slot.classList.remove('filled');
       slot.innerHTML = '<i class="fa-solid fa-plus"></i>&nbsp;' + (dict['common.adicionar'] || 'Adicionar');
@@ -1487,6 +1934,11 @@ function createTeamPicker(opts) {
   wrap.querySelectorAll('.team-slot').forEach(renderSlot);
   sync();
 
+  // O modo de edição precisa recolocar os membros já gravados. Em vez de
+  // mexer nos slots por fora (e ter de repetir renderSlot/sync), o
+  // picker devolve a MESMA função que a busca usa para preencher.
+  wrap.__preencher = preencherVaga;
+
   wrap.addEventListener('click', function (e) {
     var removeBtn = e.target.closest('.team-slot-remove');
     if (removeBtn) {
@@ -1519,7 +1971,7 @@ function createTeamPicker(opts) {
       item.type = 'button';
       item.className = 'mdm-suggest-item';
       var r = rotuloPessoa(p);
-      item.innerHTML = '<strong>' + r.nome + '</strong><small>' + r.extra + '</small>';
+      item.innerHTML = '<strong>' + escaparHtml(r.nome) + '</strong><small>' + escaparHtml(r.extra) + '</small>';
       item.addEventListener('mousedown', function (e) {
         e.preventDefault();
         preencherVaga(p);
@@ -1619,6 +2071,17 @@ createTeamPicker({
   var lista = null, timer = null;
   function fechar() { if (lista) { lista.remove(); lista = null; } }
 
+  /* Avisa quem depende do líder. Hoje é a lista de Aprovadores, que só
+     mostra quem é da MESMA unidade (NM_SITE) do líder. Só dispara quando o
+     ID muda de verdade: cada tecla digitada limpa o hidden, e sem esta
+     guarda seriam dezenas de recargas da lista por palavra. */
+  var ultimoLider = null;
+  function avisarLider() {
+    if (hidden.value === ultimoLider) return;
+    ultimoLider = hidden.value;
+    try { window.dispatchEvent(new Event('vbm:lider')); } catch (e) {}
+  }
+
   // O que o usuário vê no campo: "Nome — e-mail", nada além disso.
   function rotuloLider(nome, email) {
     return email ? nome + ' — ' + email : nome;
@@ -1626,6 +2089,7 @@ createTeamPicker({
 
   input.addEventListener('input', function () {
     hidden.value = ''; // digitou de novo: a escolha anterior não vale mais
+    avisarLider();       // sem líder escolhido, o recorte volta ao usuário logado
     var termo = input.value.trim();
     clearTimeout(timer);
     if (termo.length < 2) { fechar(); return; }
@@ -1646,11 +2110,12 @@ createTeamPicker({
             // viajando no hidden, que é o que o servidor lê.
             var r = rotuloPessoa(p);
             var email = p.CD_EMAIL || p.DS_EMAIL || '';
-            item.innerHTML = '<strong>' + r.nome + '</strong><small>' + email + '</small>';
+            item.innerHTML = '<strong>' + escaparHtml(r.nome) + '</strong><small>' + escaparHtml(email) + '</small>';
             item.addEventListener('mousedown', function (e) {
               e.preventDefault();
               input.value = rotuloLider(r.nome, email);
               hidden.value = p.ID_USUARIO;
+              avisarLider();
               fechar();
             });
             lista.appendChild(item);
@@ -1694,13 +2159,28 @@ createTeamPicker({
       select.appendChild(opt);
     });
     if (valorAtual != null) select.value = valorAtual;
+    // Modo de edição: o valor do registro é pedido ANTES de as opções
+    // existirem (a lista vem por fetch). Guardado no dataset, ele é
+    // aplicado assim que a lista chega — e continua valendo quando a
+    // lista é recarregada na troca de idioma.
+    if (!select.value && select.dataset.valorDesejado) {
+      select.value = select.dataset.valorDesejado;
+    }
   }
+
+  // 1 = financeiro, 2 = outros, em kzn_tipo_resultado. Ficam aqui, com
+  // nome, em vez de dois números soltos no meio da chamada.
+  var ID_TIPO_RESULTADO_FINANCEIRO = 1;
+  var ID_TIPO_RESULTADO_OUTROS = 2;
 
   function carregarBilingue(url, select, montarLabel) {
     if (!select) return;
     var valorAtual = select.value;
     var idioma = (window.__i18nLang === 'en') ? 'en' : 'pt-BR';
-    fetch(url + '?idioma=' + encodeURIComponent(idioma), { headers: { Accept: 'application/json' } })
+    // A rota pode já trazer querystring (?tipo=): concatenar um segundo
+    // '?' geraria uma URL inválida e o servidor ignoraria o idioma.
+    var junta = url.indexOf('?') === -1 ? '?' : '&';
+    fetch(url + junta + 'idioma=' + encodeURIComponent(idioma), { headers: { Accept: 'application/json' } })
       .then(function (r) { return r.ok ? r.json() : []; })
       .then(function (itens) {
         preencherSelect(select, (itens || []).filter(function (i) { return i.ATIVO; }), montarLabel, valorAtual);
@@ -1725,6 +2205,11 @@ createTeamPicker({
     var grid = document.getElementById('wasteTagsGrid');
     if (!grid) return;
     var marcados = new Set(Array.prototype.map.call(grid.querySelectorAll('input:checked'), function (el) { return el.value; }));
+    // Modo de edição: os desperdícios do registro entram na primeira
+    // montagem da grade, que só acontece depois do fetch.
+    if (!marcados.size && grid.dataset.desejados) {
+      grid.dataset.desejados.split(',').filter(Boolean).forEach(function (v) { marcados.add(v); });
+    }
     var idioma = (window.__i18nLang === 'en') ? 'en' : 'pt-BR';
     fetch('/api/desperdicios?idioma=' + encodeURIComponent(idioma), { headers: { Accept: 'application/json' } })
       .then(function (r) { return r.ok ? r.json() : []; })
@@ -1735,40 +2220,134 @@ createTeamPicker({
           label.className = 'waste-tag';
           label.innerHTML =
             '<input type="checkbox" name="ids_reducao_desperdicios" value="' + item.ID + '"' + (marcados.has(String(item.ID)) ? ' checked' : '') + '/>' +
-            '<span class="waste-tag-visual"><span class="waste-tag-check"><i class="fa-solid fa-check"></i></span><span>' + item.NM + '</span></span>';
+            '<span class="waste-tag-visual"><span class="waste-tag-check"><i class="fa-solid fa-check"></i></span><span>' + escaparHtml(item.NM) + '</span></span>';
           grid.appendChild(label);
         });
       })
       .catch(function () {});
   }
 
+  /* Aprovador: não é bilíngue nem tem ?idioma= — vem do join com o MDM
+     (mesmo endpoint que alimenta a aba Aprovadores do admin).
+
+     A lista é RECORTADA pela unidade (NM_SITE) do líder do projeto, e o
+     recorte é feito no servidor: daqui vai só o ID_USUARIO do líder, ou
+     "logado" quando o campo Líder ainda está no padrão (o usuário logado,
+     com o hidden vazio — mesmo acordo do POST /api/kaizens). Nome de site
+     nunca viaja na URL, então não há como pedir a lista de outra unidade.
+
+     Roda no carregamento, a cada troca de líder ('vbm:lider') e na
+     abertura de um Kaizen para edição/revisão. */
+  function liderAtual() {
+    var hidden = document.getElementById('id_usuario_lider');
+    var id = hidden && hidden.value ? String(hidden.value).trim() : '';
+    return id || 'logado';
+  }
+
+  function carregarAprovadores() {
+    var select = document.getElementById('id_aprovador');
+    if (!select) return;
+    var valorAtual = select.value;
+    // Só a resposta do pedido MAIS RECENTE pode desenhar: trocar de líder
+    // duas vezes seguidas dispara dois fetches e o mais lento pode chegar
+    // por último, repondo a lista da unidade antiga.
+    var meuPedido = ++pedidoAprovadores;
+    fetch('/api/aprovadores?lider=' + encodeURIComponent(liderAtual()), { headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (itens) {
+        if (meuPedido !== pedidoAprovadores) return;
+        // preencherSelect() lê item.ID — /api/aprovadores devolve ID_USUARIO
+        // (é a FK que POST /api/kaizens espera em id_usuario_aprovador).
+        var ativos = (itens || []).filter(function (i) { return i.ATIVO; });
+        var normalizados = ativos.map(function (i) {
+          return { ID: i.ID_USUARIO, DS_EMAIL: i.DS_EMAIL, CD_MATRICULA: i.CD_MATRICULA, NM_POSICAO: i.NM_POSICAO };
+        });
+        preencherSelect(select, normalizados, function (i) {
+          var r = rotuloPessoa({ CD_EMAIL: i.DS_EMAIL, CD_MATRICULA: i.CD_MATRICULA, NM_POSICAO: i.NM_POSICAO });
+          return r.nome + (r.extra ? ' — ' + r.extra : '');
+        }, valorAtual);
+        // NM_SITE_LIDER só vem quando o servidor CONSEGUIU resolver a
+        // unidade. Sem ela (líder fora do MDM ou sem NM_SITE) a lista
+        // veio inteira, e o texto tem de voltar ao genérico — dizer
+        // "somente da unidade X" sobre uma lista não recortada seria
+        // pior do que não dizer nada.
+        dizerUnidade((ativos.length && ativos[0].NM_SITE_LIDER) || null);
+        conferirAprovadorGravado(select);
+      })
+      .catch(function () {});
+  }
+  var pedidoAprovadores = 0;
+
+  /* O texto de ajuda passa a dizer a unidade DE VERDADE. Antes trazia
+     "(Sudbury, CA)" fixo no dicionário: errado para todo mundo que não
+     fosse de Sudbury, e a lista sequer era filtrada. */
+  var siteDoLider = null;
+  function dizerUnidade(site) {
+    siteDoLider = site || null;
+    reescreverUnidade();
+  }
+  function reescreverUnidade() {
+    var ajuda = document.getElementById('ajudaAprovador');
+    if (!ajuda) return;
+    ajuda.textContent = siteDoLider
+      ? txtFiltro('f.approverHelperSite',
+          'Somente aprovadores da unidade {site} — a mesma do líder do projeto.').replace('{site}', siteDoLider)
+      : txtFiltro('f.approverHelper', 'Lista de aprovadores ativos (kzn_aprovador).');
+  }
+  // Troca de idioma: reescreve no novo dicionário sem perder a unidade já
+  // descoberta. São duas funções, e não um parâmetro-sentinela, porque
+  // "site ausente" é um estado de verdade aqui — o líder pode não ter
+  // NM_SITE — e confundi-lo com "não mexa" deixava na tela a unidade do
+  // líder ANTERIOR sobre uma lista que não estava mais recortada.
+
+  /* Edição/revisão: o aprovador gravado pode ser de outra unidade (foi
+     escolhido antes desta regra, ou o líder mudou de site). Se ele não
+     está na lista recortada, a seleção é limpa e a pessoa escolhe outro —
+     deixar o ID antigo no hidden gravaria de volta um aprovador que a
+     regra não aceita mais. */
+  function conferirAprovadorGravado(select) {
+    var desejado = select.dataset.valorDesejado;
+    if (!desejado || select.value) return;
+    delete select.dataset.valorDesejado;
+    select.value = '';
+    if (typeof showToast === 'function') {
+      showToast('warning',
+        txtFiltro('f.approverOtherSiteTitle', 'Aprovador de outra unidade'),
+        txtFiltro('f.approverOtherSiteMsg', 'O aprovador gravado neste Kaizen não pertence à unidade do líder do projeto. Escolha um aprovador da lista.'),
+        7000);
+    }
+  }
+
+  function txtFiltro(chave, padrao) {
+    return (window.__i18n && window.__i18n[chave]) || padrao;
+  }
+
+  window.addEventListener('vbm:idioma', reescreverUnidade);
+
+  // Trocar o líder recarrega a lista. O evento é disparado pelo campo de
+  // busca do líder e pela abertura em modo de edição.
+  window.addEventListener('vbm:lider', carregarAprovadores);
+
   function carregarTodos() {
     carregarBilingue('/api/categorias', document.getElementById('id_categoria'), function (i) { return i.NM; });
     carregarBilingue('/api/replicacoes', document.getElementById('id_replicacao_potencial'), function (i) { return i.NM; });
     carregarDesperdicios();
-    // kzn_tipo_resultado não tem descrição nem ícone — só nome (ver server.js, temIcone:false).
-    carregarBilingue('/api/tiporesultados', document.getElementById('id_resultado_outros'), function (i) { return i.NM; });
+    // Os DOIS combos de resultado vêm da MESMA tabela, kzn_resultados,
+    // separados por ID_TIPO_RESULTADO: 1 = financeiro, 2 = outros. O
+    // recorte é feito no servidor (?tipo=), não peneirando no navegador
+    // — a tela manda o número e recebe só o que lhe cabe.
+    //
+    // O "Outros" lia de /api/tiporesultados, que é a CLASSIFICAÇÃO
+    // (kzn_tipo_resultado): o combo oferecia "Financeiro/Outros" no
+    // lugar dos resultados. E o "Financeiro" não lia de lugar nenhum —
+    // tinha duas <option> escritas à mão no HTML, "Saving" e "Cost
+    // Avoided", que nunca existiram como registro.
+    carregarBilingue('/api/resultados?tipo=' + ID_TIPO_RESULTADO_FINANCEIRO,
+      document.getElementById('id_resultado_financeiro'), function (i) { return i.NM; });
+    carregarBilingue('/api/resultados?tipo=' + ID_TIPO_RESULTADO_OUTROS,
+      document.getElementById('id_resultado_outros'), function (i) { return i.NM; });
 
-    // Aprovador: não é bilíngue nem tem ?idioma= — vem do join com o MDM
-    // (mesmo endpoint que alimenta a aba Aprovadores do admin).
-    var selAprovador = document.getElementById('id_aprovador');
-    if (selAprovador) {
-      var valorAtual = selAprovador.value;
-      fetch('/api/aprovadores', { headers: { Accept: 'application/json' } })
-        .then(function (r) { return r.ok ? r.json() : []; })
-        .then(function (itens) {
-          // preencherSelect() lê item.ID — /api/aprovadores devolve ID_USUARIO
-          // (é a FK que POST /api/kaizens espera em id_usuario_aprovador).
-          var normalizados = (itens || [])
-            .filter(function (i) { return i.ATIVO; })
-            .map(function (i) { return { ID: i.ID_USUARIO, DS_EMAIL: i.DS_EMAIL, CD_MATRICULA: i.CD_MATRICULA, NM_POSICAO: i.NM_POSICAO }; });
-          preencherSelect(selAprovador, normalizados, function (i) {
-            var r = rotuloPessoa({ CD_EMAIL: i.DS_EMAIL, CD_MATRICULA: i.CD_MATRICULA, NM_POSICAO: i.NM_POSICAO });
-            return r.nome + (r.extra ? ' — ' + r.extra : '');
-          }, valorAtual);
-        })
-        .catch(function () {});
-    }
+    carregarAprovadores();
 
     // Moeda: não é bilíngue (sem ID_IDIOMA no DER).
     carregarSimples('/api/moedas', document.getElementById('moeda_resultado_financeiro'), function (i) {
@@ -1789,6 +2368,521 @@ createTeamPicker({
 // formulário. A pré-visualização local continua funcionando sozinha
 // (initPhotoUpload, em vbm-app.js, lê o arquivo com FileReader — não
 // depende deste upload).
+// ─── Contador de caracteres + limite do banco ───
+// Um lugar só define o teto de cada campo, com o mesmo valor da coluna
+// em KZN_PEDRAVISAOCONSOLIDADA (e, no caso do "Outros resultados", o de
+// kzn_resultados). O maxlength sai daqui, então corrigir a tabela é
+// corrigir a tela — não há número repetido no HTML.
+//
+// O servidor continua validando os mesmos limites (ver lerKaizenDoCorpo
+// em server.js): isto é conforto de digitação, não a barreira.
+(function () {
+  var LIMITES = {
+    titulo_kaizen: 100,             // NM_KAIZEN
+    declaracao_problema: 300,       // DS_PROBLEMA
+    meta_objetivo: 300,             // DS_OBJETIVO
+    descricao_antes: 300,           // DS_ESTADO_ANTES
+    descricao_depois: 300,          // DS_ESTADO_DEPOIS
+    links_documentos: 300,          // URL_REFERENCIA
+    licoes_aprendidas: 300,         // DS_LICOES_APRENDIDAS
+    comparacao_meta_inicial: 300,   // DS_COMPARA_META
+    descricao_resultado_outros: 100 // DS_RESULTADO_ALCANCADO
+  };
+
+  var campos = [];
+
+  function atualizar(campo, contador, max) {
+    // Colar acima do limite: o maxlength já corta na maioria dos casos,
+    // mas preenchimento por script e alguns teclados passam por cima.
+    if (campo.value.length > max) campo.value = campo.value.slice(0, max);
+    contador.textContent = campo.value.length + '/' + max;
+    contador.classList.toggle('no-limite', campo.value.length >= max);
+  }
+
+  Object.keys(LIMITES).forEach(function (id) {
+    var campo = document.getElementById(id);
+    if (!campo) return;
+    var max = LIMITES[id];
+    campo.setAttribute('maxlength', max);
+
+    var contador = document.createElement('span');
+    contador.className = 'campo-contador';
+    contador.setAttribute('aria-hidden', 'true');   // a contagem é apoio visual
+
+    // O contador divide a linha com o texto de ajuda quando ele existe;
+    // senão fica sozinho, alinhado à direita, embaixo do campo.
+    var grupo = campo.closest('.form-group') || campo.parentElement;
+    var ajuda = grupo.querySelector('.form-helper');
+    var linha = document.createElement('div');
+    linha.className = 'campo-contador-linha';
+    if (ajuda && ajuda.parentElement === grupo) {
+      grupo.insertBefore(linha, ajuda);
+      linha.appendChild(ajuda);
+    } else {
+      grupo.appendChild(linha);
+    }
+    linha.appendChild(contador);
+
+    campo.addEventListener('input', function () { atualizar(campo, contador, max); });
+    atualizar(campo, contador, max);
+    campos.push(function () { atualizar(campo, contador, max); });
+  });
+
+  // A edição preenche os campos por script, e atribuir .value não dispara
+  // 'input' — sem isto o contador ficaria em 0 num campo já preenchido.
+  window.VBMContadores = { atualizar: function () { campos.forEach(function (f) { f(); }); } };
+})();
+
+// ─── Data de Conclusão: teto no calendário ───
+// A regra é "anterior à data de hoje", então o maior dia escolhível é
+// ONTEM. Acertar o `max` faz o próprio calendário do navegador
+// desabilitar hoje e o futuro — o usuário nem chega a errar. Não é a
+// barreira: digitação direta e colagem passam por cima do `max`, e por
+// isso a mesma conta é refeita no envio (dataConclusaoValida) e no
+// servidor (lerKaizenDoCorpo), que é quem de fato decide.
+//
+// "Hoje" é o de BRASÍLIA, não o do aparelho. O servidor grava e compara
+// tudo nesse fuso (ver AGORA_BRASILIA em server.js); se a tela usasse o
+// relógio local, quem estivesse com o aparelho em outro fuso — ou o
+// navegador em UTC, das 21h à meia-noite de Brasília — veria um limite
+// e receberia outro do servidor na hora de salvar. O fuso vem pelo nome
+// ('America/Sao_Paulo'), então horário de verão, se voltar, é
+// respeitado sozinho; 'en-CA' devolve a data já em ISO.
+window.VBMDataBrasilia = {
+  hoje: function () {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit'
+    }).format(new Date());
+  },
+  ontem: function () {
+    // A data de hoje é lida como meia-noite UTC só para poder voltar um
+    // dia sem cair na borda do fuso — o resultado volta a ser texto.
+    var d = new Date(this.hoje() + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() - 1);
+    return d.toISOString().slice(0, 10);
+  }
+};
+
+// ─── Data de Conclusão: formato conforme o idioma ───
+// Um <input type="date"> mostra a data no formato do NAVEGADOR/sistema
+// e ignora tanto o atributo lang quanto o idioma escolhido na tela —
+// conferido nos dois sentidos. Como a data tem de acompanhar o idioma,
+// quem aparece é um campo de TEXTO formatado aqui (dd/mm/aaaa em
+// português, yyyy/mm/dd em inglês) e o campo de data fica recolhido ao
+// lado, guardando o valor em ISO, servindo de calendário e sendo o que
+// o envio lê. Os dois andam sempre juntos.
+window.VBMDataConclusao = (function () {
+  var texto = document.getElementById('data_conclusao_texto');
+  var iso = document.getElementById('data_conclusao');
+  var botao = document.getElementById('data_conclusao_abrir');
+  if (!texto || !iso) return { sincronizar: function () {} };
+
+  function idioma() {
+    return (window.__i18nLang === 'en') ? 'en' : 'pt-BR';
+  }
+  // Cada idioma diz só a ORDEM dos três números; todo o resto sai daí.
+  // 'a' (ano) tem 4 dígitos e os outros dois têm 2 — por isso o tamanho
+  // dos grupos é derivado da ordem, e não fixado: em português a
+  // máscara é 2/2/4 e em inglês, com o ano na frente, 4/2/2.
+  function ordem() { return idioma() === 'en' ? ['a', 'm', 'd'] : ['d', 'm', 'a']; }
+  function tamanhos() { return ordem().map(function (k) { return k === 'a' ? 4 : 2; }); }
+
+  /** ISO "YYYY-MM-DD" -> texto no formato do idioma atual. */
+  function formatar(valorIso) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(valorIso || '')) return '';
+    var p = { a: valorIso.slice(0, 4), m: valorIso.slice(5, 7), d: valorIso.slice(8, 10) };
+    return ordem().map(function (k) { return p[k]; }).join('/');
+  }
+
+  /** Quebra os 8 dígitos nos grupos do idioma atual. */
+  function grupos(digitos) {
+    var t = tamanhos(), fora = [], i = 0;
+    t.forEach(function (tam) {
+      if (i >= digitos.length) return;
+      fora.push(digitos.substr(i, tam));
+      i += tam;
+    });
+    return fora;
+  }
+
+  /** Texto digitado -> ISO. Devolve '' quando não dá uma data real:
+   *  vale tanto para "12/" quanto para "31/02/2026", que tem o formato
+   *  certo mas não é dia nenhum. */
+  function paraIso(valorTexto) {
+    var n = String(valorTexto || '').replace(/\D/g, '');
+    if (n.length !== 8) return '';
+    var o = ordem(), g = grupos(n), p = {};
+    o.forEach(function (k, i) { p[k] = g[i]; });
+    var candidato = p.a + '-' + p.m + '-' + p.d;
+    var d = new Date(candidato + 'T00:00:00Z');
+    if (isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== candidato) return '';
+    return candidato;
+  }
+
+  /** Máscara enquanto digita: só números, barras entram sozinhas. */
+  function mascarar(valorTexto) {
+    var n = String(valorTexto || '').replace(/\D/g, '').slice(0, 8);
+    return grupos(n).join('/');
+  }
+
+  // texto -> ISO
+  texto.addEventListener('input', function () {
+    var cursorNoFim = texto.selectionStart === texto.value.length;
+    texto.value = mascarar(texto.value);
+    if (cursorNoFim) texto.setSelectionRange(texto.value.length, texto.value.length);
+    iso.value = paraIso(texto.value);
+  });
+  // Ao sair do campo, o que não virou data real é reescrito a partir do
+  // ISO (ou some, se não houver ISO): não fica meia data na tela.
+  texto.addEventListener('blur', function () { texto.value = formatar(iso.value); });
+
+  // calendário -> texto
+  iso.addEventListener('change', function () { texto.value = formatar(iso.value); });
+  if (botao) {
+    botao.addEventListener('click', function () {
+      if (typeof iso.showPicker === 'function') {
+        // showPicker lança quando o navegador não deixa abrir assim;
+        // nesse caso o campo de texto continua servindo para digitar.
+        try { iso.showPicker(); return; } catch (e) {}
+      }
+      texto.focus();
+    });
+  }
+
+  // Troca de idioma: reescreve o que já está preenchido no novo formato.
+  window.addEventListener('vbm:idioma', function () { texto.value = formatar(iso.value); });
+
+  return {
+    // Usada pela carga da edição, que preenche o ISO por script —
+    // atribuir .value não dispara 'change'.
+    sincronizar: function () { texto.value = formatar(iso.value); }
+  };
+})();
+
+// ─── Data de Conclusão: teto no calendário ───
+// A regra é "anterior à data de hoje", então o maior dia escolhível é
+// ONTEM. Acertar o `max` faz o próprio calendário do navegador
+// desabilitar hoje e o futuro — o usuário nem chega a errar. Não é a
+// barreira: digitação direta e colagem passam por cima do `max`, e por
+// isso a mesma conta é refeita no envio (dataConclusaoValida) e no
+// servidor (lerKaizenDoCorpo), que é quem de fato decide.
+(function () {
+  var campo = document.getElementById('data_conclusao');
+  if (!campo) return;
+  function acertarTeto() { campo.setAttribute('max', window.VBMDataBrasilia.ontem()); }
+  acertarTeto();
+  // Uma aba aberta durante a virada do dia continuaria com o teto de
+  // ontem; ao voltar para ela, o limite é recalculado.
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) acertarTeto();
+  });
+})();
+
+// ─── Formatos aceitos nas fotos (Antes/Depois) ───
+// O accept dos inputs já filtra a janela de escolha, mas é só uma
+// sugestão: o navegador deixa trocar para "todos os arquivos" e o
+// usuário escolher um HEIC, um PDF ou um GIF. Aqui o arquivo é recusado
+// na hora, com a mesma lista que POST /api/kaizens/imagem aceita — em
+// vez de deixar a pessoa preencher o formulário inteiro e só descobrir
+// o problema no envio. O servidor continua validando de qualquer forma.
+(function () {
+  var TIPOS_OK = ['image/png', 'image/jpeg', 'image/webp'];
+  var EXT_OK = /\.(png|jpe?g|webp)$/i;
+  var MAX_BYTES = 10 * 1024 * 1024;   // mesmo limite do servidor
+
+  function txtFoto(chave, padrao) {
+    return (window.__i18n && window.__i18n[chave]) || padrao;
+  }
+
+  function acoesDe(input) {
+    return document.querySelector('[data-acoes-foto="' + input.id + '"]');
+  }
+
+  /* A <img> mora DENTRO do palco, não mais colada ao lado da zona de
+     upload — por isso a busca é pelo palco, e não por nextElementSibling. */
+  function previewDe(input) {
+    var palco = acoesDe(input);
+    return palco ? palco.querySelector('.photo-preview-img') : null;
+  }
+
+  /* Nome, dimensão e peso do arquivo, na legenda abaixo da imagem.
+     Existe para a pessoa conferir ANTES de enviar que subiu o arquivo
+     certo — e para os 10MB aparecerem enquanto ainda dá para trocar.
+
+     `arquivo` só existe na escolha local. Na EDIÇÃO a foto já está
+     gravada e vem do servidor: sobra o nome tirado do caminho, e a
+     dimensão é lida da própria imagem quando ela carrega. */
+  function preencherLegenda(input, arquivo) {
+    var palco = acoesDe(input);
+    if (!palco) return;
+    var elNome = palco.querySelector('[data-foto-nome]');
+    var elDados = palco.querySelector('[data-foto-dados]');
+    var preview = previewDe(input);
+
+    if (elNome) {
+      var nome = arquivo ? arquivo.name : '';
+      if (!nome) {
+        var guardado = document.getElementById(input.id.replace('imagem_', 'url_imagem_'));
+        nome = guardado && guardado.value ? String(guardado.value).split('/').pop() : '';
+      }
+      elNome.textContent = nome;
+      elNome.title = nome;
+    }
+
+    /* A linha visível é NOME e DIMENSÃO, como o layout de referência.
+       O peso não sai de cena: vai para o title, porque é o que explica
+       uma recusa por 10MB — só deixa de disputar espaço com o nome do
+       arquivo, que é o que identifica o print. */
+    function escrever() {
+      if (!elDados) return;
+      var dimensao = preview && preview.naturalWidth
+        ? preview.naturalWidth.toLocaleString('pt-BR') + ' × ' +
+          preview.naturalHeight.toLocaleString('pt-BR')
+        : '';
+      elDados.textContent = dimensao;
+
+      if (arquivo) {
+        var kb = arquivo.size / 1024;
+        var peso = kb >= 1024 ? (kb / 1024).toFixed(1) + ' MB' : Math.round(kb) + ' KB';
+        elDados.title = dimensao ? dimensao + ' · ' + peso : peso;
+      } else {
+        elDados.removeAttribute('title');
+      }
+    }
+    escrever();
+    // A dimensão só existe depois que a imagem carrega — e ela chega
+    // por FileReader (assíncrono) ou pelo servidor.
+    if (preview) preview.addEventListener('load', escrever, { once: true });
+  }
+
+  /* Mostra as ações (Visualizar / Limpar) do campo.
+
+     Quem desenha a pré-visualização da foto RECÉM-ESCOLHIDA é o
+     initPhotoUpload do vbm-app.js, componente compartilhado: ele lê o
+     arquivo e, de quebra, ESCONDE a zona de upload. Era daí que vinha o
+     problema relatado — sumindo a zona, some o único jeito de trocar uma
+     foto escolhida por engano, e o "Limpar" abaixo é o que devolve a
+     zona. Aqui não repetimos a leitura do arquivo; só acrescentamos as
+     ações que faltavam.
+
+     O `endereco` é opcional e só vem da EDIÇÃO, onde a foto já está
+     gravada e tem de ser buscada no servidor. */
+  function mostrarFotoEscolhida(input, endereco) {
+    var preview = previewDe(input);
+    if (preview && endereco) {
+      preview.src = endereco;
+      preview.style.display = 'block';
+      // Só no caminho da EDIÇÃO/restauração: na escolha local quem
+      // preenche é o 'change', que tem o File em mãos (nome e peso).
+      preencherLegenda(input, null);
+    }
+    var acoes = acoesDe(input);
+    if (acoes) acoes.hidden = false;
+    // Com foto na tela, a zona de upload sai de cena — é o que o cadastro
+    // novo já fazia, e agora a EDIÇÃO faz igual. Mostrar as duas ao mesmo
+    // tempo dava a impressão de que faltava enviar alguma coisa. Quem
+    // devolve a zona é o "Limpar".
+    var zona = input.closest('.photo-upload-zone');
+    if (zona) zona.style.display = 'none';
+  }
+  /* Garante a ficha nos dois campos. Hoje a classe já vem na marcação
+     — os dois modos usam o mesmo layout —, então isto é idempotente e
+     fica como rede: a chamada do modo de edição segue valendo, e se
+     algum caminho futuro montar o campo sem a classe, ela entra aqui. */
+  function usarFicha() {
+    document.querySelectorAll('[data-acoes-foto]').forEach(function (palco) {
+      palco.classList.add('e-ficha');
+    });
+  }
+
+  window.VBMFotoCampo = { mostrar: mostrarFotoEscolhida, usarFicha: usarFicha };
+
+  /* Tira a foto da tela e devolve a zona de upload. */
+  function esvaziarCampo(input) {
+    var preview = previewDe(input);
+    if (preview) {
+      preview.removeAttribute('src');
+      preview.style.display = 'none';
+    }
+    var acoes = acoesDe(input);
+    if (acoes) {
+      acoes.hidden = true;
+      var elNome = acoes.querySelector('[data-foto-nome]');
+      var elDados = acoes.querySelector('[data-foto-dados]');
+      if (elNome) { elNome.textContent = ''; elNome.removeAttribute('title'); }
+      if (elDados) elDados.textContent = '';
+    }
+    var zona = input.closest('.photo-upload-zone');
+    if (zona) zona.style.display = '';
+  }
+
+  /* "Limpar": tira a foto do campo, tenha ela acabado de ser escolhida ou
+     já estar gravada no Kaizen. Depois disto o campo fica vazio DE FATO e
+     o envio volta a exigir uma imagem (ela é obrigatória) — é isso que
+     torna o "Limpar" o caminho para trocar a foto na edição.
+
+     Nada é apagado no servidor: a coluna do Kaizen só muda quando o
+     cadastro é salvo, e salvar sem escolher outra foto a validação não
+     deixa. Desistir e sair da tela não altera nada. */
+  function limparCampo(input) {
+    input.value = '';
+    delete input.dataset.jaGravada;
+    var hidden = document.getElementById(input.id.replace('imagem_', 'url_imagem_'));
+    if (hidden) hidden.value = '';
+    esvaziarCampo(input);
+  }
+
+  /* Descarta uma escolha RECUSADA (formato ou tamanho errado). Diferente
+     do "Limpar": aqui a pessoa não pediu para tirar a foto, ela só errou
+     o arquivo — então o que já estava no campo tem de voltar, inclusive a
+     foto gravada de uma edição. */
+  function descartarEscolha(input) {
+    input.value = '';
+    var hidden = document.getElementById(input.id.replace('imagem_', 'url_imagem_'));
+    var gravada = hidden && hidden.value;
+    if (gravada) {
+      // &v= só para furar o cache do navegador — ver nota em
+      // mostrarImagemAtual, no fim da página.
+      input.dataset.jaGravada = '1';
+      mostrarFotoEscolhida(input, '/api/kaizens/imagem?path=' + encodeURIComponent(gravada) + '&v=' + Date.now());
+    } else {
+      esvaziarCampo(input);
+    }
+  }
+
+  ['imagem_antes', 'imagem_depois'].forEach(function (id) {
+    var input = document.getElementById(id);
+    if (!input) return;
+    input.addEventListener('change', function () {
+      var arquivo = input.files && input.files[0];
+      if (!arquivo) return;
+      // Tipo E extensão: alguns navegadores não preenchem o type, e um
+      // arquivo renomeado não pode passar só pela extensão.
+      var tipoOk = TIPOS_OK.indexOf(arquivo.type) !== -1;
+      var extOk = EXT_OK.test(arquivo.name || '');
+      if (!tipoOk || !extOk) {
+        descartarEscolha(input);
+        showToast('error', txtFoto('f.photoInvalidTitle', 'Formato não suportado'),
+          txtFoto('f.photoInvalidMsg', 'Envie a imagem em PNG, JPG ou WEBP.'), 5000);
+        return;
+      }
+      if (arquivo.size > MAX_BYTES) {
+        descartarEscolha(input);
+        showToast('error', txtFoto('f.photoTooBigTitle', 'Imagem muito grande'),
+          txtFoto('f.photoTooBigMsg', 'O tamanho máximo é 10MB.'), 5000);
+        return;
+      }
+      // A imagem em si é desenhada pelo initPhotoUpload (vbm-app.js);
+      // aqui só liberamos as ações de conferir e trocar.
+      mostrarFotoEscolhida(input);
+      preencherLegenda(input, arquivo);
+    });
+  });
+
+  /* Arrastar um arquivo SOBRE a imagem já escolhida troca por ele, sem
+     passar pelo estado vazio. A zona de upload some quando há foto, e
+     era só por ela que o arrastar funcionava — então o palco precisa
+     tratar isso por conta própria.
+
+     Quem escuta é o PALCO, não o quadro: na ficha da edição o quadro é
+     uma miniatura de 104 px, alvo pequeno demais para soltar um arquivo.
+     O realce e o aviso "Solte para substituir" continuam no quadro, que
+     é onde a imagem está — o que muda é só a área que aceita o arquivo. */
+  ['imagem_antes', 'imagem_depois'].forEach(function (id) {
+    var input = document.getElementById(id);
+    var palco = input && acoesDe(input);
+    var quadro = palco && palco.querySelector('.foto-quadro');
+    var aviso = palco && palco.querySelector('[data-foto-solta]');
+    if (!palco || !quadro) return;
+
+    function realcar(ligado) {
+      quadro.classList.toggle('arrastando', ligado);
+      if (aviso) aviso.hidden = !ligado;
+    }
+    ['dragenter', 'dragover'].forEach(function (evt) {
+      palco.addEventListener(evt, function (e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        realcar(true);
+      });
+    });
+    ['dragleave', 'dragend'].forEach(function (evt) {
+      palco.addEventListener(evt, function (e) {
+        // Só apaga o realce ao sair do palco DE VERDADE: passar sobre a
+        // barra de ações dispara dragleave no contêiner e piscaria.
+        if (evt === 'dragleave' && palco.contains(e.relatedTarget)) return;
+        realcar(false);
+      });
+    });
+    palco.addEventListener('drop', function (e) {
+      e.preventDefault();
+      realcar(false);
+      var arquivos = e.dataTransfer && e.dataTransfer.files;
+      if (!arquivos || !arquivos.length) return;
+      // Atribuir o FileList ao input mantém UM só caminho de validação:
+      // o 'change' abaixo confere tipo e tamanho como em qualquer escolha.
+      input.files = arquivos;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  });
+
+  /* Visualizar / Limpar. Delegado no documento: os dois blocos de ações
+     têm a mesma marcação e o alvo sai do data-acoes-foto do contêiner. */
+  document.addEventListener('click', function (e) {
+    var bloco = e.target.closest('[data-acoes-foto]');
+    if (!bloco) return;
+    var input = document.getElementById(bloco.dataset.acoesFoto);
+    if (!input) return;
+
+    if (e.target.closest('[data-foto-limpar]')) {
+      limparCampo(input);
+      return;
+    }
+    /* Substituir: abre o seletor direto, sem obrigar a limpar antes.
+       Era a queixa central do desenho anterior — trocar exigia dois
+       passos e um estado vazio no meio. Se a pessoa desistir, o input
+       volta sem 'change' e nada muda na tela. */
+    if (e.target.closest('[data-foto-trocar]')) {
+      input.click();
+      return;
+    }
+    if (e.target.closest('[data-foto-ver]')) {
+      var preview = previewDe(input);
+      var endereco = preview && preview.getAttribute('src');
+      if (endereco) abrirFotoAmpliada(endereco, preview.alt || '');
+    }
+  });
+
+  /* Foto ampliada. Fecha pelo X, pelo Escape e pelo clique fora — o
+     mesmo que o usuário espera de qualquer modal da aplicação. */
+  var backdropFoto = document.getElementById('modalFotoAmpliada');
+  var imgAmpliada = document.getElementById('fotoAmpliada');
+
+  function abrirFotoAmpliada(endereco, descricao) {
+    if (!backdropFoto || !imgAmpliada) return;
+    imgAmpliada.src = endereco;
+    imgAmpliada.alt = descricao;
+    backdropFoto.classList.add('open');
+  }
+
+  function fecharFotoAmpliada() {
+    if (!backdropFoto) return;
+    backdropFoto.classList.remove('open');
+    // Larga a imagem ao fechar: são data: URIs de até 10MB, e manter a
+    // referência no modal guardaria isso em memória sem necessidade.
+    if (imgAmpliada) imgAmpliada.removeAttribute('src');
+  }
+
+  if (backdropFoto) {
+    backdropFoto.addEventListener('click', function (e) {
+      if (e.target === backdropFoto || e.target.closest('[data-fechar-foto]')) fecharFotoAmpliada();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && backdropFoto.classList.contains('open')) fecharFotoAmpliada();
+    });
+  }
+})();
+
 function uploadImagemSeSelecionada(inputId, hiddenId, tipo) {
   var input = document.getElementById(inputId);
   var hidden = document.getElementById(hiddenId);
@@ -1797,7 +2891,13 @@ function uploadImagemSeSelecionada(inputId, hiddenId, tipo) {
 
   var dados = new FormData();
   dados.append('imagem', arquivo);
-  return fetch('/api/kaizens/imagem?tipo=' + tipo, { method: 'POST', body: dados })
+  // ?id= só existe na edição; no cadastro novo o ID ainda não foi
+  // gerado, e o servidor nomeia o arquivo com o prefixo NOVO.
+  var idKaizen = (window.VBMEdicao && window.VBMEdicao.id) || '';
+  var origemImg = (window.VBMEdicao && window.VBMEdicao.origem) || '';
+  return fetch('/api/kaizens/imagem?tipo=' + tipo +
+               (idKaizen ? '&id=' + encodeURIComponent(idKaizen) + '&origem=' + encodeURIComponent(origemImg) : ''),
+               { method: 'POST', body: dados })
     .then(function (r) { return r.json().then(function (corpo) { return { ok: r.ok, corpo: corpo }; }); })
     .then(function (resultado) {
       if (!resultado.ok) throw new Error((resultado.corpo && resultado.corpo.error) || ('Falha ao enviar a imagem (' + tipo + ').'));
@@ -1849,7 +2949,12 @@ function uploadImagemSeSelecionada(inputId, hiddenId, tipo) {
   // (sem acentuar diferença de caixa, sem espaço nas pontas) é feita no
   // banco — ver GET /api/kaizens/titulo-existe em server.js.
   function tituloDuplicado(titulo) {
-    return fetch('/api/kaizens/titulo-existe?titulo=' + encodeURIComponent(titulo),
+    // Em edição o próprio registro não conta como duplicata — sem o id
+    // aqui, o Kaizen era barrado pelo seu próprio título ao passar da
+    // Etapa 1 para a Etapa 2.
+    var idAtual = valor('id_kaizen');
+    return fetch('/api/kaizens/titulo-existe?titulo=' + encodeURIComponent(titulo) +
+                 (idAtual ? '&id=' + encodeURIComponent(idAtual) : ''),
                  { headers: { Accept: 'application/json' } })
       .then(function (r) {
         if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -2216,6 +3321,22 @@ window.validacaoWizard = (function () {
     if (steps[indice]) steps[indice].click();
   }
 
+  /* Data de Conclusão anterior a hoje.
+     "Hoje" é o de Brasília (window.VBMDataBrasilia), o mesmo que o
+     servidor usa — com o relógio do aparelho, tela e servidor podiam
+     discordar de qual é o dia de hoje e a pessoa levava uma recusa
+     depois de a tela ter aprovado.
+     A comparação é de TEXTO "YYYY-MM-DD": nesse formato a ordem
+     alfabética é a cronológica, então não entra objeto Date nem fuso na
+     conta — mesmo critério de lerKaizenDoCorpo em server.js. */
+  function dataConclusaoValida() {
+    var v = valor('data_conclusao');
+    // Texto preenchido sem ISO por trás = o que foi digitado não virou
+    // data (dia inexistente, data pela metade). Não é "campo vazio".
+    if (!v) return !valor('data_conclusao_texto');
+    return /^\d{4}-\d{2}-\d{2}$/.test(v) && v < window.VBMDataBrasilia.hoje();
+  }
+
   // AÇÃO 1 — Lições Aprendidas. Só espaços não conta como conteúdo.
   // A ordem das regras segue a ordem dos campos na tela; a primeira
   // pendência interrompe.
@@ -2233,7 +3354,7 @@ window.validacaoWizard = (function () {
     // bloqueado, então este ramo não roda; ele existe pronto para o dia
     // em que o campo for liberado, sem depender de nova alteração aqui.
     if (valor('fl_resultado_financeiro') === 'true') {
-      exigir('id_resultado_financeiro', 'f.financialResultType', 'Tipo de Resultado Financeiro');
+      exigir('id_resultado_financeiro', 'f.financialResultType', 'Resultado');
       exigir('moeda_resultado_financeiro', 'f.resultCurrency', 'Moeda');
       exigir('valor_resultado_financeiro', 'f.resultValue', 'Valor Alcançado/Esperado');
     }
@@ -2241,12 +3362,33 @@ window.validacaoWizard = (function () {
     // Condicional do "Outros resultados": só cobra quando o bloco está
     // ativo. Desligado, os dois campos seguem opcionais.
     if (valor('fl_resultado_outros') === 'true') {
-      exigir('id_resultado_outros', 'f.otherResultType', 'Tipo de Resultado');
+      exigir('id_resultado_outros', 'f.otherResultType', 'Resultado');
       exigir('descricao_resultado_outros', 'f.otherResultDescription', 'Descrição dos Resultados Alcançados');
     }
 
     exigir('comparacao_meta_inicial', 'f.comparisonWithGoal',
       'Comparação com a Meta Inicial / Declaração do Problema');
+
+    // Data de Conclusão é OBRIGATÓRIA e, quando preenchida, tem de ser
+    // anterior a hoje. O `max` do input já impede escolher no
+    // calendário, mas digitação direta e colagem passam por cima dele —
+    // e o servidor confere de novo, de qualquer forma.
+    //
+    // A conferência olha o campo VISÍVEL: se a pessoa digitou algo que
+    // não virou data (um dia que não existe, a data pela metade), o
+    // campo de data fica vazio e o envio seguiria em silêncio, como se
+    // ela não tivesse preenchido nada. Por isso "vazio" aqui é os DOIS
+    // campos vazios, e não só o de data.
+    if (!valor('data_conclusao_texto') && !valor('data_conclusao')) {
+      faltando.push({ id: 'data_conclusao_texto', chave: 'f.completionDate',
+                      padrao: 'Data de Conclusão' });
+    } else if (!dataConclusaoValida()) {
+      // Aponta para o campo VISÍVEL: o de data está recolhido, e
+      // destacar/focar um elemento invisível não leva a pessoa a lugar
+      // nenhum.
+      faltando.push({ id: 'data_conclusao_texto', chave: 'f.completionDateInvalid',
+                      padrao: 'Data de Conclusão (deve ser anterior à data de hoje)' });
+    }
 
     // A confirmação de envio é pendência como qualquer outra: entra na
     // mesma lista, para o usuário ver tudo o que falta numa só passada.
@@ -2303,7 +3445,14 @@ window.validacaoWizard = (function () {
       { id: 'imagem_depois', etapa: 2, chave: 'f.imageAfter', padrao: 'Imagem do Depois' },
       { id: 'descricao_depois', etapa: 2, chave: 'f.descriptionAfter', padrao: 'Descrição do Depois' },
     ];
-    var faltandoAntes = camposObrigatorios.filter(function (c) { return !valor(c.id); });
+    var faltandoAntes = camposObrigatorios.filter(function (c) {
+      // Na EDIÇÃO, foto já gravada conta como preenchida: exigir um novo
+      // upload para corrigir um texto obrigaria a refazer o "Antes", que
+      // muitas vezes não existe mais para ser fotografado de novo.
+      var campo = document.getElementById(c.id);
+      if (campo && campo.dataset && campo.dataset.jaGravada === '1') return false;
+      return !valor(c.id);
+    });
     if (faltandoAntes.length) {
       irParaEtapa(faltandoAntes[0].etapa);
       validacaoWizard.abrirLista(faltandoAntes, function () {
@@ -2353,17 +3502,20 @@ window.validacaoWizard = (function () {
 
       licoes_aprendidas: valor('licoes_aprendidas'),
       comparacao_meta_inicial: valor('comparacao_meta_inicial'),
+      // Vazio = o servidor grava NULL em DT_CONCLUSAO.
+      data_conclusao: valor('data_conclusao'),
       fl_resultado_financeiro: flResultadoFinanceiro,
+      id_resultado_financeiro: flResultadoFinanceiro ? valor('id_resultado_financeiro') : '',
       valor_resultado_financeiro: flResultadoFinanceiro ? valor('valor_resultado_financeiro') : '',
       id_moeda: flResultadoFinanceiro ? valor('moeda_resultado_financeiro') : '',
       fl_resultado_outros: flResultadoOutros,
-      id_tipo_resultado_outros: flResultadoOutros ? valor('id_resultado_outros') : '',
+      // ID_RESULTADO do catálogo (kzn_resultados), não ID_TIPO_RESULTADO:
+      // o combo passou a listar os RESULTADOS, recortados pelo tipo.
+      id_resultado_outros: flResultadoOutros ? valor('id_resultado_outros') : '',
       descricao_resultado_outros: flResultadoOutros ? valor('descricao_resultado_outros') : '',
     };
 
-    submitBtn.disabled = true;
-    var textoOriginal = submitBtn.innerHTML;
-    submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Enviando imagens...</span>';
+    VBMLoading.botao(submitBtn, true, { texto: 'Enviando imagens...' });
 
     // Upload das imagens só agora (não mais ao escolher o arquivo — ver
     // uploadImagemSeSelecionada acima): evita lixo no volume se a
@@ -2375,7 +3527,24 @@ window.validacaoWizard = (function () {
       .then(function () {
         payload.url_imagem_antes = valor('url_imagem_antes');
         payload.url_imagem_depois = valor('url_imagem_depois');
-        submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Enviando...</span>';
+        VBMLoading.botao(submitBtn, true, { texto: 'Enviando...' });
+        // Modo de edição: PUT no próprio registro. O ID vem da navegação
+        // (kaizen-novo.html?id=), nunca do corpo — quem decide o que
+        // atualizar é a URL, e o servidor confere permissão de novo.
+        // O carimbo da última gravação viaja junto para o servidor
+        // recusar sobrescrever alteração de outra pessoa.
+        var idEdicao = valor('id_kaizen');
+        if (idEdicao) {
+          payload.DT_ATUALIZACAO = (window.VBMEdicao && window.VBMEdicao.dtAtualizacao) || '';
+          // A origem que o /edicao devolveu volta aqui: é o que garante
+          // que a gravação cai na mesma tabela de onde o Kaizen foi lido.
+          payload.ORIGEM = (window.VBMEdicao && window.VBMEdicao.origem) || '';
+          return fetch('/api/kaizens/' + encodeURIComponent(idEdicao), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+        }
         return fetch('/api/kaizens', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -2385,15 +3554,269 @@ window.validacaoWizard = (function () {
       .then(function (r) { return r.json().then(function (corpo) { return { ok: r.ok, corpo: corpo }; }); })
       .then(function (resultado) {
         if (!resultado.ok) throw new Error((resultado.corpo && resultado.corpo.error) || 'Falha ao enviar o Kaizen.');
-        showToast('success', 'Kaizen enviado!', 'Kaizen #' + resultado.corpo.ID_KAIZEN + ' enviado para aprovação.');
-        setTimeout(function () { window.location.href = 'index.html'; }, 1800);
+        var ehEdicao = !!valor('id_kaizen');
+        showToast('success',
+          ehEdicao ? txtEdicao('edit.savedTitle', 'Kaizen atualizado!') : 'Kaizen enviado!',
+          ehEdicao
+            ? txtEdicao('edit.savedMsg', 'Kaizen #{id} revisado e reenviado para aprovação.').replace('{id}', resultado.corpo.ID_KAIZEN)
+            : 'Kaizen #' + resultado.corpo.ID_KAIZEN + ' enviado para aprovação.');
+        // Os comunicados (equipe e aprovador) saem ANTES de trocar de
+        // página: o envio acontece aqui no navegador, e navegar no meio
+        // dele cancelaria a requisição — inclusive o popup de
+        // consentimento, na primeira vez. O tempo mínimo de 1,8 s é o
+        // mesmo de antes, só para o aviso na tela ser lido.
+        var enviando = window.VBMEmail
+          ? window.VBMEmail.enviarTodos(resultado.corpo.AVISOS, resultado.corpo.ID_KAIZEN)
+          : Promise.resolve([]);
+        // 1,8 s quando tudo correu bem — só para o aviso na tela ser
+        // lido. Se algum comunicado NÃO saiu, o VBMEmail mostra um toast
+        // com o motivo, e trocar de página em 1,8 s o cortaria antes de
+        // alguém conseguir ler: nesse caso a espera sobe para 12 s.
+        enviando
+          .catch(function () { return []; })
+          .then(function (resultados) {
+            var falhou = (resultados || []).some(function (r) {
+              return r && r.enviado === false && r.motivo
+                && r.motivo !== 'já enviado' && r.motivo !== 'sem aviso';
+            });
+            return new Promise(function (r) { setTimeout(r, falhou ? 12000 : 1800); });
+          })
+          .then(function () { window.location.href = 'biblioteca.html'; });
       })
       .catch(function (err) {
         showToast('error', 'Erro ao enviar', err.message || 'Não foi possível enviar o Kaizen.');
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = textoOriginal;
+        VBMLoading.botao(submitBtn, false);
       });
   });
+})();
+</script>
+
+<!-- ═══════════════════════════════════════════════
+     MODO DE EDIÇÃO — kaizen-novo.html?id=<ID_KAIZEN>
+     A MESMA página de cadastro. Sem duplicar tela: o que muda é que os
+     campos nascem preenchidos e o envio vira PUT no próprio registro.
+     Pela navegação viaja SÓ o ID; todo o conteúdo vem do servidor, que
+     confere a permissão antes de devolver qualquer dado.
+════════════════════════════════════════════════ -->
+<script>
+function txtEdicao(chave, padrao) {
+  return (window.__i18n && window.__i18n[chave]) || padrao;
+}
+
+(function () {
+  'use strict';
+
+  var parametros = new URLSearchParams(window.location.search);
+  var idKaizen = parseInt(parametros.get('id'), 10);
+  if (!Number.isInteger(idKaizen) || idKaizen <= 0) return;   // cadastro normal
+  // A origem ("A" atual / "H" histórico) vem da Biblioteca com o id. O
+  // servidor exige e confere; a tela só transporta.
+  var origemKaizen = String(parametros.get('origem') || '').toUpperCase();
+
+  function el(id) { return document.getElementById(id); }
+  function texto(id, valor) { var e = el(id); if (e && valor != null) e.value = valor; }
+  function selecionar(id, valor) {
+    var e = el(id);
+    if (!e || valor == null || valor === '') return;
+    // A lista do select chega por fetch; o valor fica no dataset e é
+    // aplicado assim que ela chega (ver preencherSelect).
+    e.dataset.valorDesejado = String(valor);
+    e.value = String(valor);
+  }
+
+  fetch('/api/kaizens/' + idKaizen + '/edicao?origem=' + encodeURIComponent(origemKaizen),
+        { headers: { Accept: 'application/json' } })
+    .then(function (r) {
+      return r.json().then(function (c) {
+        if (!r.ok) throw new Error((c && c.error) || 'Não foi possível abrir o Kaizen para edição.');
+        return c;
+      });
+    })
+    .then(function (k) {
+      // Só depois de o servidor autorizar é que a página entra em modo
+      // de edição — antes disso ela continua sendo um cadastro novo.
+      window.VBMEdicao = { id: k.ID_KAIZEN, dtAtualizacao: k.DT_ATUALIZACAO, origem: k.ORIGEM };
+      texto('id_kaizen', k.ID_KAIZEN);
+
+      // A ficha já vem na marcação, nos dois modos. A chamada fica como
+      // rede — é idempotente e não custa nada.
+      if (window.VBMFotoCampo && window.VBMFotoCampo.usarFicha) window.VBMFotoCampo.usarFicha();
+
+      texto('titulo_kaizen', k.titulo);
+      texto('declaracao_problema', k.declaracao_problema);
+      texto('meta_objetivo', k.meta_objetivo);
+      texto('descricao_antes', k.descricao_antes);
+      texto('descricao_depois', k.descricao_depois);
+      texto('links_documentos', k.links_documentos);
+      texto('licoes_aprendidas', k.licoes_aprendidas);
+      texto('comparacao_meta_inicial', k.comparacao_meta_inicial);
+      // DT_CONCLUSAO volta como "YYYY-MM-DD", que é o valor que o
+      // <input type="date"> aceita. Nulo deixa o campo vazio. O campo
+      // visível é escrito em seguida: atribuir .value não dispara
+      // 'change', então ele não se atualizaria sozinho.
+      texto('data_conclusao', k.data_conclusao || '');
+      if (window.VBMDataConclusao) window.VBMDataConclusao.sincronizar();
+      selecionar('id_categoria', k.id_categoria);
+      selecionar('id_replicacao_potencial', k.id_replicacao);
+      selecionar('id_aprovador', k.id_usuario_aprovador);
+      // Vínculo existe mas não está selecionável (aprovador inativo ou
+      // sem pessoa no MDM): avisa e mantém o vínculo — apagar em
+      // silêncio trocaria o aprovador do Kaizen sem ninguém perceber.
+      if (k.APROVADOR_INDISPONIVEL) {
+        showToast('warning', txtEdicao('edit.approverTitle', 'Aprovador indisponível'),
+          txtEdicao('edit.approverMsg', 'O aprovador vinculado a este Kaizen está inativo ou não foi encontrado. Escolha outro para salvar.'), 6000);
+      }
+
+      // Líder: o hidden guarda o ID e o campo visível mostra o nome —
+      // mesmo par que a busca do líder já usa.
+      if (k.id_usuario_lider) {
+        texto('id_usuario_lider', k.id_usuario_lider);
+        texto('id_lider_projeto', k.NM_LIDER || '');
+        // O líder gravado define a unidade: a lista de aprovadores tem de
+        // ser recarregada por ELE, não pelo usuário logado que abriu a
+        // edição. texto() escreve .value direto e não dispara evento algum.
+        try { window.dispatchEvent(new Event('vbm:lider')); } catch (e) {}
+      }
+
+      // Imagens já gravadas: os hidden apontam para o arquivo no volume.
+      // Enquanto ninguém escolher outro arquivo, eles vão vazios no
+      // envio e o servidor NÃO toca nas colunas — a foto antiga fica.
+      mostrarImagemAtual('imagem_antes', 'url_imagem_antes', k.url_imagem_antes);
+      mostrarImagemAtual('imagem_depois', 'url_imagem_depois', k.url_imagem_depois);
+
+      // Desperdícios: a grade é montada por fetch; o dataset marca as
+      // caixas assim que ela chega.
+      var grade = el('wasteTagsGrid');
+      if (grade && Array.isArray(k.ids_desperdicio)) {
+        grade.dataset.desejados = k.ids_desperdicio.join(',');
+        k.ids_desperdicio.forEach(function (id) {
+          var c = grade.querySelector('input[value="' + id + '"]');
+          if (c) c.checked = true;
+        });
+      }
+
+      // Resultado financeiro: aciona o MESMO toggle da tela, em vez de
+      // habilitar os campos por fora e arriscar divergir dele.
+      //
+      // id_resultado_financeiro entra na conta do "tem dado?": um Kaizen
+      // pode ter o resultado escolhido sem valor nem moeda preenchidos,
+      // e sem ele o bloco voltaria desligado com a escolha escondida.
+      if (k.valor_resultado_financeiro != null || k.id_moeda != null || k.id_resultado_financeiro != null) {
+        var tg = el('tipoResultadoFinanceiro');
+        if (tg && !tg.classList.contains('is-bloqueado') && el('fl_resultado_financeiro').value !== 'true') tg.click();
+        selecionar('id_resultado_financeiro', k.id_resultado_financeiro);
+        selecionar('moeda_resultado_financeiro', k.id_moeda);
+        texto('valor_resultado_financeiro', k.valor_resultado_financeiro);
+      }
+
+      // "Outros resultados": não era reposto de jeito nenhum — o bloco
+      // voltava desligado e o que havia sido gravado sumia da tela, ainda
+      // que estivesse no banco. Liga pelo mesmo toggle, e só quando há
+      // dado de verdade.
+      if (k.id_resultado_outros != null || k.descricao_resultado_outros) {
+        var tgO = el('tipoResultadoOutros');
+        if (tgO && el('fl_resultado_outros').value !== 'true') tgO.click();
+        selecionar('id_resultado_outros', k.id_resultado_outros);
+        texto('descricao_resultado_outros', k.descricao_resultado_outros || '');
+      }
+
+      // Equipe: cada membro volta para o picker de onde saiu — tipo 2 é
+      // terceiro (Membros Externos), o resto é Equipe Vale.
+      (k.MEMBROS || []).forEach(function (m) {
+        var wrapId = m.ID_TIPO_USUARIO === 2 ? 'teamSlotsExterno' : 'teamSlotsVale';
+        var wrap = el(wrapId);
+        if (wrap && wrap.__preencher) wrap.__preencher(m);
+      });
+
+      // Os campos foram preenchidos por script: os contadores precisam
+      // ser recalculados, porque atribuir .value não dispara 'input'.
+      if (window.VBMContadores) window.VBMContadores.atualizar();
+
+      marcarTelaComoEdicao();
+    })
+    .catch(function (err) {
+      // Sem permissão, Kaizen inexistente ou falha de rede: a página
+      // NÃO vira um cadastro novo disfarçado — avisa e volta.
+      showToast('error', txtEdicao('edit.blockedTitle', 'Edição não permitida'), err.message, 5000);
+      setTimeout(function () { window.location.href = 'biblioteca.html'; }, 2200);
+    });
+
+  /** Deixa claro que se está editando, sem trocar o layout: só o rótulo
+   *  do cabeçalho e o do botão de envio.
+   *
+   *  TROCA A CHAVE em vez de escrever o texto e tirar o data-i18n: quem
+   *  traduz a tela é o translatePanel, que lê data-i18n e reescreve o
+   *  textContent. Sem a chave, o rótulo ficava congelado no idioma em
+   *  que a página abriu e voltava a "Novo Kaizen" na primeira troca de
+   *  idioma. Com a chave nova, a troca de idioma continua funcionando e
+   *  traz "Alterando Kaizen" / "Editing Kaizen". */
+  function trocarChave(el, chave, padrao) {
+    if (!el) return;
+    el.dataset.i18n = chave;
+    el.textContent = txtEdicao(chave, padrao);
+  }
+
+  function atualizarTituloDaAba() {
+    document.title = 'VBM Kaizen — ' + txtEdicao('edit.pageTitle', 'Alterando Kaizen');
+  }
+
+  function marcarTelaComoEdicao() {
+    // O título é o .wizard-header-title do cabeçalho do formulário — o
+    // seletor anterior procurava .page-title, que não existe nesta
+    // página, então o rótulo nunca mudava ao editar.
+    trocarChave(document.querySelector('.wizard-header-title'), 'edit.pageTitle', 'Alterando Kaizen');
+    // O subtítulo dizia "Registre sua iniciativa" embaixo de "Alterando
+    // Kaizen" — duas instruções contrárias no mesmo cabeçalho.
+    trocarChave(document.querySelector('.wizard-header-sub'), 'edit.pageSubtitle',
+      'Revise as informações e reenvie o Kaizen para aprovação');
+    trocarChave(document.querySelector('[data-wizard-submit] span'), 'edit.submit', 'Salvar revisão');
+    // A aba do navegador também: com várias abas abertas, "Novo Kaizen"
+    // em todas elas não diz qual é qual.
+    atualizarTituloDaAba();
+    window.addEventListener('vbm:idioma', atualizarTituloDaAba);
+  }
+
+  /** Mostra a imagem JÁ GRAVADA usando a mesma pré-visualização do
+   *  componente de foto (.photo-preview-img), e marca o campo como
+   *  atendido de duas formas, porque são duas validações diferentes:
+   *
+   *    · o hidden url_imagem_* recebe o caminho do arquivo — é o que
+   *      imagemAntesValida()/imagemDepoisValida() conferem no "Próximo"
+   *      de cada etapa, e é a referência que vai no envio (se nenhum
+   *      arquivo novo for escolhido, o servidor recebe o caminho antigo
+   *      e a foto continua a mesma);
+   *    · o input de arquivo ganha jaGravada, que é o que a conferência
+   *      final do envio olha.
+   *
+   *  A zona de upload continua VISÍVEL: é por ela que se troca a foto.
+   *  Escolhido um arquivo novo, jaGravada sai e o hidden só é
+   *  sobrescrito depois de o upload terminar com sucesso — falha de
+   *  upload não apaga a referência anterior. */
+  function mostrarImagemAtual(inputId, hiddenId, caminho) {
+    var input = el(inputId);
+    var hidden = el(hiddenId);
+    if (!input || !hidden || !caminho) return;
+
+    hidden.value = caminho;
+    input.dataset.jaGravada = '1';
+    input.addEventListener('change', function () {
+      if (input.files && input.files.length) delete input.dataset.jaGravada;
+    });
+
+    // O &v= não é lido pelo servidor (a rota só olha o ?path=): serve
+    // para o navegador não reaproveitar a imagem do cache. O nome do
+    // arquivo agora é o ID do Kaizen e não muda ao trocar a foto — sem
+    // isto, reabrir a edição logo depois de trocar mostraria a foto
+    // antiga.
+    //
+    // Passa pelo mesmo caminho da foto recém-escolhida (VBMFotoCampo)
+    // para a imagem gravada aparecer com as MESMAS ações de Visualizar e
+    // Limpar — quem edita também pode ter posto o arquivo errado.
+    var endereco = '/api/kaizens/imagem?path=' + encodeURIComponent(caminho) + '&v=' + Date.now();
+    if (window.VBMFotoCampo) {
+      window.VBMFotoCampo.mostrar(input, endereco);
+    }
+  }
 })();
 </script>
 </body>

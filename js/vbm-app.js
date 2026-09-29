@@ -128,7 +128,13 @@
 
   window.openModal = function(id) {
     const el = document.getElementById(id);
-    if (el) { el.classList.add('open'); document.body.style.overflow = 'hidden'; }
+    if (el) {
+      el.classList.add('open');
+      document.body.style.overflow = 'hidden';
+      // O conteúdo do modal pode ter sido montado agora por script:
+      // rotula o que entrou depois da passagem inicial.
+      if (window.VBMRotulos) window.VBMRotulos(el);
+    }
   };
   window.closeModal = function(id) {
     const el = document.getElementById(id);
@@ -239,7 +245,13 @@
   function initPhotoUpload() {
     document.querySelectorAll('.photo-upload-zone').forEach(function(zone) {
       const input = zone.querySelector('input[type=file]');
-      const preview = zone.nextElementSibling;
+      // A pré-visualização era SEMPRE a irmã seguinte da zona. Deixou de
+      // ser: no Novo Kaizen a <img> passou a morar dentro do palco
+      // (.foto-palco), que envolve imagem, ações e legenda. Procurar no
+      // grupo do campo cobre os dois arranjos — o antigo, em que a irmã
+      // seguinte é a própria imagem, e o novo.
+      const grupo = zone.closest('.form-group') || zone.parentElement;
+      const preview = (grupo && grupo.querySelector('.photo-preview-img')) || zone.nextElementSibling;
       if (!input) return;
       input.addEventListener('change', function() {
         const file = input.files[0];
@@ -537,50 +549,498 @@
     });
   };
 
-  /* ── Print A4 Kaizen (single page, identical to on-screen view) ── */
-  window.printKaizen = function(id) {
-    const el = document.getElementById(id || 'printArea');
-    if (!el) { window.print(); return; }
-    const clone = el.cloneNode(true);
-    clone.querySelectorAll('.no-print').forEach(function(n) { n.remove(); });
-    clone.style.maxHeight = 'none';
-    clone.style.overflow = 'visible';
+  /* ── Loading (window.VBMLoading) ──
+     Padrão único reutilizável, nas três formas descritas em
+     vbm-app.css (.vbm-spinner / .vbm-loading-overlay /
+     .vbm-loading-fullpage). Antes cada tela tinha o próprio jeito de
+     indicar carregamento — texto "Carregando…" solto na Biblioteca,
+     swap manual de innerHTML no botão de enviar do Novo Kaizen, nada
+     nos demais lugares. Aqui thread para o sistema inteiro usar igual.
 
-    const win = window.open('', '_blank');
-    win.document.write(
-      '<html><head><title>Kaizen VBM</title>' +
-      '<link rel="stylesheet" href="css/vbm-app.css"/>' +
-      '<link rel="stylesheet" href="Referencias/VBM - Design System/assets/e5e202e3c8995079_all.min.css"/>' +
-      '<style>' +
-        '@page{size:A4;margin:0;}' +
-        'html,body{width:210mm;height:297mm;background:#fff;}' +
-        'body{display:flex;align-items:flex-start;justify-content:center;}' +
-        '.print-a4-page{width:182mm;height:273mm;margin:12mm 14mm;overflow:hidden;position:relative;}' +
-        '.print-a4-scale{transform-origin:top left;}' +
-      '</style>' +
-      '</head><body>' +
-      '<div class="print-a4-page"><div class="print-a4-scale">' + clone.outerHTML + '</div></div>' +
-      '</body></html>'
-    );
-    win.document.close();
+     botao(el, true/false, opts): trava contra duplo clique — desabilita
+     o elemento e troca o conteúdo por um spinner, sem mudar a largura;
+     restaura o HTML de antes ao desligar. Chamável em qualquer botão
+     (<button> ou <a class="btn">), então cabe em Salvar, Aprovar,
+     Rejeitar, Exportar — qualquer ação que não pode rodar duas vezes ao
+     mesmo tempo.
 
-    function fitAndPrint() {
-      const page = win.document.querySelector('.print-a4-page');
-      const scaler = win.document.querySelector('.print-a4-scale');
-      if (page && scaler) {
-        const pageH = page.clientHeight;
-        const pageW = page.clientWidth;
-        const contentH = scaler.scrollHeight;
-        const contentW = scaler.scrollWidth || pageW;
-        const scale = Math.min(1, pageH / contentH, pageW / contentW);
-        scaler.style.width = (100 / scale) + '%';
-        scaler.style.transform = 'scale(' + scale + ')';
+     overlay(container, true/false, opts): cobre o CONTAINER passado
+     (precisa de position:relative ou position:absolute — se não tiver,
+     esta função aplica position:relative nele) com o spinner
+     centralizado; o conteúdo anterior continua por baixo, sem sumir
+     nem saltar de tamanho. Serve para listas, cards e corpo de modal.
+     opts.texto: legenda abaixo do spinner (ex.: "Carregando…").
+
+     fullpage(true/false): cobre a janela inteira — troca de tela. Um
+     elemento só, reaproveitado. */
+  window.VBMLoading = (function () {
+    const BOTAO_KEY = 'vbmHtmlOriginal';
+
+    function botao(el, ligar, opts) {
+      if (!el) return;
+      opts = opts || {};
+      if (ligar) {
+        if (el.dataset[BOTAO_KEY] == null) el.dataset[BOTAO_KEY] = el.innerHTML;
+        el.disabled = true;
+        el.classList.add('vbm-btn-loading');
+        el.setAttribute('aria-busy', 'true');
+        el.innerHTML = '<span class="vbm-spinner" aria-hidden="true"></span>' +
+          (opts.texto ? '<span>' + opts.texto + '</span>' : '');
+      } else {
+        el.disabled = false;
+        el.classList.remove('vbm-btn-loading');
+        el.removeAttribute('aria-busy');
+        if (el.dataset[BOTAO_KEY] != null) {
+          el.innerHTML = el.dataset[BOTAO_KEY];
+          delete el.dataset[BOTAO_KEY];
+        }
       }
-      win.focus();
-      setTimeout(function() { win.print(); }, 150);
     }
 
-    setTimeout(fitAndPrint, 450);
+    function overlay(container, ligar, opts) {
+      if (!container) return;
+      opts = opts || {};
+      let el = container.querySelector(':scope > .vbm-loading-overlay');
+      if (ligar) {
+        const posicao = getComputedStyle(container).position;
+        if (posicao === 'static') container.style.position = 'relative';
+        if (!el) {
+          el = document.createElement('div');
+          el.className = 'vbm-loading-overlay';
+          el.innerHTML = '<span class="vbm-spinner" aria-hidden="true"></span>' +
+            (opts.texto ? '<span class="vbm-loading-texto"></span>' : '');
+          container.appendChild(el);
+        }
+        const texto = el.querySelector('.vbm-loading-texto');
+        if (texto) texto.textContent = opts.texto || '';
+        el.setAttribute('aria-busy', 'true');
+      } else if (el) {
+        el.remove();
+      }
+    }
+
+    let fullpageEl = null;
+    function fullpage(ligar) {
+      if (ligar) {
+        if (!fullpageEl) {
+          fullpageEl = document.createElement('div');
+          fullpageEl.className = 'vbm-loading-fullpage';
+          fullpageEl.innerHTML = '<span class="vbm-spinner vbm-spinner-lg" aria-hidden="true"></span>';
+          document.body.appendChild(fullpageEl);
+        }
+        fullpageEl.classList.add('open');
+      } else if (fullpageEl) {
+        fullpageEl.classList.remove('open');
+      }
+    }
+
+    return { botao: botao, overlay: overlay, fullpage: fullpage };
+  })();
+
+  /* CSS do relatório — vive aqui, e não no vbm-app.css, porque a janela
+     de impressão é um documento separado: puxar a folha do app traria
+     centenas de regras de tela para um papel.
+
+     O desenho é o MESMO do modal "Visualizar" da Biblioteca
+     (.kaizen-detail-head / .kd-section / .kd-photo-box em vbm-app.css):
+     faixa escura com a identificação do Kaizen, cartões brancos de canto
+     arredondado com cabeçalho cinza-claro e pastilha de ícone azul. Quem
+     imprime reconhece na folha a tela que acabou de ver. As medidas não
+     são copiadas dali: lá elas estão em `rem` sobre o corpo do app, aqui
+     em `em` sobre um único tamanho-base, então trocar o corpo do texto
+     reacomoda a página inteira — 15px na tela, 9.4pt no papel. */
+  var PK_CSS = [
+    '*{box-sizing:border-box;margin:0;padding:0}',
+    ':root{--az:#3cb5e5;--az-esc:#1a8bbf;--prof:#0d2640;--navy:#041523;--pale:#e8f7fd;' +
+      '--tinta:#1a1a1a;--texto:#333;--cinza:#888;--linha:#eaeaea;--linha-fina:#f0f0f0;' +
+      '--fundo-cab:#fafafa;--off:#f6f6f6;--verde:#16a34a;' +
+      "--tit:'Poppins','Segoe UI',Roboto,Helvetica,Arial,sans-serif}",
+    'body{background:#e9edf1;font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--texto);' +
+      '-webkit-print-color-adjust:exact;print-color-adjust:exact}',
+
+    /* ── folha ── */
+    '.folha{font-size:15px;line-height:1.45;background:#fff;width:min(96vw,1180px);margin:22px auto;' +
+      'padding:26px 30px 20px;box-shadow:0 10px 40px rgba(13,38,64,.18);border-radius:6px;display:flex;' +
+      'flex-direction:column;gap:1em}',
+
+    /* ── faixa de identificação: o .kaizen-detail-head do modal ──
+       Inclusive a trama de linhas do ::before, que é o que dá o
+       acabamento à faixa em vez de um bloco de cor chapado. */
+    '.cab{background:linear-gradient(135deg,var(--navy),#082d4f);border-radius:.75em;padding:1.4em 1.5em;' +
+      'position:relative;overflow:hidden;color:#fff}',
+    '.cab::before{content:"";position:absolute;inset:0;' +
+      'background-image:linear-gradient(rgba(60,181,229,.04) 1px,transparent 1px),' +
+      'linear-gradient(90deg,rgba(60,181,229,.04) 1px,transparent 1px);background-size:25px 25px}',
+    '.cab>*{position:relative;z-index:1}',
+    '.cab-topo{display:flex;align-items:flex-start;justify-content:space-between;gap:1em}',
+    '.cab-id{font-size:.66em;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.62);' +
+      'font-weight:600}',
+    '.cab-status{flex:none;border:1px solid var(--az);color:var(--az);border-radius:2em;padding:.2em .9em;' +
+      'font-size:.6em;font-weight:700;text-transform:uppercase;letter-spacing:.12em;white-space:nowrap}',
+    '.cab h1{font-family:var(--tit);font-weight:700;font-size:1.5em;line-height:1.25;color:#fff;' +
+      'margin:.45em 0 .6em}',
+    /* Texto claro sobre fundo escuro fica mais fino do que o mesmo texto
+       sobre branco — no papel, mais ainda. Por isso a linha de metas não
+       repete os 55%/80% de opacidade do modal: corpo com mais contraste
+       e um pouco maior, rótulo em branco cheio. */
+    '.cab-metas{display:flex;flex-wrap:wrap;gap:.45em 1.4em}',
+    // Sem nenhum item, a faixa não deve virar um espaço em branco.
+    '.cab-metas:empty{display:none}',
+    '.cab-metas+.cab-metas{margin-top:.5em}',
+    '.cab-meta{font-size:.78em;color:rgba(255,255,255,.86);display:flex;align-items:center;gap:.35em;' +
+      'font-weight:500}',
+    '.cab-meta i{color:var(--az)}',
+    '.cab-meta strong{color:#fff;font-weight:600}',
+
+    /* ── cartões: o .kd-section do modal ── */
+    '.duas{display:grid;grid-template-columns:1fr 1fr;gap:1em}',
+    '.sec{background:#fff;border:1px solid var(--linha);border-radius:.75em;overflow:hidden;' +
+      'break-inside:avoid;page-break-inside:avoid}',
+    '.sec-cab{display:flex;align-items:center;gap:.5em;padding:.7em 1.1em;background:var(--fundo-cab);' +
+      'border-bottom:1px solid var(--linha-fina)}',
+    '.sec-ico{width:1.85em;height:1.85em;flex:none;border-radius:.35em;background:var(--pale);color:var(--az);' +
+      'display:flex;align-items:center;justify-content:center;font-size:.75em}',
+    '.sec-tit{font-family:var(--tit);font-weight:600;font-size:.88em;color:var(--tinta)}',
+    // pre-line preserva os parágrafos digitados nos textos longos; as
+    // grades dentro do corpo voltam ao normal para que a quebra de linha
+    // do HTML não vire espaço visível entre os cartões.
+    '.sec-corpo{padding:1em 1.2em;font-size:.86em;line-height:1.65;white-space:pre-line}',
+    '.sec-corpo strong{color:var(--tinta)}',
+    '.sec-corpo>.fotos,.sec-corpo>.res-grade{white-space:normal}',
+
+    /* ── evidências: o .kd-photo-box do modal, com a foto inteira
+       (contain sobre fundo neutro) em vez de cortada ── */
+    '.fotos{display:grid;grid-template-columns:1fr 1fr;gap:1.4em}',
+    '.foto{border:1px solid var(--linha);border-radius:.5em;overflow:hidden;' +
+      'break-inside:avoid;page-break-inside:avoid}',
+    '.foto-img{height:17em;background:#f4f6f8;display:flex;align-items:center;justify-content:center;overflow:hidden}',
+    '.foto-img img{width:100%;height:100%;object-fit:contain}',
+    '.foto-vazia{font-size:.78em;color:var(--cinza);text-align:center;padding:1em}',
+    '.foto-corpo{padding:.7em .85em}',
+    '.foto-rot{font-size:.66em;text-transform:uppercase;letter-spacing:.15em;color:var(--cinza);' +
+      'margin-bottom:.3em;font-weight:600}',
+    '.foto-rot-depois{color:var(--verde)}',
+    '.foto-desc{font-size:.86em;line-height:1.5;color:var(--texto);white-space:pre-line}',
+
+    /* ── resultados: os mesmos cartões do modal ── */
+    '.res-grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(11.5em,1fr));gap:.75em}',
+    '.res{background:var(--off);border-radius:.5em;padding:.85em;border-left:3px solid var(--az);' +
+      'break-inside:avoid;page-break-inside:avoid}',
+    '.res-fin{border-left-color:var(--verde);text-align:center}',
+    '.res-num{font-family:var(--tit);font-weight:700;font-size:1.3em;color:var(--verde);line-height:1.2}',
+    '.res-rot{font-size:.7em;color:var(--cinza)}',
+    '.res-tit{font-family:var(--tit);font-weight:700;font-size:.82em;color:var(--tinta)}',
+    '.res-txt{font-size:.7em;color:var(--cinza);margin-top:.2em;line-height:1.45}',
+
+    /* ── rodapé ── */
+    '.rodape{display:flex;justify-content:space-between;gap:1em;border-top:1px solid var(--linha);' +
+      'padding-top:.6em;font-size:.66em;color:var(--cinza);letter-spacing:.06em}',
+
+    /* ── aviso de preparação ── */
+    '.aviso{position:fixed;inset:0;background:rgba(4,21,35,.94);display:flex;align-items:center;' +
+      'justify-content:center;z-index:99}',
+    '.aviso-cx{text-align:center;color:#fff}',
+    '.aviso-spin{width:2.4em;height:2.4em;margin:0 auto .9em;border:3px solid rgba(255,255,255,.25);' +
+      'border-top-color:var(--az);border-radius:50%;animation:pkGira .8s linear infinite}',
+    '.aviso-txt{font-family:var(--tit);font-size:.95em;letter-spacing:.04em}',
+    '@keyframes pkGira{to{transform:rotate(360deg)}}',
+
+    /* ── papel ──
+       A folha na tela é uma prévia larga; no papel ela vira a área útil
+       do A4 e nada mais: sem sombra, sem borda, sem largura fixa. O
+       tamanho-base menor é o que reacomoda a página inteira. */
+    '@media print{',
+    /* margem 0 em cima e embaixo: é NESSA faixa que o navegador imprime
+       a data e o título do documento. Sem ela o cabeçalho e o rodapé do
+       Chrome/Edge não têm onde ser desenhados e a folha sai limpa. O
+       respiro de 10mm volta como padding da própria folha, e as margens
+       laterais ficam na @page para continuarem valendo em cada página. */
+    '  @page{size:A4 portrait;margin:0 10mm}',
+    '  body{background:#fff}',
+    '  .aviso{display:none!important}',
+    '  .folha{font-size:9.4pt;width:auto;max-width:none;margin:0;padding:10mm 0;box-shadow:none;' +
+      'border-radius:0;gap:.8em}',
+    '  .cab{padding:1.1em 1.2em}',
+    '  .foto-img{height:56mm}',
+    '  .cab,.duas,.rodape{break-inside:avoid;page-break-inside:avoid}',
+    '}',
+
+    /* ── telas estreitas: a prévia empilha, o papel não muda ── */
+    '@media screen and (max-width:820px){',
+    '  .folha{width:100%;margin:0;border-radius:0;padding:16px}',
+    '  .duas,.fotos{grid-template-columns:1fr}',
+    '  .cab-topo{flex-direction:column}',
+    '}'
+  ].join('\n');
+
+  /* ── Relatório A4 do Kaizen ────────────────────────────────────────
+     Abre uma janela com um one-page executivo montado a partir dos DADOS
+     do Kaizen — não é mais uma cópia do modal reduzida por transform.
+
+     Por que mudou: a versão anterior clonava o corpo do modal, encolhia
+     tudo com scale() até caber em 182mm e mandava imprimir depois de
+     450ms fixos. Isso dava três problemas de uma vez: a folha ocupava um
+     pedaço pequeno da tela, o texto ficava minúsculo, e a impressão
+     saía antes de as imagens carregarem — daí os campos vazios e as
+     evidências quebradas.
+
+     Agora: HTML próprio, CSS próprio, e a impressão só é liberada
+     depois que TODAS as imagens terminam (ou falham, explicitamente).
+     Enquanto isso a janela mostra "Preparando relatório...".
+
+     printKaizen(dados, opcoes)
+       dados  — o mesmo objeto de GET /api/kaizens/:id
+       opcoes — { rotulos, idioma } para os títulos no idioma da tela */
+  function pk_escapar(txt) {
+    return String(txt == null ? '' : txt)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  /** Nome do arquivo sugerido ao salvar em PDF. O Chrome e o Edge usam o
+   *  <title> do documento, então é ele que vira "KZN26-001-SOSSEGO-
+   *  CRISTIAN-ARLAN-ALVES.pdf". Sem acento, sem caractere que o Windows
+   *  recusa (\ / : * ? " < > |) e sem hífen repetido ou sobrando. */
+  function pk_nomeArquivo(partes) {
+    return partes
+      .filter(Boolean)
+      .map(function (p) {
+        return String(p).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+          .replace(/[\\/:*?"<>|]/g, ' ')
+          .replace(/[^A-Za-z0-9 _-]/g, ' ')
+          .trim().replace(/\s+/g, '-');
+      })
+      .filter(Boolean).join('-').replace(/-{2,}/g, '-').replace(/^-|-$/g, '')
+      .toUpperCase().slice(0, 120);
+  }
+
+  /** As folhas que o relatório herda do app: os ÍCONES (Font Awesome) e a
+   *  Poppins dos títulos — sem elas a faixa e os cabeçalhos dos cartões
+   *  não ficariam iguais ao modal. Os endereços são lidos do próprio
+   *  documento que abriu a janela, já absolutos, em vez de repetidos
+   *  aqui: o arquivo do vendor tem hash no nome e mudaria a cada build.
+   *  A folha do app NÃO entra — o relatório tem o CSS dele. */
+  function pk_folhasHerdadas() {
+    return Array.prototype.slice.call(document.querySelectorAll('link[rel~="stylesheet"]'))
+      .map(function (l) { return l.href; })
+      .filter(function (h) { return /fontawesome|all\.min\.css/i.test(h) || /poppins\.css/i.test(h); })
+      .map(function (h) { return '<link rel="stylesheet" href="' + pk_escapar(h) + '"/>'; })
+      .join('');
+  }
+
+  /** "2026-08-15T00:00:00" -> "15/08/2026" (ou o formato do idioma).
+   *  Lê os números do texto em vez de criar um Date: a data vem sem
+   *  fuso (ver relogioLocal em server.js) e deixar o navegador
+   *  interpretar mudaria o dia de quem está em outro fuso. */
+  function pk_data(valor, idioma) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(valor || ''));
+    if (!m) return '';
+    return (idioma === 'en')
+      ? m[1] + '/' + m[2] + '/' + m[3]
+      : m[3] + '/' + m[2] + '/' + m[1];
+  }
+
+  window.printKaizen = function (dados, opcoes) {
+    var k = dados || {};
+    var o = opcoes || {};
+    var R = o.rotulos || {};
+    var idioma = o.idioma === 'en' ? 'en' : 'pt-BR';
+    var r = function (chave, padrao) { return R[chave] || padrao; };
+
+    var win = window.open('', '_blank');
+    if (!win) return;   // bloqueador de pop-up: nada a fazer aqui
+
+    var titulo = pk_nomeArquivo([k.ROTULO, k.NM_SITE, k.NM_LIDER]) || 'KAIZEN';
+
+    // A foto não é servida pelo caminho do volume: quem entrega os bytes
+    // é GET /api/kaizens/imagem (ver server.js). Quem chama passa a
+    // função que monta essa URL — a MESMA que a tela usa para o <img> do
+    // modal, então não há duas formas de montar o mesmo endereço.
+    // Depois disso vira absoluta: a janela nova tem base própria e um
+    // caminho relativo poderia resolver para outro lugar.
+    var comApi = typeof o.urlImagem === 'function' ? o.urlImagem : function (u) { return u; };
+    var absoluto = function (u) {
+      if (!u) return '';
+      try { return new URL(comApi(u), window.location.href).href; } catch (e) { return u; }
+    };
+    var foto = function (url, marca, descricao) {
+      var depois = marca === 'depois';
+      return '<figure class="foto">' +
+        (url
+          ? '<div class="foto-img"><img src="' + pk_escapar(absoluto(url)) + '" alt=""/></div>'
+          : '<div class="foto-img foto-vazia">' + pk_escapar(r('semImagem', 'Sem imagem registrada')) + '</div>') +
+        '<div class="foto-corpo">' +
+          '<div class="foto-rot' + (depois ? ' foto-rot-depois' : '') + '">' +
+            pk_escapar(depois ? r('depois', 'Depois') : r('antes', 'Antes')) + '</div>' +
+          '<div class="foto-desc">' + pk_escapar(descricao || '—') + '</div>' +
+        '</div>' +
+      '</figure>';
+    };
+
+    /* Cartão: a mesma casca do .kd-section do modal — cabeçalho com
+       pastilha de ícone e título, corpo embaixo. */
+    var secao = function (icone, titulo, corpo, classe) {
+      return '<section class="sec' + (classe ? ' ' + classe : '') + '">' +
+        '<div class="sec-cab"><div class="sec-ico"><i class="fa-solid ' + icone + '"></i></div>' +
+        '<div class="sec-tit">' + pk_escapar(titulo) + '</div></div>' +
+        '<div class="sec-corpo">' + corpo + '</div></section>';
+    };
+
+    // Meta da faixa: ícone + "Rótulo: valor", igual ao meta() da Biblioteca.
+    var linhaMeta = function (icone, rotulo, valor) {
+      if (!valor) return '';
+      return '<div class="cab-meta"><i class="fa-solid ' + icone + '"></i> <strong>' +
+             pk_escapar(rotulo) + ':</strong> ' + pk_escapar(valor) + '</div>';
+    };
+
+    var desperdicios = (k.DESPERDICIOS || []).filter(Boolean).join(' · ');
+    var equipe = (k.MEMBROS || []).map(function (m) { return m.NM_USUARIO; }).filter(Boolean).join(', ');
+    var dataRef = pk_data(k.DT_CONCLUSAO || k.DT_CRIACAO, idioma);
+    var identificacao = [k.ROTULO, k.NM_CATEGORIA, k.NM_SITE].filter(Boolean).join(' · ');
+
+    // Resultados: o financeiro vira um destaque proprio, os demais
+    // entram como cartoes. Esta e a secao que o relatorio existe para
+    // mostrar, entao ela ocupa a largura inteira.
+    var destaques = [];
+    if (k.VL_RESULTADO_FINANCEIRO != null) {
+      var valor = Number(k.VL_RESULTADO_FINANCEIRO)
+        .toLocaleString(idioma === 'en' ? 'en-US' : 'pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      destaques.push('<div class="res res-fin"><div class="res-num">' +
+        pk_escapar((k.SG_MOEDA || '') + ' ' + valor) + '</div><div class="res-rot">' +
+        pk_escapar(r('resultadoFinanceiro', 'Resultado financeiro')) + '</div></div>');
+    }
+    (k.RESULTADOS || []).forEach(function (x) {
+      destaques.push('<div class="res"><div class="res-tit">' + pk_escapar(x.NM_RESULTADO) +
+        '</div><div class="res-txt">' + pk_escapar(x.DS_RESULTADO || '') + '</div></div>');
+    });
+
+    // Aprendizados: os mesmos três itens rotulados que o modal mostra.
+    var licoes = [];
+    if (k.DS_LICOES_APRENDIDAS) {
+      licoes.push('<strong>' + pk_escapar(r('licoesAprendidas', 'Lições Aprendidas')) + ':</strong> ' +
+        pk_escapar(k.DS_LICOES_APRENDIDAS));
+    }
+    if (k.DS_RESULTADO_ESPERADO) {
+      licoes.push('<strong>' + pk_escapar(r('comparacaoMeta', 'Comparação com a meta')) + ':</strong> ' +
+        pk_escapar(k.DS_RESULTADO_ESPERADO));
+    }
+    if (desperdicios) {
+      licoes.push('<strong>' + pk_escapar(r('desperdiciosReduzidos', 'Desperdícios reduzidos')) + ':</strong> ' +
+        pk_escapar(desperdicios));
+    }
+
+    var html =
+      '<!doctype html><html lang="' + (idioma === 'en' ? 'en' : 'pt-BR') + '"><head><meta charset="utf-8"/>' +
+      '<title>' + pk_escapar(titulo) + '</title>' +
+      pk_folhasHerdadas() +
+      '<style>' + PK_CSS + '</style></head><body>' +
+      '<div class="aviso" id="pkAviso"><div class="aviso-cx">' +
+        '<div class="aviso-spin"></div>' +
+        '<div class="aviso-txt">' + pk_escapar(r('preparando', 'Preparando relatório para impressão...')) + '</div>' +
+      '</div></div>' +
+      '<div class="folha">' +
+
+        '<header class="cab">' +
+          '<div class="cab-topo">' +
+            '<div class="cab-id">' + pk_escapar(identificacao) + '</div>' +
+            (k.NM_STATUS ? '<div class="cab-status">' + pk_escapar(k.NM_STATUS) + '</div>' : '') +
+          '</div>' +
+          '<h1>' + pk_escapar(k.NM_KAIZEN || '') + '</h1>' +
+          // Duas faixas de propósito: primeiro QUEM e QUANDO, depois
+          // COMO o Kaizen se classifica. Cada uma é uma linha própria —
+          // juntas numa só, a quebra caía onde coubesse e separava
+          // rótulo de valor sem critério.
+          '<div class="cab-metas">' +
+            linhaMeta('fa-user', r('lider', 'Líder'), k.NM_LIDER) +
+            linhaMeta('fa-users', r('equipe', 'Equipe'), equipe) +
+            linhaMeta('fa-calendar-day', r('data', 'Data'), dataRef) +
+          '</div>' +
+          '<div class="cab-metas">' +
+            linhaMeta('fa-tag', r('categoria', 'Categoria'), k.NM_CATEGORIA) +
+            linhaMeta('fa-globe', r('replicacao', 'Replicação'), k.NM_REPLICACAO) +
+            linhaMeta('fa-recycle', r('desperdicios', 'Redução de Desperdícios'), desperdicios) +
+          '</div>' +
+        '</header>' +
+
+        '<div class="duas">' +
+          secao('fa-bullseye', r('problema', 'Declaração do Problema'), pk_escapar(k.DS_PROBLEMA || '—')) +
+          secao('fa-flag', r('objetivo', 'Meta / Objetivo'), pk_escapar(k.DS_OBJETIVO || '—')) +
+        '</div>' +
+
+        secao('fa-camera', r('evidencias', 'Evidências Antes & Depois'),
+          '<div class="fotos">' +
+            foto(k.URL_IMG_ANTES, 'antes', k.DS_ESTADO_ANTES) +
+            foto(k.URL_IMG_DEPOIS, 'depois', k.DS_ESTADO_DEPOIS) +
+          '</div>') +
+
+        (destaques.length
+          ? secao('fa-chart-bar', r('resultados', 'Resultados Alcançados'),
+              '<div class="res-grade">' + destaques.join('') + '</div>')
+          : '') +
+
+        (licoes.length
+          ? secao('fa-lightbulb', r('licoes', 'Aprendizados & Potencial de Replicação'),
+              licoes.join('<br/><br/>'))
+          : '') +
+
+        '<footer class="rodape">' +
+          '<span>' + pk_escapar(k.ROTULO || '') + (k.NM_SITE ? ' · ' + pk_escapar(k.NM_SITE) : '') + '</span>' +
+          '<span>' + pk_escapar(r('rodape', 'VBM Problem Solving & Continuous Improvement')) + '</span>' +
+        '</footer>' +
+
+      '</div></body></html>';
+
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+
+    /* A impressão só é liberada quando TODAS as imagens terminam.
+       decode() resolve quando a imagem está pronta para pintar; a falha
+       é tratada como "terminou" também — uma foto que não carregou não
+       pode travar o relatório, e o lugar dela mostra o aviso. O teto de
+       tempo existe para o caso de uma requisição ficar pendurada. */
+    function quandoPronto(janela, aoFim) {
+      var imgs = Array.prototype.slice.call(janela.document.images || []);
+      var pendentes = imgs.map(function (img) {
+        if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+        return new Promise(function (resolve) {
+          img.addEventListener('load', function () { resolve(); }, { once: true });
+          img.addEventListener('error', function () {
+            var cx = img.parentNode;
+            if (cx) { cx.classList.add('ev-vazia'); cx.textContent = r('imagemFalhou', 'Imagem não disponível'); }
+            resolve();
+          }, { once: true });
+        });
+      });
+      // Os ícones e a Poppins entram por webfont: imprimir antes de a
+      // fonte chegar sairia com quadradinhos no lugar dos ícones. fonts.ready
+      // resolve tanto no sucesso quanto na falha, então uma fonte
+      // inalcançável não prende o relatório — só o deixa sem ícone.
+      var fontes = (janela.document.fonts && janela.document.fonts.ready)
+        ? Promise.resolve(janela.document.fonts.ready).catch(function () {})
+        : Promise.resolve();
+
+      var acabou = false;
+      var fim = function () { if (!acabou) { acabou = true; aoFim(); } };
+      Promise.all(pendentes.concat([fontes])).then(function () {
+        // Um quadro a mais para o layout assentar antes de medir/imprimir.
+        if (janela.requestAnimationFrame) janela.requestAnimationFrame(function () { janela.requestAnimationFrame(fim); });
+        else setTimeout(fim, 50);
+      });
+      setTimeout(fim, 20000);   // teto: nunca deixa a janela presa
+    }
+
+    var iniciar = function () {
+      quandoPronto(win, function () {
+        var aviso = win.document.getElementById('pkAviso');
+        if (aviso) aviso.parentNode.removeChild(aviso);
+        win.focus();
+        win.print();
+      });
+    };
+
+    if (win.document.readyState === 'complete') iniciar();
+    else win.addEventListener('load', iniciar, { once: true });
   };
 
   /* ── Approval workflow ── */
@@ -653,6 +1113,102 @@
       .catch(function () {});
   }
 
+  /* ── Rótulos acessíveis ────────────────────────────────────────────
+     Campo sem rótulo programático é anunciado pelo leitor de tela só
+     como "caixa de edição", sem dizer qual — a auditoria encontrou 75
+     assim só na Administração. O rótulo VISUAL existe em quase todos;
+     o que falta é a ligação, e em dois casos ela não cabe no HTML:
+
+       · campos bilíngues: um <label> serve DOIS campos (PT e EN), então
+         `for=` não resolve — cada um recebe "Rótulo (PT-BR)" / "(EN)",
+         lido da própria etiqueta de idioma que está na tela;
+       · modais da Administração: o conteúdo é montado por script depois
+         do carregamento, então marcação estática não alcançaria.
+
+     Por isso a passagem é feita aqui, em runtime, e repetida quando um
+     modal abre. Nada de layout muda: só entram atributos.
+
+     O que NÃO é tocado: quem já tem label[for], aria-label,
+     aria-labelledby ou placeholder — o rótulo existente sempre vence. */
+  function textoDoRotulo(el) {
+    return (el.textContent || '').replace(/\s+/g, ' ').trim().replace(/[:*]+$/, '');
+  }
+
+  function rotularControle(campo) {
+    if (campo.type === 'hidden' || campo.disabled) return;
+    if (campo.getAttribute('aria-label') || campo.getAttribute('aria-labelledby')) return;
+    if (campo.id && document.querySelector('label[for="' + CSS.escape(campo.id) + '"]')) return;
+    if (campo.getAttribute('placeholder')) return;
+
+    // Sobe até o bloco do campo e pega o rótulo visual dele.
+    var bloco = campo.closest('.form-group, .settings-section, .filter-bar, .lang-slot-group') || campo.parentElement;
+    var rotulo = bloco ? bloco.querySelector('label, .form-label, .settings-section-title, .filter-label') : null;
+    var texto = rotulo ? textoDoRotulo(rotulo) : '';
+
+    // Dentro de um slot bilíngue, o idioma entra junto: sem isso os dois
+    // campos do mesmo rótulo seriam anunciados com o mesmo nome.
+    var slot = campo.closest('.lang-slot');
+    if (slot) {
+      var tag = slot.querySelector('.lang-slot-tag');
+      var idioma = tag ? textoDoRotulo(tag) : (campo.dataset.lang || '');
+      if (idioma) texto = texto ? texto + ' (' + idioma + ')' : idioma;
+    }
+
+    // Combo de filtro não tem rótulo visual: a primeira opção ("Todas
+    // as unidades", "Todos os status") é exatamente o nome do campo, e
+    // já vem traduzida pelo dicionário da página.
+    if (!texto && campo.tagName === 'SELECT' && campo.options.length) {
+      texto = textoDoRotulo(campo.options[0]);
+    }
+    // Caixa de seleção: o texto que fica ao lado dela é o rótulo.
+    if (!texto && (campo.type === 'checkbox' || campo.type === 'radio')) {
+      var vizinho = campo.closest('label') || campo.parentElement;
+      if (vizinho) texto = textoDoRotulo(vizinho);
+    }
+
+    if (texto) campo.setAttribute('aria-label', texto);
+  }
+
+  function rotularBotao(botao) {
+    if (botao.getAttribute('aria-label') || botao.textContent.trim()) return;
+    var titulo = botao.getAttribute('title');
+    if (titulo) { botao.setAttribute('aria-label', titulo); return; }
+    // Botão só com ícone e sem título: o nome do ícone é o melhor sinal
+    // disponível. "fa-solid fa-xmark" tem DOIS fa-*, e o primeiro é o
+    // estilo — ler o primeiro daria "solid" e não identificaria nada.
+    var icone = botao.querySelector('i[class*="fa-"]');
+    var estilos = { solid: 1, regular: 1, brands: 1, light: 1, thin: 1, duotone: 1, fw: 1, spin: 1, lg: 1, sm: 1, xs: 1 };
+    var nome = null;
+    if (icone) {
+      String(icone.className).split(/\s+/).forEach(function (c) {
+        var m = /^fa-([a-z0-9-]+)$/.exec(c);
+        if (m && !estilos[m[1]] && !nome) nome = m[1];
+      });
+    }
+    var conhecidos = {
+      xmark: 'common.fechar', times: 'common.fechar', bars: 'a11y.abrirMenu',
+      'chevron-down': 'a11y.expandir', 'chevron-right': 'a11y.avancar',
+      'arrow-left': 'a11y.voltar', plus: 'a11y.adicionar',
+    };
+    var padroes = {
+      'common.fechar': 'Fechar', 'a11y.abrirMenu': 'Abrir menu', 'a11y.expandir': 'Expandir',
+      'a11y.avancar': 'Avançar', 'a11y.voltar': 'Voltar', 'a11y.adicionar': 'Adicionar',
+    };
+    var chave = nome && conhecidos[nome];
+    if (!chave) return;
+    // data-i18n-aria: o próprio tradutor da página reescreve o rótulo na
+    // troca de idioma, sem esta função precisar rodar de novo.
+    botao.setAttribute('data-i18n-aria', chave);
+    var dicionario = window.__i18n || {};
+    botao.setAttribute('aria-label', dicionario[chave] || padroes[chave]);
+  }
+
+  window.VBMRotulos = function (raiz) {
+    var alvo = raiz || document;
+    alvo.querySelectorAll('input, select, textarea').forEach(rotularControle);
+    alvo.querySelectorAll('button').forEach(rotularBotao);
+  };
+
   document.addEventListener('DOMContentLoaded', function() {
     initSidebar();
     initActiveNav();
@@ -669,6 +1225,7 @@
     initApproval();
     initAOS();
     initBadgeAprovacao();
+    window.VBMRotulos();
   });
 
   /* ──────────────────────────────────────────────────────────────

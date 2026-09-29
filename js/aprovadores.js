@@ -93,28 +93,114 @@
     return item;
   }
 
-  function renderList(rows) {
-    listEl.innerHTML = "";
-    if (countEl) countEl.textContent = rows.length + " " + (rows.length === 1 ? "aprovador" : "aprovadores");
+  function txt(chave, padrao) {
+    return (window.__i18n && window.__i18n[chave]) || padrao;
+  }
 
-    if (!rows.length) {
-      setState("Nenhum aprovador cadastrado ainda.", false);
+  /** "12 aprovadores" / "1 aprovador", no idioma da tela. */
+  function contagem(n) {
+    return n + " " + (n === 1
+      ? txt("adm.approverWord", "aprovador")
+      : txt("adm.approversWord", "aprovadores"));
+  }
+
+  /* Agrupa por NM_SITE em UMA passagem, sobre a mesma resposta de
+     GET /api/aprovadores — sem consulta por card e sem reordenar no
+     navegador: o servidor já devolve ordenado por NM_SITE, NM_USUARIO.
+     Manter a ordem de chegada é o que garante que o agrupamento não custa
+     nada além do laço que já existia.
+
+     Quem não tem unidade no MDM vai para um grupo próprio, no FIM. Em SQL
+     o NULL ordena primeiro, e abrir a tela por "(sem unidade)" daria a
+     esse punhado de registros um destaque que eles não têm. */
+  function agruparPorSite(rows) {
+    var grupos = [], porNome = {}, semSite = null;
+    rows.forEach(function (row) {
+      var site = row.NM_SITE || null;
+      if (!site) {
+        if (!semSite) semSite = { site: null, linhas: [] };
+        semSite.linhas.push(row);
+        return;
+      }
+      if (!porNome[site]) { porNome[site] = { site: site, linhas: [] }; grupos.push(porNome[site]); }
+      porNome[site].linhas.push(row);
+    });
+    if (semSite) grupos.push(semSite);
+    return grupos;
+  }
+
+  function renderGrupo(grupo) {
+    var bloco = document.createElement("div");
+    bloco.className = "admin-grupo";
+    bloco.dataset.site = grupo.site || "";
+
+    var cab = document.createElement("div");
+    cab.className = "admin-grupo-cab";
+    var nome = document.createElement("span");
+    nome.className = "admin-grupo-nome";
+    nome.textContent = grupo.site || txt("adm.siteNone", "Sem unidade");
+    var quantos = document.createElement("span");
+    quantos.className = "admin-item-badge";
+    quantos.textContent = contagem(grupo.linhas.length);
+    cab.appendChild(nome);
+    cab.appendChild(quantos);
+
+    // A grade dos cards é a MESMA .admin-list de antes — é ela que traz as
+    // duas colunas, a altura igual e a quebra para uma coluna no tablet.
+    var grade = document.createElement("div");
+    grade.className = "admin-list";
+    grupo.linhas.forEach(function (row) { grade.appendChild(renderItem(row)); });
+
+    bloco.appendChild(cab);
+    bloco.appendChild(grade);
+    return bloco;
+  }
+
+  // Guardado para redesenhar na troca de idioma sem pedir a lista de novo.
+  var ultimaLista = [];
+
+  function renderList(rows) {
+    ultimaLista = rows || [];
+    listEl.innerHTML = "";
+    if (countEl) countEl.textContent = contagem(ultimaLista.length);
+
+    if (!ultimaLista.length) {
+      setState(txt("adm.noApprovers", "Nenhum aprovador cadastrado ainda."), false);
       return;
     }
     setState(null);
-    rows.forEach(function (row) { listEl.appendChild(renderItem(row)); });
+    agruparPorSite(ultimaLista).forEach(function (grupo) {
+      listEl.appendChild(renderGrupo(grupo));
+    });
   }
 
+  // Trocar de idioma redesenha a lista já carregada — os rótulos
+  // ("aprovadores", "Sem unidade") mudam sem um segundo GET.
+  window.addEventListener("vbm:idioma", function () {
+    if (ultimaLista.length) renderList(ultimaLista);
+  });
+
   function loadAprovadores() {
-    setState("Carregando aprovadores...", false);
+    // Recarga (já existe algo na tela): overlay por cima da lista atual
+    // em vez do setState de sempre, que ESCONDE listEl inteiro — a lista
+    // anterior continua visível, só esmaecida, até a resposta chegar.
+    // Primeira carga (nada ainda): mantém o texto "Carregando…" de
+    // sempre, porque não há o que sobrepor.
+    var usaOverlay = window.VBMLoading && ultimaLista.length > 0;
+    if (usaOverlay) VBMLoading.overlay(listEl, true, { texto: txt("adm.loadingApprovers", "Carregando aprovadores...") });
+    else setState(txt("adm.loadingApprovers", "Carregando aprovadores..."), false);
     return fetch("/api/aprovadores")
       .then(function (res) {
         if (!res.ok) return res.json().then(function (e) { throw new Error(e.error || res.statusText); });
         return res.json();
       })
-      .then(renderList)
+      .then(function (rows) {
+        if (usaOverlay) VBMLoading.overlay(listEl, false);
+        return renderList(rows);
+      })
       .catch(function (err) {
         console.error("[aprovadores] erro ao carregar:", err);
+        if (usaOverlay) VBMLoading.overlay(listEl, false);
         setState("Erro ao carregar aprovadores: " + err.message, true);
       });
   }
@@ -331,7 +417,7 @@
       if (window.showToast) showToast("warning", "Campo obrigatório", "Busque e selecione o usuário na lista.");
       return;
     }
-    if (btnSaveAdd) btnSaveAdd.disabled = true;
+    if (btnSaveAdd) { if (window.VBMLoading) VBMLoading.botao(btnSaveAdd, true); else btnSaveAdd.disabled = true; }
     fetch("/api/aprovadores", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -354,10 +440,14 @@
         if (window.showToast) showToast("error", "Erro ao inserir", err.message);
       })
       .finally(function () {
-        // Reabilita só se ainda houver alguém selecionado: depois de um
-        // salvamento bem-sucedido o formulário é limpo e o botão tem de
-        // continuar desabilitado.
-        if (btnSaveAdd) btnSaveAdd.disabled = !buscaAdd.id();
+        if (btnSaveAdd) {
+          if (window.VBMLoading) VBMLoading.botao(btnSaveAdd, false);
+          // Reabilita só se ainda houver alguém selecionado: depois de um
+          // salvamento bem-sucedido o formulário é limpo e o botão tem de
+          // continuar desabilitado. VBMLoading.botao(false) sempre libera
+          // o botão — esta linha reaplica a regra de cima por cima.
+          btnSaveAdd.disabled = !buscaAdd.id();
+        }
       });
   }
 
@@ -390,7 +480,7 @@
       if (window.showToast) showToast("warning", "Campo obrigatório", "Busque e selecione o usuário na lista.");
       return;
     }
-    if (btnSaveEdit) btnSaveEdit.disabled = true;
+    if (btnSaveEdit) { if (window.VBMLoading) VBMLoading.botao(btnSaveEdit, true); else btnSaveEdit.disabled = true; }
     fetch("/api/aprovadores/" + encodeURIComponent(idEmEdicao), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -413,7 +503,10 @@
         if (window.showToast) showToast("error", "Erro ao salvar", err.message);
       })
       .finally(function () {
-        if (btnSaveEdit) btnSaveEdit.disabled = !buscaEdit.id();
+        if (btnSaveEdit) {
+          if (window.VBMLoading) VBMLoading.botao(btnSaveEdit, false);
+          btnSaveEdit.disabled = !buscaEdit.id();
+        }
       });
   }
 

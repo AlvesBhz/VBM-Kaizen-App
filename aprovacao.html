@@ -37,18 +37,12 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>VBM Kaizen — Aprovação</title>
-<link href="css/vendor/e5e202e3c8995079_all.min.css" rel="stylesheet"/>
-<link href="css/vbm-app.css?v=20260819-1" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com" rel="preconnect"/>
-<link href="https://fonts.gstatic.com" rel="preconnect" crossorigin/>
-<!-- Poppins carregada SEM bloquear a renderização: como "print" o navegador
-     baixa a folha mas não espera por ela para pintar a tela; o onload a
-     promove para "all" e a fonte entra assim que chega. Antes, esta linha
-     era render-blocking — num ambiente sem saída para a internet a página
-     ficava em branco até o timeout do fonts.googleapis.com. O <noscript>
-     mantém o comportamento original quando não há JS. -->
-<link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet" media="print" onload="this.media='all';this.onload=null;"/>
-<noscript><link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet"/></noscript>
+<link href="css/fontawesome-subset.css?v=20260920-1" rel="stylesheet"/>
+<link href="css/vbm-app.css?v=20260921-1" rel="stylesheet"/>
+<!-- Poppins servida pelo próprio app (css/poppins.css + assets/fonts/poppins).
+     Vinha de fonts.googleapis.com: em rede sem saída para a internet o
+     pedido ficava pendente e o evento load da página nunca disparava. -->
+<link href="css/poppins.css?v=20260912-1" rel="stylesheet"/>
 <link href="assets/icons/a1922a98664cc516_favicon-32x32-1.png" rel="icon"/>
 <style>
 /* ═══════════════════════════════════════════════════
@@ -142,8 +136,7 @@
 [data-bg="dark"] .settings-panel{background:var(--vbm-blue-deep);box-shadow:-16px 0 48px rgba(0,0,0,.45)}
 [data-bg="dark"] .settings-panel-head{border-bottom-color:rgba(255,255,255,.1)}
 [data-bg="dark"] .settings-panel-head h2{color:#fff}
-[data-bg="dark"] .settings-close{background:rgba(255,255,255,.08);color:rgba(255,255,255,.6)}
-[data-bg="dark"] .settings-close:hover{background:var(--vbm-blue);color:#fff}
+/* O fechar no tema escuro vem de css/vbm-app.css (regra única). */
 [data-bg="dark"] .settings-section-title{color:#fff}
 [data-bg="dark"] .settings-info{border-color:rgba(255,255,255,.25);color:rgba(255,255,255,.5)}
 [data-bg="dark"] .settings-divider{background:rgba(255,255,255,.1)}
@@ -263,15 +256,12 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
   border-color:rgba(194,119,14,.35);
 }
 
-/* ── Painel de detalhe (direita) — correção dos "gaps" de cor:
-   blocos que eram brancos/cinza-claro fixos e destoavam no tema escuro. ── */
-[data-bg="dark"] .kd-section{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1);}
-[data-bg="dark"] .kd-section-head{background:rgba(255,255,255,.05);border-bottom-color:rgba(255,255,255,.1);}
-[data-bg="dark"] .kd-section-icon{background:rgba(60,181,229,.16);color:var(--vbm-blue-light);}
-[data-bg="dark"] .kd-section-title{color:#fff;}
-[data-bg="dark"] .kd-photo-box{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.12);}
-[data-bg="dark"] .kd-photo-desc{color:rgba(255,255,255,.6);}
-/* Blocos com background var(--vbm-off-white) inline (métricas e caixa de decisão) */
+/* ── Painel de detalhe (direita) — tema escuro dos blocos .kd-* mora no
+   css/vbm-app.css, junto da definição deles e do bloco de medidas que a
+   Biblioteca também usa. Duas cópias das mesmas cores é o caminho curto
+   para as duas telas começarem iguais e terminarem diferentes.
+   Aqui fica só o que é exclusivo desta tela: os blocos com background
+   var(--vbm-off-white) no atributo style (métricas e caixa de decisão). ── */
 [data-bg="dark"] .approval-detail-panel [style*="--vbm-off-white"]{
   background:rgba(255,255,255,.06) !important;border-color:rgba(255,255,255,.12) !important;
 }
@@ -345,7 +335,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
     <a href="admin.html" class="topnav-link"><i class="fa-solid fa-shield-halved"></i> <span data-i18n="nav.administracao">Administração</span></a>
   </div>
   <div class="topnav-actions">
-    <button class="settings-btn" id="settingsBtn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="settingsPanel" title="Configurações" data-i18n-title="settings.btnTitle">
+    <button class="settings-btn" id="settingsBtn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="settingsPanel" title="Configurações" data-i18n-title="settings.btnTitle" aria-label="Configurações">
       <svg width="17" height="17" viewBox="0 0 20 20" fill="none">
         <path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" stroke="currentColor" stroke-width="1.5" />
         <path d="M16.2 12.3a1.4 1.4 0 0 0 .28 1.54l.05.05a1.7 1.7 0 1 1-2.4 2.4l-.05-.05a1.4 1.4 0 0 0-1.54-.28 1.4 1.4 0 0 0-.85 1.28V17.4a1.7 1.7 0 0 1-3.4 0v-.08a1.4 1.4 0 0 0-.91-1.28 1.4 1.4 0 0 0-1.54.28l-.05.05a1.7 1.7 0 1 1-2.4-2.4l.05-.05a1.4 1.4 0 0 0 .28-1.54 1.4 1.4 0 0 0-1.28-.85H2.6a1.7 1.7 0 0 1 0-3.4h.08a1.4 1.4 0 0 0 1.28-.91 1.4 1.4 0 0 0-.28-1.54l-.05-.05a1.7 1.7 0 1 1 2.4-2.4l.05.05a1.4 1.4 0 0 0 1.54.28h.06a1.4 1.4 0 0 0 .85-1.28V2.6a1.7 1.7 0 0 1 3.4 0v.08a1.4 1.4 0 0 0 .85 1.28h.06a1.4 1.4 0 0 0 1.54-.28l.05-.05a1.7 1.7 0 1 1 2.4 2.4l-.05.05a1.4 1.4 0 0 0-.28 1.54v.06a1.4 1.4 0 0 0 1.28.85h.08a1.7 1.7 0 0 1 0 3.4h-.08a1.4 1.4 0 0 0-1.28.85Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
@@ -407,34 +397,24 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
   <div class="page-content">
 
     <!-- Hero banner — mesmo layout/linguagem do hero de biblioteca.html -->
-    <div style="position:relative;border-radius:1.25rem;overflow:hidden;margin-bottom:1.5rem;background:linear-gradient(135deg,#041523,#082d4f);background-image:url('assets/images/Fundo_Sossego_2400x1145.svg');background-size:cover;background-position:center;padding:2rem;">
+    <div style="position:relative;border-radius:1.25rem;overflow:hidden;margin-bottom:1.5rem;background-color:#041523;background-image:url('assets/images/Fundo_Sossego_2400x1145.webp'),linear-gradient(135deg,#041523,#082d4f);background-size:cover;background-position:center;padding:2rem;">
       <div style="position:absolute;width:350px;height:350px;border-radius:50%;background:radial-gradient(circle,rgba(60,181,229,.18) 0%,transparent 65%);top:-100px;right:-60px;filter:blur(50px);animation:orb1 20s ease-in-out infinite;pointer-events:none;"></div>
       <div style="position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;">
         <div>
           <div style="font-size:.6rem;letter-spacing:.25em;text-transform:uppercase;color:var(--vbm-blue-light);margin-bottom:.6rem;" data-i18n="ap.eyebrow">Autoridade de Aprovação</div>
-          <div style="font-family:'Poppins',sans-serif;font-weight:700;font-style:italic;font-size:clamp(1.8rem,4vw,3rem);color:#fff;mix-blend-mode:overlay;line-height:.9;margin-bottom:.4rem;" data-i18n="ap.heroTitle">APROVAÇÃO</div>
+          <div style="font-family:'Poppins',sans-serif;font-weight:700;font-style:italic;font-size:clamp(1.8rem,4vw,3rem);color:#fff;mix-blend-mode:overlay;line-height:.9;margin-bottom:.4rem;" data-i18n="ap.heroTitle" role="heading" aria-level="1">APROVAÇÃO</div>
           <div style="font-family:'Poppins',sans-serif;font-weight:700;font-size:clamp(.9rem,2vw,1.3rem);color:rgba(255,255,255,.75);mix-blend-mode:overlay;margin-bottom:.75rem;">KAIZENS · VALE BASE METALS</div>
           <p style="font-size:.82rem;color:rgba(255,255,255,.5);max-width:440px;line-height:1.6;" data-i18n="ap.subtitle">Revise, aprove ou devolva os Kaizens submetidos da sua unidade.</p>
         </div>
         <div style="background:rgba(255,255,255,.08);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.14);border-radius:.9rem;padding:1.1rem 1.4rem;min-width:220px;box-shadow:0 8px 32px rgba(0,0,0,.18);">
-          <div style="font-size:.58rem;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:.75rem;" data-i18n="ap.summaryTitle">Resumo de Aprovação</div>
+          <div style="font-family:'Poppins',sans-serif;font-size:.8rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.85);text-align:center;margin-bottom:.75rem;" data-i18n="ap.summaryTitle">Resumo 2026</div>
           <div style="display:flex;flex-direction:column;gap:.55rem;">
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
-              <span style="font-size:.72rem;color:rgba(255,255,255,.55);display:flex;align-items:center;gap:.4rem;"><span style="width:7px;height:7px;border-radius:50%;background:#c2770e;display:inline-block;"></span> <span data-i18n="ap.pendentes">Pendentes</span></span>
-              <span style="font-family:'Poppins', sans-serif;font-weight:700;font-size:.85rem;color:#fff;" id="apQtdPendentes">—</span>
-            </div>
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
-              <span style="font-size:.72rem;color:rgba(255,255,255,.55);display:flex;align-items:center;gap:.4rem;"><span style="width:7px;height:7px;border-radius:50%;background:#16a34a;display:inline-block;"></span> <span data-i18n="ap.aprovados2026">Aprovados (2026)</span></span>
-              <span style="font-family:'Poppins', sans-serif;font-weight:700;font-size:.85rem;color:#fff;">28</span>
-            </div>
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
-              <span style="font-size:.72rem;color:rgba(255,255,255,.55);display:flex;align-items:center;gap:.4rem;"><span style="width:7px;height:7px;border-radius:50%;background:#dc2626;display:inline-block;"></span> <span data-i18n="ap.reprovados2026">Reprovados (2026)</span></span>
-              <span style="font-family:'Poppins', sans-serif;font-weight:700;font-size:.85rem;color:#fff;">4</span>
-            </div>
+            <!-- Uma linha por status de kzn_status, montada em carregarResumo(). -->
+            <div id="apResumoStatus" style="display:flex;flex-direction:column;gap:.55rem;"></div>
             <div style="height:1px;background:rgba(255,255,255,.1);"></div>
             <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
               <span style="font-size:.72rem;color:rgba(255,255,255,.55);" data-i18n="ap.approvalRate">Taxa de aprovação</span>
-              <span style="font-family:'Poppins', sans-serif;font-weight:700;font-size:.85rem;color:#fff;">87%</span>
+              <span style="font-family:'Poppins', sans-serif;font-weight:700;font-size:.85rem;color:#fff;" id="apTaxa">—</span>
             </div>
           </div>
         </div>
@@ -475,6 +455,15 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
               </div>
             </div>
             <span class="badge badge-aguardando" data-i18n="badge.aguardando">Aguardando</span>
+            <!-- Amplia o MESMO conteúdo do painel: o modal recebe um
+                 clone na hora de abrir, então não há segunda consulta
+                 nem uma segunda montagem para divergir. -->
+            <button type="button" class="btn-icon" id="btnAmpliarKaizen"
+                    style="background:rgba(255,255,255,.12);color:#fff;border:none;"
+                    title="Ampliar" data-i18n-title="ap.expand"
+                    aria-label="Ampliar" data-i18n-aria="ap.expand">
+              <i class="fa-solid fa-up-right-and-down-left-from-center"></i>
+            </button>
           </div>
         </div>
 
@@ -502,11 +491,13 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
             <div class="kd-section-body">
               <div class="kd-before-after">
                 <div class="kd-photo-box">
-                  <img id="kdImgAntes" src="" alt="Antes" loading="lazy" decoding="async"/>
+                  <img id="kdImgAntes" src="" alt="" loading="lazy" decoding="async" hidden/>
+                  <div class="kd-photo-vazia" id="kdVazioAntes" data-i18n="kd.noImage">Sem imagem registrada</div>
                   <div class="kd-photo-box-body"><div class="kd-photo-label" data-i18n="kd.before">Antes</div><div class="kd-photo-desc" id="kdDescAntes">—</div></div>
                 </div>
                 <div class="kd-photo-box">
-                  <img id="kdImgDepois" src="" alt="Depois" loading="lazy" decoding="async"/>
+                  <img id="kdImgDepois" src="" alt="" loading="lazy" decoding="async" hidden/>
+                  <div class="kd-photo-vazia" id="kdVazioDepois" data-i18n="kd.noImage">Sem imagem registrada</div>
                   <div class="kd-photo-box-body"><div class="kd-photo-label" data-i18n="kd.after">Depois</div><div class="kd-photo-desc" id="kdDescDepois">—</div></div>
                 </div>
               </div>
@@ -525,21 +516,31 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
           </div>
 
           <!-- Approval actions -->
-          <div style="background:var(--vbm-off-white);border-radius:.75rem;padding:1.25rem;border:1px solid #eaeaea;">
+          <!-- id usado pelo botão de ampliar para TIRAR este bloco do
+               clone: o clone não carrega os listeners nem os ids, então
+               dentro do pop-up o campo e os botões ficariam inertes. A
+               decisão acontece no painel, em um lugar só. -->
+          <div id="apDecisao" style="background:var(--vbm-off-white);border-radius:.75rem;padding:1.25rem;border:1px solid #eaeaea;">
             <div style="font-family:'Poppins', sans-serif;font-weight:700;font-size:.85rem;color:var(--vbm-dark);margin-bottom:.75rem;">
               <i class="fa-solid fa-clipboard-check" style="color:var(--vbm-blue);margin-right:.4rem;"></i>
               <span data-i18n="ap.approvalDecision">Decisão de Aprovação</span>
             </div>
             <div class="form-group" id="kdMotivoWrap">
-              <label class="form-label" data-i18n="ap.rejectReason">Motivo da Reprovação <span class="req">*</span></label>
-              <textarea class="form-control" rows="3" id="kdMotivo" placeholder="Descreva o motivo da reprovação (obrigatório ao reprovar)..." data-i18n-placeholder="ap.commentPlaceholder"></textarea>
-              <div class="form-helper" data-i18n="ap.rejectReasonHelper">Máximo de 100 caracteres. Fica registrado vinculado a este Kaizen.</div>
+              <label for="kdMotivo" class="form-label" data-i18n="ap.rejectReason">Motivo da Reprovação ou correção</label>
+              <textarea class="form-control" rows="3" id="kdMotivo" maxlength="300" placeholder="Descreva o motivo da reprovação (obrigatório ao reprovar)..." data-i18n-placeholder="ap.commentPlaceholder"></textarea>
+              <div style="display:flex;justify-content:space-between;gap:1rem;">
+                <div class="form-helper" data-i18n="ap.rejectReasonHelper">Máximo de 300 caracteres. Fica registrado vinculado a este Kaizen.</div>
+                <div class="form-helper" id="kdMotivoContador">0/300</div>
+              </div>
             </div>
             <div class="ap-actions">
-              <button class="btn btn-danger ap-action-btn" onclick="handleReject()">
-                <i class="fa-solid fa-circle-xmark"></i> <span data-i18n="ap.reject">Reprovar</span>
+              <button class="btn btn-outline ap-action-btn" data-decisao="alteracao">
+                <i class="fa-solid fa-rotate-left"></i> <span data-i18n="ap.requestChange">Solicitar alteração</span>
               </button>
-              <button class="btn btn-success ap-action-btn" onclick="handleApprove()">
+              <button class="btn btn-danger ap-action-btn" data-decisao="reprovar">
+                <i class="fa-solid fa-circle-xmark"></i> <span data-i18n="ap.reject">Rejeitar</span>
+              </button>
+              <button class="btn btn-success ap-action-btn" data-decisao="aprovar">
                 <i class="fa-solid fa-circle-check"></i> <span data-i18n="ap.approveKaizen">Aprovar Kaizen</span>
               </button>
             </div>
@@ -553,18 +554,33 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 </main>
 </div>
 
+<!-- Modal: Kaizen ampliado — recebe um clone do painel ao abrir -->
+<div class="modal-backdrop" id="modalKaizenAmpliado" role="dialog" aria-modal="true" aria-labelledby="tituloKaizenAmpliado">
+  <div class="modal modal-xl">
+    <div class="modal-head">
+      <div class="modal-icon" style="--hue:60,181,229;background:var(--vbm-blue-pale);border-color:rgba(60,181,229,.22);"><i class="fa-solid fa-clipboard-list" style="color:var(--vbm-blue-dark);"></i></div>
+      <div class="modal-title" id="tituloKaizenAmpliado" data-i18n="ap.expandedTitle">Kaizen ampliado</div>
+      <button class="modal-close" data-modal-close aria-label="Fechar" data-i18n-aria="common.fechar"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body" id="corpoKaizenAmpliado"></div>
+  </div>
+</div>
+
 <!-- Modal: Editar Kaizen (aprovador) -->
-<div class="modal-backdrop" id="modalEditKaizen">
+<div class="modal-backdrop" id="modalEditKaizen" role="dialog" aria-modal="true" aria-labelledby="modalEditKaizenTitulo">
   <div class="modal modal-lg">
     <div class="modal-head">
       <div class="modal-icon" style="background:var(--vbm-blue-pale);"><i class="fa-solid fa-pen" style="color:var(--vbm-blue);"></i></div>
-      <div class="modal-title" data-i18n="ap.editKaizenAsApprover">Editar Kaizen (como Aprovador)</div>
+      <div class="modal-title" id="modalEditKaizenTitulo" data-i18n="ap.editKaizenAsApprover">Editar Kaizen (como Aprovador)</div>
       <button class="modal-close" data-modal-close><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
-      <div style="background:#fff4e5;border-radius:.5rem;padding:.85rem;margin-bottom:1.25rem;border:1px solid rgba(194,119,14,.2);display:flex;align-items:flex-start;gap:.6rem;">
-        <i class="fa-solid fa-triangle-exclamation" style="color:#c2770e;margin-top:.05rem;"></i>
-        <div style="font-size:.8rem;color:#92400e;line-height:1.55;" data-i18n="ap.editWarning">Como aprovador, você pode editar os campos deste Kaizen antes de aprová-lo. Suas alterações serão registradas no histórico.</div>
+      <!-- As cores saíram do atributo style para .callout-atencao, em
+           css/vbm-app.css: inline não sabe que existe tema, e a faixa
+           ficava âmbar-clara dentro do modal escuro. -->
+      <div class="callout-atencao">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <div data-i18n="ap.editWarning">Como aprovador, você pode editar os campos deste Kaizen antes de aprová-lo. Suas alterações serão registradas no histórico.</div>
       </div>
       <div class="form-group">
         <label class="form-label" data-i18n="ap.titulo">Título</label>
@@ -585,7 +601,7 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" data-modal-close data-i18n="common.cancelar">Cancelar</button>
-      <button class="btn btn-success" onclick="handleApprove();closeModal('modalEditKaizen')">
+      <button class="btn btn-success" onclick="closeModal('modalEditKaizen');decidir('aprovar')">
         <i class="fa-solid fa-circle-check"></i> <span data-i18n="ap.saveAndApprove">Salvar e Aprovar</span>
       </button>
     </div>
@@ -593,49 +609,156 @@ body[data-bg="dark"]{--vbm-dark:#f4f7fb;--vbm-mid:rgba(244,247,251,.55);--vbm-te
 </div>
 
 <div class="toast-container"></div>
-<script src="js/vbm-app.js?v=20260817-1"></script>
+<script src="js/vbm-app.js?v=20260921-1"></script>
 <!-- Dados do usuário logado (Microsoft Graph) — reaproveita o token do
      login já existente; sem MSAL próprio, sem alterar o fluxo de auth. -->
-<script src="js/usuario-graph.js?v=20260817-1"></script>
+<script src="js/usuario-graph.js?v=20260912-1"></script>
+<!-- Aviso da decisão por e-mail: o servidor devolve a mensagem pronta e
+     estes dois enviam pelo Graph com o token do aprovador logado. -->
+<script src="js/msal-config.js?v=20260915-1"></script>
+<script src="js/envio-email.js?v=20260915-1"></script>
 <script>
 // ─── Aprovação: fila + decisão, ligado ao banco (era mock) ───
 var kaizenSelecionadoId = null;
 
-function handleApprove() {
-  if (!kaizenSelecionadoId) return;
-  fetch('/api/kaizens/' + kaizenSelecionadoId + '/aprovar', { method: 'POST' })
-    .then(function (r) { return r.json().then(function (c) { return { ok: r.ok, c: c }; }); })
-    .then(function (res) {
-      if (!res.ok) throw new Error((res.c && res.c.error) || 'Falha ao aprovar.');
-      showToast('success', 'Kaizen Aprovado!', 'O autor será notificado.');
-      removerDaFila(kaizenSelecionadoId);
-    })
-    .catch(function (err) { showToast('error', 'Erro ao aprovar', err.message); });
+// As 3 decisões dividem o mesmo caminho: o que muda é a rota, se o
+// motivo é obrigatório e a mensagem de sucesso.
+var DECISOES = {
+  aprovar:   { rota: 'aprovar',              exigeMotivo: false, tom: 'success', chave: 'ap.okApproved' },
+  reprovar:  { rota: 'reprovar',             exigeMotivo: true,  tom: 'warning', chave: 'ap.okRejected' },
+  alteracao: { rota: 'solicitar-alteracao',  exigeMotivo: true,  tom: 'info',    chave: 'ap.okChangeRequested' },
+};
+var decisaoEmCurso = false;
+
+function txt(chave, padrao) {
+  return (window.__i18n && window.__i18n[chave]) || padrao;
 }
-function handleReject() {
-  if (!kaizenSelecionadoId) return;
-  var motivo = document.getElementById('kdMotivo').value.trim();
-  if (!motivo) {
-    showToast('error', 'Campo obrigatório', 'Descreva o motivo da reprovação.', 4000);
+
+/* Endereço da foto, com a versão do Kaizen na URL: o arquivo se chama
+   pelo ID e não muda de nome quando a foto é trocada, então é a versão
+   que diz ao navegador que o conteúdo é outro. */
+function urlFoto(caminho, versao) {
+  if (!caminho) return '';
+  var url = '/api/kaizens/imagem?path=' + encodeURIComponent(caminho);
+  return versao ? url + '&v=' + encodeURIComponent(String(versao).slice(0, 19)) : url;
+}
+
+/* Mostra a foto OU um aviso no lugar dela — nunca um <img src="">.
+   Com src vazio o navegador resolve para a URL da própria página, baixa
+   o HTML, não consegue decodificar e desenha o ícone de imagem
+   quebrada com o texto alternativo ao lado: parecia defeito da tela
+   quando era só um Kaizen sem a foto. Mesma função da Biblioteca. */
+function mostrarFoto(idImg, idVazio, url) {
+  var img = document.getElementById(idImg);
+  var vazio = document.getElementById(idVazio);
+  if (!img || !vazio) return;
+  var semFoto = function (chave, padrao) {
+    img.hidden = true;
+    img.removeAttribute('src');
+    vazio.hidden = false;
+    vazio.dataset.i18n = chave;
+    vazio.textContent = txt(chave, padrao);
+  };
+  if (!url) { semFoto('kd.noImage', 'Sem imagem registrada'); return; }
+  img.onerror = function () { semFoto('kd.imageFailed', 'Imagem não disponível'); };
+  img.onload = null;
+  img.hidden = false;
+  vazio.hidden = true;
+  // Trocar de Kaizen na fila reusa o mesmo <img>: se a url for a MESMA,
+  // 'load' não dispara de novo e o estado precisa ser decidido aqui.
+  if (img.getAttribute('src') !== url) img.src = url;
+  else if (img.complete && img.naturalWidth === 0) semFoto('kd.imageFailed', 'Imagem não disponível');
+}
+function botoesDecisao() {
+  return Array.prototype.slice.call(document.querySelectorAll('.ap-actions [data-decisao]'));
+}
+// tipo: qual botão foi clicado — só ELE ganha o spinner (VBMLoading),
+// os outros dois só ficam desabilitados, para não travar como se
+// tivessem sido clicados também.
+function travarDecisao(travado, tipo) {
+  decisaoEmCurso = travado;
+  botoesDecisao().forEach(function (b) {
+    if (window.VBMLoading && b.dataset.decisao === tipo) {
+      VBMLoading.botao(b, travado);
+    } else {
+      b.disabled = travado;
+    }
+  });
+}
+
+// Fecha o pop-up de ampliação se ele estiver aberto. O bloco de decisão
+// volta para o painel sozinho — quem devolve é o observador registrado
+// junto do botão de ampliar.
+function fecharAmpliado() {
+  var m = document.getElementById('modalKaizenAmpliado');
+  if (m && m.classList.contains('open') && window.closeModal) window.closeModal('modalKaizenAmpliado');
+}
+
+function decidir(tipo) {
+  var cfg = DECISOES[tipo];
+  // Duplo clique / clique durante o envio não pode virar 2 registros.
+  if (!cfg || !kaizenSelecionadoId || decisaoEmCurso) return;
+
+  var campo = document.getElementById('kdMotivo');
+  var motivo = (campo.value || '').trim();   // trim antes de tudo: só espaço não é motivo
+  if (cfg.exigeMotivo && !motivo) {
+    showToast('error', txt('ap.requiredField', 'Campo obrigatório'),
+              txt('ap.reasonRequired', 'Descreva o motivo.'), 4000);
+    campo.focus();
     return;
   }
-  fetch('/api/kaizens/' + kaizenSelecionadoId + '/reprovar', {
+  if (motivo.length > 300) {
+    showToast('error', txt('ap.requiredField', 'Campo obrigatório'),
+              txt('ap.reasonTooLong', 'O motivo deve ter no máximo 300 caracteres.'), 4000);
+    return;
+  }
+
+  travarDecisao(true, tipo);
+  var idDecidido = kaizenSelecionadoId;   // a fila recarrega e troca a seleção
+  fetch('/api/kaizens/' + kaizenSelecionadoId + '/' + cfg.rota, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ motivo: motivo }),
   })
-    .then(function (r) { return r.json().then(function (c) { return { ok: r.ok, c: c }; }); })
+    .then(function (r) { return r.json().then(function (c) { return { ok: r.ok, status: r.status, c: c }; }); })
     .then(function (res) {
-      if (!res.ok) throw new Error((res.c && res.c.error) || 'Falha ao reprovar.');
-      showToast('warning', 'Kaizen Reprovado', 'O autor receberá o feedback.');
-      removerDaFila(kaizenSelecionadoId);
+      if (!res.ok) {
+        // 404/403/409 = a fila na tela não bate mais com o banco (o
+        // Kaizen já foi decidido, saiu ou nunca foi desta pessoa).
+        // Recarregar deixa a tela mostrar o que existe de verdade, em
+        // vez de manter um item que só vai recusar de novo.
+        if (res.status === 404 || res.status === 403 || res.status === 409) {
+          fecharAmpliado();
+          window.recarregarAprovacao();
+        }
+        throw new Error((res.c && res.c.error) || txt('ap.decisionFailed', 'Falha ao registrar a decisão.'));
+      }
+      showToast(cfg.tom, txt(cfg.chave, 'Decisão registrada'), txt('ap.authorNotified', 'O autor será notificado.'));
+      // Aviso ao autor: a mensagem vem montada do servidor (dados já
+      // gravados) e sai pela caixa do PCI com o perfil de quem aprovou.
+      // Não entra no encadeamento: a decisão está registrada, e um
+      // problema de e-mail não pode virar erro de decisão na tela.
+      if (window.VBMEmail) window.VBMEmail.enviarTodos(res.c && res.c.AVISOS, idDecidido);
+      campo.value = '';
+      atualizarContador();
+      // Decidido pelo pop-up, o Kaizen sai da fila: manter a janela
+      // aberta deixaria na tela um Kaizen que não está mais lá.
+      fecharAmpliado();
+      // Fila, resumo e Kaizen selecionado saem do banco de novo — o que
+      // some da fila e o que muda no resumo vêm da mesma fonte.
+      window.recarregarAprovacao();
     })
-    .catch(function (err) { showToast('error', 'Erro ao reprovar', err.message); });
+    .catch(function (err) {
+      // O texto digitado FICA: refazer a justificativa por causa de uma
+      // falha de rede seria punir quem já escreveu.
+      showToast('error', txt('ap.decisionError', 'Erro ao registrar'), err.message);
+    })
+    .finally(function () { travarDecisao(false, tipo); });
 }
-function removerDaFila(id) {
-  var item = document.querySelector('.approval-item[data-kaizen="' + id + '"]');
-  if (item) item.remove();
-  document.getElementById('approvalDetail').style.display = 'none';
-  kaizenSelecionadoId = null;
+
+function atualizarContador() {
+  var campo = document.getElementById('kdMotivo');
+  var contador = document.getElementById('kdMotivoContador');
+  if (campo && contador) contador.textContent = (campo.value || '').length + '/300';
 }
 
 // ─── Fila de aprovação: só o que o usuário logado é o aprovador designado ───
@@ -653,10 +776,23 @@ function removerDaFila(id) {
     setText('kdHeadDate', k.DT_CRIACAO ? new Date(k.DT_CRIACAO).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }) : '—');
     setText('kdProblem', k.DS_PROBLEMA);
     setText('kdObjective', k.DS_OBJETIVO);
-    document.getElementById('kdImgAntes').src = k.URL_IMG_ANTES ? '/api/kaizens/imagem?path=' + encodeURIComponent(k.URL_IMG_ANTES) : '';
+    mostrarFoto('kdImgAntes', 'kdVazioAntes', urlFoto(k.URL_IMG_ANTES, k.DT_CRIACAO));
     setText('kdDescAntes', k.DS_ESTADO_ANTES);
-    document.getElementById('kdImgDepois').src = k.URL_IMG_DEPOIS ? '/api/kaizens/imagem?path=' + encodeURIComponent(k.URL_IMG_DEPOIS) : '';
+    mostrarFoto('kdImgDepois', 'kdVazioDepois', urlFoto(k.URL_IMG_DEPOIS, k.DT_CRIACAO));
     setText('kdDescDepois', k.DS_ESTADO_DEPOIS);
+
+    // A fila agora tem dois status (Aguardando aprovação e Revisado), e
+    // o selo do cabeçalho era fixo em "Aguardando" — mostrava o rótulo
+    // errado para um Kaizen revisado. Passa a vir do banco, no idioma
+    // da tela, com a mesma cor por nome usada no resumo do hero.
+    var selo = document.querySelector('#kaizenDetalhe .badge, .kd-header .badge')
+            || document.querySelector('[data-i18n="badge.aguardando"]');
+    if (selo && k.NM_STATUS) {
+      selo.textContent = k.NM_STATUS;
+      selo.removeAttribute('data-i18n');
+      var cor = COR_STATUS[semAcento(k.NM_STATUS)];
+      if (cor) { selo.style.background = 'transparent'; selo.style.color = cor; selo.style.border = '1px solid ' + cor; }
+    }
 
     var boxes = [];
     if (k.VL_RESULTADO_FINANCEIRO != null) {
@@ -666,8 +802,8 @@ function removerDaFila(id) {
     }
     (k.RESULTADOS || []).forEach(function (r) {
       boxes.push('<div style="background:var(--vbm-off-white);border-radius:.5rem;padding:.75rem;border-left:3px solid var(--vbm-blue);">' +
-        '<div style="font-family:\'Poppins\',sans-serif;font-weight:700;font-size:.82rem;color:var(--vbm-dark);">' + r.NM_RESULTADO + '</div>' +
-        '<div style="font-size:.68rem;color:var(--vbm-mid);">' + r.DS_RESULTADO + '</div></div>');
+        '<div style="font-family:\'Poppins\',sans-serif;font-weight:700;font-size:.82rem;color:var(--vbm-dark);">' + escaparHtml(r.NM_RESULTADO) + '</div>' +
+        '<div style="font-size:.68rem;color:var(--vbm-mid);">' + escaparHtml(r.DS_RESULTADO) + '</div></div>');
     });
     document.getElementById('kdResults').innerHTML = boxes.join('') || '<p style="font-size:.78rem;color:var(--vbm-mid);">Nenhum resultado registrado.</p>';
   }
@@ -678,10 +814,34 @@ function removerDaFila(id) {
     kaizenSelecionadoId = id;
     document.getElementById('kdMotivo').value = '';
     panel.style.display = 'block';
+    // Sem checar r.ok, uma resposta de erro (corpo {error: "..."}) era
+    // lida como se fosse o Kaizen: preencherDetalhe via setText() só
+    // sabe mostrar "—" para cada campo ausente, e a tela parecia "vazia"
+    // em vez de dizer que a busca falhou.
+    //
+    // Overlay no painel: sem ele, trocar de item na fila deixava os
+    // dados do Kaizen ANTERIOR na tela até a resposta nova chegar —
+    // renderização parcial/enganosa por um instante.
+    if (window.VBMLoading) VBMLoading.overlay(panel, true);
     fetch('/api/kaizens/' + id, { headers: { Accept: 'application/json' } })
-      .then(function (r) { return r.json(); })
+      .then(function (r) {
+        if (r.ok) return r.json();
+        return r.json().catch(function () { return null; }).then(function (corpo) {
+          var erro = new Error((corpo && corpo.error) || ('HTTP ' + r.status));
+          // sql: só vem quando o servidor prende o comando que falhou
+          // (ver corpoErroSql em server.js) — diagnóstico temporário.
+          if (corpo && corpo.sql) erro.sql = corpo.sql;
+          throw erro;
+        });
+      })
       .then(preencherDetalhe)
-      .catch(function () {});
+      .catch(function (err) {
+        showToast('error', txt('ap.loadFailed', 'Não foi possível carregar o Kaizen'),
+          err.message + (err.sql ? '\n\nSQL: ' + err.sql : ''), 12000);
+      })
+      .finally(function () {
+        if (window.VBMLoading) VBMLoading.overlay(panel, false);
+      });
   }
 
   fila.addEventListener('click', function (e) {
@@ -690,11 +850,19 @@ function removerDaFila(id) {
   });
 
   function carregarFila() {
+    // A fila recarrega depois de CADA decisão (recarregarAprovacao), não
+    // só na abertura da tela — sem o overlay, cada aprovar/rejeitar
+    // apagava a lista para "Carregando…" por um instante. Ela continua
+    // visível por baixo, só esmaecida, até a nova chegar (ver
+    // window.VBMLoading em vbm-app.js).
+    if (window.VBMLoading) VBMLoading.overlay(fila, true);
     fetch('/api/aprovacoes', { headers: { Accept: 'application/json' } })
       .then(function (r) { return r.ok ? r.json() : []; })
       .then(function (itens) {
-        document.querySelector('.badge-glass').textContent = itens.length;
-        document.getElementById('apQtdPendentes').textContent = itens.length;
+        // #apQtdPendentes deixou de existir: a contagem de pendentes
+        // agora sai do resumo, junto com os demais status do cadastro.
+        var badge = document.querySelector('.badge-glass');
+        if (badge) badge.textContent = itens.length;
         if (!itens.length) {
           fila.innerHTML = '<p style="padding:1rem;color:var(--vbm-mid);font-size:.8rem;">Nenhuma aprovação pendente para você.</p>';
           panel.style.display = 'none';
@@ -703,8 +871,9 @@ function removerDaFila(id) {
         fila.innerHTML = itens.map(function (k, i) {
           return '<div class="approval-item' + (i === 0 ? ' selected' : '') + '" data-kaizen="' + k.ID_KAIZEN + '">' +
             '<div class="approval-icon"><i class="fa-solid fa-clipboard-list"></i></div>' +
-            '<div class="approval-info"><div class="approval-title">' + k.NM_KAIZEN + '</div>' +
-            '<div class="approval-meta">' + (k.NM_LIDER || '—') + ' · ' + k.ROTULO + '</div></div>' +
+            '<div class="approval-info"><div class="approval-title">' + escaparHtml(k.NM_KAIZEN) + '</div>' +
+            '<div class="approval-meta">' + escaparHtml(k.NM_LIDER || '—') + ' · ' + escaparHtml(k.ROTULO) +
+              (k.NM_STATUS ? ' · ' + escaparHtml(k.NM_STATUS) : '') + '</div></div>' +
             '<i class="fa-solid fa-chevron-right approval-chevron"></i></div>';
         }).join('');
         selecionar(itens[0].ID_KAIZEN, fila.querySelector('.approval-item'));
@@ -712,7 +881,165 @@ function removerDaFila(id) {
       .catch(function () { fila.innerHTML = '<p style="padding:1rem;color:#dc2626;font-size:.8rem;">Erro ao carregar a fila.</p>'; });
   }
 
+  // ─── Resumo do ano (hero) ───
+  // Uma linha por status de kzn_status, com a contagem real do ano
+  // vinda de kzn_pedravisaoconsolidada. Nada de nome, ID ou quantidade
+  // fixos aqui: o painel mostra o que estiver cadastrado.
+  function idiomaDaTela() {
+    var sel = document.getElementById('langSelect');
+    return (sel && sel.value) || 'pt-BR';
+  }
+  // A cor do ponto casa pelo nome sem acento — kzn_status não tem
+  // coluna de cor. Status novo cai no neutro, sem quebrar.
+  // Nomes como estão em kzn_status, nos dois idiomas — o resumo mostra
+  // NM_STATUS no idioma da tela, então a chave precisa existir nos dois.
+  var COR_STATUS = {
+    'aprovado': '#16a34a', 'approved': '#16a34a', 'concluido': '#16a34a',
+    'reprovado': '#dc2626', 'rejeitado': '#dc2626', 'reject': '#dc2626', 'rejected': '#dc2626',
+    'aguardando aprovacao': '#c2770e', 'awaiting approval': '#c2770e',
+    'em aprovacao': '#c2770e', 'aguardando': '#c2770e',
+    'revisado': '#7c3aed', 'reviewed': '#7c3aed',
+    'solicitado alteracoes': '#3cb5e5', 'solicitado alteracao': '#3cb5e5',
+    'solicitar alteracoes': '#3cb5e5', 'solicitar alteracao': '#3cb5e5',
+    'request changes': '#3cb5e5',
+  };
+  function semAcento(x) {
+    return String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  }
+
+  // Idioma com que o resumo na tela foi montado — ver a guarda do
+  // vbm:idioma no fim deste bloco.
+  var idiomaDoResumo = null;
+
+  function carregarResumo() {
+    idiomaDoResumo = idiomaDaTela();
+    var alvo = document.getElementById('apResumoStatus');
+    var elTaxa = document.getElementById('apTaxa');
+    if (!alvo) return;
+    fetch('/api/kaizens/resumo?idioma=' + encodeURIComponent(idiomaDaTela()),
+          { headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (resumo) {
+        if (!resumo) return;
+        var titulo = document.querySelector('[data-i18n="ap.summaryTitle"]');
+        if (titulo && resumo.ano) {
+          var molde = (window.__i18n && window.__i18n['ap.summaryTitle']) || 'Resumo {ano}';
+          titulo.textContent = molde.indexOf('{ano}') !== -1
+            ? molde.replace('{ano}', resumo.ano) : molde;
+        }
+        alvo.innerHTML = (resumo.statusAno || []).map(function (st) {
+          var cor = COR_STATUS[semAcento(st.NM_STATUS)] || 'rgba(255,255,255,.45)';
+          return '<div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">' +
+            '<span style="font-size:.72rem;color:rgba(255,255,255,.55);display:flex;align-items:center;gap:.4rem;">' +
+              '<span style="width:7px;height:7px;border-radius:50%;background:' + cor + ';display:inline-block;"></span> ' +
+              escaparHtml(st.NM_STATUS) + '</span>' +
+            '<span style="font-family:\'Poppins\', sans-serif;font-weight:700;font-size:.85rem;color:#fff;">' + st.QTD + '</span>' +
+          '</div>';
+        }).join('');
+        // null = nenhum Kaizen decidido no ano; "—" em vez de 0%.
+        if (elTaxa) elTaxa.textContent = resumo.taxaAprovacao == null ? '—' : resumo.taxaAprovacao + '%';
+      })
+      .catch(function () { /* o painel fica como está; a fila não depende dele */ });
+  }
+
+  function escaparHtml(txt) {
+    var d = document.createElement('div');
+    d.textContent = txt == null ? '' : String(txt);
+    return d.innerHTML;
+  }
+
+  // ─── Ampliar o Kaizen selecionado ───
+  // Clona o painel já renderizado em vez de montar tudo de novo: o que
+  // aparece ampliado é exatamente o que está na tela, sem consulta
+  // extra e sem uma segunda montagem para divergir da primeira.
+  //
+  // O bloco de decisão é a exceção: ele NÃO é clonado, é MOVIDO para
+  // dentro do modal e devolvido ao painel no fechamento. Cópia não
+  // carrega listener nem id — no pop-up o contador ficava em 0/300 e os
+  // botões não respondiam. Movendo o nó real, o campo, o contador, as
+  // travas e os três botões são exatamente os mesmos, e continua
+  // existindo um único bloco de decisão na página.
+  var decisaoOrigem = null;   // onde o bloco mora quando o modal está fechado
+
+  function moverDecisaoPara(destino) {
+    var bloco = document.getElementById('apDecisao');
+    if (!bloco || !destino) return;
+    if (!decisaoOrigem) decisaoOrigem = { pai: bloco.parentNode, proximo: bloco.nextSibling };
+    destino.appendChild(bloco);
+  }
+  function devolverDecisaoAoPainel() {
+    var bloco = document.getElementById('apDecisao');
+    if (!bloco || !decisaoOrigem || bloco.parentNode === decisaoOrigem.pai) return;
+    decisaoOrigem.pai.insertBefore(bloco, decisaoOrigem.proximo);
+  }
+
+  var backdropAmpliado = document.getElementById('modalKaizenAmpliado');
+  if (backdropAmpliado && window.MutationObserver) {
+    // O modal fecha por ESC, clique fora e botão X — todos tratados pelo
+    // initModals() global, que só tira a classe .open. Observar a classe
+    // cobre os três sem duplicar aquele tratamento aqui.
+    new MutationObserver(function () {
+      if (!backdropAmpliado.classList.contains('open')) devolverDecisaoAoPainel();
+    }).observe(backdropAmpliado, { attributes: true, attributeFilter: ['class'] });
+  }
+
+  var btnAmpliar = document.getElementById('btnAmpliarKaizen');
+  if (btnAmpliar) {
+    btnAmpliar.addEventListener('click', function () {
+      var corpo = document.getElementById('corpoKaizenAmpliado');
+      if (!corpo || !panel) return;
+      // Devolve antes de clonar: se o bloco ainda estivesse no modal, o
+      // clone sairia sem ele.
+      devolverDecisaoAoPainel();
+      var copia = panel.cloneNode(true);
+      // No clone não faz sentido o botão de ampliar (já estamos
+      // ampliados) nem a cópia morta da decisão — o bloco real entra
+      // depois, movido.
+      var lixo = copia.querySelector('#btnAmpliarKaizen');
+      if (lixo) lixo.remove();
+      var decisao = copia.querySelector('#apDecisao');
+      if (decisao) decisao.remove();
+      // ids duplicados quebrariam getElementById do painel original.
+      copia.removeAttribute('id');
+      copia.querySelectorAll('[id]').forEach(function (el) { el.removeAttribute('id'); });
+      copia.style.display = 'block';
+      copia.style.maxHeight = 'none';
+      corpo.innerHTML = '';
+      corpo.appendChild(copia);
+      moverDecisaoPara(corpo);
+      var titulo = document.getElementById('tituloKaizenAmpliado');
+      var nome = document.getElementById('kdHeadTitle');
+      if (titulo && nome) titulo.textContent = nome.textContent;
+      window.openModal('modalKaizenAmpliado');
+      // Foco no fechar: teclado entra no modal, não fica atrás dele.
+      var x = document.querySelector('#modalKaizenAmpliado .modal-close');
+      if (x && x.focus) x.focus();
+    });
+  }
+
+  botoesDecisao().forEach(function (b) {
+    b.addEventListener('click', function () { decidir(b.dataset.decisao); });
+  });
+  var campoMotivo = document.getElementById('kdMotivo');
+  if (campoMotivo) campoMotivo.addEventListener('input', atualizarContador);
+  atualizarContador();
+
+  // decidir() está fora desta IIFE e precisa recarregar a tela depois de
+  // uma decisão — chamar carregarFila() de lá dava "carregarFila is not
+  // defined", e o erro de escopo aparecia como falha da decisão mesmo
+  // quando ela tinha sido gravada.
+  window.recarregarAprovacao = function () { carregarFila(); carregarResumo(); };
+
   carregarFila();
+  carregarResumo();
+  // O applyLang inicial TAMBÉM dispara vbm:idioma, então sem esta guarda
+  // o resumo era consultado duas vezes em toda abertura da tela (medido:
+  // 2x GET /api/kaizens/resumo). Mesma proteção que a Biblioteca usa: só
+  // reconsulta em troca REAL de idioma.
+  window.addEventListener('vbm:idioma', function () {
+    if (idiomaDaTela() === idiomaDoResumo) return;
+    carregarResumo();
+  });
 })();
 
 (function(){
@@ -799,6 +1126,12 @@ function removerDaFila(id) {
 (function () {
   var I18N = {
     'pt-BR': {
+      'a11y.abrirMenu': 'Abrir menu',
+      'a11y.expandir': 'Expandir',
+      'a11y.avancar': 'Avançar',
+      'a11y.voltar': 'Voltar',
+      'a11y.adicionar': 'Adicionar',
+      'common.fechar': 'Fechar',
       'settings.btnTitle': 'Configurações',
       'settings.title': 'Configurações',
       'settings.close': 'Fechar',
@@ -824,13 +1157,13 @@ function removerDaFila(id) {
       'ap.membersCount': '3 membros',
       'ap.generatedValue': 'Valor Gerado',
       'ap.approvalDecision': 'Decisão de Aprovação',
-      'ap.rejectReason': 'Motivo da Reprovação',
-      'ap.rejectReasonHelper': 'Máximo de 100 caracteres. Fica registrado vinculado a este Kaizen.',
+      'ap.rejectReason': 'Motivo da Reprovação ou correção',
+      'ap.rejectReasonHelper': 'Máximo de 300 caracteres. Fica registrado vinculado a este Kaizen.',
       'ap.approverComment': 'Comentário do Aprovador',
       'ap.commentPlaceholder': 'Deixe um feedback para o autor (obrigatório ao reprovar)...',
       'ap.approveKaizen': 'Aprovar Kaizen',
       'ap.editAndApprove': 'Editar e Aprovar',
-      'ap.reject': 'Reprovar',
+      'ap.reject': 'Rejeitar',
       'ap.editKaizenAsApprover': 'Editar Kaizen (como Aprovador)',
       'ap.editWarning': 'Como aprovador, você pode editar os campos deste Kaizen antes de aprová-lo. Suas alterações serão registradas no histórico.',
       'ap.titulo': 'Título',
@@ -839,13 +1172,35 @@ function removerDaFila(id) {
       'kd.problemObjective': 'Problema & Objetivo',
       'kd.beforeAfter': 'Antes & Depois',
       'kd.before': 'Antes',
+      'kd.noImage': 'Sem imagem registrada',
+      'kd.imageFailed': 'Imagem não disponível',
       'kd.after': 'Depois',
       'kd.resultsAchieved': 'Resultados Alcançados',
       'ap.eyebrow': 'Autoridade de Aprovação',
+      'email.failTitle': 'E-mail não enviado',
+      'email.failMsg': 'A decisão foi registrada normalmente, mas o comunicado não saiu.',
       'ap.heroTitle': 'APROVAÇÃO',
-      'ap.summaryTitle': 'Resumo de Aprovação'
+      'ap.expand': 'Ampliar',
+      'ap.expandedTitle': 'Kaizen ampliado',
+      'ap.requestChange': 'Solicitar alteração',
+      'ap.requiredField': 'Campo obrigatório',
+      'ap.reasonRequired': 'Descreva o motivo.',
+      'ap.reasonTooLong': 'O motivo deve ter no máximo 300 caracteres.',
+      'ap.okApproved': 'Kaizen aprovado!',
+      'ap.okRejected': 'Kaizen rejeitado',
+      'ap.okChangeRequested': 'Alteração solicitada',
+      'ap.authorNotified': 'O autor será notificado.',
+      'ap.decisionFailed': 'Falha ao registrar a decisão.',
+      'ap.decisionError': 'Erro ao registrar',
+      'ap.summaryTitle': 'Resumo {ano}'
     },
     'en': {
+      'a11y.abrirMenu': 'Open menu',
+      'a11y.expandir': 'Expand',
+      'a11y.avancar': 'Next',
+      'a11y.voltar': 'Back',
+      'a11y.adicionar': 'Add',
+      'common.fechar': 'Close',
       'settings.btnTitle': 'Settings',
       'settings.title': 'Settings',
       'settings.close': 'Close',
@@ -871,8 +1226,8 @@ function removerDaFila(id) {
       'ap.membersCount': '3 members',
       'ap.generatedValue': 'Value Generated',
       'ap.approvalDecision': 'Approval Decision',
-      'ap.rejectReason': 'Rejection Reason',
-      'ap.rejectReasonHelper': 'Max 100 characters. Recorded and linked to this Kaizen.',
+      'ap.rejectReason': 'Rejection or correction reason',
+      'ap.rejectReasonHelper': 'Max 300 characters. Recorded and linked to this Kaizen.',
       'ap.approverComment': "Approver's Comment",
       'ap.commentPlaceholder': 'Leave feedback for the author (required when rejecting)...',
       'ap.approveKaizen': 'Approve Kaizen',
@@ -886,11 +1241,27 @@ function removerDaFila(id) {
       'kd.problemObjective': 'Problem & Objective',
       'kd.beforeAfter': 'Before & After',
       'kd.before': 'Before',
+      'kd.noImage': 'No image on file',
+      'kd.imageFailed': 'Image unavailable',
       'kd.after': 'After',
       'kd.resultsAchieved': 'Results Achieved',
       'ap.eyebrow': 'Approval Authority',
+      'email.failTitle': 'E-mail not sent',
+      'email.failMsg': 'The decision was recorded normally, but the notice did not go out.',
       'ap.heroTitle': 'APPROVAL',
-      'ap.summaryTitle': 'Approval Summary'
+      'ap.expand': 'Expand',
+      'ap.expandedTitle': 'Expanded Kaizen',
+      'ap.requestChange': 'Request change',
+      'ap.requiredField': 'Required field',
+      'ap.reasonRequired': 'Describe the reason.',
+      'ap.reasonTooLong': 'The reason must be at most 300 characters.',
+      'ap.okApproved': 'Kaizen approved!',
+      'ap.okRejected': 'Kaizen rejected',
+      'ap.okChangeRequested': 'Change requested',
+      'ap.authorNotified': 'The author will be notified.',
+      'ap.decisionFailed': 'Could not record the decision.',
+      'ap.decisionError': 'Error recording',
+      'ap.summaryTitle': 'Summary {ano}'
     }
   };
 
@@ -929,6 +1300,7 @@ function removerDaFila(id) {
     if (!I18N[lang]) lang = 'pt-BR';
     select.value = lang;
     translatePanel(lang);
+    window.__i18n = I18N[lang] || I18N['pt-BR'];
     try { localStorage.setItem('vdt-lang', lang); } catch (e) {}
     // Avisa quem mostra dados do banco (listas bilíngues) para
     // reconsultar no novo idioma — ver window.VBMIdioma em vbm-app.js.

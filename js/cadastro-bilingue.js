@@ -8,7 +8,7 @@
  * Add/Edit bilíngues). Este arquivo define o motor único
  * (window.criarCadastroBilingue) usado por js/replicacao.js,
  * js/desperdicios.js, js/resultados.js, js/tiporesultados.js e
- * js/motivosreprovacao.js — cada um só passando a configuração da sua
+ * js/status.js — cada um só passando a configuração da sua
  * própria aba (rota, ids dos elementos, textos, limites de campo).
  * js/categorias.js é a exceção: fica de fora deste motor de propósito
  * (ver header desse arquivo). Precisa ser carregado ANTES dos 5 acima.
@@ -286,6 +286,23 @@ window.criarCadastroBilingue = function (cfg) {
         '<button type="button" class="btn-icon ' + (reg.ATIVO ? "btn-icon-red" : "btn-icon-blue") + ' btn-icon-sm" data-action="status" title="' + (reg.ATIVO ? "Desativar" : "Reativar") + '"><i class="fa-solid ' + (reg.ATIVO ? "fa-ban" : "fa-rotate-right") + '"></i></button>' +
       "</div>";
 
+    // Ícone que não carrega — arquivo SVG ainda não publicado, ou
+    // URL_ICONE apontando para um caminho que não existe mais — deixava
+    // o cartão com o símbolo de imagem quebrada do navegador. Cai no
+    // glifo do Font Awesome correspondente, que é vendorizado junto com
+    // a aplicação e não depende de nenhum arquivo em assets/icons.
+    var img = item.querySelector(".admin-item-icon img");
+    if (img) {
+      img.addEventListener("error", function () {
+        var classe = classeDoCaminho(img.getAttribute("src")) ||
+                     classeDoCaminho(cfg.iconePadrao);
+        if (!classe) return; // sem classe reconhecível, deixa como está
+        var glifo = document.createElement("i");
+        glifo.className = classe;
+        img.replaceWith(glifo);
+      }, { once: true });
+    }
+
     item.querySelector('[data-action="editar"]').addEventListener("click", function () { abrirEdicao(reg); });
     item.querySelector('[data-action="status"]').addEventListener("click", function () { alternarStatus(reg, item); });
     return item;
@@ -294,11 +311,24 @@ window.criarCadastroBilingue = function (cfg) {
   // Recarrega sempre do banco — nunca reaproveita estado anterior,
   // então o ativo/inativo exibido é o SG_ATIVO atual.
   function carregarLista() {
+    // Overlay por cima da lista ATUAL (padrão global — window.VBMLoading
+    // em vbm-app.js), em vez de apagar tudo para o texto "Carregando…":
+    // recarregar depois de ativar/desativar/editar um item piscava a
+    // aba inteira em branco por um instante. Na primeira carga da aba
+    // (nada na tela ainda) cai na rede de segurança de sempre.
+    if (window.VBMLoading && jaCarregouAlgumaVez) {
+      VBMLoading.overlay(list, true, { texto: cfg.textoCarregando });
+    } else {
+      list.innerHTML = "";
+      list.appendChild(statusEl(cfg.textoCarregando, false));
+    }
     jaCarregouAlgumaVez = true;
-    list.innerHTML = "";
-    list.appendChild(statusEl(cfg.textoCarregando, false));
 
-    fetch("/api/" + cfg.rota + "?idioma=" + encodeURIComponent(idiomaEmUso()))
+    // cache: "no-store" — esta leitura acontece logo depois de gravar e
+    // precisa refletir a gravação. Sem isso, uma resposta guardada em
+    // qualquer ponto do caminho (navegador ou proxy) faria o registro
+    // recém-criado só aparecer quando o prazo do cache vencesse.
+    fetch("/api/" + cfg.rota + "?idioma=" + encodeURIComponent(idiomaEmUso()), { cache: "no-store" })
       .then(function (res) {
         if (!res.ok) return res.json().then(function (e) { throw new Error(e.error || res.statusText); });
         return res.json();
@@ -313,6 +343,7 @@ window.criarCadastroBilingue = function (cfg) {
       })
       .catch(function (err) {
         console.error("[" + cfg.rota + "] falha ao carregar lista:", err);
+        if (window.VBMLoading) VBMLoading.overlay(list, false);
         list.innerHTML = "";
         var box = statusEl("", true);
         box.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> <span></span>';
@@ -385,7 +416,7 @@ window.criarCadastroBilingue = function (cfg) {
       return;
     }
 
-    if (editSaveBtn) editSaveBtn.disabled = true;
+    if (editSaveBtn) { if (window.VBMLoading) VBMLoading.botao(editSaveBtn, true); else editSaveBtn.disabled = true; }
     fetch("/api/" + cfg.rota + "/" + encodeURIComponent(idEmEdicao), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -408,7 +439,7 @@ window.criarCadastroBilingue = function (cfg) {
         if (window.showToast) showToast("error", "Erro ao salvar", err.message);
       })
       .finally(function () {
-        if (editSaveBtn) editSaveBtn.disabled = false;
+        if (editSaveBtn) { if (window.VBMLoading) VBMLoading.botao(editSaveBtn, false); else editSaveBtn.disabled = false; }
       });
   }
 
@@ -432,7 +463,7 @@ window.criarCadastroBilingue = function (cfg) {
       return;
     }
 
-    if (addSaveBtn) addSaveBtn.disabled = true;
+    if (addSaveBtn) { if (window.VBMLoading) VBMLoading.botao(addSaveBtn, true); else addSaveBtn.disabled = true; }
     fetch("/api/" + cfg.rota, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -456,7 +487,7 @@ window.criarCadastroBilingue = function (cfg) {
         if (window.showToast) showToast("error", "Erro ao criar", err.message);
       })
       .finally(function () {
-        if (addSaveBtn) addSaveBtn.disabled = false;
+        if (addSaveBtn) { if (window.VBMLoading) VBMLoading.botao(addSaveBtn, false); else addSaveBtn.disabled = false; }
       });
   }
 
@@ -484,6 +515,11 @@ window.criarCadastroBilingue = function (cfg) {
       .then(function () {
         reg.ATIVO = ativar;
         item.replaceWith(renderItem(reg));
+        // Redesenhar só o item deixaria a tela apoiada no estado local.
+        // Relendo a lista, o que aparece é sempre o que está gravado —
+        // mesma regra do criar e do editar. A aba não muda: a releitura
+        // acontece dentro dela.
+        carregarLista();
         avisarMudanca();
         if (window.showToast) {
           showToast("success", ativar ? "Reativado" : "Desativado",
