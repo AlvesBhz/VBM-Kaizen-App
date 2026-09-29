@@ -401,6 +401,25 @@ BEGIN
 END
 
 /* =====================================================================
+   E1c - Aprovadores (CI.KZN_HIST_APROVADOR, se ja existir)
+   A principal tem FK para ela: inclui antes os IDs que faltarem. ID 0 e
+   o marcador "sem aprovador" do legado e vira NULL (ver E2), nao entra.
+   Dinamico: a tabela pode nao existir, e #PVC e visivel no escopo interno.
+   ===================================================================== */
+IF OBJECT_ID('CI.KZN_HIST_APROVADOR', 'U') IS NOT NULL
+BEGIN
+    SET @sql = N'
+    INSERT INTO CI.KZN_HIST_APROVADOR (ID_APROVADOR)
+    SELECT DISTINCT a.ID
+    FROM   #PVC p CROSS APPLY (SELECT ID = NULLIF(TRY_CONVERT(INT, p.TX_APROVADOR), 0)) a
+    WHERE  a.ID IS NOT NULL
+      AND  NOT EXISTS (SELECT 1 FROM CI.KZN_HIST_APROVADOR x WHERE x.ID_APROVADOR = a.ID);
+    SET @c = @@ROWCOUNT;';
+    EXEC sp_executesql @sql, N'@c INT OUTPUT', @c = @qt OUTPUT;
+    PRINT '  E1c - KZN_HIST_APROVADOR: ' + CAST(@qt AS VARCHAR(10)) + ' aprovador(es) novo(s).';
+END
+
+/* =====================================================================
    E2 - Tabela principal
    ===================================================================== */
 SET @sql = N'
@@ -411,7 +430,7 @@ INSERT INTO CI.KZN_HIST_PEDRAVISAOCONSOLIDADA
      VL_RESULTADO_FINANCEIRO, ID_MOEDA, DS_RESULTADO_ALCANCADO, DT_CONCLUSAO, ' + QUOTENAME(@dtCol) + N',
      ID_USUARIO_ATUALIZACAO, DS_MOTIVO, ID_STATUS)
 SELECT  p.ID_KAIZEN, TRY_CONVERT(INT, p.TX_CADASTRO), TRY_CONVERT(INT, p.TX_LIDER), p.NM_KAIZEN, p.ID_CATEGORIA, r.ID_REPLICACAO,
-        p.DS_PROBLEMA, p.DS_OBJETIVO, TRY_CONVERT(INT, p.TX_APROVADOR), p.URL_IMG_ANTES, p.DS_ESTADO_ANTES, p.URL_IMG_DEPOIS,
+        p.DS_PROBLEMA, p.DS_OBJETIVO, NULLIF(TRY_CONVERT(INT, p.TX_APROVADOR), 0), p.URL_IMG_ANTES, p.DS_ESTADO_ANTES, p.URL_IMG_DEPOIS,
         p.DS_ESTADO_DEPOIS, p.URL_REFERENCIA, p.DS_COMPARA_META, p.DS_LICOES_APRENDIDAS,
         p.VL_RESULTADO_FINANCEIRO, p.ID_MOEDA, p.DS_RESULTADO_ALCANCADO, p.DT_CONCLUSAO, p.DT_REG,
         TRY_CONVERT(INT, p.TX_ATUALIZACAO), p.DS_MOTIVO, p.ID_STATUS
@@ -470,6 +489,10 @@ GROUP BY p.TX_REPLICACAO;
 SELECT  PROBLEMA = 'ID_APROVADOR nao numerico -> gravado NULL',
         QT_KAIZENS = COUNT(*)
 FROM    #PVC WHERE TX_APROVADOR IS NOT NULL AND TRY_CONVERT(INT, TX_APROVADOR) IS NULL;
+
+SELECT  PROBLEMA = 'ID_APROVADOR 0 (sem aprovador no legado) -> gravado NULL',
+        QT_KAIZENS = COUNT(*)
+FROM    #PVC WHERE TRY_CONVERT(INT, TX_APROVADOR) = 0;
 
 DROP TABLE #PVC;
 
