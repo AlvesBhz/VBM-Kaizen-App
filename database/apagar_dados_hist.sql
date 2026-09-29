@@ -4,13 +4,21 @@
    Por padrao apaga SO a faixa carregada (7281-12267), nao a tabela toda.
    Para limpar tudo, troque @SOMENTE_FAIXA para 0.
 
-   As tabelas HIST nao tem FK entre si, entao a ordem nao e imposta pelo
-   banco — ainda assim a exclusao segue a inversa da carga (auxiliares
-   primeiro, principal por ultimo), para que uma interrupcao nunca deixe
-   auxiliar apontando para Kaizen inexistente.
+   ORDEM: auxiliares -> principal -> aprovadores. A principal tem FK para
+   CI.KZN_HIST_APROVADOR (FK_KZN_HIST_PVC_APROVADOR), entao o aprovador so
+   pode sair depois dos Kaizens que o usam. As auxiliares nao tem FK, mas
+   saem antes para que uma interrupcao nunca deixe auxiliar apontando
+   para Kaizen inexistente.
 
-   DELETE, nao TRUNCATE: TRUNCATE ignoraria o filtro de faixa e nao pode
-   ser desfeito dentro da transacao da mesma forma.
+   APROVADORES nao tem ID_KAIZEN, entao nao ha "faixa" para eles. Com
+   @APAGAR_APROVADORES = 1 (padrao) saem os que ficarem SEM NENHUM Kaizen
+   depois da exclusao — com @SOMENTE_FAIXA = 0 isso e a tabela toda; com
+   a faixa, o aprovador que ainda atende Kaizen de fora dela fica. Com 0,
+   a tabela de aprovadores nao e tocada (util se CD_MATRICULA/ID_USUARIO
+   ja foram preenchidos a mao). A carga recria os que faltarem (E1c).
+
+   DELETE, nao TRUNCATE: TRUNCATE ignoraria o filtro de faixa e e barrado
+   pela FK na tabela de aprovadores.
 
    Tudo em UMA transacao com contagem previa: erro em qualquer etapa
    desfaz tudo. Schema: 'ci'.
@@ -19,7 +27,8 @@
 SET NOCOUNT ON;
 SET XACT_ABORT ON;
 
-DECLARE @SOMENTE_FAIXA BIT = 1;      -- 1 = so 7281-12267 | 0 = todas as linhas
+DECLARE @SOMENTE_FAIXA      BIT = 1;   -- 1 = so 7281-12267 | 0 = todas as linhas
+DECLARE @APAGAR_APROVADORES BIT = 1;   -- 1 = remove aprovadores que ficarem sem Kaizen | 0 = nao toca
 DECLARE @ID_INI INT = 7281, @ID_FIM INT = 12267;
 
 DECLARE @tabelas TABLE (ORDEM INT PRIMARY KEY, NOME SYSNAME);
@@ -32,6 +41,26 @@ INSERT INTO @tabelas (ORDEM, NOME) VALUES
 
 DECLARE @i INT = 1, @n INT, @tab SYSNAME, @sql NVARCHAR(MAX), @qt INT, @total INT = 0;
 SELECT @n = MAX(ORDEM) FROM @tabelas;
+
+/* Aprovador orfao = nenhum Kaizen da principal o referencia. Na previa
+   (E1) conta-se o que ficara orfao DEPOIS da exclusao; na E2/E3, com a
+   principal ja limpa, a mesma consulta sem o filtro de faixa. */
+DECLARE @sqlOrfaosPrevia NVARCHAR(MAX) = N'
+SELECT @c = COUNT(*)
+FROM   CI.KZN_HIST_APROVADOR a
+WHERE  NOT EXISTS (SELECT 1 FROM CI.KZN_HIST_PEDRAVISAOCONSOLIDADA p
+                   WHERE p.ID_APROVADOR = a.ID_APROVADOR
+                     AND @f = 1 AND p.ID_KAIZEN NOT BETWEEN @a AND @b);';
+
+DECLARE @sqlOrfaosAgora NVARCHAR(MAX) = N'
+SELECT @c = COUNT(*)
+FROM   CI.KZN_HIST_APROVADOR a
+WHERE  NOT EXISTS (SELECT 1 FROM CI.KZN_HIST_PEDRAVISAOCONSOLIDADA p WHERE p.ID_APROVADOR = a.ID_APROVADOR);';
+
+DECLARE @temAprovador BIT = CASE WHEN @APAGAR_APROVADORES = 1
+                                  AND OBJECT_ID('CI.KZN_HIST_APROVADOR', 'U') IS NOT NULL
+                                  AND OBJECT_ID('CI.KZN_HIST_PEDRAVISAOCONSOLIDADA', 'U') IS NOT NULL
+                                 THEN 1 ELSE 0 END;
 
 /* =====================================================================
    E1 - PREVIA: o que sera apagado
@@ -56,6 +85,16 @@ BEGIN
     END
     SET @i += 1;
 END
+
+IF @temAprovador = 1
+BEGIN
+    EXEC sp_executesql @sqlOrfaosPrevia, N'@f BIT, @a INT, @b INT, @c INT OUTPUT',
+         @f = @SOMENTE_FAIXA, @a = @ID_INI, @b = @ID_FIM, @c = @qt OUTPUT;
+    SET @total += @qt;
+    PRINT '  - CI.KZN_HIST_APROVADOR: ' + CAST(@qt AS VARCHAR(10)) + ' aprovador(es) sem Kaizen apos a exclusao.';
+END
+ELSE IF @APAGAR_APROVADORES = 0
+    PRINT '  - CI.KZN_HIST_APROVADOR: nao sera tocada (@APAGAR_APROVADORES = 0).';
 
 IF @total = 0
 BEGIN
@@ -91,9 +130,22 @@ BEGIN TRY
         SET @i += 1;
     END
 
+    /* Aprovadores por ultimo: a principal ja nao os referencia. */
+    IF @temAprovador = 1
+    BEGIN
+        SET @sql = N'DELETE a FROM CI.KZN_HIST_APROVADOR a
+                     WHERE NOT EXISTS (SELECT 1 FROM CI.KZN_HIST_PEDRAVISAOCONSOLIDADA p
+                                       WHERE p.ID_APROVADOR = a.ID_APROVADOR);
+                     SET @c = @@ROWCOUNT;';
+        EXEC sp_executesql @sql, N'@c INT OUTPUT', @c = @qt OUTPUT;
+        PRINT '  - CI.KZN_HIST_APROVADOR: ' + CAST(@qt AS VARCHAR(10)) + ' aprovador(es) excluido(s).';
+    END
+
     /* =================================================================
        E3 - VERIFICACAO ANTES DO COMMIT
        ================================================================= */
+    DECLARE @msg NVARCHAR(400);
+
     SET @i = 1;
     WHILE @i <= @n
     BEGIN
@@ -107,13 +159,24 @@ BEGIN TRY
 
             IF @qt > 0
             BEGIN
-                DECLARE @msg NVARCHAR(400) = 'Abortado na verificacao: restam ' + CAST(@qt AS VARCHAR(10))
+                SET @msg = 'Abortado na verificacao: restam ' + CAST(@qt AS VARCHAR(10))
                     + ' linha(s) em CI.' + @tab + '. ROLLBACK aplicado — nada foi excluido.';
                 RAISERROR(@msg, 16, 1);
             END
         END
 
         SET @i += 1;
+    END
+
+    IF @temAprovador = 1
+    BEGIN
+        EXEC sp_executesql @sqlOrfaosAgora, N'@c INT OUTPUT', @c = @qt OUTPUT;
+        IF @qt > 0
+        BEGIN
+            SET @msg = 'Abortado na verificacao: restam ' + CAST(@qt AS VARCHAR(10))
+                + ' aprovador(es) sem Kaizen em CI.KZN_HIST_APROVADOR. ROLLBACK aplicado — nada foi excluido.';
+            RAISERROR(@msg, 16, 1);
+        END
     END
 
     COMMIT TRANSACTION;
