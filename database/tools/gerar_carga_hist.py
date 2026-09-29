@@ -370,7 +370,7 @@ INSERT INTO @tabs (TABELA) VALUES (N'KZN_HIST_APROVADOR');
         w("""
 /* ---------------------------------------------------------------------
    E0.3 - CI.KZN_HIST_MDM_VBM_TERC: a guia cabe na tabela REAL?
-   A tabela NAO e alterada: so recebe linhas novas (E1d). Entao o que a
+   A ESTRUTURA nao e alterada: so os dados (E1d). Entao o que a
    guia traz tem de caber como a tabela esta. Aborta, listando, se:
      - coluna da guia nao existe na tabela;
      - coluna NOT NULL vem vazia na guia (DEFAULT nao ajuda: a coluna vai
@@ -591,8 +591,10 @@ END
         w("""
 /* =====================================================================
    E1d - CI.KZN_HIST_MDM_VBM_TERC, da guia de mesmo nome (%d linhas)
-   SO ACRESCENTA: nenhum UPDATE, nenhum DELETE. Linha cuja chave (a PK
-   real da tabela, lida do catalogo) ja existe e pulada e contada.
+   Chave = PK real da tabela, lida do catalogo. Chave que ja existe e
+   ATUALIZADA com o que a guia traz; celula vazia na guia NAO apaga o
+   valor atual (COALESCE). Chave nova e incluida. Nenhum DELETE, nenhuma
+   mudanca de estrutura.
    ===================================================================== */
 CREATE TABLE #MDM (%s);
 """ % (len(mdm), decl))
@@ -605,7 +607,7 @@ IF @CARREGAR_MDM_TERC = 1
 BEGIN
     /* Chave: PK real. Texto comparado com COLLATE DATABASE_DEFAULT dos
        dois lados (a tabela pode ter herdado outra collation da origem). */
-    DECLARE @chave NVARCHAR(MAX), @pulados INT;
+    DECLARE @chave NVARCHAR(MAX), @atualizados INT;
     SELECT @chave = STRING_AGG(CONVERT(NVARCHAR(MAX),
                         N't.' + QUOTENAME(x.nm)
                       + CASE WHEN x.tp IN (N'varchar',N'char',N'nvarchar',N'nchar') THEN N' COLLATE DATABASE_DEFAULT' ELSE N'' END
@@ -620,22 +622,26 @@ BEGIN
                         tp = CONVERT(NVARCHAR(128), ty.name) COLLATE DATABASE_DEFAULT) x
     WHERE  i.object_id = OBJECT_ID('CI.KZN_HIST_MDM_VBM_TERC') AND i.is_primary_key = 1;
 
+    /* Sem PK nao ha como saber qual linha atualizar. */
+    IF @chave IS NULL
+        RAISERROR('Abortado: CI.KZN_HIST_MDM_VBM_TERC nao tem PK — sem chave nao ha como atualizar. Rode ajustar_kzn_hist_mdm_vbm_terc.sql.', 16, 1);
+
     SET @sql = N'
+    UPDATE t SET %s
+    FROM   CI.KZN_HIST_MDM_VBM_TERC t JOIN #MDM m ON ' + @chave + N';
+    SET @u = @@ROWCOUNT;
     INSERT INTO CI.KZN_HIST_MDM_VBM_TERC (%s)
-    SELECT %s FROM #MDM m'
-        + CASE WHEN @chave IS NOT NULL
-               THEN N'
-    WHERE NOT EXISTS (SELECT 1 FROM CI.KZN_HIST_MDM_VBM_TERC t WHERE ' + @chave + N')'
-               ELSE N'' END + N';
+    SELECT %s FROM #MDM m
+    WHERE NOT EXISTS (SELECT 1 FROM CI.KZN_HIST_MDM_VBM_TERC t WHERE ' + @chave + N');
     SET @c = @@ROWCOUNT;';
-    EXEC sp_executesql @sql, N'@c INT OUTPUT', @c = @qt OUTPUT;
-    SET @pulados = %d - @qt;
-    PRINT '  E1d - KZN_HIST_MDM_VBM_TERC: ' + CAST(@qt AS VARCHAR(10)) + ' linha(s) acrescentada(s), '
-        + CAST(@pulados AS VARCHAR(10)) + ' ja existente(s) pulada(s).';
+    EXEC sp_executesql @sql, N'@u INT OUTPUT, @c INT OUTPUT', @u = @atualizados OUTPUT, @c = @qt OUTPUT;
+    PRINT '  E1d - KZN_HIST_MDM_VBM_TERC: ' + CAST(@atualizados AS VARCHAR(10)) + ' linha(s) atualizada(s), '
+        + CAST(@qt AS VARCHAR(10)) + ' incluida(s).';
 END
 ELSE PRINT '  E1d - KZN_HIST_MDM_VBM_TERC nao tocada (@CARREGAR_MDM_TERC = 0).';
 DROP TABLE #MDM;
-""" % (', '.join(mdm_cols), ', '.join('m.' + c for c in mdm_cols), len(mdm)))
+""" % (', '.join('t.%s = COALESCE(m.%s, t.%s)' % (c, c, c) for c in mdm_cols if c != 'ID_USUARIO'),
+       ', '.join(mdm_cols), ', '.join('m.' + c for c in mdm_cols)))
 
     w("""
 /* =====================================================================
