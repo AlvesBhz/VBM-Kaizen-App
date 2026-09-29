@@ -19,6 +19,9 @@ import sys, datetime, decimal
 import openpyxl
 
 GUIA_PVC = 'KZN_HIST_PEDRAVISAOCONSOLIDADA'
+GUIA_APR = 'KZN_HIST_APROVADOR'   # opcional: planilhas antigas nao tem
+APR_COLS = ['ID_APROVADOR', 'CD_MATRICULA', 'SG_ATIVO', 'ID_USUARIO', 'DT_ATUALIZACAO']
+APR_KINDS = ['int', 'txt', 'txt', 'int', 'dt']   # CD_MATRICULA mistura numero e texto
 # Cada auxiliar tem seu PROPRIO nome de staging. Reaproveitar '#T' com um
 # DROP no meio nao funciona: a carga toda roda num unico batch (nao pode
 # haver GO dentro da transacao nem depois de um RAISERROR de aborto), e o
@@ -176,6 +179,23 @@ def main():
         if m:
             req.append(('KZN_HIST_KAIZEN_HIERARQUIA', 'NM_HIERARQUIA_N%d' % (i - 1), m))
 
+    # Aprovadores: cadastro mestre, NAO filtrado por Kaizen (a guia inteira
+    # entra). Se a planilha nao tiver a guia, a E1c cai no modo antigo e
+    # deriva os IDs da principal.
+    apr = None
+    if GUIA_APR in wb.sheetnames:
+        apr = sorted(ler(wb, GUIA_APR, 5, 1), key=lambda r: int(r[0]))
+        if len(set(int(r[0]) for r in apr)) != len(apr):
+            sys.exit('ID_APROVADOR duplicado na guia %s' % GUIA_APR)
+        m = max((len(str(r[1])) for r in apr if r[1] is not None), default=0)
+        if m:
+            req.append(('KZN_HIST_APROVADOR', 'CD_MATRICULA', m))
+        usados = {int(r[8]) for r in pvc if isinstance(r[8], int) and r[8] != 0}
+        faltam = sorted(usados - {int(r[0]) for r in apr})
+        if faltam:
+            print('AVISO: %d ID_APROVADOR da principal fora da guia %s: %s'
+                  % (len(faltam), GUIA_APR, faltam[:20]), file=sys.stderr)
+
     o = []
     w = o.append
     faixa = '%d a %d' % (ini, fim)
@@ -316,6 +336,18 @@ BEGIN
 END
 """ % (n_cat, len(pvc)))
 
+    if apr is not None:
+        w("""
+/* A principal tem FK para CI.KZN_HIST_APROVADOR, e a E1c a carrega da
+   guia: a tabela tem de existir, e entra na conferencia da E0.2. */
+IF OBJECT_ID('CI.KZN_HIST_APROVADOR', 'U') IS NULL
+BEGIN
+    RAISERROR('Abortado: CI.KZN_HIST_APROVADOR nao existe. Rode criar_kzn_hist_aprovador.sql antes.', 16, 1);
+    RETURN;
+END
+INSERT INTO @tabs (TABELA) VALUES (N'KZN_HIST_APROVADOR');
+""")
+
     w("""
 /* ---------------------------------------------------------------------
    E0.2 - NOT NULL sem DEFAULT que esta carga NAO preenche
@@ -364,7 +396,9 @@ CREATE TABLE #PVC (
 """ % (',\n'.join('    (N\'%s\')' % c for c in PVC_DESTINO),
        '\n'.join("UNION ALL SELECT N'%s', v FROM (VALUES\n%s) x(v)"
                  % (dest, ',\n'.join('    (N\'%s\')' % c for c in cols))
-                 for _g, dest, cols, _s, _d, _l in AUX),
+                 for _g, dest, cols, _s, _d, _l in AUX)
+       + ("\nUNION ALL SELECT N'KZN_HIST_APROVADOR', v FROM (VALUES\n%s) x(v)"
+          % ',\n'.join("    (N'%s')" % c for c in APR_COLS) if apr is not None else ''),
        STAGING_PVC))
 
     for r in pvc:
@@ -400,11 +434,67 @@ BEGIN
     END
 END
 
+""")
+
+    if apr is not None:
+        w("""
+/* =====================================================================
+   E1c - Aprovadores, da guia KZN_HIST_APROVADOR (%d)
+   Cadastro mestre, antes da principal (FK). Atualiza o que ja existir e
+   inclui o que faltar — nunca apaga: pode haver Kaizen de fora desta
+   carga usando o aprovador. Dinamico: #APR e #PVC sao visiveis no escopo
+   interno, e a referencia estatica a tabela nova nao e necessaria.
+   ===================================================================== */
+CREATE TABLE #APR (ID_APROVADOR INT, CD_MATRICULA NVARCHAR(100), SG_ATIVO NVARCHAR(10),
+                   ID_USUARIO INT, DT_ATUALIZACAO DATETIME2(3));
+""" % len(apr))
+        for k in range(0, len(apr), 100):
+            w('INSERT INTO #APR VALUES\n')
+            w(',\n'.join('(%s)' % ', '.join(lit(r[i], APR_KINDS[i]) for i in range(5))
+                         for r in apr[k:k + 100]) + ';\n')
+        w("""
+SET @sql = N'
+UPDATE a SET CD_MATRICULA = t.CD_MATRICULA, SG_ATIVO = t.SG_ATIVO,
+             ID_USUARIO = t.ID_USUARIO, DT_ATUALIZACAO = t.DT_ATUALIZACAO
+FROM   CI.KZN_HIST_APROVADOR a JOIN #APR t ON t.ID_APROVADOR = a.ID_APROVADOR;
+SET @u = @@ROWCOUNT;
+INSERT INTO CI.KZN_HIST_APROVADOR (ID_APROVADOR, CD_MATRICULA, SG_ATIVO, ID_USUARIO, DT_ATUALIZACAO)
+SELECT t.ID_APROVADOR, t.CD_MATRICULA, t.SG_ATIVO, t.ID_USUARIO, t.DT_ATUALIZACAO
+FROM   #APR t
+WHERE  NOT EXISTS (SELECT 1 FROM CI.KZN_HIST_APROVADOR a WHERE a.ID_APROVADOR = t.ID_APROVADOR);
+SET @c = @@ROWCOUNT;';
+DECLARE @upd INT;
+EXEC sp_executesql @sql, N'@u INT OUTPUT, @c INT OUTPUT', @u = @upd OUTPUT, @c = @qt OUTPUT;
+PRINT '  E1c - KZN_HIST_APROVADOR: ' + CAST(@qt AS VARCHAR(10)) + ' incluido(s), '
+    + CAST(@upd AS VARCHAR(10)) + ' atualizado(s).';
+DROP TABLE #APR;
+
+/* Aprovador usado na principal e ausente do cadastro: a FK derrubaria a
+   E2 com uma mensagem generica. Aborta antes, listando os IDs. */
+SET @sql = N'
+SELECT @c = COUNT(DISTINCT a.ID)
+FROM   #PVC p CROSS APPLY (SELECT ID = NULLIF(TRY_CONVERT(INT, p.TX_APROVADOR), 0)) a
+WHERE  a.ID IS NOT NULL
+  AND  NOT EXISTS (SELECT 1 FROM CI.KZN_HIST_APROVADOR x WHERE x.ID_APROVADOR = a.ID);';
+EXEC sp_executesql @sql, N'@c INT OUTPUT', @c = @qt OUTPUT;
+IF @qt > 0
+BEGIN
+    EXEC sp_executesql N'
+    SELECT PROBLEMA = ''ID_APROVADOR sem cadastro em KZN_HIST_APROVADOR'', ID_APROVADOR = a.ID, QT_KAIZENS = COUNT(*)
+    FROM   #PVC p CROSS APPLY (SELECT ID = NULLIF(TRY_CONVERT(INT, p.TX_APROVADOR), 0)) a
+    WHERE  a.ID IS NOT NULL
+      AND  NOT EXISTS (SELECT 1 FROM CI.KZN_HIST_APROVADOR x WHERE x.ID_APROVADOR = a.ID)
+    GROUP BY a.ID ORDER BY a.ID;';
+    RAISERROR('Abortado: ha ID_APROVADOR usado na principal sem linha na guia KZN_HIST_APROVADOR (lista acima).', 16, 1);
+END
+""")
+    else:
+        w("""
 /* =====================================================================
    E1c - Aprovadores (CI.KZN_HIST_APROVADOR, se ja existir)
-   A principal tem FK para ela: inclui antes os IDs que faltarem. ID 0 e
-   o marcador "sem aprovador" do legado e vira NULL (ver E2), nao entra.
-   Dinamico: a tabela pode nao existir, e #PVC e visivel no escopo interno.
+   A planilha nao tem a guia KZN_HIST_APROVADOR: inclui so o ID dos que
+   faltarem, derivado da principal (FK). ID 0 e o marcador "sem
+   aprovador" do legado e vira NULL (ver E2), nao entra.
    ===================================================================== */
 IF OBJECT_ID('CI.KZN_HIST_APROVADOR', 'U') IS NOT NULL
 BEGIN
@@ -418,7 +508,9 @@ BEGIN
     EXEC sp_executesql @sql, N'@c INT OUTPUT', @c = @qt OUTPUT;
     PRINT '  E1c - KZN_HIST_APROVADOR: ' + CAST(@qt AS VARCHAR(10)) + ' aprovador(es) novo(s).';
 END
+""")
 
+    w("""
 /* =====================================================================
    E2 - Tabela principal
    ===================================================================== */
