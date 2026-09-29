@@ -22,6 +22,7 @@ GUIA_PVC = 'KZN_HIST_PEDRAVISAOCONSOLIDADA'
 GUIA_APR = 'KZN_HIST_APROVADOR'   # opcional: planilhas antigas nao tem
 APR_COLS = ['ID_APROVADOR', 'CD_MATRICULA', 'SG_ATIVO', 'ID_USUARIO', 'DT_ATUALIZACAO']
 APR_KINDS = ['int', 'txt', 'txt', 'int', 'dt']   # CD_MATRICULA mistura numero e texto
+GUIA_MDM = 'KZN_HIST_MDM_VBM_TERC'  # opcional: so acrescenta linhas na tabela de mesmo nome
 # Cada auxiliar tem seu PROPRIO nome de staging. Reaproveitar '#T' com um
 # DROP no meio nao funciona: a carga toda roda num unico batch (nao pode
 # haver GO dentro da transacao nem depois de um RAISERROR de aborto), e o
@@ -196,6 +197,23 @@ def main():
             print('AVISO: %d ID_APROVADOR da principal fora da guia %s: %s'
                   % (len(faltam), GUIA_APR, faltam[:20]), file=sys.stderr)
 
+    # MDM historico (VBM + terceiros): so ACRESCENTA linhas. Cabecalho da
+    # guia define as colunas; nulos e larguras medidos aqui para a E0.3
+    # conferir contra a tabela REAL antes de gravar qualquer coisa.
+    mdm = mdm_cols = mdm_kinds = mdm_perfil = None
+    if GUIA_MDM in wb.sheetnames:
+        it = wb[GUIA_MDM].iter_rows(values_only=True)
+        cab = [c for c in next(it)]
+        nc = max(i for i, c in enumerate(cab) if c is not None) + 1
+        mdm_cols = [str(c) for c in cab[:nc]]
+        mdm = [r[:nc] for r in it if r[0] is not None]
+        mdm_kinds = [('int' if c.startswith('ID_') else 'dt' if c.startswith('DT_') else 'txt')
+                     for c in mdm_cols]
+        # (coluna, qtd de nulos, maior tamanho de texto)
+        mdm_perfil = [(c, sum(1 for r in mdm if r[i] is None),
+                       max((len(str(r[i])) for r in mdm if r[i] is not None and mdm_kinds[i] == 'txt'), default=0))
+                      for i, c in enumerate(mdm_cols)]
+
     o = []
     w = o.append
     faixa = '%d a %d' % (ini, fim)
@@ -347,6 +365,62 @@ BEGIN
 END
 INSERT INTO @tabs (TABELA) VALUES (N'KZN_HIST_APROVADOR');
 """)
+
+    if mdm is not None:
+        w("""
+/* ---------------------------------------------------------------------
+   E0.3 - CI.KZN_HIST_MDM_VBM_TERC: a guia cabe na tabela REAL?
+   A tabela NAO e alterada: so recebe linhas novas (E1d). Entao o que a
+   guia traz tem de caber como a tabela esta. Aborta, listando, se:
+     - coluna da guia nao existe na tabela;
+     - coluna NOT NULL vem vazia na guia (DEFAULT nao ajuda: a coluna vai
+       explicita no INSERT, e NULL explicito nao aciona DEFAULT);
+     - texto da guia maior que a coluna.
+   Para carregar so os Kaizens, troque @CARREGAR_MDM_TERC para 0.
+   --------------------------------------------------------------------- */
+DECLARE @CARREGAR_MDM_TERC BIT = 1;   -- 0 = nao toca em CI.KZN_HIST_MDM_VBM_TERC
+
+IF @CARREGAR_MDM_TERC = 1
+BEGIN
+    IF OBJECT_ID('CI.KZN_HIST_MDM_VBM_TERC', 'U') IS NULL
+    BEGIN
+        RAISERROR('Abortado: CI.KZN_HIST_MDM_VBM_TERC nao existe. Rode criar_kzn_hist_mdm_vbm_terc.sql, ou troque @CARREGAR_MDM_TERC para 0.', 16, 1);
+        RETURN;
+    END
+
+    DECLARE @mdm TABLE (COLUNA SYSNAME, QT_NULOS INT, TAM_MAX INT);
+    INSERT INTO @mdm (COLUNA, QT_NULOS, TAM_MAX) VALUES
+%s;
+
+    DECLARE @mdmProb TABLE (COLUNA SYSNAME, PROBLEMA NVARCHAR(200));
+    INSERT INTO @mdmProb (COLUNA, PROBLEMA)
+    SELECT m.COLUNA, N'nao existe na tabela'
+    FROM   @mdm m
+    WHERE  NOT EXISTS (SELECT 1 FROM sys.columns c
+                       WHERE c.object_id = OBJECT_ID('CI.KZN_HIST_MDM_VBM_TERC')
+                         AND c.name COLLATE DATABASE_DEFAULT = m.COLUNA COLLATE DATABASE_DEFAULT)
+    UNION ALL
+    SELECT m.COLUNA, N'NOT NULL na tabela, vazia em ' + CAST(m.QT_NULOS AS NVARCHAR(10)) + N' linha(s) da guia'
+    FROM   @mdm m JOIN sys.columns c ON c.object_id = OBJECT_ID('CI.KZN_HIST_MDM_VBM_TERC')
+                                    AND c.name COLLATE DATABASE_DEFAULT = m.COLUNA COLLATE DATABASE_DEFAULT
+    WHERE  c.is_nullable = 0 AND m.QT_NULOS > 0
+    UNION ALL
+    SELECT m.COLUNA, N'tabela aceita ' + CAST(c.max_length / CASE WHEN ty.name IN ('nvarchar','nchar') THEN 2 ELSE 1 END AS NVARCHAR(10))
+                   + N' caractere(s), guia chega a ' + CAST(m.TAM_MAX AS NVARCHAR(10))
+    FROM   @mdm m JOIN sys.columns c ON c.object_id = OBJECT_ID('CI.KZN_HIST_MDM_VBM_TERC')
+                                    AND c.name COLLATE DATABASE_DEFAULT = m.COLUNA COLLATE DATABASE_DEFAULT
+           JOIN sys.types ty ON ty.user_type_id = c.user_type_id
+    WHERE  c.max_length <> -1 AND ty.name IN ('varchar','char','nvarchar','nchar')
+      AND  c.max_length / CASE WHEN ty.name IN ('nvarchar','nchar') THEN 2 ELSE 1 END < m.TAM_MAX;
+
+    IF EXISTS (SELECT 1 FROM @mdmProb)
+    BEGIN
+        SELECT TABELA = 'KZN_HIST_MDM_VBM_TERC', COLUNA, PROBLEMA FROM @mdmProb ORDER BY COLUNA;
+        RAISERROR('Abortado: a guia KZN_HIST_MDM_VBM_TERC nao cabe na tabela como ela esta (lista acima). Complete a guia, ou troque @CARREGAR_MDM_TERC para 0 para carregar so os Kaizens.', 16, 1);
+        RETURN;
+    END
+END
+""" % ',\n'.join("        (N'%s', %d, %d)" % p for p in mdm_perfil))
 
     w("""
 /* ---------------------------------------------------------------------
@@ -509,6 +583,59 @@ BEGIN
     PRINT '  E1c - KZN_HIST_APROVADOR: ' + CAST(@qt AS VARCHAR(10)) + ' aprovador(es) novo(s).';
 END
 """)
+
+    if mdm is not None:
+        decl = ', '.join('%s %s' % (c, {'int': 'INT', 'dt': 'DATETIME2(3)',
+                                        'txt': 'NVARCHAR(MAX) COLLATE DATABASE_DEFAULT'}[k])
+                         for c, k in zip(mdm_cols, mdm_kinds))
+        w("""
+/* =====================================================================
+   E1d - CI.KZN_HIST_MDM_VBM_TERC, da guia de mesmo nome (%d linhas)
+   SO ACRESCENTA: nenhum UPDATE, nenhum DELETE. Linha cuja chave (a PK
+   real da tabela, lida do catalogo) ja existe e pulada e contada.
+   ===================================================================== */
+CREATE TABLE #MDM (%s);
+""" % (len(mdm), decl))
+        for k in range(0, len(mdm), 100):
+            w('INSERT INTO #MDM VALUES\n')
+            w(',\n'.join('(%s)' % ', '.join(lit(r[i], mdm_kinds[i]) for i in range(len(mdm_cols)))
+                         for r in mdm[k:k + 100]) + ';\n')
+        w("""
+IF @CARREGAR_MDM_TERC = 1
+BEGIN
+    /* Chave: PK real. Texto comparado com COLLATE DATABASE_DEFAULT dos
+       dois lados (a tabela pode ter herdado outra collation da origem). */
+    DECLARE @chave NVARCHAR(MAX), @pulados INT;
+    SELECT @chave = STRING_AGG(CONVERT(NVARCHAR(MAX),
+                        N't.' + QUOTENAME(x.nm)
+                      + CASE WHEN x.tp IN (N'varchar',N'char',N'nvarchar',N'nchar') THEN N' COLLATE DATABASE_DEFAULT' ELSE N'' END
+                      + N' = m.' + QUOTENAME(x.nm)
+                      + CASE WHEN x.tp IN (N'varchar',N'char',N'nvarchar',N'nchar') THEN N' COLLATE DATABASE_DEFAULT' ELSE N'' END),
+                    N' AND ') WITHIN GROUP (ORDER BY ic.key_ordinal)
+    FROM   sys.indexes i
+    JOIN   sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id AND ic.key_ordinal > 0
+    JOIN   sys.columns c        ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+    JOIN   sys.types ty         ON ty.user_type_id = c.user_type_id
+    CROSS APPLY (SELECT nm = CONVERT(NVARCHAR(128), c.name)  COLLATE DATABASE_DEFAULT,
+                        tp = CONVERT(NVARCHAR(128), ty.name) COLLATE DATABASE_DEFAULT) x
+    WHERE  i.object_id = OBJECT_ID('CI.KZN_HIST_MDM_VBM_TERC') AND i.is_primary_key = 1;
+
+    SET @sql = N'
+    INSERT INTO CI.KZN_HIST_MDM_VBM_TERC (%s)
+    SELECT %s FROM #MDM m'
+        + CASE WHEN @chave IS NOT NULL
+               THEN N'
+    WHERE NOT EXISTS (SELECT 1 FROM CI.KZN_HIST_MDM_VBM_TERC t WHERE ' + @chave + N')'
+               ELSE N'' END + N';
+    SET @c = @@ROWCOUNT;';
+    EXEC sp_executesql @sql, N'@c INT OUTPUT', @c = @qt OUTPUT;
+    SET @pulados = %d - @qt;
+    PRINT '  E1d - KZN_HIST_MDM_VBM_TERC: ' + CAST(@qt AS VARCHAR(10)) + ' linha(s) acrescentada(s), '
+        + CAST(@pulados AS VARCHAR(10)) + ' ja existente(s) pulada(s).';
+END
+ELSE PRINT '  E1d - KZN_HIST_MDM_VBM_TERC nao tocada (@CARREGAR_MDM_TERC = 0).';
+DROP TABLE #MDM;
+""" % (', '.join(mdm_cols), ', '.join('m.' + c for c in mdm_cols), len(mdm)))
 
     w("""
 /* =====================================================================
