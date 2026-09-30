@@ -181,3 +181,15 @@ a partir do dicionário reproduziu-o sem diferença (colunas, PKs, FKs, índices
 | Item 11 (collation `Latin1_General_CI_AS` no MDM e em APROVADOR.CD_MATRICULA) em DEV vazio, com dados e contido | aplicado; PK/UQ/IX recriados; FK_KZN_APROVADOR_MDM_MATRICULA confiável; 2ª execução sem alterações |
 | MERGE com KZN_TIPO_USUARIO vazio no DEV (erro real: FK_KZN_MDM_TIPO_USUARIO) | 2 tipos copiados da PRD, 3 usuários inseridos, ID_USUARIO dos tipos preenchido; 0 diferenças; nenhuma FK desabilitada |
 | MERGE após o item 11 | sem AVISO de collation |
+
+### Transferência das demais tabelas após o MERGE (collation da PRD `Latin1_General_CI_AS`)
+
+PRD de teste com a estrutura do dicionário real, banco `Latin1_General_CI_AS`, 26.283 linhas. DEV: criar_estrutura →
+corrigir_dev_conforme_prd → MERGE do MDM (3 usuários, 2 tipos) → transferir_dados_prd_dev.
+
+| Teste | Resultado |
+|---|---|
+| `@SUBSTITUIR_DADOS_DEV = 0` | abortado: DEV já tem dados (MDM e TIPO_USUARIO) |
+| `@SUBSTITUIR_DADOS_DEV = 1` | 29 tabelas OK (inclui KZN_MDM_TERCEIROS_USUARIO); 36 FKs/CHECKs confiáveis; 19 triggers; aviso de collation em 106 colunas/22 tabelas (mesma página de código 1252) |
+| Comparação linha a linha (EXCEPT com `Latin1_General_BIN2`) | 0 diferenças nas 29 tabelas |
+| corrigir_dev_conforme_prd em DEV novo | pré-validação do item 11 não acusa mais as FKs tratadas nos itens 4 e 5 |

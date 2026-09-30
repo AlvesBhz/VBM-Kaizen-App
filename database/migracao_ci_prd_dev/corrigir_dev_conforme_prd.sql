@@ -130,7 +130,7 @@ BEGIN
     FROM sys.foreign_keys fk JOIN sys.foreign_key_columns fc ON fc.constraint_object_id = fk.object_id
     JOIN sys.columns c ON c.object_id = fc.referenced_object_id AND c.column_id = fc.referenced_column_id
     WHERE fc.referenced_object_id = OBJECT_ID(N'CI.KZN_MDM_HIERARQUIA') AND c.collation_name IS NOT NULL
-      AND fk.name <> N'FK_KZN_APROVADOR_MDM_MATRICULA';
+      AND fk.name NOT IN (N'FK_KZN_APROVADOR_MDM_MATRICULA', N'FK_KZN_APROVADOR_MATRICULA', N'FK_KZN_ADMIN_MATRICULA');  -- tratadas nos itens 4 e 5
     INSERT @PROBLEMA
     SELECT N'Estatística manual em coluna texto do MDM', s.name
     FROM sys.stats s JOIN sys.stats_columns sc ON sc.object_id = s.object_id AND sc.stats_id = s.stats_id

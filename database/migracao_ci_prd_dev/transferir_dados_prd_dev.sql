@@ -115,6 +115,7 @@ DECLARE @PRD_CONF TABLE (TABELA SYSNAME, QTD BIGINT, SOMA INT NULL, SHARD NVARCH
 DECLARE @RESULTADO TABLE (TABELA SYSNAME, LINHAS_PRD BIGINT NULL, SOMA_PRD INT NULL, LINHAS_LIDAS BIGINT NULL,
                           SOMA_LIDA INT NULL, LINHAS_DEV BIGINT NULL, SOMA_DEV INT NULL);
 DECLARE @DIF TABLE (TABELA SYSNAME, COLUNA SYSNAME NULL, PRD NVARCHAR(400) NULL, DEV NVARCHAR(400) NULL);
+DECLARE @AVISO TABLE (TABELA SYSNAME, COLUNA SYSNAME, PRD SYSNAME NULL, DEV SYSNAME NULL);
 DECLARE @TRG TABLE (NOME SYSNAME, TABELA SYSNAME, DESABILITADO BIT);
 DECLARE @CON TABLE (TABELA SYSNAME, NOME SYSNAME, DESABILITADA BIT, NAO_CONFIAVEL BIT);
 DECLARE @SEQ_FIM TABLE (NOME SYSNAME, PROXIMO_PRD NVARCHAR(40), PROXIMO_DEV NVARCHAR(40));
@@ -160,16 +161,30 @@ BEGIN TRY
     SELECT DISTINCT d.TABELA, NULL, N'(tabela não existe)', N'existe'
     FROM @DEV_COL d WHERE NOT EXISTS (SELECT 1 FROM @PRD_COL p WHERE p.TABELA = d.TABELA);
 
-    ;WITH D AS (SELECT TABELA, COLUNA, TIPO, TAM, PREC, ESC, COLL, CALC FROM @DEV_COL),
-          P AS (SELECT TABELA, COLUNA, TIPO, TAM, PREC, ESC, COLL, CALC FROM @PRD_COL WHERE TABELA IN (SELECT TABELA FROM @DEV_COL)),
+    ;WITH D AS (SELECT TABELA, COLUNA, TIPO, TAM, PREC, ESC, CALC FROM @DEV_COL),
+          P AS (SELECT TABELA, COLUNA, TIPO, TAM, PREC, ESC, CALC FROM @PRD_COL WHERE TABELA IN (SELECT TABELA FROM @DEV_COL)),
           X AS (SELECT 'PRD' AS LADO, * FROM (SELECT * FROM P EXCEPT SELECT * FROM D) a
                 UNION ALL
                 SELECT 'DEV', * FROM (SELECT * FROM D EXCEPT SELECT * FROM P) b)
     INSERT @DIF (TABELA, COLUNA, PRD, DEV)
     SELECT TABELA, COLUNA,
-           MAX(CASE WHEN LADO = 'PRD' THEN CONCAT(TIPO, N' tam=', TAM, N' prec=', PREC, N' esc=', ESC, N' ', COLL, CASE WHEN CALC = 1 THEN N' calculada' END) END),
-           MAX(CASE WHEN LADO = 'DEV' THEN CONCAT(TIPO, N' tam=', TAM, N' prec=', PREC, N' esc=', ESC, N' ', COLL, CASE WHEN CALC = 1 THEN N' calculada' END) END)
+           MAX(CASE WHEN LADO = 'PRD' THEN CONCAT(TIPO, N' tam=', TAM, N' prec=', PREC, N' esc=', ESC, CASE WHEN CALC = 1 THEN N' calculada' END) END),
+           MAX(CASE WHEN LADO = 'DEV' THEN CONCAT(TIPO, N' tam=', TAM, N' prec=', PREC, N' esc=', ESC, CASE WHEN CALC = 1 THEN N' calculada' END) END)
     FROM X GROUP BY TABELA, COLUNA;
+
+    /* Collation diferente: com a mesma página de código (ou texto Unicode) o
+       dado é convertido sem perda para a do DEV -> AVISO; página de código
+       diferente em char/varchar -> bloqueia. */
+    INSERT @AVISO (TABELA, COLUNA, PRD, DEV)
+    SELECT d.TABELA, d.COLUNA, p.COLL, d.COLL
+    FROM @DEV_COL d JOIN @PRD_COL p ON p.TABELA = d.TABELA AND p.COLUNA = d.COLUNA
+    WHERE ISNULL(p.COLL, N'') <> ISNULL(d.COLL, N'');
+    INSERT @DIF (TABELA, COLUNA, PRD, DEV)
+    SELECT TABELA, COLUNA, N'collation ' + PRD + N' (página ' + CAST(COLLATIONPROPERTY(PRD, 'CodePage') AS NVARCHAR(10)) + N')',
+           N'collation ' + DEV + N' (página ' + CAST(COLLATIONPROPERTY(DEV, 'CodePage') AS NVARCHAR(10)) + N')'
+    FROM @AVISO a
+    WHERE (PRD IS NULL OR DEV IS NULL OR CAST(COLLATIONPROPERTY(PRD, 'CodePage') AS INT) <> CAST(COLLATIONPROPERTY(DEV, 'CodePage') AS INT))
+      AND EXISTS (SELECT 1 FROM @DEV_COL d WHERE d.TABELA = a.TABELA AND d.COLUNA = a.COLUNA AND d.TIPO IN (N'char', N'varchar', N'text'));
 
     IF EXISTS (SELECT 1 FROM @DIF)
     BEGIN
@@ -191,7 +206,7 @@ BEGIN TRY
     END
 
     /* ── 2. Leitura da PRD para a área temporária ──────────────────── */
-    DECLARE @colsDef NVARCHAR(MAX), @cols NVARCHAR(MAX), @confPrd NVARCHAR(MAX) = NULL;
+    DECLARE @colsDef NVARCHAR(MAX), @colsExt NVARCHAR(MAX), @cols NVARCHAR(MAX), @confPrd NVARCHAR(MAX) = NULL;
     DECLARE t CURSOR LOCAL FAST_FORWARD FOR SELECT DISTINCT TABELA FROM @DEV_COL ORDER BY TABELA;
     OPEN t;
     FETCH NEXT FROM t INTO @tab;
@@ -200,8 +215,12 @@ BEGIN TRY
         SET @passo = N'ler CI.' + @tab + N' da PRD';
         /* colunas copiáveis: sem calculadas e sem rowversion (o DEV gera) */
         SELECT @cols = STRING_AGG(CONVERT(NVARCHAR(MAX), QUOTENAME(d.COLUNA)), N', ') WITHIN GROUP (ORDER BY d.ORDEM),
-               @colsDef = STRING_AGG(CONVERT(NVARCHAR(MAX), QUOTENAME(d.COLUNA) + N' '
-                    + CASE WHEN d.TIPO IN (N'varchar', N'char', N'varbinary', N'binary')
+               @colsDef = STRING_AGG(CONVERT(NVARCHAR(MAX), QUOTENAME(d.COLUNA) + N' ' + x.TIPO_TXT + ISNULL(N' COLLATE ' + d.COLL, N'')
+                    + CASE WHEN p.NULO = 1 THEN N' NULL' ELSE N' NOT NULL' END), N', ') WITHIN GROUP (ORDER BY d.ORDEM),
+               @colsExt = STRING_AGG(CONVERT(NVARCHAR(MAX), QUOTENAME(d.COLUNA) + N' ' + x.TIPO_TXT + ISNULL(N' COLLATE ' + p.COLL, N'')
+                    + CASE WHEN p.NULO = 1 THEN N' NULL' ELSE N' NOT NULL' END), N', ') WITHIN GROUP (ORDER BY d.ORDEM)
+        FROM @DEV_COL d JOIN @PRD_COL p ON p.TABELA = d.TABELA AND p.COLUNA = d.COLUNA
+        CROSS APPLY (SELECT TIPO_TXT = CASE WHEN d.TIPO IN (N'varchar', N'char', N'varbinary', N'binary')
                                 THEN d.TIPO + N'(' + CASE WHEN d.TAM = -1 THEN N'max' ELSE CAST(d.TAM AS NVARCHAR(10)) END + N')'
                            WHEN d.TIPO IN (N'nvarchar', N'nchar')
                                 THEN d.TIPO + N'(' + CASE WHEN d.TAM = -1 THEN N'max' ELSE CAST(d.TAM / 2 AS NVARCHAR(10)) END + N')'
@@ -209,14 +228,11 @@ BEGIN TRY
                                 THEN d.TIPO + N'(' + CAST(d.PREC AS NVARCHAR(3)) + N',' + CAST(d.ESC AS NVARCHAR(3)) + N')'
                            WHEN d.TIPO IN (N'datetime2', N'time', N'datetimeoffset') THEN d.TIPO + N'(' + CAST(d.ESC AS NVARCHAR(3)) + N')'
                            WHEN d.TIPO = N'float' THEN N'float(' + CAST(d.PREC AS NVARCHAR(3)) + N')'
-                           ELSE d.TIPO END
-                    + ISNULL(N' COLLATE ' + d.COLL, N'')
-                    + CASE WHEN p.NULO = 1 THEN N' NULL' ELSE N' NOT NULL' END), N', ') WITHIN GROUP (ORDER BY d.ORDEM)
-        FROM @DEV_COL d JOIN @PRD_COL p ON p.TABELA = d.TABELA AND p.COLUNA = d.COLUNA
+                           ELSE d.TIPO END) x
         WHERE d.TABELA = @tab AND d.CALC = 0 AND d.TIPO <> N'timestamp';
 
         IF @MODO = 'AZURE'
-            SET @sql = N'CREATE EXTERNAL TABLE TRF_EXT.' + QUOTENAME(@tab) + N' (' + @colsDef + N') WITH (DATA_SOURCE = TRF_DS_PRD, '
+            SET @sql = N'CREATE EXTERNAL TABLE TRF_EXT.' + QUOTENAME(@tab) + N' (' + @colsExt + N') WITH (DATA_SOURCE = TRF_DS_PRD, '
                      + N'SCHEMA_NAME = N''CI'', OBJECT_NAME = N''' + REPLACE(@tab, N'''', N'''''') + N''');';
         ELSE
             SET @sql = N'CREATE VIEW TRF_EXT.' + QUOTENAME(@tab) + N' AS SELECT ' + @cols + N' FROM '
@@ -427,6 +443,9 @@ BEGIN
     UNION ALL
     SELECT N'Sequence CI.' + NOME + N' (próximo valor PRD / DEV)', PROXIMO_PRD, PROXIMO_DEV FROM @SEQ_FIM;
 
+    IF EXISTS (SELECT 1 FROM @AVISO)
+        SELECT AVISO = N'collation diferente, mesma página de código — dado convertido sem perda', TABELAS = COUNT(DISTINCT TABELA), COLUNAS = COUNT(*),
+               PRD = MIN(PRD), DEV = MIN(DEV) FROM @AVISO;
     PRINT N'Transferência concluída. Confira RESULTADO = OK em todas as tabelas.';
 END
 ELSE
