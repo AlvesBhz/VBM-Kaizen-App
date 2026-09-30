@@ -129,6 +129,16 @@ async function abrirArquivoDoBlob(caminhoRelativo) {
   };
 }
 
+/** O arquivo existe? Devolve o status HTTP de um HEAD (200, 404, 403...)
+ *  — só o cabeçalho, sem baixar a foto. Usado pela conferência de fotos
+ *  ausentes (GET /api/fotos/ausentes). O SAS atual (sp=racw) basta: HEAD
+ *  exige só 'r'. Listar a pasta exigiria 'l', que ele não tem. */
+async function statusNoBlob(caminhoRelativo) {
+  exigirConfig();
+  const resp = await fetch(urlDoBlob(caminhoRelativo), { method: "HEAD" });
+  return resp.status;
+}
+
 /** Apaga `caminhoRelativo`. Usado para limpar o arquivo TEMPORÁRIO do
  *  cadastro novo e a foto com a extensão antiga quando se troca PNG por
  *  JPG.
@@ -163,5 +173,6 @@ module.exports = {
   enviarArquivoParaBlob,
   baixarArquivoDoBlob,
   abrirArquivoDoBlob,
+  statusNoBlob,
   removerArquivoDoBlob,
 };
