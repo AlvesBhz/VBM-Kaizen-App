@@ -107,3 +107,21 @@ KZN_MDM_TEMP, KZN_MDM_TERCEIROS_TEMP e KZN_TB_NOTIFICACAO_TESTE.
 Correções no gerador feitas neste teste: separador de STRING_AGG precisa ser variável
 (Msg 8733); ordem de trigger montada fora do agregado (Msg 130/8124); bloco de PRINT com
 exatamente 4000 caracteres perdia 1 caractere (concatenação de NVARCHAR(4000) truncava).
+
+## Transferência de dados (`transferir_dados_prd_dev.sql`)
+
+Origem: banco PRD de teste (26.290 linhas). Destino: banco criado pelo `criar_estrutura_ci_dev.sql`. Modo LOCAL.
+
+| Teste | Resultado |
+|---|---|
+| DEV com dados e `@SUBSTITUIR_DADOS_DEV = 0` | abortado antes de gravar, listando as tabelas com dados |
+| Cópia completa (`@SUBSTITUIR_DADOS_DEV = 1`) | 28 tabelas OK (contagem e soma de verificação iguais: PRD, leitura e DEV); tabelas só da PRD listadas como NAO COPIADA |
+| Comparação linha a linha (EXCEPT nos dois sentidos, todas as colunas) | 0 diferenças nas 28 tabelas |
+| Estado depois da cópia | 38 FKs/CHECKs religados e confiáveis (revalidados WITH CHECK); 19 triggers habilitados; sequences = próximo valor da PRD |
+| Uso normal depois da cópia | Kaizen novo no DEV gera log 51 (C) e 52 (A), após os IDs copiados |
+| Falha forçada na revalidação (CHECK que a PRD viola) | ROLLBACK: DEV igual ao de antes (linhas, constraints, triggers); mensagem aponta a constraint |
+| Coluna com tamanho diferente no DEV | abortado antes de copiar, listando tabela/coluna PRD x DEV |
+| DEV com collation `Latin1_General_CI_AS` e banco contido | OK, 0 erros |
+| Limpeza | nenhuma sobra (TRF_EXT, TRF_STG, fonte externa, credencial) em sucesso e em falha |
+
+Não testado aqui: o caminho Elastic Query do Azure (`@MODO = 'AZURE'`), que exige os dois bancos no Azure.
