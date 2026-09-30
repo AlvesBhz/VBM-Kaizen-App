@@ -88,3 +88,22 @@ ETAPA|RESULTADO|ITEM|DETALHE
 -----|---------|----|-------
 05|AVISO|Integridade — [CK_ZZ_QTD]|1 linha(s) em [CI].[ZZ_BORDAS] — pré-existente: a constraint é não confiável/desabilitada também na PRD.
 ```
+
+## Script único de estrutura (`criar_estrutura_ci_dev.sql`)
+
+Gerado por `gerar_script_estrutura_ci.sql` a partir de um banco montado só com os scripts do
+repositório (DDL_SCRIPT_DB.sql + scripts HIST), sem os objetos de teste e sem
+KZN_MDM_TEMP, KZN_MDM_TERCEIROS_TEMP e KZN_TB_NOTIFICACAO_TESTE.
+
+| Teste | Resultado |
+|---|---|
+| 1ª execução em banco vazio `SQL_Latin1_General_CP1_CI_AS` | 0 erros; conferência 14/14 OK (28 tabelas, 37 FKs) |
+| 1ª execução em banco vazio `Latin1_General_CI_AS` | 0 erros; 14/14 OK |
+| 2ª execução nos dois bancos (idempotência) | 0 erros; 14/14 OK; nada recriado |
+| Estrutura criada x origem (gerador rodado nos dois e comparado) | idêntica, nas duas collations |
+| Execução por engano na PRD | abortada na 1ª linha (`SET NOEXEC ON`), nada executado |
+| Comportamento | TR_KZN_PVC_INS/UPD gravam log C e A via sequence; FK barra órfão (547); 0 FK não confiável |
+
+Correções no gerador feitas neste teste: separador de STRING_AGG precisa ser variável
+(Msg 8733); ordem de trigger montada fora do agregado (Msg 130/8124); bloco de PRINT com
+exatamente 4000 caracteres perdia 1 caractere (concatenação de NVARCHAR(4000) truncava).
