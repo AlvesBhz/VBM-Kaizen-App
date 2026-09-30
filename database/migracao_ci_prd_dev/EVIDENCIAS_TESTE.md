@@ -125,3 +125,19 @@ Origem: banco PRD de teste (26.290 linhas). Destino: banco criado pelo `criar_es
 | Limpeza | nenhuma sobra (TRF_EXT, TRF_STG, fonte externa, credencial) em sucesso e em falha |
 
 Não testado aqui: o caminho Elastic Query do Azure (`@MODO = 'AZURE'`), que exige os dois bancos no Azure.
+
+## MERGE da KZN_MDM_HIERARQUIA (`merge_kzn_mdm_hierarquia_prd_dev.sql`)
+
+Modo LOCAL; origem = banco PRD de teste; destino = DEV criado pelos scripts acima.
+
+| Teste | Resultado |
+|---|---|
+| Usuário novo na PRD, usuário alterado no DEV, usuário só no DEV (`@APAGAR_AUSENTES_NO_DEV = 0`) | 1 inserido, 1 atualizado, 1 mantido; 0 linhas da PRD diferentes no DEV |
+| DT_ATUALIZACAO após o UPDATE | igual à da PRD (o trigger não recarimbou) |
+| 2ª execução | 0 inseridas, 0 atualizadas (idempotente) |
+| `@APAGAR_AUSENTES_NO_DEV = 1` | linha só do DEV apagada; DEV = PRD |
+| Linha a apagar referenciada por KZN_ADMIN (+ 1 atualização pendente) | FK barrou; ROLLBACK total (a atualização também voltou); mensagem cita a FK |
+| ID_TIPO_USUARIO da PRD inexistente no DEV | abortado antes de gravar, listando o tipo |
+| Coluna com tamanho ou collation diferente | abortado antes de gravar, listando a coluna |
+| Banco contido `Latin1_General_CI_AS` (estrutura → transferência → merge) | OK, 0 erros |
+| Ligação com a PRD | removida ao final em todos os casos |
