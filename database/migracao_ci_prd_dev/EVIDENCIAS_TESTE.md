@@ -159,3 +159,17 @@ CD_EMAIL NULL, NM_SITUACAO/NM_POSICAO/NM_EMPRESA varchar(80); linha com nome de 
 | Reversão com dados que não cabem | abortada, lista NULL e tamanho por coluna; nada alterado |
 | Reversão com dados que cabem | OK; IX_KZN_MDM_HIERARQUIA_EMAIL recriado com a mesma definição |
 | Banco contido `Latin1_General_CI_AS` | aplicar → reverter → aplicar → MERGE: OK |
+
+## Correção do DEV conforme a PRD (`corrigir_dev_conforme_prd.sql`)
+
+Base: dicionário real da PRD (`Estrutura_Atual_do_banco.xlsx`, 32 tabelas, 35 FKs, 55 índices). Um banco de teste montado
+a partir do dicionário reproduziu-o sem diferença (colunas, PKs, FKs, índices).
+
+| Teste | Resultado |
+|---|---|
+| DEV novo (criar_estrutura_ci_dev.sql) + correção | igual à PRD; restam só as 3 tabelas excluídas e a ordem física de colunas da PVC/HIST PVC |
+| 2ª execução | nada alterado |
+| DEV com dados + bloqueios (CD_MATRICULA 'FG002634', DT_CRIACAO NULL, líder sem MDM) | abortado, 3 motivos listados, nada alterado |
+| DEV com dados corrigidos | aplicado; backup de SG_GM/URL_GM/ID_TIPO_KAIZEN em dbo.BKP_KZN_HIST_PVC_CAMPOS_GM (4.980 linhas); FK nova confiável |
+| Banco contido `Latin1_General_CI_AS` | igual à PRD |
+| MERGE da KZN_MDM_HIERARQUIA no DEV corrigido | sem aviso de estrutura; 1 inserida (nome 77 car., e-mail NULL), 1 atualizada; 0 diferenças; 2ª execução sem alterações |
