@@ -128,6 +128,8 @@ Não testado aqui: o caminho Elastic Query do Azure (`@MODO = 'AZURE'`), que exi
 
 ## MERGE da KZN_MDM_HIERARQUIA (`merge_kzn_mdm_hierarquia_prd_dev.sql`)
 
+Colunas lidas do catálogo real dos dois bancos (versão 2: a 1ª comparava com uma lista fixa e abortava no ambiente real).
+
 Modo LOCAL; origem = banco PRD de teste; destino = DEV criado pelos scripts acima.
 
 | Teste | Resultado |
@@ -137,7 +139,8 @@ Modo LOCAL; origem = banco PRD de teste; destino = DEV criado pelos scripts acim
 | 2ª execução | 0 inseridas, 0 atualizadas (idempotente) |
 | `@APAGAR_AUSENTES_NO_DEV = 1` | linha só do DEV apagada; DEV = PRD |
 | Linha a apagar referenciada por KZN_ADMIN (+ 1 atualização pendente) | FK barrou; ROLLBACK total (a atualização também voltou); mensagem cita a FK |
-| ID_TIPO_USUARIO da PRD inexistente no DEV | abortado antes de gravar, listando o tipo |
-| Coluna com tamanho ou collation diferente | abortado antes de gravar, listando a coluna |
+| ID_TIPO_USUARIO da PRD inexistente no DEV | abortado antes de gravar, listando a FK e o valor |
+| Estrutura diferente, dado cabe (DEV mais largo, coluna extra NULL no DEV, collation diferente) | concluído com AVISOS listados; acento preservado na conversão de collation |
+| Estrutura diferente, dado não cabe (coluna só da PRD, DEV mais estreito) | abortado antes de gravar; BLOQUEIA e AVISOS listados |
 | Banco contido `Latin1_General_CI_AS` (estrutura → transferência → merge) | OK, 0 erros |
 | Ligação com a PRD | removida ao final em todos os casos |
