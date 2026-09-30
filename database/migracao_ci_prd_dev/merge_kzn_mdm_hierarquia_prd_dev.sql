@@ -166,8 +166,27 @@ BEGIN TRY
 
     IF EXISTS (SELECT 1 FROM @DIF)
         SELECT COLUNA, NA_PRD, NO_DEV, SITUACAO, MOTIVO FROM @DIF ORDER BY CASE SITUACAO WHEN 'BLOQUEIA' THEN 0 ELSE 1 END, COLUNA;
+    -- a mesma lista na aba Mensagens
+    DECLARE @linha NVARCHAR(1000);
+    DECLARE d CURSOR LOCAL FAST_FORWARD FOR
+        SELECT SITUACAO + N' | ' + COLUNA + N' | PRD: ' + NA_PRD + N' | DEV: ' + NO_DEV + N' | ' + MOTIVO
+        FROM @DIF ORDER BY CASE SITUACAO WHEN 'BLOQUEIA' THEN 0 ELSE 1 END, COLUNA;
+    OPEN d;
+    FETCH NEXT FROM d INTO @linha;
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        PRINT @linha;
+        FETCH NEXT FROM d INTO @linha;
+    END
+    CLOSE d; DEALLOCATE d;
     IF EXISTS (SELECT 1 FROM @DIF WHERE SITUACAO = 'BLOQUEIA')
-        THROW 50002, N'A estrutura de CI.KZN_MDM_HIERARQUIA no DEV não comporta os dados da PRD (linhas BLOQUEIA acima). Nada foi alterado.', 1;
+    BEGIN
+        SELECT @erro = N'A estrutura de CI.KZN_MDM_HIERARQUIA no DEV não comporta os dados da PRD: '
+                     + LEFT(STRING_AGG(CONVERT(NVARCHAR(MAX), COLUNA + N' (PRD ' + NA_PRD + N' x DEV ' + NO_DEV + N')'), N'; '), 1600)
+                     + N'. Nada foi alterado.'
+        FROM @DIF WHERE SITUACAO = 'BLOQUEIA';
+        THROW 50002, @erro, 1;
+    END
 
     /* Colunas comuns: externa com a definição da PRD; área de leitura com o tipo da PRD e a collation do DEV */
     INSERT @COMUM (COLUNA, ORDEM, DEF_EXT, DEF_STG)
