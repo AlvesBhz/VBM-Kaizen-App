@@ -26,6 +26,11 @@
                               para PK_kzn_membros_equipe
     9 KZN_STATUS              remove FK_KZN_STATUS_USUARIO
    10 KZN_MDM_TERCEIROS_USUARIO  tabela criada (existe só na PRD)
+   11 Collation Latin1_General_CI_AS (a da PRD) nas colunas texto de
+      KZN_MDM_HIERARQUIA e em KZN_APROVADOR.CD_MATRICULA (tem FK para a
+      matrícula do MDM). Exige remover e recriar, na mesma transação e
+      com a mesma definição: PK_KZN_MDM_HIERARQUIA, UQ_KZN_MDM_HIERARQUIA_MATR,
+      IX_KZN_MDM_HIERARQUIA_EMAIL e FK_KZN_APROVADOR_MDM_MATRICULA (WITH CHECK).
 
    Não corrigido: ordem física das colunas da PVC e da HIST PVC (sem
    efeito em consultas com lista de colunas; exigiria recriar a tabela).
@@ -107,6 +112,34 @@ BEGIN
     WHERE NOT EXISTS (SELECT 1 FROM CI.KZN_MDM_HIERARQUIA m WHERE m.ID_USUARIO = k.ID_USUARIO_LIDER);
     IF @n > 0 INSERT @PROBLEMA VALUES (N'KZN_KAIZEN_HIERARQUIA.ID_USUARIO_LIDER',
         CAST(@n AS NVARCHAR(10)) + N' linha(s) sem usuário no MDM (ID_KAIZEN/ID_USUARIO_LIDER): ' + @lista);
+END
+-- 11: só estes objetos podem depender das colunas cuja collation muda
+IF EXISTS (SELECT 1 FROM sys.columns c WHERE c.object_id IN (OBJECT_ID(N'CI.KZN_MDM_HIERARQUIA'), OBJECT_ID(N'CI.KZN_APROVADOR'))
+             AND c.collation_name IS NOT NULL AND c.collation_name <> N'Latin1_General_CI_AS'
+             AND (c.object_id = OBJECT_ID(N'CI.KZN_MDM_HIERARQUIA') OR c.name = N'CD_MATRICULA'))
+BEGIN
+    INSERT @PROBLEMA
+    SELECT N'Índice inesperado em coluna texto do MDM/APROVADOR', OBJECT_NAME(i.object_id) + N'.' + i.name
+    FROM sys.indexes i JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
+    JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+    WHERE c.collation_name IS NOT NULL
+      AND (i.object_id = OBJECT_ID(N'CI.KZN_MDM_HIERARQUIA') OR (i.object_id = OBJECT_ID(N'CI.KZN_APROVADOR') AND c.name = N'CD_MATRICULA'))
+      AND i.name NOT IN (N'PK_KZN_MDM_HIERARQUIA', N'UQ_KZN_MDM_HIERARQUIA_MATR', N'IX_KZN_MDM_HIERARQUIA_EMAIL');
+    INSERT @PROBLEMA
+    SELECT N'FK inesperada em coluna texto do MDM/APROVADOR', fk.name
+    FROM sys.foreign_keys fk JOIN sys.foreign_key_columns fc ON fc.constraint_object_id = fk.object_id
+    JOIN sys.columns c ON c.object_id = fc.referenced_object_id AND c.column_id = fc.referenced_column_id
+    WHERE fc.referenced_object_id = OBJECT_ID(N'CI.KZN_MDM_HIERARQUIA') AND c.collation_name IS NOT NULL
+      AND fk.name <> N'FK_KZN_APROVADOR_MDM_MATRICULA';
+    INSERT @PROBLEMA
+    SELECT N'Estatística manual em coluna texto do MDM', s.name
+    FROM sys.stats s JOIN sys.stats_columns sc ON sc.object_id = s.object_id AND sc.stats_id = s.stats_id
+    JOIN sys.columns c ON c.object_id = sc.object_id AND c.column_id = sc.column_id
+    WHERE s.object_id = OBJECT_ID(N'CI.KZN_MDM_HIERARQUIA') AND s.user_created = 1 AND c.collation_name IS NOT NULL;
+    INSERT @PROBLEMA
+    SELECT N'Módulo com SCHEMABINDING usa o MDM', OBJECT_NAME(d.referencing_id)
+    FROM sys.sql_expression_dependencies d JOIN sys.sql_modules m ON m.object_id = d.referencing_id
+    WHERE d.referenced_id = OBJECT_ID(N'CI.KZN_MDM_HIERARQUIA') AND m.is_schema_bound = 1;
 END
 
 IF EXISTS (SELECT 1 FROM @PROBLEMA)
@@ -225,6 +258,33 @@ BEGIN TRY
             CONSTRAINT UQ_KZN_MDM_TERCEIROS_USUARIO_CD_MATRICULA UNIQUE NONCLUSTERED (CD_MATRICULA)
         );
 
+    -- 11: collation da PRD no MDM (e na matrícula do APROVADOR)
+    SELECT @sql = STRING_AGG(CONVERT(NVARCHAR(MAX),
+               N'ALTER TABLE CI.' + QUOTENAME(OBJECT_NAME(c.object_id)) + N' ALTER COLUMN ' + QUOTENAME(c.name) + N' '
+             + TYPE_NAME(c.user_type_id) + N'(' + CASE WHEN c.max_length = -1 THEN N'max'
+                                                       WHEN TYPE_NAME(c.user_type_id) IN (N'nvarchar', N'nchar') THEN CAST(c.max_length / 2 AS NVARCHAR(10))
+                                                       ELSE CAST(c.max_length AS NVARCHAR(10)) END + N')'
+             + N' COLLATE Latin1_General_CI_AS' + CASE WHEN c.is_nullable = 1 THEN N' NULL;' ELSE N' NOT NULL;' END), NCHAR(10))
+    FROM sys.columns c
+    WHERE c.collation_name IS NOT NULL AND c.collation_name <> N'Latin1_General_CI_AS'
+      AND (c.object_id = OBJECT_ID(N'CI.KZN_MDM_HIERARQUIA') OR (c.object_id = OBJECT_ID(N'CI.KZN_APROVADOR') AND c.name = N'CD_MATRICULA'));
+    IF @sql IS NOT NULL
+    BEGIN
+        IF OBJECT_ID(N'CI.FK_KZN_APROVADOR_MDM_MATRICULA', N'F') IS NOT NULL ALTER TABLE CI.KZN_APROVADOR DROP CONSTRAINT FK_KZN_APROVADOR_MDM_MATRICULA;
+        IF EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'CI.KZN_MDM_HIERARQUIA') AND name = N'IX_KZN_MDM_HIERARQUIA_EMAIL')
+            DROP INDEX IX_KZN_MDM_HIERARQUIA_EMAIL ON CI.KZN_MDM_HIERARQUIA;
+        IF OBJECT_ID(N'CI.UQ_KZN_MDM_HIERARQUIA_MATR', N'UQ') IS NOT NULL ALTER TABLE CI.KZN_MDM_HIERARQUIA DROP CONSTRAINT UQ_KZN_MDM_HIERARQUIA_MATR;
+        IF OBJECT_ID(N'CI.PK_KZN_MDM_HIERARQUIA', N'PK') IS NOT NULL ALTER TABLE CI.KZN_MDM_HIERARQUIA DROP CONSTRAINT PK_KZN_MDM_HIERARQUIA;
+
+        EXEC sp_executesql @sql;
+
+        ALTER TABLE CI.KZN_MDM_HIERARQUIA ADD CONSTRAINT PK_KZN_MDM_HIERARQUIA PRIMARY KEY CLUSTERED (ID_USUARIO, CD_MATRICULA, ID_TIPO_USUARIO);
+        ALTER TABLE CI.KZN_MDM_HIERARQUIA ADD CONSTRAINT UQ_KZN_MDM_HIERARQUIA_MATR UNIQUE NONCLUSTERED (CD_MATRICULA);
+        CREATE NONCLUSTERED INDEX IX_KZN_MDM_HIERARQUIA_EMAIL ON CI.KZN_MDM_HIERARQUIA (CD_EMAIL);
+        ALTER TABLE CI.KZN_APROVADOR WITH CHECK ADD CONSTRAINT FK_KZN_APROVADOR_MDM_MATRICULA
+            FOREIGN KEY (CD_MATRICULA) REFERENCES CI.KZN_MDM_HIERARQUIA (CD_MATRICULA);
+    END
+
     COMMIT TRANSACTION;
 END TRY
 BEGIN CATCH
@@ -260,5 +320,12 @@ FROM (
                      AND name COLLATE Latin1_General_BIN = N'PK_kzn_membros_equipe' COLLATE Latin1_General_BIN) THEN 1 ELSE 0 END
     UNION ALL SELECT N'Sem FK_KZN_STATUS_USUARIO', CASE WHEN OBJECT_ID(N'CI.FK_KZN_STATUS_USUARIO') IS NULL THEN 1 ELSE 0 END
     UNION ALL SELECT N'KZN_MDM_TERCEIROS_USUARIO', CASE WHEN OBJECT_ID(N'CI.KZN_MDM_TERCEIROS_USUARIO', N'U') IS NOT NULL THEN 1 ELSE 0 END
+    UNION ALL SELECT N'Collation Latin1_General_CI_AS no MDM e em APROVADOR.CD_MATRICULA',
+           CASE WHEN NOT EXISTS (SELECT 1 FROM sys.columns c WHERE c.collation_name IS NOT NULL AND c.collation_name <> N'Latin1_General_CI_AS'
+                                 AND (c.object_id = OBJECT_ID(N'CI.KZN_MDM_HIERARQUIA') OR (c.object_id = OBJECT_ID(N'CI.KZN_APROVADOR') AND c.name = N'CD_MATRICULA'))) THEN 1 ELSE 0 END
+    UNION ALL SELECT N'PK/UQ/IX do MDM e FK_KZN_APROVADOR_MDM_MATRICULA (confiável)',
+           CASE WHEN OBJECT_ID(N'CI.PK_KZN_MDM_HIERARQUIA', N'PK') IS NOT NULL AND OBJECT_ID(N'CI.UQ_KZN_MDM_HIERARQUIA_MATR', N'UQ') IS NOT NULL
+                     AND EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'CI.KZN_MDM_HIERARQUIA') AND name = N'IX_KZN_MDM_HIERARQUIA_EMAIL')
+                     AND EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_KZN_APROVADOR_MDM_MATRICULA' AND is_not_trusted = 0) THEN 1 ELSE 0 END
 ) r;
 GO

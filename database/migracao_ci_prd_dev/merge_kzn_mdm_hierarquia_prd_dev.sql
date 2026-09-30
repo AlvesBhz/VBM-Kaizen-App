@@ -24,8 +24,11 @@
 
    Antes de gravar (nada é alterado se falhar):
      - ID_USUARIO não se repete na PRD;
-     - cada FK da tabela no DEV (ex.: ID_TIPO_USUARIO -> KZN_TIPO_USUARIO)
-       encontra o valor vindo da PRD.
+     - cada FK da tabela no DEV encontra o valor vindo da PRD.
+   Tipo de usuário (KZN_TIPO_USUARIO) usado pela PRD e ausente no DEV é
+   copiado da PRD na mesma transação: entra com ID_USUARIO nulo (a FK
+   dele aponta para o MDM — ciclo), o MERGE roda e em seguida o
+   ID_USUARIO da PRD é preenchido. Tipos já existentes não são tocados.
    Gravação numa única transação, com as FKs ativas: se uma matrícula
    que muda ou uma linha a apagar estiver referenciada por outra tabela
    (ADMIN, APROVADOR, PVC, log...), a FK barra, é feito ROLLBACK e o
@@ -100,7 +103,9 @@ SELECT c.name, c.column_id, TYPE_NAME(c.user_type_id), c.max_length, c.precision
 FROM sys.columns c WHERE c.object_id = OBJECT_ID(N'CI.KZN_MDM_HIERARQUIA');
 SELECT @antes = COUNT_BIG(*) FROM CI.KZN_MDM_HIERARQUIA;
 
-DROP TABLE IF EXISTS #PRD, #ACAO;
+DROP TABLE IF EXISTS #PRD, #ACAO, #TIPO, #TIPO_NOVO;
+CREATE TABLE #TIPO (ID_TIPO_USUARIO INT, NM_USUARIO VARCHAR(30), ID_USUARIO INT NULL, DT_ATUALIZACAO DATETIME2(3), SHARD NVARCHAR(500));
+CREATE TABLE #TIPO_NOVO (ID_TIPO_USUARIO INT);
 CREATE TABLE #PRD (_VAZIA_ BIT NULL);        -- colunas reais entram abaixo, conforme a PRD
 CREATE TABLE #ACAO (ACAO NVARCHAR(10), ID_USUARIO INT);
 
@@ -233,6 +238,11 @@ BEGIN TRY
         SET @sql = N'INSERT INTO #PRD (' + @cols + N') SELECT ' + @cols + N' FROM ' + QUOTENAME(@BANCO_ORIGEM) + N'.CI.KZN_MDM_HIERARQUIA;';
     EXEC (@sql);
 
+    /* Tipos de usuário da PRD (para os que faltarem no DEV) */
+    SET @q = N'SELECT ID_TIPO_USUARIO, NM_USUARIO, ID_USUARIO, DT_ATUALIZACAO FROM CI.KZN_TIPO_USUARIO';
+    IF @MODO = 'AZURE' INSERT #TIPO EXEC sp_execute_remote @data_source_name = N'MRG_DS_PRD', @stmt = @q;
+    ELSE BEGIN SET @q = N'SELECT q.*, CAST(N''LOCAL'' AS NVARCHAR(500)) FROM (' + @q + N') q;'; INSERT #TIPO EXEC @proc @q; END
+
     /* ── Pré-validações ─────────────────────────────────────────────── */
     IF EXISTS (SELECT 1 FROM #PRD GROUP BY ID_USUARIO HAVING COUNT(*) > 1)
     BEGIN
@@ -265,6 +275,8 @@ BEGIN TRY
     FETCH NEXT FROM f INTO @fkNome, @fkRef, @fkCond, @fkFiltro, @fkCols;
     WHILE @@FETCH_STATUS = 0
     BEGIN
+        -- tipo de usuário que vem da PRD junto (#TIPO) não falta
+        IF @fkRef = N'[CI].[KZN_TIPO_USUARIO]' SET @fkFiltro = @fkFiltro + N' AND NOT EXISTS (SELECT 1 FROM #TIPO r WHERE ' + @fkCond + N')';
         SET @sql = N'SELECT @n = COUNT(*) FROM #PRD p WHERE ' + @fkFiltro + N' AND NOT EXISTS (SELECT 1 FROM ' + @fkRef + N' r WHERE ' + @fkCond + N');';
         EXEC sp_executesql @sql, N'@n BIGINT OUTPUT', @n = @n OUTPUT;
         IF @n > 0
@@ -303,7 +315,19 @@ BEGIN TRY
     SELECT @n = COUNT_BIG(*) FROM (SELECT ' + @cols + N' FROM #PRD EXCEPT SELECT ' + @cols + N' FROM CI.KZN_MDM_HIERARQUIA) x;';
 
     BEGIN TRANSACTION;
+    -- tipos usados pela PRD que faltam no DEV: entram sem ID_USUARIO (ciclo com o MDM)
+    IF OBJECT_ID(N'CI.KZN_TIPO_USUARIO', N'U') IS NOT NULL
+        INSERT CI.KZN_TIPO_USUARIO (ID_TIPO_USUARIO, NM_USUARIO, ID_USUARIO, DT_ATUALIZACAO)
+        OUTPUT inserted.ID_TIPO_USUARIO INTO #TIPO_NOVO (ID_TIPO_USUARIO)
+        SELECT t.ID_TIPO_USUARIO, t.NM_USUARIO, NULL, t.DT_ATUALIZACAO FROM #TIPO t
+        WHERE EXISTS (SELECT 1 FROM #PRD p WHERE p.ID_TIPO_USUARIO = t.ID_TIPO_USUARIO)
+          AND NOT EXISTS (SELECT 1 FROM CI.KZN_TIPO_USUARIO d WHERE d.ID_TIPO_USUARIO = t.ID_TIPO_USUARIO);
     EXEC sp_executesql @sql, N'@n BIGINT OUTPUT', @n = @n OUTPUT;
+    -- agora o usuário responsável pelo tipo (da PRD) já existe no MDM do DEV
+    UPDATE d SET ID_USUARIO = t.ID_USUARIO, DT_ATUALIZACAO = t.DT_ATUALIZACAO
+    FROM CI.KZN_TIPO_USUARIO d JOIN #TIPO_NOVO n ON n.ID_TIPO_USUARIO = d.ID_TIPO_USUARIO
+    JOIN #TIPO t ON t.ID_TIPO_USUARIO = d.ID_TIPO_USUARIO
+    WHERE t.ID_USUARIO IS NOT NULL AND EXISTS (SELECT 1 FROM CI.KZN_MDM_HIERARQUIA m WHERE m.ID_USUARIO = t.ID_USUARIO);
     /* Conferência antes de confirmar: toda linha da PRD está igual no DEV */
     IF @n <> 0
         THROW 50007, N'Após o MERGE ainda há linhas da PRD diferentes no DEV. Nada foi gravado.', 1;
@@ -338,6 +362,7 @@ BEGIN
     UNION ALL SELECT N''Atualizadas'', (SELECT COUNT_BIG(*) FROM #ACAO WHERE ACAO = N''UPDATE'')
     UNION ALL SELECT N''Apagadas (só existiam no DEV)'', (SELECT COUNT_BIG(*) FROM #ACAO WHERE ACAO = N''DELETE'')
     UNION ALL SELECT N''Mantidas (só existem no DEV)'', (SELECT COUNT_BIG(*) FROM CI.KZN_MDM_HIERARQUIA t WHERE NOT EXISTS (SELECT 1 FROM #PRD p WHERE p.ID_USUARIO = t.ID_USUARIO))
+    UNION ALL SELECT N''Tipos de usuário copiados da PRD (KZN_TIPO_USUARIO)'', (SELECT COUNT_BIG(*) FROM #TIPO_NOVO)
     UNION ALL SELECT N''Linhas no DEV depois'', (SELECT COUNT_BIG(*) FROM CI.KZN_MDM_HIERARQUIA)
     UNION ALL SELECT N''Linhas da PRD diferentes no DEV (deve ser 0)'', (SELECT COUNT_BIG(*) FROM (SELECT ' + @cols + N' FROM #PRD EXCEPT SELECT ' + @cols + N' FROM CI.KZN_MDM_HIERARQUIA) x);';
     EXEC sp_executesql @sql, N'@antes BIGINT', @antes = @antes;
@@ -347,5 +372,5 @@ END
 ELSE
     RAISERROR(N'%s', 16, 1, @erro);
 
-DROP TABLE IF EXISTS #PRD, #ACAO;
+DROP TABLE IF EXISTS #PRD, #ACAO, #TIPO, #TIPO_NOVO;
 GO

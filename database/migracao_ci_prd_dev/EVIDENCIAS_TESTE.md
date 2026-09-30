@@ -173,3 +173,11 @@ a partir do dicionário reproduziu-o sem diferença (colunas, PKs, FKs, índices
 | DEV com dados corrigidos | aplicado; backup de SG_GM/URL_GM/ID_TIPO_KAIZEN em dbo.BKP_KZN_HIST_PVC_CAMPOS_GM (4.980 linhas); FK nova confiável |
 | Banco contido `Latin1_General_CI_AS` | igual à PRD |
 | MERGE da KZN_MDM_HIERARQUIA no DEV corrigido | sem aviso de estrutura; 1 inserida (nome 77 car., e-mail NULL), 1 atualizada; 0 diferenças; 2ª execução sem alterações |
+
+### Ajustes após a execução real (30/09/2026 17:52)
+
+| Teste | Resultado |
+|---|---|
+| Item 11 (collation `Latin1_General_CI_AS` no MDM e em APROVADOR.CD_MATRICULA) em DEV vazio, com dados e contido | aplicado; PK/UQ/IX recriados; FK_KZN_APROVADOR_MDM_MATRICULA confiável; 2ª execução sem alterações |
+| MERGE com KZN_TIPO_USUARIO vazio no DEV (erro real: FK_KZN_MDM_TIPO_USUARIO) | 2 tipos copiados da PRD, 3 usuários inseridos, ID_USUARIO dos tipos preenchido; 0 diferenças; nenhuma FK desabilitada |
+| MERGE após o item 11 | sem AVISO de collation |
