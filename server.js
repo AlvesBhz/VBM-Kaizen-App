@@ -28,13 +28,21 @@ const compression = require("compression");
 const sql = require("mssql");
 const multer = require("multer");
 const ExcelJS = require("exceljs");
-const { enviarArquivoParaVolume, baixarArquivoDoVolume, removerArquivoDoVolume } = require("./databricks-fs");
+const { Readable } = require("stream");
+const {
+  enviarArquivoParaVolume,
+  baixarArquivoDoVolume,
+  abrirArquivoDoVolume,
+  removerArquivoDoVolume,
+} = require("./databricks-fs");
 const {
   blobConfigurado,
   enviarArquivoParaBlob,
   baixarArquivoDoBlob,
+  abrirArquivoDoBlob,
   removerArquivoDoBlob,
 } = require("./azure-blob");
+const fotos = require("./fotos");
 const { montarAviso } = require("./email-kaizen");
 
 const app = express();
@@ -2865,11 +2873,20 @@ async function lerImagemArmazenada(caminho) {
   return ehCaminhoDeVolume(caminho) ? baixarArquivoDoVolume(caminho) : baixarArquivoDoBlob(caminho);
 }
 
+/** Mesma origem de lerImagemArmazenada, mas em stream (ver GET /kaizens/imagem). */
+async function abrirImagemArmazenada(caminho) {
+  return ehCaminhoDeVolume(caminho) ? abrirArquivoDoVolume(caminho) : abrirArquivoDoBlob(caminho);
+}
+
+// Gravar e apagar invalidam o cache de fotos (fotos.js): o nome do
+// arquivo é o ID do Kaizen e não muda quando a foto é trocada.
 async function removerImagemArmazenada(caminho) {
+  fotos.invalidar(caminho);
   return ehCaminhoDeVolume(caminho) ? removerArquivoDoVolume(caminho) : removerArquivoDoBlob(caminho);
 }
 
 async function gravarImagemArmazenada(caminho, buffer, contentType) {
+  fotos.invalidar(caminho);
   return ehCaminhoDeVolume(caminho)
     ? enviarArquivoParaVolume(caminho, buffer, contentType)
     : enviarArquivoParaBlob(caminho, buffer, contentType);
@@ -2986,29 +3003,67 @@ async function nomearImagensDoKaizen({ novoAntes, novoDepois, idKaizen }) {
 // do blob são URLs que o navegador acesse direto — e no caso do blob o
 // SAS não pode sair do servidor). Atende as duas origens, cada uma
 // restrita à sua base: não é um proxy genérico de nenhuma das duas.
+//
+// ?w= (opcional, uma das fotos.LARGURAS_PERMITIDAS) pede a foto
+// redimensionada em WebP — ver fotos.js. Sem ?w=, ou sem o sharp
+// instalado, vai o ORIGINAL, repassado em stream à medida que chega do
+// armazenamento (sem juntar o arquivo inteiro na memória antes).
 apiRouter.get("/kaizens/imagem", async (req, res) => {
+  const caminho = String(req.query.path || "");
+  if (!caminhoDeImagemValido(caminho)) {
+    return res.status(400).json({ error: "Caminho de imagem inválido." });
+  }
+
+  // O nome do arquivo é o ID do Kaizen e NÃO muda ao trocar a foto,
+  // então a URL sozinha não diz se o conteúdo mudou. Quem chama
+  // resolve isso passando ?v= com a data do Kaizen — que muda
+  // quando a foto é substituída. Com versão na URL a resposta pode ser
+  // guardada para sempre; sem ela, cache curto, que ainda evita
+  // rebuscar a mesma imagem durante a navegação mas deixa a troca
+  // aparecer depressa.
+  const cacheControl = req.query.v
+    ? `private, max-age=${UM_ANO_EM_SEGUNDOS}, immutable`
+    : "private, max-age=60";
+
+  // "Não existe", respondido sem ir ao armazenamento. O navegador também
+  // guarda por 5 min: um Kaizen sem a foto não gera um 404 novo a cada
+  // vez que é aberto.
+  const naoEncontrada = () => res.status(404).set("Cache-Control", "private, max-age=300").end();
+  if (fotos.estaAusente(caminho)) return naoEncontrada();
+
+  const largura = fotos.larguraValida(req.query.w);
   try {
-    const caminho = String(req.query.path || "");
-    if (!caminhoDeImagemValido(caminho)) {
-      return res.status(400).json({ error: "Caminho de imagem inválido." });
+    if (largura && fotos.disponivel()) {
+      const { buffer, contentType } = await fotos.obterRedimensionada(
+        caminho, req.query.v, largura, () => lerImagemArmazenada(caminho)
+      );
+      res.set({ "Content-Type": contentType, "Cache-Control": cacheControl });
+      return res.send(buffer);
     }
-    const { buffer, contentType } = await lerImagemArmazenada(caminho);
-    res.setHeader("Content-Type", contentType);
-    // O nome do arquivo é o ID do Kaizen e NÃO muda ao trocar a foto,
-    // então a URL sozinha não diz se o conteúdo mudou. Quem chama
-    // resolve isso passando ?v= com a DT_ATUALIZACAO do Kaizen — que
-    // muda exatamente quando a foto é substituída. Com versão na URL a
-    // resposta pode ser guardada para sempre; sem ela, o cache curto de
-    // antes, que ainda evita rebuscar a mesma imagem durante a
-    // navegação mas deixa a troca aparecer depressa.
-    res.setHeader(
-      "Cache-Control",
-      req.query.v ? `private, max-age=${UM_ANO_EM_SEGUNDOS}, immutable` : "private, max-age=60"
-    );
-    res.send(buffer);
+
+    const arq = await abrirImagemArmazenada(caminho);
+    res.set({ "Content-Type": arq.contentType, "Cache-Control": cacheControl });
+    if (arq.tamanho) res.set("Content-Length", String(arq.tamanho));
+    Readable.fromWeb(arq.corpo)
+      .on("error", (err) => {
+        // Os cabeçalhos já saíram: não dá mais para trocar por um 500.
+        // Cortar a conexão faz o <img> cair no onerror da tela.
+        console.error(`[kaizens/imagem GET] leitura interrompida (${caminho}): ${err.message}`);
+        res.destroy(err);
+      })
+      .pipe(res);
   } catch (err) {
-    console.error("[kaizens/imagem GET] erro:", err.message);
-    res.status(404).end();
+    if (err.status === 404) {
+      // Só o caminho, sem o XML do Azure: é o que dá para investigar
+      // (o arquivo não existe ou o caminho gravado no banco está errado).
+      console.warn(`[kaizens/imagem GET] não encontrada: ${caminho}`);
+      fotos.marcarAusente(caminho);
+      return naoEncontrada();
+    }
+    console.error(`[kaizens/imagem GET] erro (${caminho}): ${err.message}`);
+    // Falha que não é "não existe" (rede, permissão): sem cache, para a
+    // próxima tentativa buscar de novo.
+    if (!res.headersSent) res.status(404).set("Cache-Control", "no-store").end();
   }
 });
 
@@ -3065,6 +3120,7 @@ apiRouter.post("/kaizens/imagem", receberImagemUnica, async (req, res) => {
       return res.status(500).json({ error: "Armazenamento de imagens não configurado. Avise o administrador." });
     }
     const caminhoImagem = `${BLOB_BASE_IMGS}/${pasta}/${nomeArquivo}`;
+    fotos.invalidar(caminhoImagem);
     await enviarArquivoParaBlob(caminhoImagem, req.file.buffer, req.file.mimetype);
     // Trocar PNG por JPG deixaria o arquivo antigo para trás, com outra
     // extensão e o mesmo ID. Some com ele.

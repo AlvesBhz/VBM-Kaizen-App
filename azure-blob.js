@@ -98,15 +98,35 @@ async function enviarArquivoParaBlob(caminhoRelativo, buffer, contentType) {
  *  navegador possa abrir (o SAS não sai daqui), então este servidor busca
  *  os bytes e repassa — ver GET /api/kaizens/imagem em server.js. */
 async function baixarArquivoDoBlob(caminhoRelativo) {
+  const arq = await abrirArquivoDoBlob(caminhoRelativo);
+  const buffer = Buffer.from(await new Response(arq.corpo).arrayBuffer());
+  return { buffer, contentType: arq.contentType };
+}
+
+/** Abre `caminhoRelativo` para leitura SEM juntar os bytes na memória.
+ *
+ *  Devolve o corpo como stream, para quem chama repassar ao navegador à
+ *  medida que chega do Blob — a primeira parte da foto já sai enquanto o
+ *  resto ainda está vindo, e o servidor não segura o arquivo inteiro
+ *  (foto de celular tem vários MB) enquanto isso.
+ *
+ *  O erro leva `status` (404, 403...) para quem chama distinguir "a foto
+ *  não existe" de falha de verdade, sem ler a mensagem. O corpo do erro
+ *  do Azure (XML) não entra na mensagem: só polui o log. */
+async function abrirArquivoDoBlob(caminhoRelativo) {
   exigirConfig();
   const resp = await fetch(urlDoBlob(caminhoRelativo));
   if (!resp.ok) {
-    const texto = await resp.text().catch(() => "");
-    throw new Error(`Falha ao ler do Blob (HTTP ${resp.status}): ${texto}`);
+    await resp.body?.cancel().catch(() => {});
+    const err = new Error(`Falha ao ler do Blob (HTTP ${resp.status})`);
+    err.status = resp.status;
+    throw err;
   }
-  const buffer = Buffer.from(await resp.arrayBuffer());
-  const contentType = resp.headers.get("content-type") || "application/octet-stream";
-  return { buffer, contentType };
+  return {
+    corpo: resp.body,
+    contentType: resp.headers.get("content-type") || "application/octet-stream",
+    tamanho: Number(resp.headers.get("content-length")) || null,
+  };
 }
 
 /** Apaga `caminhoRelativo`. Usado para limpar o arquivo TEMPORÁRIO do
@@ -142,5 +162,6 @@ module.exports = {
   blobConfigurado,
   enviarArquivoParaBlob,
   baixarArquivoDoBlob,
+  abrirArquivoDoBlob,
   removerArquivoDoBlob,
 };

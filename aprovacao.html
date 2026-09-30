@@ -639,7 +639,8 @@ function txt(chave, padrao) {
    que diz ao navegador que o conteúdo é outro. */
 function urlFoto(caminho, versao) {
   if (!caminho) return '';
-  var url = '/api/kaizens/imagem?path=' + encodeURIComponent(caminho);
+  // &w=1280: foto redimensionada para a tela (ver fotos.js no servidor).
+  var url = '/api/kaizens/imagem?path=' + encodeURIComponent(caminho) + '&w=1280';
   return versao ? url + '&v=' + encodeURIComponent(String(versao).slice(0, 19)) : url;
 }
 

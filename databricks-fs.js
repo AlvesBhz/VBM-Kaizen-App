@@ -119,16 +119,29 @@ async function enviarArquivoParaVolume(caminhoVolume, buffer, contentType) {
  * busca os bytes com as mesmas credenciais do upload e repassa.
  */
 async function baixarArquivoDoVolume(caminhoVolume) {
+  const arq = await abrirArquivoDoVolume(caminhoVolume);
+  const buffer = Buffer.from(await new Response(arq.corpo).arrayBuffer());
+  return { buffer, contentType: arq.contentType };
+}
+
+/** Abre `caminhoVolume` para leitura SEM juntar os bytes na memória —
+ *  mesmo contrato de abrirArquivoDoBlob (azure-blob.js): corpo em stream,
+ *  e `status` no erro para separar "não existe" de falha de verdade. */
+async function abrirArquivoDoVolume(caminhoVolume) {
   const token = await obterToken();
   const url = `${DATABRICKS_HOST}/api/2.0/fs/files${caminhoVolume}`;
   const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   if (!resp.ok) {
-    const texto = await resp.text().catch(() => "");
-    throw new Error(`Falha ao ler do volume (HTTP ${resp.status}): ${texto}`);
+    await resp.body?.cancel().catch(() => {});
+    const err = new Error(`Falha ao ler do volume (HTTP ${resp.status})`);
+    err.status = resp.status;
+    throw err;
   }
-  const buffer = Buffer.from(await resp.arrayBuffer());
-  const contentType = resp.headers.get("content-type") || "application/octet-stream";
-  return { buffer, contentType };
+  return {
+    corpo: resp.body,
+    contentType: resp.headers.get("content-type") || "application/octet-stream",
+    tamanho: Number(resp.headers.get("content-length")) || null,
+  };
 }
 
 /**
@@ -151,4 +164,4 @@ async function removerArquivoDoVolume(caminhoVolume) {
   }
 }
 
-module.exports = { enviarArquivoParaVolume, baixarArquivoDoVolume, removerArquivoDoVolume };
+module.exports = { enviarArquivoParaVolume, baixarArquivoDoVolume, abrirArquivoDoVolume, removerArquivoDoVolume };

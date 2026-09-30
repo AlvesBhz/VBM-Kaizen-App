@@ -10,6 +10,7 @@ que fala direto com o Azure SQL.
 ├── server.js               Express: estáticos + API REST + pool do Azure SQL
 ├── email-kaizen.js         templates dos comunicados (monta; não envia)
 ├── azure-blob.js           upload/leitura das fotos no Azure Blob
+├── fotos.js                fotos redimensionadas (WebP) + cache em memória
 ├── databricks-fs.js        leitura das fotos ANTIGAS (Volume do Databricks)
 ├── app.yaml                config do Databricks App (env vars)
 ├── package.json

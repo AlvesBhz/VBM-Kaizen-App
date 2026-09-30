@@ -2744,7 +2744,7 @@ window.VBMDataConclusao = (function () {
       // &v= só para furar o cache do navegador — ver nota em
       // mostrarImagemAtual, no fim da página.
       input.dataset.jaGravada = '1';
-      mostrarFotoEscolhida(input, '/api/kaizens/imagem?path=' + encodeURIComponent(gravada) + '&v=' + Date.now());
+      mostrarFotoEscolhida(input, '/api/kaizens/imagem?path=' + encodeURIComponent(gravada) + '&w=1280&v=' + Date.now());
     } else {
       esvaziarCampo(input);
     }
@@ -3812,7 +3812,7 @@ function txtEdicao(chave, padrao) {
     // Passa pelo mesmo caminho da foto recém-escolhida (VBMFotoCampo)
     // para a imagem gravada aparecer com as MESMAS ações de Visualizar e
     // Limpar — quem edita também pode ter posto o arquivo errado.
-    var endereco = '/api/kaizens/imagem?path=' + encodeURIComponent(caminho) + '&v=' + Date.now();
+    var endereco = '/api/kaizens/imagem?path=' + encodeURIComponent(caminho) + '&w=1280&v=' + Date.now();
     if (window.VBMFotoCampo) {
       window.VBMFotoCampo.mostrar(input, endereco);
     }

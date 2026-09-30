@@ -897,9 +897,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     else if (img.complete && img.naturalWidth === 0) semFoto('kd.imageFailed', 'Imagem não disponível');
   }
 
-  function urlImagem(path, versao) {
+  /* largura: 1280 na tela (padrão) e 1600 no PDF — o servidor devolve a
+     foto redimensionada em WebP em vez do original do celular (vários
+     MB). Só aceita as larguras de fotos.js no servidor. */
+  function urlImagem(path, versao, largura) {
     if (!path) return '';
-    var url = '/api/kaizens/imagem?path=' + encodeURIComponent(path);
+    var url = '/api/kaizens/imagem?path=' + encodeURIComponent(path) + '&w=' + (largura || 1280);
     return versao ? url + '&v=' + encodeURIComponent(String(versao).slice(0, 19)) : url;
   }
   function formatarMesAno(dataStr) {
@@ -1678,7 +1681,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         idioma: idiomaDaTela(),
         // Mesma função que o <img> do modal usa — o relatório não inventa
         // um jeito próprio de montar o endereço da foto.
-        urlImagem: function (caminho) { return urlImagem(caminho, k.DT_CRIACAO); },
+        urlImagem: function (caminho) { return urlImagem(caminho, k.DT_CRIACAO, 1600); },
         rotulos: {
           programa: txtI18n('print.program', 'Kaizen Corporativo'),
           lider: txtI18n('print.leader', 'Líder'),
