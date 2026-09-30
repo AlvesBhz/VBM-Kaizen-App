@@ -54,6 +54,9 @@ DECLARE @LOGIN_ORIGEM          NVARCHAR(128) = N'<usuario de leitura criado no 0
 DECLARE @SENHA_ORIGEM          NVARCHAR(256) = N'<senha do usuario de leitura>';
 DECLARE @SENHA_MASTER_KEY      NVARCHAR(256) = N'<senha forte para a master key do DEV>';  -- só se o DEV ainda não tiver master key
 DECLARE @SUBSTITUIR_DADOS_DEV  BIT           = 0;         -- 1 = apaga os dados do CI no DEV e copia de novo
+-- Tabelas do DEV que ficam de fora (não são comparadas, apagadas nem copiadas)
+DECLARE @EXCLUIR TABLE (TABELA SYSNAME PRIMARY KEY);
+INSERT @EXCLUIR VALUES (N'KZN_MDM_TERCEIROS_USUARIO');   -- ID_USUARIO é IDENTITY na PRD e não no DEV
 
 /* ── 1. Travas ──────────────────────────────────────────────────────── */
 IF @MODO NOT IN ('AZURE', 'LOCAL')
@@ -100,6 +103,7 @@ SELECT t.name, c.column_id, c.name, TYPE_NAME(c.user_type_id), c.max_length, c.p
        c.collation_name, c.is_computed, c.is_identity
 FROM sys.tables t JOIN sys.columns c ON c.object_id = t.object_id
 WHERE t.schema_id = SCHEMA_ID(N'CI');
+DELETE d FROM @DEV_COL d WHERE EXISTS (SELECT 1 FROM @EXCLUIR e WHERE e.TABELA = d.TABELA);
 
 IF NOT EXISTS (SELECT 1 FROM @DEV_COL)
 BEGIN
@@ -198,7 +202,8 @@ BEGIN TRY
     SELECT @comDados = STRING_AGG(CONVERT(NVARCHAR(MAX), N'CI.' + t.name COLLATE DATABASE_DEFAULT + N' (' + CAST(p.linhas AS NVARCHAR(20)) + N')'), N', ')
     FROM sys.tables t
     CROSS APPLY (SELECT linhas = SUM(ps.rows) FROM sys.partitions ps WHERE ps.object_id = t.object_id AND ps.index_id IN (0,1)) p
-    WHERE t.schema_id = SCHEMA_ID(N'CI') AND p.linhas > 0;
+    WHERE t.schema_id = SCHEMA_ID(N'CI') AND p.linhas > 0
+      AND NOT EXISTS (SELECT 1 FROM @EXCLUIR e WHERE e.TABELA = t.name COLLATE DATABASE_DEFAULT);
     IF @comDados IS NOT NULL AND @SUBSTITUIR_DADOS_DEV = 0
     BEGIN
         SET @erro = N'O DEV já tem dados no CI: ' + LEFT(@comDados, 3500) + N'. Nada foi alterado. Para apagar e copiar de novo: @SUBSTITUIR_DADOS_DEV = 1.';
@@ -335,7 +340,8 @@ BEGIN TRY
                  ELSE CAST(CAST(i.ULTIMO AS DECIMAL(38,0)) + CAST(i.INCREMENTO AS DECIMAL(38,0)) AS NVARCHAR(40)) END
           + N') WITH NO_INFOMSGS;'), NCHAR(10))
     FROM @PRD_IDENT i JOIN @RESULTADO r ON r.TABELA = i.TABELA
-    WHERE i.ULTIMO IS NOT NULL;
+    WHERE i.ULTIMO IS NOT NULL
+      AND EXISTS (SELECT 1 FROM @DEV_COL d WHERE d.TABELA = i.TABELA AND d.IDENT = 1);
     IF @sql IS NOT NULL EXEC (@sql);
 
     /* Religar no estado anterior. WITH CHECK revalida todas as linhas. */
@@ -426,7 +432,9 @@ BEGIN
                             ELSE 'DIVERGE' END
     FROM @RESULTADO
     UNION ALL
-    SELECT DISTINCT N'CI.' + p.TABELA, NULL, NULL, 'NAO COPIADA (tabela nao existe no DEV)'
+    SELECT DISTINCT N'CI.' + p.TABELA, NULL, NULL,
+           CASE WHEN EXISTS (SELECT 1 FROM @EXCLUIR e WHERE e.TABELA = p.TABELA) THEN 'NAO COPIADA (em @EXCLUIR)'
+                ELSE 'NAO COPIADA (tabela nao existe no DEV)' END
     FROM @PRD_COL p WHERE NOT EXISTS (SELECT 1 FROM @DEV_COL d WHERE d.TABELA = p.TABELA)
     ORDER BY 1;
 
