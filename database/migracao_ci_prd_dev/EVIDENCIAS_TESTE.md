@@ -144,3 +144,18 @@ Modo LOCAL; origem = banco PRD de teste; destino = DEV criado pelos scripts acim
 | Estrutura diferente, dado não cabe (coluna só da PRD, DEV mais estreito) | abortado antes de gravar; BLOQUEIA e AVISOS listados |
 | Banco contido `Latin1_General_CI_AS` (estrutura → transferência → merge) | OK, 0 erros |
 | Ligação com a PRD | removida ao final em todos os casos |
+
+## Ajuste da KZN_MDM_HIERARQUIA no DEV (`ajustar_kzn_mdm_hierarquia_dev.sql`)
+
+PRD de teste alterada para a forma da PRD real (print do SSMS de 30/09/2026): NM_USUARIO varchar(80) NULL,
+CD_EMAIL NULL, NM_SITUACAO/NM_POSICAO/NM_EMPRESA varchar(80); linha com nome de 66 caracteres e e-mail NULL.
+
+| Teste | Resultado |
+|---|---|
+| MERGE antes do ajuste | bloqueado, mensagem lista as 4 colunas menores no DEV |
+| Ajuste | 5 colunas alteradas; collation mantida; índice de CD_EMAIL intacto |
+| Ajuste de novo | "Nada a fazer" |
+| MERGE depois do ajuste | linha inserida (nome longo, e-mail NULL); 0 diferenças |
+| Reversão com dados que não cabem | abortada, lista NULL e tamanho por coluna; nada alterado |
+| Reversão com dados que cabem | OK; IX_KZN_MDM_HIERARQUIA_EMAIL recriado com a mesma definição |
+| Banco contido `Latin1_General_CI_AS` | aplicar → reverter → aplicar → MERGE: OK |
