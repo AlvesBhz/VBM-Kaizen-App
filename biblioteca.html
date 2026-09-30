@@ -873,7 +873,17 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     var img = document.getElementById(idImg);
     var vazio = document.getElementById(idVazio);
     if (!img || !vazio) return;
+    // "Carregando": spinner do padrão global (VBMLoading.overlay) sobre a
+    // caixa da foto, desligado no load/erro. Só é LIGADO quando há de
+    // fato um download em andamento — reabrir o mesmo Kaizen atribui o
+    // MESMO src, que não dispara 'load' de novo, e o spinner ficaria
+    // preso na tela se fosse ligado nesse caso.
+    var caixa = img.closest('.kd-photo-box');
+    var carregando = function (ligar) {
+      if (window.VBMLoading && caixa) VBMLoading.overlay(caixa, ligar);
+    };
     var semFoto = function (chave, padrao) {
+      carregando(false);
       img.hidden = true;
       img.removeAttribute('src');
       vazio.hidden = false;
@@ -882,19 +892,16 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     };
     if (!url) { semFoto('kd.noImage', 'Sem imagem registrada'); return; }
 
-    // A foto aparece de imediato; o aviso só entra se ela FALHAR. Um
-    // estado intermediário de "carregando" não cabe aqui: a caixa já
-    // tem fundo neutro, então não há salto de layout a esconder — e ele
-    // ficava preso na tela quando o mesmo Kaizen era reaberto, porque
-    // atribuir o MESMO src não dispara 'load' de novo.
     img.onerror = function () { semFoto('kd.imageFailed', 'Imagem não disponível'); };
-    img.onload = null;
+    img.onload = function () { carregando(false); };
     img.hidden = false;
     vazio.hidden = true;
-    if (img.getAttribute('src') !== url) img.src = url;
+    if (img.getAttribute('src') !== url) { carregando(true); img.src = url; }
     // Reabrir com a MESMA url: o load já aconteceu (ou já falhou) e não
     // vai disparar outra vez — o estado é decidido aqui, na hora.
     else if (img.complete && img.naturalWidth === 0) semFoto('kd.imageFailed', 'Imagem não disponível');
+    else if (img.complete) carregando(false);
+    else carregando(true); // mesma url, download ainda em andamento
   }
 
   /* largura: 1280 na tela (padrão) e 1600 no PDF — o servidor devolve a

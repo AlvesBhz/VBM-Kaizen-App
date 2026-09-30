@@ -653,7 +653,15 @@ function mostrarFoto(idImg, idVazio, url) {
   var img = document.getElementById(idImg);
   var vazio = document.getElementById(idVazio);
   if (!img || !vazio) return;
+  // "Carregando": spinner do padrão global (VBMLoading.overlay) sobre a
+  // caixa da foto, desligado no load/erro. Só é ligado com download em
+  // andamento — mesma url não dispara 'load' de novo (ver abaixo).
+  var caixa = img.closest('.kd-photo-box');
+  var carregando = function (ligar) {
+    if (window.VBMLoading && caixa) VBMLoading.overlay(caixa, ligar);
+  };
   var semFoto = function (chave, padrao) {
+    carregando(false);
     img.hidden = true;
     img.removeAttribute('src');
     vazio.hidden = false;
@@ -662,13 +670,15 @@ function mostrarFoto(idImg, idVazio, url) {
   };
   if (!url) { semFoto('kd.noImage', 'Sem imagem registrada'); return; }
   img.onerror = function () { semFoto('kd.imageFailed', 'Imagem não disponível'); };
-  img.onload = null;
+  img.onload = function () { carregando(false); };
   img.hidden = false;
   vazio.hidden = true;
   // Trocar de Kaizen na fila reusa o mesmo <img>: se a url for a MESMA,
   // 'load' não dispara de novo e o estado precisa ser decidido aqui.
-  if (img.getAttribute('src') !== url) img.src = url;
+  if (img.getAttribute('src') !== url) { carregando(true); img.src = url; }
   else if (img.complete && img.naturalWidth === 0) semFoto('kd.imageFailed', 'Imagem não disponível');
+  else if (img.complete) carregando(false);
+  else carregando(true); // mesma url, download ainda em andamento
 }
 function botoesDecisao() {
   return Array.prototype.slice.call(document.querySelectorAll('.ap-actions [data-decisao]'));
@@ -1003,6 +1013,19 @@ function atualizarContador() {
       // ids duplicados quebrariam getElementById do painel original.
       copia.removeAttribute('id');
       copia.querySelectorAll('[id]').forEach(function (el) { el.removeAttribute('id'); });
+      // O clone copia o spinner de "carregando" no estado em que estava,
+      // mas NÃO os handlers de load do <img> — sem isto, spinner copiado
+      // ligado ficava preso no modal com a foto já visível por trás. E o
+      // <img> clonado baixa a foto de novo se ela não estiver em cache.
+      // Cada foto do clone decide o próprio spinner pelo PRÓPRIO load.
+      copia.querySelectorAll('.kd-photo-box').forEach(function (caixa) {
+        var img = caixa.querySelector('img');
+        var spinner = function (ligar) { if (window.VBMLoading) VBMLoading.overlay(caixa, ligar); };
+        if (!img || img.hidden || img.complete) { spinner(false); return; }
+        spinner(true);
+        img.addEventListener('load', function () { spinner(false); }, { once: true });
+        img.addEventListener('error', function () { spinner(false); }, { once: true });
+      });
       copia.style.display = 'block';
       copia.style.maxHeight = 'none';
       corpo.innerHTML = '';
