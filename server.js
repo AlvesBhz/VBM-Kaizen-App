@@ -773,73 +773,9 @@ app.use(async (req, res, next) => {
   res.status(403).set("Cache-Control", "no-store").type("html").send(paginaAcessoNegado(papel));
 });
 
-// ------------------------------------------------------------------
-// Quartely (Portal → /Quartely/quartely.html)
-// ------------------------------------------------------------------
-// Aplicação acoplada ao Portal com conexão PRÓPRIA ao banco: pool
-// separado do Kaizen, apontado para o Azure SQL de PRODUÇÃO. Variáveis
-// QUARTELY_SQL_* (opcionais) permitem servidor/base/credencial próprios;
-// sem elas, usa as AZURE_SQL_* do Portal. A SQL vive em
-// Quartely/quartely-api.js (a mesma do app standalone em Quartely/server.js).
-const { criarQuartelyRouter } = require("./Quartely/quartely-api");
-
-const QUARTELY_DB = {
-  server: process.env.QUARTELY_SQL_SERVER || DB_SERVER,
-  database: process.env.QUARTELY_SQL_DATABASE || DB_NAME,
-  user: process.env.QUARTELY_SQL_USER || DB_USER,
-  password: process.env.QUARTELY_SQL_PASSWORD || DB_PASSWORD,
-  port: parseInt(process.env.QUARTELY_SQL_PORT || String(DB_PORT), 10),
-};
-let quartelyPoolPromise = null;
-let quartelyUltimaFalha = null; // falha recente reaproveitada por 30 s (evita esperar o timeout a cada rota)
-
-function quartelyPool() {
-  if (!quartelyPoolPromise && quartelyUltimaFalha && Date.now() - quartelyUltimaFalha.em < 30000) {
-    return Promise.reject(quartelyUltimaFalha.erro);
-  }
-  if (!quartelyPoolPromise) {
-    const faltando = ["server", "database", "user", "password"].filter((k) => !QUARTELY_DB[k]);
-    if (faltando.length) return Promise.reject(new Error("Quartely: configuração do banco incompleta (" + faltando.join(", ") + ")"));
-    const pool = new sql.ConnectionPool({
-      server: QUARTELY_DB.server,
-      port: QUARTELY_DB.port,
-      database: QUARTELY_DB.database,
-      user: QUARTELY_DB.user,
-      password: QUARTELY_DB.password,
-      options: { encrypt: true, trustServerCertificate: false },
-      connectionTimeout: 30000,
-      requestTimeout: 60000,
-      pool: { max: 3, min: 0, idleTimeoutMillis: 30000 },
-    });
-    pool.on("error", (err) => { console.error("[quartely] erro no pool:", err.message); quartelyPoolPromise = null; });
-    quartelyPoolPromise = pool.connect().then((p) => {
-      quartelyUltimaFalha = null;
-      console.log(`[quartely] conectado a ${QUARTELY_DB.server}/${QUARTELY_DB.database}`);
-      return p;
-    }).catch((err) => {
-      quartelyPoolPromise = null;
-      quartelyUltimaFalha = { erro: err, em: Date.now() };
-      console.error("[quartely] falha ao conectar:", err.message);
-      throw err;
-    });
-  }
-  return quartelyPoolPromise;
-}
-
-const quartelyRouter = criarQuartelyRouter({
-  runQuery: async (query) => (await quartelyPool()).request().query(query),
-});
-// Express não diferencia maiúsculas: cobre /Quartely/api e /quartely/api.
-app.get("/Quartely/api/health", async (req, res) => {
-  res.set("Cache-Control", "no-store");
-  try {
-    await (await quartelyPool()).request().query("SELECT 1 AS ok");
-    res.json({ status: "healthy", database: QUARTELY_DB.database, server: QUARTELY_DB.server });
-  } catch (err) {
-    res.status(503).json({ status: "unhealthy", database: QUARTELY_DB.database || null, error: err.message });
-  }
-});
-app.use("/Quartely/api", (req, res, next) => { res.set("Cache-Control", "no-store"); next(); }, quartelyRouter);
+// Quartely (/Quartely/quartely.html): rotas, conexão própria ao PRD e
+// bloqueio dos arquivos de servidor — tudo dentro da pasta Quartely/.
+require("./Quartely/portal")(app);
 
 // Arquivos que NUNCA devem ser baixáveis pelo navegador.
 //
@@ -862,9 +798,6 @@ const ARQUIVOS_DO_SERVIDOR = [
   /^\/node_modules\//i,
   /^\/database\//i,
   /^\/docs\//i,
-  // Quartely/: só a página e os assets são públicos (server.js,
-  // quartely-api.js, app.yaml, package*.json, .env*, docs ficam bloqueados).
-  /^\/quartely\/(?!quartely\.html$|assets\/)/i,
 ];
 
 app.use((req, res, next) => {

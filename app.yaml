@@ -22,42 +22,19 @@ env:
   - name: 'AZURE_SQL_TABLE'
     value: 'kzn_aprovador'
 
-  # ── Quartely (/Quartely/quartely.html): conexão própria, sempre PRD ──
-  # Pool separado do Kaizen (ver server.js). Credencial: se
-  # QUARTELY_SQL_USER/QUARTELY_SQL_PASSWORD não forem declaradas, usa a
-  # mesma do Portal (AZURE_SQL_USER/PASSWORD). Para um usuário só de
-  # leitura do Quartely, crie os secrets e declare com valueFrom:
-  #   - name: 'QUARTELY_SQL_USER'
-  #     valueFrom: 'quartely-sql-user'
-  #   - name: 'QUARTELY_SQL_PASSWORD'
-  #     valueFrom: 'quartely-sql-password'
-  - name: 'QUARTELY_SQL_SERVER'
-    value: 'rdb-ibp-bmsa-prd.database.windows.net'
-  - name: 'QUARTELY_SQL_DATABASE'
-    value: 'BDIBPBMSA_PRD'
-
-  # ROLLBACK DE EMERGÊNCIA (20/09/2026): voltou pra texto puro porque o
-  # deploy com "valueFrom" saiu ANTES de os resources 'azure-sql-user'/
-  # 'azure-sql-password' existirem no Databricks App — sem eles a env
-  # var fica vazia, checkConfig() derruba a conexão com o banco, e
-  # TODA a aplicação para (não só a exportação: login, Biblioteca,
-  # Aprovação, Administração — tudo depende de identificar o usuário
-  # contra o MDM). Incidente registrado, não é decisão nova.
-  #
-  # NUNCA em texto puro em produção — o valor abaixo já estava
-  # versionado em texto puro desde 02/09/2026 e é tratado como
-  # COMPROMETIDO independente deste rollback. Antes de voltar para
-  # "valueFrom":
-  #   1. Criar os resources 'azure-sql-user'/'azure-sql-password' em
-  #      App resources > + Add resource > Secret — e CONFIRMAR que
-  #      existem antes do próximo deploy, não durante.
-  #   2. Trocar a senha no Azure SQL para um valor NOVO, que nunca
-  #      tenha existido em texto puro no histórico do git.
-  #   3. Só então trocar as duas linhas abaixo para valueFrom de novo.
+  # ── Credenciais: SEMPRE via secret do Databricks App ──
+  # Nenhuma credencial fica neste arquivo (o repositório é público).
+  # ANTES do deploy, em Compute > Apps > (app) > Edit > App resources >
+  # + Add resource > Secret, crie e CONFIRME que existem:
+  #   'azure-sql-user'      → usuário do Azure SQL
+  #   'azure-sql-password'  → senha NOVA (a anterior esteve exposta no git)
+  #   'azure-storage-sas'   → SAS NOVO do container (o anterior esteve exposto)
+  # Sem eles as variáveis ficam vazias e o app não conecta ao banco
+  # (incidente de 20/09/2026): criar os secrets ANTES, nunca durante.
   - name: 'AZURE_SQL_USER'
-    value: 'KZNDEV'
+    valueFrom: 'azure-sql-user'
   - name: 'AZURE_SQL_PASSWORD'
-    value: 'DEVKZN@!13'
+    valueFrom: 'azure-sql-password'
 
   # ── Leitura das imagens ANTIGAS (Volumes do Databricks) ──
   # As fotos passaram a ser gravadas no Azure Blob (bloco abaixo). O
@@ -94,30 +71,17 @@ env:
   #      volta 403. O cadastro funciona, o aviso fica no log, e o lixo se
   #      acumula. Reemita com sp=racwd.
   #
-  #   2. O valor abaixo ficou em TEXTO PURO, versionado desde 02/09/2026,
-  #      com escrita no container inteiro até 2030 — trate como
-  #      COMPROMETIDO. Fechar o download (server.js recusa servir
-  #      app.yaml, os .js da raiz, node_modules, database e docs — ver
-  #      ARQUIVOS_DO_SERVIDOR) não substitui revogar: o token esteve
-  #      exposto enquanto a trava não existia, e continua recuperável
-  #      pelo histórico do git mesmo depois de trocado aqui.
-  #
-  #      ROLLBACK DE EMERGÊNCIA (20/09/2026): voltou pra texto puro
-  #      porque o resource 'azure-storage-sas' não existia no Databricks
-  #      App quando o "valueFrom" foi para produção — env var vazia
-  #      derruba a conexão com o banco (é o USER/PASSWORD acima que faz
-  #      isso, não este SAS sozinho) e tira a aplicação inteira do ar.
-  #      Antes de voltar para valueFrom: revogar este SAS no Azure,
-  #      emitir outro já com sp=racwd (resolve a pendência 1 acima),
-  #      CRIAR o resource 'azure-storage-sas' e só então trocar a linha
-  #      abaixo — nessa ordem, confirmando cada passo antes do próximo.
+  #   2. O SAS anterior esteve em TEXTO PURO no git (repositório público)
+  #      de 02/09/2026 até a troca para valueFrom: trate-o como
+  #      COMPROMETIDO — revogue-o no Azure e grave o NOVO (já com
+  #      sp=racwd) no secret 'azure-storage-sas'.
 
   - name: 'AZURE_STORAGE_ACCOUNT'
     value: 'https://ibpdatalake.blob.core.windows.net/vbmdatalake'
   - name: 'AZURE_STORAGE_CONTAINER'
     value: '05 - Kaizen'
   - name: 'AZURE_STORAGE_SAS_TOKEN'
-    value: 'sp=racw&st=2026-09-02T13:37:52Z&se=2030-01-18T21:52:52Z&spr=https&sv=2026-02-06&sr=c&sig=8gEPo1jtLiz1wbdSW7EVlOl0su8Tj5%2FqJDYe7I%2B%2BOHI%3D'
+    valueFrom: 'azure-storage-sas'
 
 
   # ── Avisos por e-mail das decisões de aprovação ──
