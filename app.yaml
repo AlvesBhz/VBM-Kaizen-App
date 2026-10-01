@@ -22,6 +22,20 @@ env:
   - name: 'AZURE_SQL_TABLE'
     value: 'kzn_aprovador'
 
+  # ── Quartely (/Quartely/quartely.html): conexão própria, sempre PRD ──
+  # Pool separado do Kaizen (ver server.js). Credencial: se
+  # QUARTELY_SQL_USER/QUARTELY_SQL_PASSWORD não forem declaradas, usa a
+  # mesma do Portal (AZURE_SQL_USER/PASSWORD). Para um usuário só de
+  # leitura do Quartely, crie os secrets e declare com valueFrom:
+  #   - name: 'QUARTELY_SQL_USER'
+  #     valueFrom: 'quartely-sql-user'
+  #   - name: 'QUARTELY_SQL_PASSWORD'
+  #     valueFrom: 'quartely-sql-password'
+  - name: 'QUARTELY_SQL_SERVER'
+    value: 'rdb-ibp-bmsa-prd.database.windows.net'
+  - name: 'QUARTELY_SQL_DATABASE'
+    value: 'BDIBPBMSA_PRD'
+
   # ROLLBACK DE EMERGÊNCIA (20/09/2026): voltou pra texto puro porque o
   # deploy com "valueFrom" saiu ANTES de os resources 'azure-sql-user'/
   # 'azure-sql-password' existirem no Databricks App — sem eles a env
