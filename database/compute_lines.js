@@ -122,7 +122,8 @@ const rels = [
   ['APROVADOR','MDM',3],
   ['APROVADOR','MDM',1,1],
   ['ADMIN','MDM',3],
-  ['ADMIN','MDM',1,1],
+  // ['ADMIN','MDM',1,1] removida: na PRD CD_MATRICULA (VARCHAR(30)) faz parte da PK
+  // (ID_ADMIN, CD_MATRICULA) e não tem FK para o MDM.
   ['TIPO_USUARIO','MDM',2],
   ['MDM','TIPO_USUARIO',2],
   ['IDIOMA','MDM',6],

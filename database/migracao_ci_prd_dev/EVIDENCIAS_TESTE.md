@@ -193,3 +193,16 @@ corrigir_dev_conforme_prd → MERGE do MDM (3 usuários, 2 tipos) → transferir
 | `@SUBSTITUIR_DADOS_DEV = 1` | 29 tabelas OK (inclui KZN_MDM_TERCEIROS_USUARIO); 36 FKs/CHECKs confiáveis; 19 triggers; aviso de collation em 106 colunas/22 tabelas (mesma página de código 1252) |
 | Comparação linha a linha (EXCEPT com `Latin1_General_BIN2`) | 0 diferenças nas 29 tabelas |
 | corrigir_dev_conforme_prd em DEV novo | pré-validação do item 11 não acusa mais as FKs tratadas nos itens 4 e 5 |
+
+## KZN_ADMIN.CD_MATRICULA INT -> VARCHAR(30) (`../alterar_kzn_admin_cd_matricula_varchar30.sql`)
+
+| Teste | Resultado |
+|---|---|
+| PRD de teste (dicionário real, `Latin1_General_CI_AS`, 3 linhas, estatísticas automáticas na coluna) | aplicado; PK_KZN_ADMIN (ID_ADMIN, CD_MATRICULA) recriada igual; collation da matrícula do MDM |
+| 2ª execução | "Nada a fazer" |
+| Matrícula não numérica ('FG002634') após a alteração | aceita |
+| Reversão com 'FG002634' | abortada, lista o valor |
+| Reversão / reaplicação | OK |
+| Banco contido | OK |
+| `criar_estrutura_ci_dev.sql` regerado (PRD + esta alteração) em banco vazio | conferência OK; igual ao dicionário da PRD (inclusive ordem das colunas da PVC/HIST PVC), exceto a própria alteração e as 3 tabelas excluídas; 2ª execução sem alterações |
+| DER | KZN_ADMIN: CD_MATRICULA VARCHAR(30) na PK; ligação ADMIN→MDM por matrícula removida; 43 linhas do HTML = saída do compute_lines.js |
